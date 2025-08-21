@@ -53,7 +53,7 @@
 
 ## Tech Stack
 
--   **Language:** Python 3.11+
+-   **Language:** Python 3.13+
 -   **UI:** Streamlit (local browser interface, no backend complexity).
 -   **Database:** SQLite with SQLAlchemy ORM.
 -   **Frontend styling:** Streamlit widgets (no custom CSS needed).
