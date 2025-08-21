@@ -2,4 +2,13 @@
 
 from __future__ import annotations
 
-# Placeholder for planning algorithms.
+from typing import Dict, List
+
+
+def generate_plan() -> Dict[str, List[str]]:
+    """Return a freshly generated meal plan.
+
+    The actual implementation would contain the planning algorithm. Tests mock
+    this function to provide predictable results.
+    """
+    raise NotImplementedError("Planning algorithm not implemented")
