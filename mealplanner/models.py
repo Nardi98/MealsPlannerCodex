@@ -2,4 +2,75 @@
 
 from __future__ import annotations
 
-# Placeholder for ORM models.
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    Text,
+)
+from sqlalchemy.orm import relationship
+
+from .db import Base
+
+# Association table linking recipes and tags for a many-to-many relationship.
+recipe_tag_table = Table(
+    "recipe_tag",
+    Base.metadata,
+    Column("recipe_id", ForeignKey("recipes.id"), primary_key=True),
+    Column("tag_id", ForeignKey("tags.id"), primary_key=True),
+)
+
+
+class Recipe(Base):
+    """A meal that can be prepared and consumed."""
+
+    __tablename__ = "recipes"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String, nullable=False)
+    servings_default = Column(Integer, nullable=False)
+    procedure = Column(Text)
+    bulk_prep = Column(Boolean, default=False)
+    score = Column(Float)
+    date_last_consumed = Column(Date)
+
+    ingredients = relationship(
+        "Ingredient", back_populates="recipe", cascade="all, delete-orphan"
+    )
+    tags = relationship(
+        "Tag", secondary=recipe_tag_table, back_populates="recipes"
+    )
+
+
+class Ingredient(Base):
+    """An ingredient used within a recipe."""
+
+    __tablename__ = "ingredients"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    quantity = Column(Float)
+    unit = Column(String)
+    season_months = Column(String)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
+
+    recipe = relationship("Recipe", back_populates="ingredients")
+
+
+class Tag(Base):
+    """A simple label that can be attached to recipes."""
+
+    __tablename__ = "tags"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+
+    recipes = relationship(
+        "Recipe", secondary=recipe_tag_table, back_populates="tags"
+    )
+
