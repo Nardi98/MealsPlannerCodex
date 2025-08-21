@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+
+from typing import Dict, List
+
 from typing import Iterable, List, Sequence, Set
 
 from .models import Ingredient, Recipe, Tag
 
 
+def generate_plan() -> Dict[str, List[str]]:
+    """Return a freshly generated meal plan.
+
+    The actual implementation would contain the planning algorithm. Tests mock
+    this function to provide predictable results.
+    """
+    raise NotImplementedError("Planning algorithm not implemented")
+    
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
 
