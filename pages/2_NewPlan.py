@@ -32,8 +32,10 @@ def main() -> None:
     bulk_bonus_weight = st.slider(
         "Bulk-Prep Bonus Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
     )
-    tag_text = st.text_input("Tag Filters (comma separated)")
-    tags = [t.strip() for t in tag_text.split(",") if t.strip()]
+    avoid_text = st.text_input("Avoid Tags", help="Comma separated")
+    reduce_text = st.text_input("Reduce Tags", help="Comma separated")
+    avoid_tags = [t.strip() for t in avoid_text.split(",") if t.strip()]
+    reduce_tags = [t.strip() for t in reduce_text.split(",") if t.strip()]
 
     if st.button("Generate Plan"):
         try:
@@ -42,7 +44,8 @@ def main() -> None:
                 "days": int(days),
                 "meals_per_day": int(meals_per_day),
                 "epsilon": float(epsilon),
-                "tags": tags or None,
+                "avoid_tags": avoid_tags or None,
+                "reduce_tags": reduce_tags or None,
                 "seasonality_weight": float(seasonality_weight),
                 "recency_weight": float(recency_weight),
                 "tag_penalty_weight": float(tag_penalty_weight),
