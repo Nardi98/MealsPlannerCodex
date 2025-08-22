@@ -34,6 +34,33 @@ def _render_tag_boxes(tags: List[str]) -> str:
     return "".join(f"<span class='recipe-tag'>{t}</span>" for t in tags)
 
 
+def _render_tag_filter(session: Session) -> List[str]:
+    """Render tag buttons that toggle recipe filtering.
+
+    Returns a list with the currently selected tag names.
+    """
+
+    tags = session.execute(select(Tag).order_by(Tag.name)).scalars().all()
+    if "selected_tags" not in st.session_state:
+        st.session_state["selected_tags"] = []
+
+    selected: List[str] = st.session_state["selected_tags"]
+
+    if tags:
+        cols = st.columns(len(tags))
+        for tag, col in zip(tags, cols):
+            is_selected = tag.name in selected
+            button_type = "primary" if is_selected else "secondary"
+            if col.button(tag.name, key=f"filter_{tag.id}", type=button_type):
+                if is_selected:
+                    selected.remove(tag.name)
+                else:
+                    selected.append(tag.name)
+                st.experimental_rerun()
+
+    return selected
+
+
 def _render_recipe_fields(
     session: Session, prefix: str, recipe: Optional[Recipe] = None
 ) -> Dict[str, object]:
@@ -145,6 +172,8 @@ def main() -> None:
                 crud.create_recipe(session, **data)
                 _refresh()
 
+    selected_tags = _render_tag_filter(session)
+
     recipes = (
         session.execute(
             select(Recipe)
@@ -154,6 +183,12 @@ def main() -> None:
         .scalars()
         .all()
     )
+
+    if selected_tags:
+        selected_set = set(selected_tags)
+        recipes = [
+            r for r in recipes if selected_set.issubset({t.name for t in r.tags})
+        ]
 
     if not recipes:
         st.info("No recipes available.")
