@@ -40,6 +40,9 @@ def _render_recipe_fields(
     selected_tag_names = st.multiselect(
         "Tags", tag_names, default_tags, key=f"{prefix}_tags"
     )
+    new_tag_names = st.text_input(
+        "New tags (comma-separated)", key=f"{prefix}_new_tags"
+    )
     selected_tags = [t for t in all_tags if t.name in selected_tag_names]
 
     # Ingredient inputs
@@ -78,6 +81,12 @@ def _render_recipe_fields(
             ingredients.append(
                 Ingredient(name=name, quantity=quantity, unit=unit, season_months=season)
             )
+
+    if new_tag_names:
+        for raw_name in new_tag_names.split(","):
+            name = raw_name.strip()
+            if name:
+                selected_tags.append(crud.get_or_create_tag(session, name))
 
     return {
         "title": title,

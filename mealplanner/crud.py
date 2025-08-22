@@ -16,6 +16,7 @@ _PLAN_CACHE: Dict[str, List[str]] = {}
 
 __all__ = [
     "create_recipe",
+    "get_or_create_tag",
     "get_recipe",
     "update_recipe",
     "delete_recipe",
@@ -96,6 +97,23 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
     session.delete(recipe)
     session.commit()
     return True
+
+
+def get_or_create_tag(session: Session, name: str) -> Tag:
+    """Return a :class:`~mealplanner.models.Tag` with ``name``.
+
+    The tag is created and added to the session if it does not already exist.
+    The session is flushed so that tags added earlier in the transaction are
+    visible to the lookup query.
+    """
+
+    session.flush()
+    tag = session.execute(select(Tag).where(Tag.name == name)).scalar_one_or_none()
+    if tag is None:
+        tag = Tag(name=name)
+        session.add(tag)
+    return tag
+
 
 def get_recipes() -> List[str]:
     """Return a list of recipe names.
