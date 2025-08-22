@@ -59,3 +59,10 @@ def test_generate_plan_repeatable(db_session):
     plan2 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
     assert plan1 == expected
     assert plan1 == plan2
+
+
+def test_generate_weekly_plan_insufficient_recipes():
+    """Generating a plan without enough recipes should raise an error."""
+    recipes = [make_recipe("OnlyOne")]
+    with pytest.raises(ValueError):
+        generate_weekly_plan(recipes)
