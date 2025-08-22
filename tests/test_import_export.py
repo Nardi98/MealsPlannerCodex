@@ -3,6 +3,8 @@ import json
 from datetime import date
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
 from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, Tag
@@ -26,7 +28,7 @@ def test_round_trip_export_import(db_session):
     exported = crud.export_data(db_session)
 
     # Re-import into the same session; import_data should clear existing data first.
-    crud.import_data(io.StringIO(exported), db_session)
+    crud.import_data(io.StringIO(exported), db_session, mode="overwrite")
 
     assert db_session.query(Recipe).count() == 1
     assert db_session.query(Tag).count() == 1
@@ -47,6 +49,43 @@ def test_import_bad_data_raises(db_session):
         crud.import_data(bad_file, db_session)
 
 
+def test_import_merge_adds_data(db_session):
+    _create_sample_data(db_session)
+
+    merge_payload = {
+        "recipes": [
+            {
+                "title": "Salad",
+                "servings_default": 1,
+                "ingredients": [],
+                "tags": [],
+            }
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+
+    crud.import_data(io.StringIO(json.dumps(merge_payload)), db_session, mode="merge")
+
+    titles = {r.title for r in db_session.query(Recipe).all()}
+    assert titles == {"Soup", "Salad"}
+    # Existing data remains untouched
+    assert db_session.query(Tag).count() == 1
+
+
+def test_import_merge_existing_ids(db_session):
+    """Importing an export in merge mode duplicates recipes with new ids."""
+    _create_sample_data(db_session)
+    exported = crud.export_data(db_session)
+
+    crud.import_data(io.StringIO(exported), db_session, mode="merge")
+
+    recipes = db_session.query(Recipe).order_by(Recipe.id).all()
+    assert len(recipes) == 2
+    assert recipes[0].id != recipes[1].id
+    assert db_session.query(Tag).count() == 1
+
+
 def test_export_includes_related_objects(db_session):
     _create_sample_data(db_session)
     exported = crud.export_data(db_session)
@@ -59,4 +98,22 @@ def test_export_includes_related_objects(db_session):
     assert tag_lookup[tag_id] == "vegan"
     assert data["meal_plans"][0]["slots"][0]["meal_time"] == "lunch"
     assert data["meal_plans"][0]["slots"][0]["recipe_id"] == data["recipes"][0]["id"]
+
+
+def test_import_creates_tables_when_missing():
+    """import_data should initialise schema if tables are absent."""
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    payload = {
+        "recipes": [
+            {"title": "Temp", "servings_default": 1, "ingredients": [], "tags": []}
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+
+    with Session() as session:
+        crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
+        assert session.query(Recipe).count() == 1
 

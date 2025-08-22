@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal
+from .db import SessionLocal, Base
 from .models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
@@ -230,7 +230,9 @@ def list_recipe_titles(session: Session) -> List[str]:
     return session.scalars(select(Recipe.title)).all()
 
 
-def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
+def import_data(
+    file_obj: Any, session: Optional[Session] = None, mode: str = "overwrite"
+) -> None:
     """Import data from the given uploaded file object.
 
     Parameters
@@ -240,12 +242,19 @@ def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
     session:
         Optional SQLAlchemy session. If omitted a new session is created using
         :func:`~mealplanner.db.SessionLocal`.
+    mode:
+        Specifies how imported data should be handled. ``"overwrite"`` clears
+        existing tables before import, while ``"merge"`` leaves existing data
+        intact.
     """
 
     close_session = False
     if session is None:
         session = SessionLocal()
         close_session = True
+
+    # Ensure database tables exist for this session's engine
+    Base.metadata.create_all(bind=session.get_bind())
 
     try:
         raw = file_obj.read()
@@ -257,42 +266,72 @@ def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
             session.close()
         raise ValueError("Malformed import data") from exc
 
+    if mode not in {"overwrite", "merge"}:
+        if close_session:
+            session.close()
+        raise ValueError("mode must be 'overwrite' or 'merge'")
+
     try:
-        # Clear existing data
-        session.execute(recipe_tag_table.delete())
-        session.query(MealSlot).delete()
-        session.query(MealPlan).delete()
-        session.query(Ingredient).delete()
-        session.query(Tag).delete()
-        session.query(Recipe).delete()
-        session.commit()
-        session.expunge_all()
+        if mode == "overwrite":
+            # Clear existing data
+            session.execute(recipe_tag_table.delete())
+            session.query(MealSlot).delete()
+            session.query(MealPlan).delete()
+            session.query(Ingredient).delete()
+            session.query(Tag).delete()
+            session.query(Recipe).delete()
+            session.commit()
+            session.expunge_all()
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):
-            tag = Tag(id=tag_info.get("id"), name=tag_info["name"])
-            session.add(tag)
-            tag_map[tag.id] = tag
+            tag_id = tag_info.get("id")
+            tag = session.get(Tag, tag_id) if tag_id is not None else None
+            if tag is None:
+                tag = Tag(id=tag_id, name=tag_info["name"])
+                session.add(tag)
+            else:
+                tag.name = tag_info["name"]
+            tag_map[tag_id] = tag
 
+        recipe_id_map: Dict[int, int] = {}
         for rec_info in data.get("recipes", []):
-            recipe = Recipe(
-                id=rec_info.get("id"),
-                title=rec_info["title"],
-                servings_default=rec_info["servings_default"],
-                procedure=rec_info.get("procedure"),
-                bulk_prep=rec_info.get("bulk_prep", False),
-                score=rec_info.get("score"),
-                date_last_consumed=(
-                    date.fromisoformat(rec_info["date_last_consumed"])
-                    if rec_info.get("date_last_consumed")
-                    else None
-                ),
-            )
+            rec_id = rec_info.get("id")
+            existing = session.get(Recipe, rec_id) if rec_id is not None else None
+            if existing is None:
+                recipe = Recipe(
+                    id=rec_id,
+                    title=rec_info["title"],
+                    servings_default=rec_info["servings_default"],
+                    procedure=rec_info.get("procedure"),
+                    bulk_prep=rec_info.get("bulk_prep", False),
+                    score=rec_info.get("score"),
+                    date_last_consumed=(
+                        date.fromisoformat(rec_info["date_last_consumed"])
+                        if rec_info.get("date_last_consumed")
+                        else None
+                    ),
+                )
+            else:
+                recipe = Recipe(
+                    title=rec_info["title"],
+                    servings_default=rec_info["servings_default"],
+                    procedure=rec_info.get("procedure"),
+                    bulk_prep=rec_info.get("bulk_prep", False),
+                    score=rec_info.get("score"),
+                    date_last_consumed=(
+                        date.fromisoformat(rec_info["date_last_consumed"])
+                        if rec_info.get("date_last_consumed")
+                        else None
+                    ),
+                )
             session.add(recipe)
+            session.flush()
+            if rec_id is not None:
+                recipe_id_map[rec_id] = recipe.id
 
             for ing_info in rec_info.get("ingredients", []):
                 ingredient = Ingredient(
-                    id=ing_info.get("id"),
                     name=ing_info["name"],
                     quantity=ing_info.get("quantity"),
                     unit=ing_info.get("unit"),
@@ -307,15 +346,25 @@ def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
                     recipe.tags.append(tag)
 
         for plan_info in data.get("meal_plans", []):
-            meal_plan = MealPlan(
-                id=plan_info.get("id"),
-                plan_date=date.fromisoformat(plan_info["plan_date"]),
-            )
-            session.add(meal_plan)
+            plan_id = plan_info.get("id")
+            meal_plan = session.get(MealPlan, plan_id) if plan_id is not None else None
+            if meal_plan is None:
+                meal_plan = MealPlan(
+                    id=plan_id,
+                    plan_date=date.fromisoformat(plan_info["plan_date"]),
+                )
+                session.add(meal_plan)
+            else:
+                meal_plan.plan_date = date.fromisoformat(plan_info["plan_date"])
+                meal_plan.slots.clear()
+                session.flush()
+
             for slot_info in plan_info.get("slots", []):
+                rid = slot_info.get("recipe_id")
+                rid = recipe_id_map.get(rid, rid)
                 slot = MealSlot(
                     meal_time=slot_info["meal_time"],
-                    recipe_id=slot_info.get("recipe_id"),
+                    recipe_id=rid,
                 )
                 meal_plan.slots.append(slot)
 
@@ -342,6 +391,9 @@ def export_data(session: Optional[Session] = None) -> str:
     if session is None:
         session = SessionLocal()
         close_session = True
+
+    # Ensure database tables exist for this session's engine
+    Base.metadata.create_all(bind=session.get_bind())
 
     try:
         recipes_data = []
