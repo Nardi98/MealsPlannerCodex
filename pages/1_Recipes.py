@@ -169,16 +169,20 @@ def main() -> None:
 
     for recipe in recipes:
         tag_html = _render_tag_boxes([t.name for t in recipe.tags])
-        header = f"{recipe.title} {tag_html}" if tag_html else recipe.title
-        with st.expander(header):
-            with st.form(f"edit_{recipe.id}"):
-                data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
-                if st.form_submit_button("Update"):
-                    crud.update_recipe(session, recipe.id, **data)
+        exp_col, tag_col = st.columns([4, 1])
+        with exp_col:
+            with st.expander(recipe.title):
+                with st.form(f"edit_{recipe.id}"):
+                    data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
+                    if st.form_submit_button("Update"):
+                        crud.update_recipe(session, recipe.id, **data)
+                        _refresh()
+                if st.button("Delete", key=f"delete_{recipe.id}"):
+                    crud.delete_recipe(session, recipe.id)
                     _refresh()
-            if st.button("Delete", key=f"delete_{recipe.id}"):
-                crud.delete_recipe(session, recipe.id)
-                _refresh()
+        with tag_col:
+            if tag_html:
+                st.markdown(tag_html, unsafe_allow_html=True)
 
     session.close()
 
