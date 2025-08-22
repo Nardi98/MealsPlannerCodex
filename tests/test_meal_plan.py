@@ -31,12 +31,45 @@ def test_generate_and_persist_plan(db_session):
     )
     id_plan = {}
     for day, meals in plan_titles.items():
-        ids = [
-            db_session.execute(
-                select(Recipe.id).where(Recipe.title == meal)
-            ).scalar_one()
-            for meal in meals
-        ]
+        ids: list[int] = []
+        for meal in meals:
+            recipe_id = (
+                db_session.execute(
+                    select(Recipe.id).where(Recipe.title == meal)
+                )
+                .scalars()
+                .first()
+            )
+            assert recipe_id is not None
+            ids.append(recipe_id)
+        id_plan[day] = ids
+    set_meal_plan(db_session, plan_date, id_plan)
+    fetched = get_plan(db_session, plan_date)
+    assert fetched == plan_titles
+
+
+def test_duplicate_titles_do_not_break_plan(db_session):
+    """Generating a plan works even if recipe titles are duplicated."""
+    create_recipe(db_session, title="Dup", servings_default=1)
+    # duplicate title intentionally
+    create_recipe(db_session, title="Dup", servings_default=1)
+
+    plan_date = date(2024, 5, 18)
+    plan_titles = {"Mon": ["Dup"]}
+
+    id_plan: dict[str, list[int]] = {}
+    for day, meals in plan_titles.items():
+        ids: list[int] = []
+        for meal in meals:
+            recipe_id = (
+                db_session.execute(
+                    select(Recipe.id).where(Recipe.title == meal)
+                )
+                .scalars()
+                .first()
+            )
+            assert recipe_id is not None
+            ids.append(recipe_id)
         id_plan[day] = ids
     set_meal_plan(db_session, plan_date, id_plan)
     fetched = get_plan(db_session, plan_date)
