@@ -89,7 +89,6 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
     session.commit()
     return True
 
-
 def get_recipes() -> List[str]:
     """Return a list of recipe names.
 
