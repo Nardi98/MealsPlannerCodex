@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from mealplanner import crud
 from mealplanner.db import SessionLocal, init_db
@@ -120,16 +120,30 @@ def main() -> None:
     # Retrieve recipe names using helper for compatibility with tests
     names = crud.get_recipes()
 
-    recipes = session.execute(select(Recipe).order_by(Recipe.title)).scalars().all()
+    recipes = (
+        session.execute(
+            select(Recipe)
+            .options(selectinload(Recipe.tags))
+            .order_by(Recipe.title)
+        )
+        .scalars()
+        .all()
+    )
+
+    tag_map = {r.title: ", ".join(t.name for t in r.tags) for r in recipes}
 
     if names:
         for name in names:
-            st.markdown(f"- {name}")
+            tags = tag_map.get(name)
+            label = f" ({tags})" if tags else ""
+            st.markdown(f"- {name}{label}")
     else:
         st.info("No recipes available.")
 
     for recipe in recipes:
-        with st.expander(recipe.title):
+        header_tags = ", ".join(t.name for t in recipe.tags)
+        header = f"{recipe.title} ({header_tags})" if header_tags else recipe.title
+        with st.expander(header):
             with st.form(f"edit_{recipe.id}"):
                 data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
                 if st.form_submit_button("Update"):
