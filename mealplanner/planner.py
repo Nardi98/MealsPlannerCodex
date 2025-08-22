@@ -39,6 +39,7 @@ def generate_plan(
     days: int,
     meals_per_day: int,
     keep_days: int = 7,
+    bulk_leftovers: bool = True,
     epsilon: float = 0.0,
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
@@ -57,7 +58,8 @@ def generate_plan(
     components.
 
     ``keep_days`` controls how many days leftover portions from a ``bulk_prep``
-    recipe may appear after the initial preparation. Parameters are forwarded to
+    recipe may appear after the initial preparation. Set ``bulk_leftovers`` to
+    ``False`` to disable leftover reuse entirely. Parameters are forwarded to
     :func:`filter_recipes` allowing tag-based inclusion, exclusion and
     down-weighting of recipes.
     """
@@ -94,7 +96,7 @@ def generate_plan(
             scored,
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
-            keep_days=keep_days,
+            keep_days=keep_days if bulk_leftovers else 1,
             days=min(7, total_slots - len(selections)),
         )
         selections.extend(weekly)

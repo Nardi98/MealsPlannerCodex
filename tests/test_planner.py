@@ -220,3 +220,23 @@ def test_generate_plan_leftover_expiry(db_session):
         "2024-01-04": ["Bulk (leftover)"],
     }
     assert plan == expected
+
+
+def test_generate_plan_bulk_leftovers_disabled(db_session):
+    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0)
+    db_session.add(recipe)
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=2,
+        meals_per_day=1,
+        epsilon=0.0,
+        keep_days=2,
+        bulk_leftovers=False,
+    )
+    assert plan == {
+        "2024-01-01": ["Bulk"],
+        "2024-01-02": ["Bulk"],
+    }
