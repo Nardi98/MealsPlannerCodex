@@ -73,6 +73,17 @@ def test_import_merge_adds_data(db_session):
     assert db_session.query(Tag).count() == 1
 
 
+def test_import_merge_existing_ids(db_session):
+    """Merging exported data should not error or duplicate records."""
+    _create_sample_data(db_session)
+    exported = crud.export_data(db_session)
+
+    crud.import_data(io.StringIO(exported), db_session, mode="merge")
+
+    assert db_session.query(Recipe).count() == 1
+    assert db_session.query(Tag).count() == 1
+
+
 def test_export_includes_related_objects(db_session):
     _create_sample_data(db_session)
     exported = crud.export_data(db_session)

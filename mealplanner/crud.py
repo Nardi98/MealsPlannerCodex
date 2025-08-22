@@ -285,25 +285,47 @@ def import_data(
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):
-            tag = Tag(id=tag_info.get("id"), name=tag_info["name"])
-            session.add(tag)
-            tag_map[tag.id] = tag
+            tag_id = tag_info.get("id")
+            tag = session.get(Tag, tag_id) if tag_id is not None else None
+            if tag is None:
+                tag = Tag(id=tag_id, name=tag_info["name"])
+                session.add(tag)
+            else:
+                tag.name = tag_info["name"]
+            tag_map[tag_id] = tag
 
         for rec_info in data.get("recipes", []):
-            recipe = Recipe(
-                id=rec_info.get("id"),
-                title=rec_info["title"],
-                servings_default=rec_info["servings_default"],
-                procedure=rec_info.get("procedure"),
-                bulk_prep=rec_info.get("bulk_prep", False),
-                score=rec_info.get("score"),
-                date_last_consumed=(
+            rec_id = rec_info.get("id")
+            recipe = session.get(Recipe, rec_id) if rec_id is not None else None
+            if recipe is None:
+                recipe = Recipe(
+                    id=rec_id,
+                    title=rec_info["title"],
+                    servings_default=rec_info["servings_default"],
+                    procedure=rec_info.get("procedure"),
+                    bulk_prep=rec_info.get("bulk_prep", False),
+                    score=rec_info.get("score"),
+                    date_last_consumed=(
+                        date.fromisoformat(rec_info["date_last_consumed"])
+                        if rec_info.get("date_last_consumed")
+                        else None
+                    ),
+                )
+                session.add(recipe)
+            else:
+                recipe.title = rec_info["title"]
+                recipe.servings_default = rec_info["servings_default"]
+                recipe.procedure = rec_info.get("procedure")
+                recipe.bulk_prep = rec_info.get("bulk_prep", False)
+                recipe.score = rec_info.get("score")
+                recipe.date_last_consumed = (
                     date.fromisoformat(rec_info["date_last_consumed"])
                     if rec_info.get("date_last_consumed")
                     else None
-                ),
-            )
-            session.add(recipe)
+                )
+                recipe.ingredients.clear()
+                session.flush()
+                recipe.tags.clear()
 
             for ing_info in rec_info.get("ingredients", []):
                 ingredient = Ingredient(
@@ -322,11 +344,19 @@ def import_data(
                     recipe.tags.append(tag)
 
         for plan_info in data.get("meal_plans", []):
-            meal_plan = MealPlan(
-                id=plan_info.get("id"),
-                plan_date=date.fromisoformat(plan_info["plan_date"]),
-            )
-            session.add(meal_plan)
+            plan_id = plan_info.get("id")
+            meal_plan = session.get(MealPlan, plan_id) if plan_id is not None else None
+            if meal_plan is None:
+                meal_plan = MealPlan(
+                    id=plan_id,
+                    plan_date=date.fromisoformat(plan_info["plan_date"]),
+                )
+                session.add(meal_plan)
+            else:
+                meal_plan.plan_date = date.fromisoformat(plan_info["plan_date"])
+                meal_plan.slots.clear()
+                session.flush()
+
             for slot_info in plan_info.get("slots", []):
                 slot = MealSlot(
                     meal_time=slot_info["meal_time"],

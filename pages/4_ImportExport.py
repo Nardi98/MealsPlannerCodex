@@ -25,11 +25,10 @@ def main() -> None:
         )
         st.code(data, language="json")
 
-    mode = st.radio("Import mode", ["overwrite", "merge"], index=0)
-    uploaded = st.file_uploader("Import Data")
-    if uploaded is not None:
+    def _do_import(file, mode: str) -> None:
+        file.seek(0)
         try:
-            crud.import_data(uploaded, mode=mode)
+            crud.import_data(file, mode=mode)
         except ValueError as exc:  # noqa: BLE001 - broad to show message
             st.error(f"Import failed: {exc}")
         else:
@@ -42,6 +41,25 @@ def main() -> None:
                     st.write(f"- {title}")
             else:
                 st.write("No recipes found")
+
+    mode = st.radio("Import mode", ["overwrite", "merge"], index=0)
+    uploaded = st.file_uploader("Import Data")
+    if uploaded is not None and st.button("Import"):
+        if mode == "overwrite":
+            st.session_state["confirm_overwrite"] = True
+        else:
+            _do_import(uploaded, mode)
+
+    if st.session_state.get("confirm_overwrite") and uploaded is not None:
+        st.warning("This will delete the existing database. Are you sure?")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, delete data"):
+                _do_import(uploaded, "overwrite")
+                st.session_state["confirm_overwrite"] = False
+        with col2:
+            if st.button("Cancel"):
+                st.session_state["confirm_overwrite"] = False
 
 
 if __name__ == "__main__":
