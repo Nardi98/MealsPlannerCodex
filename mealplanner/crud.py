@@ -12,12 +12,15 @@ from sqlalchemy.orm import Session
 from .db import SessionLocal
 from .models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
 
+_PLAN_CACHE: Dict[str, List[str]] = {}
+
 __all__ = [
     "create_recipe",
     "get_recipe",
     "update_recipe",
     "delete_recipe",
     "set_meal_plan",
+    "save_plan",
     "get_plan",
 ]
 
@@ -135,12 +138,20 @@ def set_meal_plan(
     return meal_plan
 
 
-def get_plan(session: Session, plan_date: Optional[date] = None) -> Dict[str, List[str]]:
-    """Return the meal plan for ``plan_date`` or today if ``None``.
+def save_plan(plan: Dict[str, List[str]]) -> None:
+    """Persist ``plan`` in memory for later retrieval."""
 
-    The returned mapping associates meal times with a list of recipe titles.
-    If no plan exists for the requested date an empty dictionary is returned.
-    """
+    _PLAN_CACHE.clear()
+    _PLAN_CACHE.update(plan)
+
+
+def get_plan(
+    session: Session | None = None, plan_date: Optional[date] = None
+) -> Dict[str, List[str]]:
+    """Return the cached plan or fetch from the database if a session is given."""
+
+    if session is None:
+        return dict(_PLAN_CACHE)
 
     if plan_date is None:
         plan_date = date.today()
