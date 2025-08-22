@@ -294,10 +294,11 @@ def import_data(
                 tag.name = tag_info["name"]
             tag_map[tag_id] = tag
 
+        recipe_id_map: Dict[int, int] = {}
         for rec_info in data.get("recipes", []):
             rec_id = rec_info.get("id")
-            recipe = session.get(Recipe, rec_id) if rec_id is not None else None
-            if recipe is None:
+            existing = session.get(Recipe, rec_id) if rec_id is not None else None
+            if existing is None:
                 recipe = Recipe(
                     id=rec_id,
                     title=rec_info["title"],
@@ -311,25 +312,26 @@ def import_data(
                         else None
                     ),
                 )
-                session.add(recipe)
             else:
-                recipe.title = rec_info["title"]
-                recipe.servings_default = rec_info["servings_default"]
-                recipe.procedure = rec_info.get("procedure")
-                recipe.bulk_prep = rec_info.get("bulk_prep", False)
-                recipe.score = rec_info.get("score")
-                recipe.date_last_consumed = (
-                    date.fromisoformat(rec_info["date_last_consumed"])
-                    if rec_info.get("date_last_consumed")
-                    else None
+                recipe = Recipe(
+                    title=rec_info["title"],
+                    servings_default=rec_info["servings_default"],
+                    procedure=rec_info.get("procedure"),
+                    bulk_prep=rec_info.get("bulk_prep", False),
+                    score=rec_info.get("score"),
+                    date_last_consumed=(
+                        date.fromisoformat(rec_info["date_last_consumed"])
+                        if rec_info.get("date_last_consumed")
+                        else None
+                    ),
                 )
-                recipe.ingredients.clear()
-                session.flush()
-                recipe.tags.clear()
+            session.add(recipe)
+            session.flush()
+            if rec_id is not None:
+                recipe_id_map[rec_id] = recipe.id
 
             for ing_info in rec_info.get("ingredients", []):
                 ingredient = Ingredient(
-                    id=ing_info.get("id"),
                     name=ing_info["name"],
                     quantity=ing_info.get("quantity"),
                     unit=ing_info.get("unit"),
@@ -358,9 +360,11 @@ def import_data(
                 session.flush()
 
             for slot_info in plan_info.get("slots", []):
+                rid = slot_info.get("recipe_id")
+                rid = recipe_id_map.get(rid, rid)
                 slot = MealSlot(
                     meal_time=slot_info["meal_time"],
-                    recipe_id=slot_info.get("recipe_id"),
+                    recipe_id=rid,
                 )
                 meal_plan.slots.append(slot)
 

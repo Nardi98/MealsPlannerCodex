@@ -74,13 +74,15 @@ def test_import_merge_adds_data(db_session):
 
 
 def test_import_merge_existing_ids(db_session):
-    """Merging exported data should not error or duplicate records."""
+    """Importing an export in merge mode duplicates recipes with new ids."""
     _create_sample_data(db_session)
     exported = crud.export_data(db_session)
 
     crud.import_data(io.StringIO(exported), db_session, mode="merge")
 
-    assert db_session.query(Recipe).count() == 1
+    recipes = db_session.query(Recipe).order_by(Recipe.id).all()
+    assert len(recipes) == 2
+    assert recipes[0].id != recipes[1].id
     assert db_session.query(Tag).count() == 1
 
 
