@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from streamlit.testing.v1 import AppTest
+from mealplanner import crud
+from mealplanner.db import SessionLocal, init_db
 
 
 def test_main_runs() -> None:
@@ -11,16 +13,16 @@ def test_main_runs() -> None:
     assert at.title[0].value == "Meals Planner Codex"
 
 
-def test_recipes_page(monkeypatch) -> None:
-    """Recipes page displays data returned from the backend."""
-    monkeypatch.setattr(
-        "mealplanner.crud.get_recipes",
-        lambda: ["Pasta", "Salad"],
-    )
+def test_recipes_page() -> None:
+    """Recipes page displays existing recipes."""
+    init_db()
+    with SessionLocal() as session:
+        crud.create_recipe(session, title="Pasta", servings_default=1)
+        crud.create_recipe(session, title="Salad", servings_default=1)
     at = AppTest.from_file("pages/1_Recipes.py").run()
-    values = [m.value for m in at.markdown]
-    assert any("Pasta" in v for v in values)
-    assert any("Salad" in v for v in values)
+    labels = [e.label for e in at.expander]
+    assert any("Pasta" in l for l in labels)
+    assert any("Salad" in l for l in labels)
 
 
 def test_new_plan_page(monkeypatch) -> None:

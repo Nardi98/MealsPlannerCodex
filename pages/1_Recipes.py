@@ -145,9 +145,6 @@ def main() -> None:
                 crud.create_recipe(session, **data)
                 _refresh()
 
-    # Retrieve recipe names using helper for compatibility with tests
-    names = crud.get_recipes()
-
     recipes = (
         session.execute(
             select(Recipe)
@@ -158,19 +155,7 @@ def main() -> None:
         .all()
     )
 
-    tag_map = {r.title: [t.name for t in r.tags] for r in recipes}
-
-    if names:
-        for name in names:
-            tags = tag_map.get(name, [])
-            if tags:
-                st.markdown(
-                    f"- {name} {_render_tag_boxes(tags)}",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown(f"- {name}")
-    else:
+    if not recipes:
         st.info("No recipes available.")
 
     for recipe in recipes:
