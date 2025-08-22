@@ -52,6 +52,25 @@ def test_avoid_tags_filtering():
     assert {r.title for r in plan} == {"Good"}
 
 
+def test_generate_plan_avoid_tags_from_ui(db_session):
+    """Avoid tags supplied as a list should exclude recipes."""
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
+    bad = Recipe(title="Bad", servings_default=1, score=1.5, bulk_prep=True)
+    bad.tags = [Tag(name="avoid")]
+    db_session.add_all([good, bad])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        avoid_tags=["avoid"],
+    )
+    assert plan["2024-01-01"] == ["Good"]
+
+
 def test_reduce_tags_penalty(db_session):
     good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
     reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True)
@@ -66,6 +85,25 @@ def test_reduce_tags_penalty(db_session):
         meals_per_day=1,
         epsilon=0.0,
         reduce_tags={"reduce"},
+    )
+    assert plan["2024-01-01"] == ["Good"]
+
+
+def test_generate_plan_reduce_tags_from_ui(db_session):
+    """Reduce tags supplied as a list should downrank recipes."""
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
+    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True)
+    reduce.tags = [Tag(name="reduce")]
+    db_session.add_all([good, reduce])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        reduce_tags=["reduce"],
     )
     assert plan["2024-01-01"] == ["Good"]
 
