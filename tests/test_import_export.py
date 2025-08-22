@@ -1,4 +1,5 @@
 import io
+import json
 from datetime import date
 
 import pytest
@@ -44,4 +45,18 @@ def test_import_bad_data_raises(db_session):
     bad_file = io.StringIO("not json")
     with pytest.raises(ValueError):
         crud.import_data(bad_file, db_session)
+
+
+def test_export_includes_related_objects(db_session):
+    _create_sample_data(db_session)
+    exported = crud.export_data(db_session)
+    data = json.loads(exported)
+
+    assert data["recipes"][0]["title"] == "Soup"
+    assert data["recipes"][0]["ingredients"][0]["name"] == "Water"
+    tag_id = data["recipes"][0]["tags"][0]
+    tag_lookup = {t["id"]: t["name"] for t in data["tags"]}
+    assert tag_lookup[tag_id] == "vegan"
+    assert data["meal_plans"][0]["slots"][0]["meal_time"] == "lunch"
+    assert data["meal_plans"][0]["slots"][0]["recipe_id"] == data["recipes"][0]["id"]
 
