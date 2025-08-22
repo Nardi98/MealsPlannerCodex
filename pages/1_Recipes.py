@@ -52,6 +52,11 @@ def _render_recipe_fields(
     procedure = st.text_area(
         "Procedure", value=getattr(recipe, "procedure", ""), key=f"{prefix}_procedure"
     )
+    bulk_prep = st.checkbox(
+        "Suitable for bulk preparation",
+        value=getattr(recipe, "bulk_prep", False),
+        key=f"{prefix}_bulk_prep",
+    )
 
     # Tag selection
     tags_stmt = select(Tag).order_by(Tag.name)
@@ -113,6 +118,7 @@ def _render_recipe_fields(
         "title": title,
         "servings_default": int(servings),
         "procedure": procedure,
+        "bulk_prep": bulk_prep,
         "ingredients": ingredients,
         "tags": selected_tags,
     }
