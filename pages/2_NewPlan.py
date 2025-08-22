@@ -9,6 +9,8 @@ import streamlit as st
 
 from mealplanner import crud, planner
 from mealplanner.db import SessionLocal
+from mealplanner.models import Recipe
+from sqlalchemy import select
 
 
 def main() -> None:
@@ -53,10 +55,30 @@ def main() -> None:
             }
             if len(inspect.signature(planner.generate_plan).parameters) == 0:
                 plan = planner.generate_plan()
+                id_plan = {}
             else:
                 with SessionLocal() as session:
                     plan = planner.generate_plan(session, **params)
-            crud.save_plan(plan)
+                    id_plan = {}
+                    for day, meals in plan.items():
+                        ids = []
+                        for meal in meals:
+                            # ``scalar_one`` raises ``MultipleResultsFound`` if
+                            # recipe titles are duplicated.  Fetch the first
+                            # match instead to tolerate non-unique titles while
+                            # still failing if none exist.
+                            recipe_id = (
+                                session.execute(
+                                    select(Recipe.id).where(Recipe.title == meal)
+                                )
+                                .scalars()
+                                .first()
+                            )
+                            if recipe_id is None:
+                                raise ValueError(f"Recipe '{meal}' not found")
+                            ids.append(recipe_id)
+                        id_plan[day] = ids
+                    crud.set_meal_plan(session, start_date, id_plan)
             st.success("Plan generated successfully.")
             for day, meals in plan.items():
                 st.subheader(day)

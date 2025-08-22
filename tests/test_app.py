@@ -39,7 +39,7 @@ def test_plan_view_page(monkeypatch) -> None:
     """Viewing the plan shows data from the mocked CRUD layer."""
     monkeypatch.setattr(
         "mealplanner.crud.get_plan",
-        lambda: {"Tue": ["Pizza"]},
+        lambda *a, **k: {"Tue": ["Pizza"]},
     )
     monkeypatch.setattr(
         "mealplanner.crud.list_recipe_titles", lambda *a, **k: ["Pizza"]

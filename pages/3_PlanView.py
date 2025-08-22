@@ -11,7 +11,8 @@ from mealplanner.db import SessionLocal
 def main() -> None:
     """Render the current meal plan."""
     st.header("Plan View")
-    plan = crud.get_plan()
+    with SessionLocal() as session:
+        plan = crud.get_plan(session)
     if not plan:
         st.info("No plan available.")
         return
