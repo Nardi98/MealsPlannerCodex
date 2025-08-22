@@ -36,7 +36,7 @@ def main() -> None:
 
     if swap_slot:
         day, idx = swap_slot
-        with st.modal("Swap Recipe"):
+        with st.dialog("Swap Recipe"):
             with SessionLocal() as session:
                 options = crud.list_recipe_titles(session)
             replacement = st.selectbox("Alternate Recipe", options)
