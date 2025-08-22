@@ -16,7 +16,7 @@
     -   Ingredients also store their **season_months** (list of months
         1--12).
 2.  **Meal plan generator**
-    -   Input: start date, number of days, meals per day.
+    -   Input: start date, number of days, meals per day, bulk leftovers toggle, keep days field.
     -   For each slot, propose a recipe using a **scoring function**:
         -   Base preference score (per-recipe, updated on
             accept/reject).
@@ -44,6 +44,7 @@
         -   **Avoid**: recipes with selected tags are excluded.
         -   **Reduce**: recipes with selected tags are penalized.
 6.  **Leftover management**
+    -   Toggle bulk leftovers on or off and define how many "keep days" they remain.
     -   If recipe is bulk-prep, planner can generate leftover slots in
         future days.
     -   Warn if leftovers exceed "keep days".

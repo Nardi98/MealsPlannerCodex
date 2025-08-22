@@ -34,6 +34,10 @@ def main() -> None:
     bulk_bonus_weight = st.slider(
         "Bulk-Prep Bonus Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
     )
+    bulk_leftovers = st.toggle("Bulk Leftovers", value=True)
+    keep_days = st.number_input(
+        "Keep Days", min_value=1, value=7, step=1
+    )
     avoid_text = st.text_input("Avoid Tags", help="Comma separated")
     reduce_text = st.text_input("Reduce Tags", help="Comma separated")
     avoid_tags = [t.strip() for t in avoid_text.split(",") if t.strip()]
@@ -52,6 +56,8 @@ def main() -> None:
                 "recency_weight": float(recency_weight),
                 "tag_penalty_weight": float(tag_penalty_weight),
                 "bulk_bonus_weight": float(bulk_bonus_weight),
+                "bulk_leftovers": bool(bulk_leftovers),
+                "keep_days": int(keep_days),
             }
             if len(inspect.signature(planner.generate_plan).parameters) == 0:
                 plan = planner.generate_plan()
@@ -79,6 +85,11 @@ def main() -> None:
                             ids.append(recipe_id)
                         id_plan[day] = ids
                     crud.set_meal_plan(session, start_date, id_plan)
+            crud.save_plan(
+                plan,
+                bulk_leftovers=bool(bulk_leftovers),
+                keep_days=int(keep_days),
+            )
             st.success("Plan generated successfully.")
             for day, meals in plan.items():
                 st.subheader(day)
