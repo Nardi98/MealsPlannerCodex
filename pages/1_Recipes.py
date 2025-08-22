@@ -6,11 +6,32 @@ from typing import Dict, List, Optional
 
 import streamlit as st
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from mealplanner import crud
 from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Ingredient, Recipe, Tag
+
+
+TAG_STYLE = """
+<style>
+.recipe-tag {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 0.8rem;
+    margin-left: 0.25rem;
+}
+</style>
+"""
+
+
+def _render_tag_boxes(tags: List[str]) -> str:
+    """Return HTML for displaying tag names as colored boxes."""
+
+    return "".join(f"<span class='recipe-tag'>{t}</span>" for t in tags)
 
 
 def _render_recipe_fields(
@@ -107,6 +128,7 @@ def main() -> None:
     """Render the recipes page with CRUD operations."""
 
     st.header("Recipes")
+    st.markdown(TAG_STYLE, unsafe_allow_html=True)
     init_db()
     session = SessionLocal()
 
@@ -120,24 +142,47 @@ def main() -> None:
     # Retrieve recipe names using helper for compatibility with tests
     names = crud.get_recipes()
 
-    recipes = session.execute(select(Recipe).order_by(Recipe.title)).scalars().all()
+    recipes = (
+        session.execute(
+            select(Recipe)
+            .options(selectinload(Recipe.tags))
+            .order_by(Recipe.title)
+        )
+        .scalars()
+        .all()
+    )
+
+    tag_map = {r.title: [t.name for t in r.tags] for r in recipes}
 
     if names:
         for name in names:
-            st.markdown(f"- {name}")
+            tags = tag_map.get(name, [])
+            if tags:
+                st.markdown(
+                    f"- {name} {_render_tag_boxes(tags)}",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(f"- {name}")
     else:
         st.info("No recipes available.")
 
     for recipe in recipes:
-        with st.expander(recipe.title):
-            with st.form(f"edit_{recipe.id}"):
-                data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
-                if st.form_submit_button("Update"):
-                    crud.update_recipe(session, recipe.id, **data)
+        tag_html = _render_tag_boxes([t.name for t in recipe.tags])
+        exp_col, tag_col = st.columns([4, 1])
+        with exp_col:
+            with st.expander(recipe.title):
+                with st.form(f"edit_{recipe.id}"):
+                    data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
+                    if st.form_submit_button("Update"):
+                        crud.update_recipe(session, recipe.id, **data)
+                        _refresh()
+                if st.button("Delete", key=f"delete_{recipe.id}"):
+                    crud.delete_recipe(session, recipe.id)
                     _refresh()
-            if st.button("Delete", key=f"delete_{recipe.id}"):
-                crud.delete_recipe(session, recipe.id)
-                _refresh()
+        with tag_col:
+            if tag_html:
+                st.markdown(tag_html, unsafe_allow_html=True)
 
     session.close()
 
