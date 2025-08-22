@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from datetime import date
+
 from mealplanner import crud
 from mealplanner.db import SessionLocal
 
@@ -17,10 +19,32 @@ def main() -> None:
         st.info("No plan available.")
         return
 
+    settings = crud.get_plan_settings()
+    keep_days = int(settings.get("keep_days", 1))
     swap_slot = st.session_state.get("swap_slot")
-    for day, meals in plan.items():
+    plan_items = list(plan.items())
+    for day_idx, (day, meals) in enumerate(plan_items):
         st.subheader(day)
+        try:
+            day_date = date.fromisoformat(str(day))
+        except ValueError:
+            day_date = None
         for idx, meal in enumerate(meals):
+            age: int | None = None
+            if meal.endswith(" (leftover)") and day_date is not None:
+                base = meal[:-11]
+                for prev_idx in range(day_idx - 1, -1, -1):
+                    prev_day, prev_meals = plan_items[prev_idx]
+                    if base in prev_meals:
+                        try:
+                            prev_date = date.fromisoformat(str(prev_day))
+                        except ValueError:
+                            break
+                        age = (day_date - prev_date).days
+                        break
+            if age is not None and age >= keep_days:
+                st.warning(f"{meal} is {age} days old (max {keep_days})")
+
             cols = st.columns([3, 1, 1, 1])
             cols[0].markdown(f"- {meal}")
             if cols[1].button("Accept", key=f"{day}-{idx}-a"):

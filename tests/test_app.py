@@ -67,6 +67,26 @@ def test_plan_view_page(monkeypatch) -> None:
     assert "r" in calls
 
 
+def test_plan_view_expired_leftover_warning(monkeypatch) -> None:
+    """Expired leftovers should trigger a warning in the plan view."""
+    plan = {
+        "2024-01-01": ["Bulk"],
+        "2024-01-03": ["Bulk (leftover)"],
+    }
+    crud.save_plan(plan, keep_days=2)
+    monkeypatch.setattr("mealplanner.crud.get_plan", lambda *a, **k: plan)
+    monkeypatch.setattr(
+        "mealplanner.crud.list_recipe_titles", lambda *a, **k: ["Bulk"]
+    )
+    try:
+        at = AppTest.from_file("pages/3_PlanView.py").run()
+        warnings = [w.value for w in at.warning]
+        assert any("days old" in w for w in warnings)
+    finally:
+        crud._PLAN_SETTINGS.clear()
+        crud._PLAN_CACHE.clear()
+
+
 def test_export_page(monkeypatch) -> None:
     """Export button displays data returned by the backend."""
     monkeypatch.setattr(
