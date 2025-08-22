@@ -1,7 +1,8 @@
 import pytest
+from datetime import date
 
 from mealplanner.models import Recipe, Ingredient, Tag
-from mealplanner.planner import generate_weekly_plan
+from mealplanner.planner import generate_weekly_plan, generate_plan
 
 
 def make_recipe(name, bulk=False, tags=None, season=None):
@@ -42,3 +43,19 @@ def test_tag_filtering():
     plan = generate_weekly_plan([vegan, vegan_bulk, meat], tags={"vegan"})
     assert {r.title for r in plan} == {"VeganNB", "VeganBulk"}
     assert sum(1 for r in plan if r.title == "VeganNB") == 1
+
+
+def test_generate_plan_repeatable(db_session):
+    for i, score in enumerate(range(7, 0, -1), start=1):
+        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))
+    db_session.commit()
+    start = date(2024, 1, 1)
+    expected = {
+        "2024-01-01": ["R1"],
+        "2024-01-02": ["R2"],
+        "2024-01-03": ["R3"],
+    }
+    plan1 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
+    plan2 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
+    assert plan1 == expected
+    assert plan1 == plan2

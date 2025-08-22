@@ -2,21 +2,79 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+import random
+from typing import Dict, Iterable, List, Sequence, Set
 
-from typing import Dict, List
+from sqlalchemy.orm import Session
 
-from typing import Iterable, List, Sequence, Set
+from .models import Ingredient, Recipe
+from .scoring import score_recipe
 
-from .models import Ingredient, Recipe, Tag
+
+def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
+    """Return a mapping representation of ``recipe`` for scoring functions."""
+
+    return {
+        "score": recipe.score,
+        "bulk_prep": recipe.bulk_prep,
+        "date_last_consumed": recipe.date_last_consumed,
+        "ingredients": [
+            {
+                "season_months": [
+                    int(m.strip())
+                    for m in (ing.season_months or "").split(",")
+                    if m.strip()
+                ]
+            }
+            for ing in recipe.ingredients
+        ],
+    }
 
 
-def generate_plan() -> Dict[str, List[str]]:
-    """Return a freshly generated meal plan.
+def generate_plan(
+    session: Session,
+    start: date,
+    days: int,
+    meals_per_day: int,
+    epsilon: float = 0.0,
+    tags: Iterable[str] | None = None,
+) -> Dict[str, List[str]]:
+    """Generate a meal plan mapping dates to recipe titles.
 
-    The actual implementation would contain the planning algorithm. Tests mock
-    this function to provide predictable results.
+    Recipes are filtered and scored using :func:`filter_recipes` and
+    :func:`scoring.score_recipe` before being passed to
+    :func:`generate_weekly_plan`.  The resulting recipes populate the requested
+    timeslots.
     """
-    raise NotImplementedError("Planning algorithm not implemented")
+
+    recipes = session.query(Recipe).all()
+    total_slots = days * meals_per_day
+    selections: List[Recipe] = []
+    week = 0
+    while len(selections) < total_slots:
+        week_start = start + timedelta(days=7 * week)
+        season = week_start.month
+        available = filter_recipes(recipes, season=season, tags=tags)
+        scored = sorted(
+            available,
+            key=lambda r: score_recipe(_recipe_to_dict(r), today=week_start)
+            + (random.uniform(-epsilon, epsilon) if epsilon else 0.0),
+            reverse=True,
+        )
+        weekly = generate_weekly_plan(scored)
+        selections.extend(weekly)
+        week += 1
+
+    schedule: Dict[str, List[str]] = {}
+    for day_offset in range(days):
+        current = start + timedelta(days=day_offset)
+        key = current.isoformat()
+        schedule[key] = []
+        for meal_idx in range(meals_per_day):
+            idx = day_offset * meals_per_day + meal_idx
+            schedule[key].append(selections[idx].title)
+    return schedule
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
@@ -101,5 +159,5 @@ def generate_weekly_plan(
     return plan
 
 
-__all__ = ["filter_recipes", "generate_weekly_plan"]
+__all__ = ["generate_plan", "filter_recipes", "generate_weekly_plan"]
 
