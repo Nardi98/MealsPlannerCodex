@@ -41,11 +41,28 @@ def test_plan_view_page(monkeypatch) -> None:
         "mealplanner.crud.get_plan",
         lambda: {"Tue": ["Pizza"]},
     )
+    monkeypatch.setattr(
+        "mealplanner.crud.list_recipe_titles", lambda *a, **k: ["Pizza"]
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "mealplanner.crud.accept_recipe", lambda *a, **k: calls.append("a")
+    )
+    monkeypatch.setattr(
+        "mealplanner.crud.reject_recipe", lambda *a, **k: calls.append("r")
+    )
     at = AppTest.from_file("pages/3_PlanView.py").run()
     sub_values = [h.value for h in at.subheader]
     assert "Tue" in sub_values
     md_values = [m.value for m in at.markdown]
     assert any("Pizza" in v for v in md_values)
+
+    at.button[0].click().run()
+    assert "a" in calls
+
+    at = AppTest.from_file("pages/3_PlanView.py").run()
+    at.button[1].click().run()
+    assert "r" in calls
 
 
 def test_export_page(monkeypatch) -> None:

@@ -22,6 +22,9 @@ __all__ = [
     "set_meal_plan",
     "save_plan",
     "get_plan",
+    "accept_recipe",
+    "reject_recipe",
+    "list_recipe_titles",
 ]
 
 
@@ -167,6 +170,39 @@ def get_plan(
             continue
         result.setdefault(slot.meal_time, []).append(slot.recipe.title)
     return result
+
+
+def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
+    """Increment ``title``'s score and update ``date_last_consumed``."""
+
+    stmt = select(Recipe).where(Recipe.title == title)
+    recipe = session.execute(stmt).scalar_one_or_none()
+    if recipe is None:
+        return None
+    recipe.score = (recipe.score or 0) + 1
+    recipe.date_last_consumed = date.today()
+    session.commit()
+    session.refresh(recipe)
+    return recipe
+
+
+def reject_recipe(session: Session, title: str) -> Optional[Recipe]:
+    """Decrement ``title``'s score."""
+
+    stmt = select(Recipe).where(Recipe.title == title)
+    recipe = session.execute(stmt).scalar_one_or_none()
+    if recipe is None:
+        return None
+    recipe.score = (recipe.score or 0) - 1
+    session.commit()
+    session.refresh(recipe)
+    return recipe
+
+
+def list_recipe_titles(session: Session) -> List[str]:
+    """Return all recipe titles from the database."""
+
+    return session.scalars(select(Recipe.title)).all()
 
 
 def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
