@@ -51,6 +51,37 @@ def test_extreme_base_score():
     assert score_recipe(recipe, today) == pytest.approx(999_999.0)
 
 
+def test_weight_parameters():
+    today = date(2024, 6, 1)
+    recipe = {
+        "score": 1.0,
+        "ingredients": [{"season_months": [6]}],
+        "date_last_consumed": date(2024, 5, 30),
+        "bulk_prep": True,
+        "tags": ["spicy"],
+    }
+    # Only base score when weights are zero
+    assert score_recipe(
+        recipe,
+        today,
+        seasonality_weight=0,
+        recency_weight=0,
+        tag_penalty_weight=0,
+        bulk_bonus_weight=0,
+        reduce_tags={"spicy"},
+    ) == pytest.approx(1.0)
+    # Doubling all weights doubles magnitude of other components
+    assert score_recipe(
+        recipe,
+        today,
+        seasonality_weight=2,
+        recency_weight=2,
+        tag_penalty_weight=2,
+        bulk_bonus_weight=2,
+        reduce_tags={"spicy"},
+    ) == pytest.approx(0.4)
+
+
 def test_tag_penalty():
     recipe = {"tags": ["spicy", "vegan"]}
     assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-0.5)

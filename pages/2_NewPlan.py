@@ -20,6 +20,18 @@ def main() -> None:
         "Meals per Day", min_value=1, value=1, step=1
     )
     epsilon = st.number_input("ε", min_value=0.0, value=0.0, step=0.1)
+    seasonality_weight = st.slider(
+        "Seasonality Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
+    )
+    recency_weight = st.slider(
+        "Recency Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
+    )
+    tag_penalty_weight = st.slider(
+        "Tag Penalty Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
+    )
+    bulk_bonus_weight = st.slider(
+        "Bulk-Prep Bonus Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
+    )
     tag_text = st.text_input("Tag Filters (comma separated)")
     tags = [t.strip() for t in tag_text.split(",") if t.strip()]
 
@@ -31,6 +43,10 @@ def main() -> None:
                 "meals_per_day": int(meals_per_day),
                 "epsilon": float(epsilon),
                 "tags": tags or None,
+                "seasonality_weight": float(seasonality_weight),
+                "recency_weight": float(recency_weight),
+                "tag_penalty_weight": float(tag_penalty_weight),
+                "bulk_bonus_weight": float(bulk_bonus_weight),
             }
             if len(inspect.signature(planner.generate_plan).parameters) == 0:
                 plan = planner.generate_plan()

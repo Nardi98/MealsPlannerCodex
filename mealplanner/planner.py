@@ -9,7 +9,7 @@ from typing import Dict, Iterable, List, Sequence, Set
 from sqlalchemy.orm import Session
 
 from .models import Ingredient, Recipe
-from .scoring import score_recipe, tag_penalty
+from .scoring import score_recipe
 
 
 def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
@@ -42,13 +42,18 @@ def generate_plan(
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
+    seasonality_weight: float = 1.0,
+    recency_weight: float = 1.0,
+    tag_penalty_weight: float = 1.0,
+    bulk_bonus_weight: float = 1.0,
 ) -> Dict[str, List[str]]:
     """Generate a meal plan mapping dates to recipe titles.
 
-    Recipes are filtered and scored using :func:`filter_recipes`,
-    :func:`scoring.score_recipe` and :func:`scoring.tag_penalty` before being
-    passed to :func:`generate_weekly_plan`.  The resulting recipes populate the
-    requested timeslots.
+    Recipes are filtered and scored using :func:`filter_recipes` and
+    :func:`scoring.score_recipe` before being passed to
+    :func:`generate_weekly_plan`.  The resulting recipes populate the requested
+    timeslots.  Weight parameters adjust the influence of individual scoring
+    components.
 
     Parameters are forwarded to :func:`filter_recipes` allowing tag-based
     inclusion, exclusion and down-weighting of recipes.
@@ -70,8 +75,15 @@ def generate_plan(
         )
         scored = sorted(
             available,
-            key=lambda r: score_recipe(_recipe_to_dict(r), today=week_start)
-            + tag_penalty(_recipe_to_dict(r), reduce_tags or [])
+            key=lambda r: score_recipe(
+                _recipe_to_dict(r),
+                today=week_start,
+                seasonality_weight=seasonality_weight,
+                recency_weight=recency_weight,
+                tag_penalty_weight=tag_penalty_weight,
+                bulk_bonus_weight=bulk_bonus_weight,
+                reduce_tags=reduce_tags or [],
+            )
             + (random.uniform(-epsilon, epsilon) if epsilon else 0.0),
             reverse=True,
         )
