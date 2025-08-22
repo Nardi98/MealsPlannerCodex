@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import date
+from typing import Any, Dict, Iterable, List, Optional
 
-from typing import Dict, Iterable, List, Any
-
-from typing import Any, Optional
-
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Recipe
+from .models import MealPlan, MealSlot, Recipe
 
 __all__ = [
     "create_recipe",
     "get_recipe",
     "update_recipe",
     "delete_recipe",
+    "set_meal_plan",
+    "get_plan",
 ]
 
 
@@ -95,11 +96,64 @@ def get_recipes() -> List[str]:
     a database or external service. It is intentionally left unimplemented so
     that tests can mock it to provide deterministic data.
     """
+
     raise NotImplementedError("Database access not implemented")
 
-def get_plan() -> Dict[str, List[str]]:
-    """Return the current meal plan."""
-    raise NotImplementedError("Plan retrieval not implemented")
+
+def set_meal_plan(
+    session: Session, plan_date: date, plan: Dict[str, Iterable[int]]
+) -> MealPlan:
+    """Create or replace a meal plan for the given date.
+
+    Parameters
+    ----------
+    session:
+        Database session for persistence.
+    plan_date:
+        The date this plan applies to.
+    plan:
+        Mapping of meal times to iterables of recipe IDs.
+    """
+
+    stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
+    meal_plan = session.execute(stmt).scalar_one_or_none()
+    if meal_plan is None:
+        meal_plan = MealPlan(plan_date=plan_date)
+        session.add(meal_plan)
+        session.flush()
+    else:
+        meal_plan.slots = []
+
+    for meal_time, recipe_ids in plan.items():
+        for rid in recipe_ids:
+            meal_plan.slots.append(MealSlot(meal_time=meal_time, recipe_id=rid))
+
+    session.commit()
+    session.refresh(meal_plan)
+    return meal_plan
+
+
+def get_plan(session: Session, plan_date: Optional[date] = None) -> Dict[str, List[str]]:
+    """Return the meal plan for ``plan_date`` or today if ``None``.
+
+    The returned mapping associates meal times with a list of recipe titles.
+    If no plan exists for the requested date an empty dictionary is returned.
+    """
+
+    if plan_date is None:
+        plan_date = date.today()
+
+    stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
+    meal_plan = session.execute(stmt).scalar_one_or_none()
+    if meal_plan is None:
+        return {}
+
+    result: Dict[str, List[str]] = {}
+    for slot in meal_plan.slots:
+        if slot.recipe is None:
+            continue
+        result.setdefault(slot.meal_time, []).append(slot.recipe.title)
+    return result
 
 
 def import_data(file_obj: Any) -> None:
