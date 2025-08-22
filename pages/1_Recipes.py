@@ -13,6 +13,27 @@ from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Ingredient, Recipe, Tag
 
 
+TAG_STYLE = """
+<style>
+.recipe-tag {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 0.8rem;
+    margin-left: 0.25rem;
+}
+</style>
+"""
+
+
+def _render_tag_boxes(tags: List[str]) -> str:
+    """Return HTML for displaying tag names as colored boxes."""
+
+    return "".join(f"<span class='recipe-tag'>{t}</span>" for t in tags)
+
+
 def _render_recipe_fields(
     session: Session, prefix: str, recipe: Optional[Recipe] = None
 ) -> Dict[str, object]:
@@ -107,6 +128,7 @@ def main() -> None:
     """Render the recipes page with CRUD operations."""
 
     st.header("Recipes")
+    st.markdown(TAG_STYLE, unsafe_allow_html=True)
     init_db()
     session = SessionLocal()
 
@@ -130,19 +152,24 @@ def main() -> None:
         .all()
     )
 
-    tag_map = {r.title: ", ".join(t.name for t in r.tags) for r in recipes}
+    tag_map = {r.title: [t.name for t in r.tags] for r in recipes}
 
     if names:
         for name in names:
-            tags = tag_map.get(name)
-            label = f" ({tags})" if tags else ""
-            st.markdown(f"- {name}{label}")
+            tags = tag_map.get(name, [])
+            if tags:
+                st.markdown(
+                    f"- {name} {_render_tag_boxes(tags)}",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(f"- {name}")
     else:
         st.info("No recipes available.")
 
     for recipe in recipes:
-        header_tags = ", ".join(t.name for t in recipe.tags)
-        header = f"{recipe.title} ({header_tags})" if header_tags else recipe.title
+        tag_html = _render_tag_boxes([t.name for t in recipe.tags])
+        header = f"{recipe.title} {tag_html}" if tag_html else recipe.title
         with st.expander(header):
             with st.form(f"edit_{recipe.id}"):
                 data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
