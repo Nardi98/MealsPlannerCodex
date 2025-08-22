@@ -118,15 +118,9 @@ def main() -> None:
                 _refresh()
 
     # Retrieve recipe names using helper for compatibility with tests
-    names: List[str] = []
-    try:
-        names = crud.get_recipes()
-    except Exception:
-        pass
+    names = crud.get_recipes()
 
     recipes = session.execute(select(Recipe).order_by(Recipe.title)).scalars().all()
-    if not names:
-        names = [r.title for r in recipes]
 
     if names:
         for name in names:
