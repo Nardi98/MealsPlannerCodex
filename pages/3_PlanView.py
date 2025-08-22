@@ -25,14 +25,14 @@ def main() -> None:
             if cols[1].button("Accept", key=f"{day}-{idx}-a"):
                 with SessionLocal() as session:
                     crud.accept_recipe(session, meal)
-                st.experimental_rerun()
+                st.rerun()
             if cols[2].button("Reject", key=f"{day}-{idx}-r"):
                 with SessionLocal() as session:
                     crud.reject_recipe(session, meal)
-                st.experimental_rerun()
+                st.rerun()
             if cols[3].button("Swap", key=f"{day}-{idx}-s"):
                 st.session_state["swap_slot"] = (day, idx)
-                st.experimental_rerun()
+                st.rerun()
 
     if swap_slot:
         day, idx = swap_slot
@@ -44,10 +44,10 @@ def main() -> None:
                 plan[day][idx] = replacement
                 crud.save_plan(plan)
                 st.session_state.pop("swap_slot", None)
-                st.experimental_rerun()
+                st.rerun()
             if st.button("Cancel"):
                 st.session_state.pop("swap_slot", None)
-                st.experimental_rerun()
+                st.rerun()
 
 
 if __name__ == "__main__":

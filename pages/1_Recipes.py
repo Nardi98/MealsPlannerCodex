@@ -91,7 +91,7 @@ def _render_recipe_fields(
 def _refresh() -> None:
     """Trigger a Streamlit rerun to refresh the page."""
 
-    st.experimental_rerun()
+    st.rerun()
 
 
 def main() -> None:
