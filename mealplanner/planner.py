@@ -95,6 +95,7 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
             keep_days=keep_days,
+            days=min(7, total_slots - len(selections)),
         )
         selections.extend(weekly)
         week += 1
@@ -176,8 +177,9 @@ def generate_weekly_plan(
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
     keep_days: int = 7,
+    days: int = 7,
 ) -> List[tuple[Recipe, bool]]:
-    """Generate a list of seven recipes for the week.
+    """Generate a list of recipes for ``days`` days.
 
     Recipes are filtered by ``season`` and tag parameters before planning. Non
     bulk prep recipes appear at most once in the returned list while recipes
@@ -185,9 +187,18 @@ def generate_weekly_plan(
     one, leftover slots for bulk recipes are inserted immediately after the
     fresh preparation up to ``keep_days - 1`` days.
 
+    Args:
+        recipes: Candidate recipes.
+        season: Optional month number to filter by seasonal ingredients.
+        tags: Optional iterable of required tag names.
+        avoid_tags: Tags that must not appear in recipes.
+        reduce_tags: Tags that are de-prioritised.
+        keep_days: Number of days leftovers may persist.
+        days: Number of days to plan for. Defaults to a full week (``7``).
+
     Raises:
         ValueError: If there are insufficient recipes (including repeats of
-            ``bulk_prep`` recipes) to create a seven day plan.
+            ``bulk_prep`` recipes) to create a plan for ``days`` days.
     """
 
     available = filter_recipes(
@@ -204,24 +215,24 @@ def generate_weekly_plan(
     plan: List[tuple[Recipe, bool]] = []
 
     for recipe in non_bulk:
-        if len(plan) >= 7:
+        if len(plan) >= days:
             break
         plan.append((recipe, False))
 
-    if len(plan) == 7:
+    if len(plan) == days:
         return plan
 
     if not bulk_recipes:
         raise ValueError("Not enough recipes to generate a full weekly plan")
 
     idx = 0
-    while len(plan) < 7:
+    while len(plan) < days:
         recipe = bulk_recipes[idx % len(bulk_recipes)]
         plan.append((recipe, False))
-        leftover_slots = min(keep_days - 1, 7 - len(plan))
+        leftover_slots = min(keep_days - 1, days - len(plan))
         for _ in range(leftover_slots):
             plan.append((recipe, True))
-            if len(plan) >= 7:
+            if len(plan) >= days:
                 break
         idx += 1
 

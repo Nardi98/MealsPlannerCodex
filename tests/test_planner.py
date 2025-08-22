@@ -165,6 +165,21 @@ def test_generate_plan_repeatable(db_session):
     assert plan1 == plan2
 
 
+def test_generate_plan_partial_week(db_session):
+    """Plans shorter than a week work with limited recipes."""
+    for i, score in enumerate(range(3, 0, -1), start=1):
+        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))
+    db_session.commit()
+    start = date(2024, 1, 1)
+    expected = {
+        "2024-01-01": ["R1"],
+        "2024-01-02": ["R2"],
+        "2024-01-03": ["R3"],
+    }
+    plan = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
+    assert plan == expected
+
+
 def test_generate_weekly_plan_insufficient_recipes():
     """Generating a plan without enough recipes should raise an error."""
     recipes = [make_recipe("OnlyOne")]
