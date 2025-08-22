@@ -118,12 +118,15 @@ def get_or_create_tag(session: Session, name: str) -> Tag:
 def get_recipes() -> List[str]:
     """Return a list of recipe names.
 
-    This function is a placeholder that represents fetching recipe data from
-    a database or external service. It is intentionally left unimplemented so
-    that tests can mock it to provide deterministic data.
+    Titles are loaded directly from the database using a lightweight query.
+    ``tests.test_app`` replaces this function with a stub to avoid the database
+    dependency during tests, but in normal operation we should perform a real
+    query.
     """
 
-    raise NotImplementedError("Database access not implemented")
+    with SessionLocal() as session:
+        stmt = select(Recipe.title).order_by(Recipe.title)
+        return session.execute(stmt).scalars().all()
 
 
 def set_meal_plan(
