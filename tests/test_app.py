@@ -55,7 +55,7 @@ def test_export_page(monkeypatch) -> None:
         lambda: "exported",
     )
     at = AppTest.from_file("pages/4_ImportExport.py").run()
-    at.button[0].click().run()
-    md_values = [m.value for m in at.markdown]
-    assert "exported" in md_values
+    at = at.button[0].click().run()
+    code_values = [c.value for c in at.code]
+    assert any("exported" in v for v in code_values)
 
