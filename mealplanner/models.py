@@ -74,3 +74,32 @@ class Tag(Base):
         "Recipe", secondary=recipe_tag_table, back_populates="tags"
     )
 
+
+class MealPlan(Base):
+    """A dated collection of planned meals."""
+
+    __tablename__ = "meal_plans"
+
+    id = Column(Integer, primary_key=True)
+    plan_date = Column(Date, nullable=False, unique=True)
+
+    slots = relationship(
+        "MealSlot", back_populates="plan", cascade="all, delete-orphan"
+    )
+
+
+class MealSlot(Base):
+    """A specific meal time within a :class:`MealPlan`."""
+
+    __tablename__ = "meal_slots"
+
+    id = Column(Integer, primary_key=True)
+    meal_plan_id = Column(
+        Integer, ForeignKey("meal_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    meal_time = Column(String, nullable=False)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"))
+
+    plan = relationship("MealPlan", back_populates="slots")
+    recipe = relationship("Recipe")
+
