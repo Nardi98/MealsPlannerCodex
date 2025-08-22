@@ -56,7 +56,7 @@ def _render_tag_filter(session: Session) -> List[str]:
                     selected.remove(tag.name)
                 else:
                     selected.append(tag.name)
-                st.experimental_rerun()
+                st.rerun()
 
     return selected
 
