@@ -1,7 +1,7 @@
 from datetime import date
 import pytest
 
-from mealplanner.scoring import score_recipe
+from mealplanner.scoring import score_recipe, tag_penalty
 
 
 def test_all_in_season_old_recipe():
@@ -49,3 +49,9 @@ def test_extreme_base_score():
     }
     # base 1e6 + recency -1 = 999999
     assert score_recipe(recipe, today) == pytest.approx(999_999.0)
+
+
+def test_tag_penalty():
+    recipe = {"tags": ["spicy", "vegan"]}
+    assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-0.5)
+    assert tag_penalty(recipe, {"gluten-free"}) == pytest.approx(0.0)

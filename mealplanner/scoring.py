@@ -82,6 +82,31 @@ def bulk_bonus(recipe: RecipeDict) -> float:
     return 0.2 if recipe.get("bulk_prep") else 0.0
 
 
+def tag_penalty(
+    recipe: RecipeDict,
+    reduce_tags: Iterable[str],
+    penalty: float = 0.5,
+) -> float:
+    """Return a negative penalty if ``recipe`` contains any ``reduce_tags``.
+
+    Parameters
+    ----------
+    recipe:
+        Mapping describing the recipe.  Tags are expected under the ``"tags"``
+        key as a sequence of strings.
+    reduce_tags:
+        Iterable of tag names that should incur a penalty if present.
+    penalty:
+        Amount to subtract from the score when a matching tag is found.
+    """
+
+    recipe_tags = {t.lower() for t in recipe.get("tags", [])}
+    targets = {t.lower() for t in reduce_tags}
+    if recipe_tags.intersection(targets):
+        return -float(penalty)
+    return 0.0
+
+
 def score_recipe(recipe: RecipeDict, today: Optional[date] = None) -> float:
     """Compute the overall score for ``recipe``.
 
@@ -103,6 +128,7 @@ __all__ = [
     "seasonality_bonus",
     "recency_penalty",
     "bulk_bonus",
+    "tag_penalty",
     "score_recipe",
 ]
 

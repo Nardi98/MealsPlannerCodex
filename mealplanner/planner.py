@@ -9,7 +9,7 @@ from typing import Dict, Iterable, List, Sequence, Set
 from sqlalchemy.orm import Session
 
 from .models import Ingredient, Recipe
-from .scoring import score_recipe
+from .scoring import score_recipe, tag_penalty
 
 
 def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
@@ -29,6 +29,7 @@ def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
             }
             for ing in recipe.ingredients
         ],
+        "tags": [t.name for t in recipe.tags],
     }
 
 
@@ -39,13 +40,18 @@ def generate_plan(
     meals_per_day: int,
     epsilon: float = 0.0,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
+    reduce_tags: Iterable[str] | None = None,
 ) -> Dict[str, List[str]]:
     """Generate a meal plan mapping dates to recipe titles.
 
-    Recipes are filtered and scored using :func:`filter_recipes` and
-    :func:`scoring.score_recipe` before being passed to
-    :func:`generate_weekly_plan`.  The resulting recipes populate the requested
-    timeslots.
+    Recipes are filtered and scored using :func:`filter_recipes`,
+    :func:`scoring.score_recipe` and :func:`scoring.tag_penalty` before being
+    passed to :func:`generate_weekly_plan`.  The resulting recipes populate the
+    requested timeslots.
+
+    Parameters are forwarded to :func:`filter_recipes` allowing tag-based
+    inclusion, exclusion and down-weighting of recipes.
     """
 
     recipes = session.query(Recipe).all()
@@ -55,14 +61,25 @@ def generate_plan(
     while len(selections) < total_slots:
         week_start = start + timedelta(days=7 * week)
         season = week_start.month
-        available = filter_recipes(recipes, season=season, tags=tags)
+        available = filter_recipes(
+            recipes,
+            season=season,
+            tags=tags,
+            avoid_tags=avoid_tags,
+            reduce_tags=reduce_tags,
+        )
         scored = sorted(
             available,
             key=lambda r: score_recipe(_recipe_to_dict(r), today=week_start)
+            + tag_penalty(_recipe_to_dict(r), reduce_tags or [])
             + (random.uniform(-epsilon, epsilon) if epsilon else 0.0),
             reverse=True,
         )
-        weekly = generate_weekly_plan(scored)
+        weekly = generate_weekly_plan(
+            scored,
+            avoid_tags=avoid_tags,
+            reduce_tags=reduce_tags,
+        )
         selections.extend(weekly)
         week += 1
 
@@ -94,6 +111,8 @@ def filter_recipes(
     recipes: Sequence[Recipe],
     season: int | None = None,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
+    reduce_tags: Iterable[str] | None = None,
 ) -> List[Recipe]:
     """Filter ``recipes`` according to ``season`` and ``tags``.
 
@@ -103,40 +122,62 @@ def filter_recipes(
             ingredient available in that month are kept.
         tags: Optional iterable of tag names. A recipe must contain at least one
             of these tags to be included.
+        avoid_tags: Optional iterable of tag names. Recipes containing any of
+            these tags are excluded.
+        reduce_tags: Optional iterable of tag names. Recipes containing these
+            tags are returned after others so they are less likely to be
+            selected.
     """
 
     tag_set: Set[str] | None = set(tags) if tags else None
-    filtered: List[Recipe] = []
+    avoid_set: Set[str] = set(avoid_tags or [])
+    reduce_set: Set[str] = set(reduce_tags or [])
+    primary: List[Recipe] = []
+    reduced: List[Recipe] = []
     for recipe in recipes:
-        if tag_set:
-            if not {t.name for t in recipe.tags}.intersection(tag_set):
-                continue
-        if season is not None:
-            if recipe.ingredients and not any(
-                _ingredient_in_season(ing, season) for ing in recipe.ingredients
-            ):
-                continue
-        filtered.append(recipe)
-    return filtered
+        recipe_tags = {t.name for t in recipe.tags}
+        if avoid_set and recipe_tags.intersection(avoid_set):
+            continue
+        if tag_set and not recipe_tags.intersection(tag_set):
+            continue
+        if season is not None and recipe.ingredients and not any(
+            _ingredient_in_season(ing, season) for ing in recipe.ingredients
+        ):
+            continue
+        if reduce_set and recipe_tags.intersection(reduce_set):
+            reduced.append(recipe)
+        else:
+            primary.append(recipe)
+    return primary + reduced
 
 
 def generate_weekly_plan(
     recipes: Sequence[Recipe],
     season: int | None = None,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
+    reduce_tags: Iterable[str] | None = None,
 ) -> List[Recipe]:
     """Generate a list of seven recipes for the week.
 
-    Recipes are filtered by ``season`` and ``tags`` before planning. Non bulk
-    prep recipes appear at most once in the returned list while recipes flagged
-    with ``bulk_prep`` may be repeated to fill any remaining days.
+    Recipes are filtered by ``season`` and tag parameters before planning. Non
+    bulk prep recipes appear at most once in the returned list while recipes
+    flagged with ``bulk_prep`` may be repeated to fill any remaining days.  When
+    ``reduce_tags`` are supplied, matching recipes are considered only after all
+    others.
 
     Raises:
         ValueError: If there are insufficient recipes (including repeats of
             ``bulk_prep`` recipes) to create a seven day plan.
     """
 
-    available = filter_recipes(recipes, season=season, tags=tags)
+    available = filter_recipes(
+        recipes,
+        season=season,
+        tags=tags,
+        avoid_tags=avoid_tags,
+        reduce_tags=reduce_tags,
+    )
     plan: List[Recipe] = []
 
     # First use non bulk-prep recipes exactly once
