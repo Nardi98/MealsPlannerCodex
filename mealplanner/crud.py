@@ -230,7 +230,9 @@ def list_recipe_titles(session: Session) -> List[str]:
     return session.scalars(select(Recipe.title)).all()
 
 
-def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
+def import_data(
+    file_obj: Any, session: Optional[Session] = None, mode: str = "overwrite"
+) -> None:
     """Import data from the given uploaded file object.
 
     Parameters
@@ -240,6 +242,10 @@ def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
     session:
         Optional SQLAlchemy session. If omitted a new session is created using
         :func:`~mealplanner.db.SessionLocal`.
+    mode:
+        Specifies how imported data should be handled. ``"overwrite"`` clears
+        existing tables before import, while ``"merge"`` leaves existing data
+        intact.
     """
 
     close_session = False
@@ -257,16 +263,22 @@ def import_data(file_obj: Any, session: Optional[Session] = None) -> None:
             session.close()
         raise ValueError("Malformed import data") from exc
 
+    if mode not in {"overwrite", "merge"}:
+        if close_session:
+            session.close()
+        raise ValueError("mode must be 'overwrite' or 'merge'")
+
     try:
-        # Clear existing data
-        session.execute(recipe_tag_table.delete())
-        session.query(MealSlot).delete()
-        session.query(MealPlan).delete()
-        session.query(Ingredient).delete()
-        session.query(Tag).delete()
-        session.query(Recipe).delete()
-        session.commit()
-        session.expunge_all()
+        if mode == "overwrite":
+            # Clear existing data
+            session.execute(recipe_tag_table.delete())
+            session.query(MealSlot).delete()
+            session.query(MealPlan).delete()
+            session.query(Ingredient).delete()
+            session.query(Tag).delete()
+            session.query(Recipe).delete()
+            session.commit()
+            session.expunge_all()
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):

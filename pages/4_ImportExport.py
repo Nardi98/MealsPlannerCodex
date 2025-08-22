@@ -24,10 +24,11 @@ def main() -> None:
         )
         st.code(data, language="json")
 
+    mode = st.radio("Import mode", ["overwrite", "merge"], index=0)
     uploaded = st.file_uploader("Import Data")
     if uploaded is not None:
         try:
-            crud.import_data(uploaded)
+            crud.import_data(uploaded, mode=mode)
         except ValueError as exc:  # noqa: BLE001 - broad to show message
             st.error(f"Import failed: {exc}")
         else:
