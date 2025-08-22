@@ -82,20 +82,41 @@ def bulk_bonus(recipe: RecipeDict) -> float:
     return 0.2 if recipe.get("bulk_prep") else 0.0
 
 
-def score_recipe(recipe: RecipeDict, today: Optional[date] = None) -> float:
+def tag_penalty(
+    recipe: RecipeDict, reduce_tags: Optional[Iterable[str]] = None
+) -> float:
+    """Return a negative penalty if ``recipe`` contains ``reduce`` tags."""
+
+    if not reduce_tags:
+        return 0.0
+    recipe_tags = set(recipe.get("tags") or [])
+    if recipe_tags.intersection(set(reduce_tags)):
+        return -1.0
+    return 0.0
+
+
+def score_recipe(
+    recipe: RecipeDict,
+    today: Optional[date] = None,
+    *,
+    weights: Optional[Dict[str, float]] = None,
+    reduce_tags: Optional[Iterable[str]] = None,
+) -> float:
     """Compute the overall score for ``recipe``.
 
     The scoring is intentionally straightforward: add the base score to the
-    results of :func:`seasonality_bonus`, :func:`recency_penalty` and
-    :func:`bulk_bonus`.
+    weighted results of :func:`seasonality_bonus`, :func:`recency_penalty`,
+    :func:`bulk_bonus` and :func:`tag_penalty`.
     """
 
     today = today or date.today()
+    weights = weights or {}
     base = recipe.get("score") or 0.0
     total = float(base)
-    total += seasonality_bonus(recipe, today)
-    total += recency_penalty(recipe, today)
-    total += bulk_bonus(recipe)
+    total += weights.get("seasonality", 1.0) * seasonality_bonus(recipe, today)
+    total += weights.get("recency", 1.0) * recency_penalty(recipe, today)
+    total += weights.get("bulk", 1.0) * bulk_bonus(recipe)
+    total += weights.get("tags", 1.0) * tag_penalty(recipe, reduce_tags)
     return total
 
 
@@ -103,6 +124,7 @@ __all__ = [
     "seasonality_bonus",
     "recency_penalty",
     "bulk_bonus",
+    "tag_penalty",
     "score_recipe",
 ]
 

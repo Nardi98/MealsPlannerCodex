@@ -45,6 +45,40 @@ def test_tag_filtering():
     assert sum(1 for r in plan if r.title == "VeganNB") == 1
 
 
+def test_avoid_and_reduce_tags(db_session):
+    good = Recipe(title="Good", servings_default=1, score=1)
+    reduce = Recipe(title="Reduce", servings_default=1, score=1, bulk_prep=True)
+    reduce.tags = [Tag(name="sugar")]
+    avoid = Recipe(title="Avoid", servings_default=1, score=1)
+    avoid.tags = [Tag(name="meat")]
+    db_session.add_all([good, reduce, avoid])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=2,
+        meals_per_day=1,
+        epsilon=0.0,
+        avoid_tags={"meat"},
+        reduce_tags={"sugar"},
+    )
+    days = list(plan.values())
+    assert all("Avoid" not in meals for meals in days)
+    assert days[0] == ["Good"]
+    assert days[1] == ["Reduce"]
+
+
+def test_leftover_slots_follow_initial_recipe():
+    r1 = make_recipe("R1")
+    bulk = make_recipe("Bulk", bulk=True)
+    plan = generate_weekly_plan([r1, bulk])
+    # bulk recipe should appear multiple times with first occurrence before repeats
+    assert plan.count(bulk) > 1
+    first_idx = plan.index(bulk)
+    assert all(idx > first_idx for idx, r in enumerate(plan) if r == bulk and idx != first_idx)
+
+
 def test_generate_plan_repeatable(db_session):
     for i, score in enumerate(range(7, 0, -1), start=1):
         db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))

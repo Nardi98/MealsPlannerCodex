@@ -29,6 +29,7 @@ def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
             }
             for ing in recipe.ingredients
         ],
+        "tags": [t.name for t in recipe.tags],
     }
 
 
@@ -39,6 +40,9 @@ def generate_plan(
     meals_per_day: int,
     epsilon: float = 0.0,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
+    reduce_tags: Iterable[str] | None = None,
+    weights: Dict[str, float] | None = None,
 ) -> Dict[str, List[str]]:
     """Generate a meal plan mapping dates to recipe titles.
 
@@ -55,14 +59,23 @@ def generate_plan(
     while len(selections) < total_slots:
         week_start = start + timedelta(days=7 * week)
         season = week_start.month
-        available = filter_recipes(recipes, season=season, tags=tags)
+        available = filter_recipes(
+            recipes, season=season, tags=tags, avoid_tags=avoid_tags
+        )
         scored = sorted(
             available,
-            key=lambda r: score_recipe(_recipe_to_dict(r), today=week_start)
+            key=lambda r: score_recipe(
+                _recipe_to_dict(r),
+                today=week_start,
+                weights=weights,
+                reduce_tags=reduce_tags,
+            )
             + (random.uniform(-epsilon, epsilon) if epsilon else 0.0),
             reverse=True,
         )
-        weekly = generate_weekly_plan(scored)
+        weekly = generate_weekly_plan(
+            scored, season=season, tags=tags, avoid_tags=avoid_tags
+        )
         selections.extend(weekly)
         week += 1
 
@@ -94,23 +107,32 @@ def filter_recipes(
     recipes: Sequence[Recipe],
     season: int | None = None,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
 ) -> List[Recipe]:
-    """Filter ``recipes`` according to ``season`` and ``tags``.
+    """Filter ``recipes`` according to ``season`` and tag preferences.
 
     Args:
-        recipes: Collection of :class:`~mealplanner.models.Recipe` objects.
-        season: Optional month number (``1-12``). Only recipes with at least one
+        recipes:
+            Collection of :class:`~mealplanner.models.Recipe` objects.
+        season:
+            Optional month number (``1-12``). Only recipes with at least one
             ingredient available in that month are kept.
-        tags: Optional iterable of tag names. A recipe must contain at least one
+        tags:
+            Optional iterable of tag names. A recipe must contain at least one
             of these tags to be included.
+        avoid_tags:
+            Optional iterable of tag names that should be excluded entirely.
     """
 
     tag_set: Set[str] | None = set(tags) if tags else None
+    avoid_set: Set[str] = set(avoid_tags) if avoid_tags else set()
     filtered: List[Recipe] = []
     for recipe in recipes:
-        if tag_set:
-            if not {t.name for t in recipe.tags}.intersection(tag_set):
-                continue
+        recipe_tags = {t.name for t in recipe.tags}
+        if avoid_set.intersection(recipe_tags):
+            continue
+        if tag_set and not recipe_tags.intersection(tag_set):
+            continue
         if season is not None:
             if recipe.ingredients and not any(
                 _ingredient_in_season(ing, season) for ing in recipe.ingredients
@@ -124,24 +146,27 @@ def generate_weekly_plan(
     recipes: Sequence[Recipe],
     season: int | None = None,
     tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
 ) -> List[Recipe]:
     """Generate a list of seven recipes for the week.
 
-    Recipes are filtered by ``season`` and ``tags`` before planning. Non bulk
-    prep recipes appear at most once in the returned list while recipes flagged
-    with ``bulk_prep`` may be repeated to fill any remaining days.
+    Recipes are filtered by ``season`` and tag preferences before planning. Each
+    recipe appears at most once initially; recipes marked with ``bulk_prep`` may
+    then be repeated to fill any remaining days.
 
     Raises:
         ValueError: If there are insufficient recipes (including repeats of
             ``bulk_prep`` recipes) to create a seven day plan.
     """
 
-    available = filter_recipes(recipes, season=season, tags=tags)
+    available = filter_recipes(
+        recipes, season=season, tags=tags, avoid_tags=avoid_tags
+    )
     plan: List[Recipe] = []
 
-    # First use non bulk-prep recipes exactly once
+    # Add each recipe once
     for recipe in available:
-        if not recipe.bulk_prep and recipe not in plan:
+        if recipe not in plan:
             plan.append(recipe)
         if len(plan) == 7:
             return plan
