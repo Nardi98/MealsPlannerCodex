@@ -21,7 +21,8 @@ def test_non_repetition_and_bulk_prep():
     recipes.append(bulk_recipe)
     plan = generate_weekly_plan(recipes)
     assert len(plan) == 7
-    counts = {r.title: plan.count(r) for r in recipes}
+    plan_recipes = [r for r, _ in plan]
+    counts = {r.title: plan_recipes.count(r) for r in recipes}
     for r in recipes:
         if r.bulk_prep:
             assert counts[r.title] > 1
@@ -33,7 +34,7 @@ def test_seasonal_filtering():
     summer = make_recipe("Summer", bulk=True, season=[6, 7])
     winter = make_recipe("Winter", season=[12])
     plan = generate_weekly_plan([summer, winter], season=6)
-    assert {r.title for r in plan} == {"Summer"}
+    assert {r.title for r, _ in plan} == {"Summer"}
 
 
 def test_tag_filtering():
@@ -41,15 +42,15 @@ def test_tag_filtering():
     vegan_bulk = make_recipe("VeganBulk", bulk=True, tags=["vegan"])
     meat = make_recipe("Meat", tags=["meat"])
     plan = generate_weekly_plan([vegan, vegan_bulk, meat], tags={"vegan"})
-    assert {r.title for r in plan} == {"VeganNB", "VeganBulk"}
-    assert sum(1 for r in plan if r.title == "VeganNB") == 1
+    assert {r.title for r, _ in plan} == {"VeganNB", "VeganBulk"}
+    assert sum(1 for r, _ in plan if r.title == "VeganNB") == 1
 
 
 def test_avoid_tags_filtering():
     good = make_recipe("Good", bulk=True)
     bad = make_recipe("Bad", bulk=True, tags=["avoid"])
     plan = generate_weekly_plan([good, bad], avoid_tags={"avoid"})
-    assert {r.title for r in plan} == {"Good"}
+    assert {r.title for r, _ in plan} == {"Good"}
 
 
 def test_reduce_tags_penalty(db_session):
@@ -131,3 +132,38 @@ def test_generate_weekly_plan_insufficient_recipes():
     recipes = [make_recipe("OnlyOne")]
     with pytest.raises(ValueError):
         generate_weekly_plan(recipes)
+
+
+def test_generate_weekly_plan_leftovers_marked():
+    bulk = make_recipe("Bulk", bulk=True)
+    plan = generate_weekly_plan([bulk], keep_days=2)
+    titles = [(r.title, leftover) for r, leftover in plan]
+    # Expect alternating fresh and leftover slots
+    assert titles[:4] == [
+        ("Bulk", False),
+        ("Bulk", True),
+        ("Bulk", False),
+        ("Bulk", True),
+    ]
+
+
+def test_generate_plan_leftover_expiry(db_session):
+    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0)
+    db_session.add(recipe)
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=4,
+        meals_per_day=1,
+        epsilon=0.0,
+        keep_days=2,
+    )
+    expected = {
+        "2024-01-01": ["Bulk"],
+        "2024-01-02": ["Bulk (leftover)"],
+        "2024-01-03": ["Bulk"],
+        "2024-01-04": ["Bulk (leftover)"],
+    }
+    assert plan == expected

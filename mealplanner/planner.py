@@ -38,6 +38,7 @@ def generate_plan(
     start: date,
     days: int,
     meals_per_day: int,
+    keep_days: int = 7,
     epsilon: float = 0.0,
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
@@ -55,13 +56,15 @@ def generate_plan(
     timeslots.  Weight parameters adjust the influence of individual scoring
     components.
 
-    Parameters are forwarded to :func:`filter_recipes` allowing tag-based
-    inclusion, exclusion and down-weighting of recipes.
+    ``keep_days`` controls how many days leftover portions from a ``bulk_prep``
+    recipe may appear after the initial preparation. Parameters are forwarded to
+    :func:`filter_recipes` allowing tag-based inclusion, exclusion and
+    down-weighting of recipes.
     """
 
     recipes = session.query(Recipe).all()
     total_slots = days * meals_per_day
-    selections: List[Recipe] = []
+    selections: List[tuple[Recipe, bool]] = []
     week = 0
     while len(selections) < total_slots:
         week_start = start + timedelta(days=7 * week)
@@ -91,6 +94,7 @@ def generate_plan(
             scored,
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
+            keep_days=keep_days,
         )
         selections.extend(weekly)
         week += 1
@@ -102,7 +106,9 @@ def generate_plan(
         schedule[key] = []
         for meal_idx in range(meals_per_day):
             idx = day_offset * meals_per_day + meal_idx
-            schedule[key].append(selections[idx].title)
+            recipe, leftover = selections[idx]
+            title = recipe.title + (" (leftover)" if leftover else "")
+            schedule[key].append(title)
     return schedule
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
@@ -169,14 +175,15 @@ def generate_weekly_plan(
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
-) -> List[Recipe]:
+    keep_days: int = 7,
+) -> List[tuple[Recipe, bool]]:
     """Generate a list of seven recipes for the week.
 
     Recipes are filtered by ``season`` and tag parameters before planning. Non
     bulk prep recipes appear at most once in the returned list while recipes
-    flagged with ``bulk_prep`` may be repeated to fill any remaining days.  When
-    ``reduce_tags`` are supplied, matching recipes are considered only after all
-    others.
+    flagged with ``bulk_prep`` may be repeated. When ``keep_days`` is greater than
+    one, leftover slots for bulk recipes are inserted immediately after the
+    fresh preparation up to ``keep_days - 1`` days.
 
     Raises:
         ValueError: If there are insufficient recipes (including repeats of
@@ -190,24 +197,33 @@ def generate_weekly_plan(
         avoid_tags=avoid_tags,
         reduce_tags=reduce_tags,
     )
-    plan: List[Recipe] = []
 
-    # First use non bulk-prep recipes exactly once
-    for recipe in available:
-        if not recipe.bulk_prep and recipe not in plan:
-            plan.append(recipe)
-        if len(plan) == 7:
-            return plan
-
-    # Fill remaining slots with bulk-prep recipes allowing repeats
+    non_bulk = [r for r in available if not r.bulk_prep]
     bulk_recipes = [r for r in available if r.bulk_prep]
-    idx = 0
-    while len(plan) < 7 and bulk_recipes:
-        plan.append(bulk_recipes[idx % len(bulk_recipes)])
-        idx += 1
 
-    if len(plan) < 7:
+    plan: List[tuple[Recipe, bool]] = []
+
+    for recipe in non_bulk:
+        if len(plan) >= 7:
+            break
+        plan.append((recipe, False))
+
+    if len(plan) == 7:
+        return plan
+
+    if not bulk_recipes:
         raise ValueError("Not enough recipes to generate a full weekly plan")
+
+    idx = 0
+    while len(plan) < 7:
+        recipe = bulk_recipes[idx % len(bulk_recipes)]
+        plan.append((recipe, False))
+        leftover_slots = min(keep_days - 1, 7 - len(plan))
+        for _ in range(leftover_slots):
+            plan.append((recipe, True))
+            if len(plan) >= 7:
+                break
+        idx += 1
 
     return plan
 
