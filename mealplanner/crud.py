@@ -196,8 +196,12 @@ def get_plan(
 def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
     """Increment ``title``'s score and update ``date_last_consumed``."""
 
+    # ``scalar_one_or_none`` raises ``MultipleResultsFound`` if more than one
+    # recipe shares the same title. While titles should ideally be unique,
+    # user data might contain duplicates.  Fetch the first matching recipe
+    # instead to gracefully handle such cases.
     stmt = select(Recipe).where(Recipe.title == title)
-    recipe = session.execute(stmt).scalar_one_or_none()
+    recipe = session.scalars(stmt).first()
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) + 1
@@ -211,7 +215,7 @@ def reject_recipe(session: Session, title: str) -> Optional[Recipe]:
     """Decrement ``title``'s score."""
 
     stmt = select(Recipe).where(Recipe.title == title)
-    recipe = session.execute(stmt).scalar_one_or_none()
+    recipe = session.scalars(stmt).first()
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) - 1
