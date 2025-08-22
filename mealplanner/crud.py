@@ -13,6 +13,7 @@ from .db import SessionLocal, Base
 from .models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
+_PLAN_SETTINGS: Dict[str, Any] = {}
 
 __all__ = [
     "create_recipe",
@@ -162,11 +163,17 @@ def set_meal_plan(
     return meal_plan
 
 
-def save_plan(plan: Dict[str, List[str]]) -> None:
-    """Persist ``plan`` in memory for later retrieval."""
+def save_plan(
+    plan: Dict[str, List[str]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
+) -> None:
+    """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
     _PLAN_CACHE.clear()
     _PLAN_CACHE.update(plan)
+    if bulk_leftovers is not None:
+        _PLAN_SETTINGS["bulk_leftovers"] = bulk_leftovers
+    if keep_days is not None:
+        _PLAN_SETTINGS["keep_days"] = keep_days
 
 
 def get_plan(
