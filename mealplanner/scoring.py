@@ -107,20 +107,29 @@ def tag_penalty(
     return 0.0
 
 
-def score_recipe(recipe: RecipeDict, today: Optional[date] = None) -> float:
+def score_recipe(
+    recipe: RecipeDict,
+    today: Optional[date] = None,
+    *,
+    seasonality_weight: float = 1.0,
+    recency_weight: float = 1.0,
+    tag_penalty_weight: float = 1.0,
+    bulk_bonus_weight: float = 1.0,
+    reduce_tags: Iterable[str] | None = None,
+) -> float:
     """Compute the overall score for ``recipe``.
 
-    The scoring is intentionally straightforward: add the base score to the
-    results of :func:`seasonality_bonus`, :func:`recency_penalty` and
-    :func:`bulk_bonus`.
+    Individual components are scaled by weights allowing callers to influence
+    their impact on the final score.
     """
 
     today = today or date.today()
     base = recipe.get("score") or 0.0
     total = float(base)
-    total += seasonality_bonus(recipe, today)
-    total += recency_penalty(recipe, today)
-    total += bulk_bonus(recipe)
+    total += seasonality_weight * seasonality_bonus(recipe, today)
+    total += recency_weight * recency_penalty(recipe, today)
+    total += bulk_bonus_weight * bulk_bonus(recipe)
+    total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
     return total
 
 
