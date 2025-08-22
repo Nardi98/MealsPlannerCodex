@@ -2,8 +2,9 @@ from datetime import date
 
 from sqlalchemy import select
 
+from mealplanner import planner
 from mealplanner.crud import create_recipe, set_meal_plan, get_plan
-from mealplanner.models import MealPlan, MealSlot
+from mealplanner.models import MealPlan, MealSlot, Recipe
 
 
 def test_meal_plan_model_relationships(db_session):
@@ -20,19 +21,26 @@ def test_meal_plan_model_relationships(db_session):
     assert plan.slots[0].recipe_id == recipe.id
 
 
-def test_set_and_get_plan(db_session):
-    r1 = create_recipe(db_session, title="Porridge", servings_default=1)
-    r2 = create_recipe(db_session, title="Salad", servings_default=2)
+def test_generate_and_persist_plan(db_session):
+    for i in range(7):
+        create_recipe(db_session, title=f"Meal {i}", servings_default=1)
     plan_date = date(2024, 5, 17)
 
-    set_meal_plan(db_session, plan_date, {"breakfast": [r1.id], "lunch": [r2.id]})
+    plan_titles = planner.generate_plan(
+        db_session, start=plan_date, days=1, meals_per_day=2
+    )
+    id_plan = {}
+    for day, meals in plan_titles.items():
+        ids = [
+            db_session.execute(
+                select(Recipe.id).where(Recipe.title == meal)
+            ).scalar_one()
+            for meal in meals
+        ]
+        id_plan[day] = ids
+    set_meal_plan(db_session, plan_date, id_plan)
     fetched = get_plan(db_session, plan_date)
-    assert fetched == {"breakfast": ["Porridge"], "lunch": ["Salad"]}
-
-    r3 = create_recipe(db_session, title="Soup", servings_default=2)
-    set_meal_plan(db_session, plan_date, {"dinner": [r3.id]})
-    fetched = get_plan(db_session, plan_date)
-    assert fetched == {"dinner": ["Soup"]}
+    assert fetched == plan_titles
 
 
 def test_delete_plan_cascades_slots(db_session):
