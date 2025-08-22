@@ -7,6 +7,7 @@ from typing import Dict, Iterable, List, Any
 
 from typing import Any, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import Recipe
@@ -88,14 +89,22 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
     session.commit()
     return True
 
-  def get_recipes() -> List[str]:
+def get_recipes(session: Session) -> List[str]:
     """Return a list of recipe names.
 
-    This function is a placeholder that represents fetching recipe data from
-    a database or external service. It is intentionally left unimplemented so
-    that tests can mock it to provide deterministic data.
+    Parameters
+    ----------
+    session:
+        SQLAlchemy session used for database interaction.
+
+    Returns
+    -------
+    list[str]
+        Recipe titles ordered alphabetically.
     """
-    raise NotImplementedError("Database access not implemented")
+
+    stmt = select(Recipe.title).order_by(Recipe.title)
+    return session.scalars(stmt).all()
 
 def get_plan() -> Dict[str, List[str]]:
     """Return the current meal plan."""
