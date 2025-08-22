@@ -3,6 +3,8 @@ import json
 from datetime import date
 
 import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
 from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, Tag
@@ -83,4 +85,22 @@ def test_export_includes_related_objects(db_session):
     assert tag_lookup[tag_id] == "vegan"
     assert data["meal_plans"][0]["slots"][0]["meal_time"] == "lunch"
     assert data["meal_plans"][0]["slots"][0]["recipe_id"] == data["recipes"][0]["id"]
+
+
+def test_import_creates_tables_when_missing():
+    """import_data should initialise schema if tables are absent."""
+    engine = create_engine("sqlite:///:memory:", future=True)
+    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    payload = {
+        "recipes": [
+            {"title": "Temp", "servings_default": 1, "ingredients": [], "tags": []}
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+
+    with Session() as session:
+        crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
+        assert session.query(Recipe).count() == 1
 

@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal
+from .db import SessionLocal, Base
 from .models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
@@ -253,6 +253,9 @@ def import_data(
         session = SessionLocal()
         close_session = True
 
+    # Ensure database tables exist for this session's engine
+    Base.metadata.create_all(bind=session.get_bind())
+
     try:
         raw = file_obj.read()
         if isinstance(raw, bytes):
@@ -354,6 +357,9 @@ def export_data(session: Optional[Session] = None) -> str:
     if session is None:
         session = SessionLocal()
         close_session = True
+
+    # Ensure database tables exist for this session's engine
+    Base.metadata.create_all(bind=session.get_bind())
 
     try:
         recipes_data = []

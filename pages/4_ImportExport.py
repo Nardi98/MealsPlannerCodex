@@ -6,13 +6,14 @@ import streamlit as st
 from sqlalchemy import select
 
 from mealplanner import crud
-from mealplanner.db import SessionLocal
+from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Recipe
 
 
 def main() -> None:
     """Render the import/export utilities."""
     st.header("Import / Export")
+    init_db()
 
     if st.button("Export Data"):
         data = crud.export_data()
