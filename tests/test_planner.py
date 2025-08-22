@@ -45,6 +45,31 @@ def test_tag_filtering():
     assert sum(1 for r in plan if r.title == "VeganNB") == 1
 
 
+def test_avoid_tags_filtering():
+    good = make_recipe("Good", bulk=True)
+    bad = make_recipe("Bad", bulk=True, tags=["avoid"])
+    plan = generate_weekly_plan([good, bad], avoid_tags={"avoid"})
+    assert {r.title for r in plan} == {"Good"}
+
+
+def test_reduce_tags_penalty(db_session):
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
+    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True)
+    reduce.tags = [Tag(name="reduce")]
+    db_session.add_all([good, reduce])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        reduce_tags={"reduce"},
+    )
+    assert plan["2024-01-01"] == ["Good"]
+
+
 def test_generate_plan_repeatable(db_session):
     for i, score in enumerate(range(7, 0, -1), start=1):
         db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))
