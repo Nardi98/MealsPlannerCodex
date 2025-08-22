@@ -24,6 +24,7 @@ __all__ = [
     "set_meal_plan",
     "save_plan",
     "get_plan",
+    "get_plan_settings",
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
@@ -198,6 +199,17 @@ def get_plan(
             continue
         result.setdefault(slot.meal_time, []).append(slot.recipe.title)
     return result
+
+
+def get_plan_settings() -> Dict[str, Any]:
+    """Return cached plan metadata such as ``keep_days``.
+
+    The settings are populated by :func:`save_plan` and stored in-memory only.
+    A shallow copy is returned to prevent accidental modification of the
+    internal cache.
+    """
+
+    return dict(_PLAN_SETTINGS)
 
 
 def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
