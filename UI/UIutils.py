@@ -40,36 +40,33 @@ def ingredient_selector(
         The selected or typed ingredient name.
     """
 
-    # Render the main text input where users can type a name
-    input_value = container.text_input(label, value=default, key=key)
+    st.session_state.setdefault(key, default)
+    current = st.session_state[key]
 
-    # Filter available options based on user input
+    # Filter available options based on current text
     filtered = [
         opt
         for opt in options
-        if input_value and input_value.lower() in opt.lower() and opt != input_value
+        if current and current.lower() in opt.lower() and opt != current
     ]
 
-    # Placeholder for suggestions to keep layout stable
+    select_key = f"{key}_select"
     suggestion_placeholder = container.empty()
 
-    select_key = f"{key}_select"
-
-    def _update_from_suggestion() -> None:
-        """Write the selected suggestion back to the text input."""
-        st.session_state[key] = st.session_state[select_key]
-
     if filtered:
-        suggestion_placeholder.selectbox(
+        selected = suggestion_placeholder.selectbox(
             "Suggestions",
             filtered,
             key=select_key,
             label_visibility="collapsed",
-            on_change=_update_from_suggestion,
         )
+        if selected != current:
+            st.session_state[key] = selected
+            current = selected
     else:
         suggestion_placeholder.empty()
         st.session_state.pop(select_key, None)
 
-    return st.session_state.get(key, "")
+    # Render the main text input where users can type a name
+    return container.text_input(label, key=key)
 
