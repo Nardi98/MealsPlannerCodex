@@ -38,7 +38,7 @@ def _render_tag_boxes(tags: List[str]) -> str:
 
 
 def _render_tag_filter(session: Session) -> List[str]:
-    """Render tag buttons that toggle recipe filtering.
+    """Render a multiselect for filtering recipes by tags.
 
     Returns a list with the currently selected tag names.
     """
@@ -47,19 +47,11 @@ def _render_tag_filter(session: Session) -> List[str]:
     if "selected_tags" not in st.session_state:
         st.session_state["selected_tags"] = []
 
-    selected: List[str] = st.session_state["selected_tags"]
-
-    if tags:
-        cols = st.columns(len(tags))
-        for tag, col in zip(tags, cols):
-            is_selected = tag.name in selected
-            button_type = "primary" if is_selected else "secondary"
-            if col.button(tag.name, key=f"filter_{tag.id}", type=button_type):
-                if is_selected:
-                    selected.remove(tag.name)
-                else:
-                    selected.append(tag.name)
-                st.rerun()
+    tag_names = [t.name for t in tags]
+    selected: List[str] = st.multiselect(
+        "Filter by Tag", tag_names, default=st.session_state["selected_tags"]
+    )
+    st.session_state["selected_tags"] = selected
 
     return selected
 
