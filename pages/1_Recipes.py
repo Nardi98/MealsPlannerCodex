@@ -98,10 +98,17 @@ def _render_recipe_fields(
     if count_key not in st.session_state:
         st.session_state[count_key] = len(existing)
 
-    # The ingredient rows are dynamic. A small button allows users to add
-    # another row, and each click triggers a rerun to display the new inputs.
-    if st.button("➕", key=f"{prefix}_add_ingredient"):
-        st.session_state[count_key] += 1
+    # Buttons to dynamically add or remove ingredient rows. Each click triggers
+    # a rerun to display the updated set of inputs.
+    btn_cols = st.columns(2)
+    with btn_cols[0]:
+        if st.button("➕", key=f"{prefix}_add_ingredient"):
+            st.session_state[count_key] += 1
+    with btn_cols[1]:
+        if st.button("➖", key=f"{prefix}_remove_ingredient"):
+            st.session_state[count_key] = max(
+                len(existing), st.session_state[count_key] - 1
+            )
 
     ingredient_count = st.session_state[count_key]
 
