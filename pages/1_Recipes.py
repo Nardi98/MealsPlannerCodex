@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import streamlit as st
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from mealplanner import crud
+from mealplanner.UIUtils import combobox_with_add
 from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Ingredient, Recipe, Tag
 
@@ -28,58 +29,6 @@ TAG_STYLE = """
 """
 
 ALLOWED_UNITS = ["g", "l", "ml", "pieces"]
-
-
-def combobox_with_add(
-    key: str,
-    placeholder: str,
-    fetch_options: Callable[[str], List[str]],
-    on_create: Callable[[str], None] | None = None,
-    limit: int = 50,
-) -> tuple[str | None, bool]:
-    """Searchbox that lets users select existing values or add new ones."""
-
-    from streamlit_searchbox import st_searchbox
-
-    ADD_PREFIX = "➕ Add ‘"
-    ADD_SUFFIX = "’"
-
-    def exact_exists(q: str, opts: List[str]) -> bool:
-        qn = q.strip().lower()
-        return any(o.strip().lower() == qn for o in opts)
-
-    def make_add_label(q: str) -> str:
-        return f"{ADD_PREFIX}{q.strip()}{ADD_SUFFIX}"
-
-    def is_add_label(x: str) -> bool:
-        return isinstance(x, str) and x.startswith(ADD_PREFIX) and x.endswith(ADD_SUFFIX)
-
-    def extract_val(x: str) -> str:
-        return x[len(ADD_PREFIX) : -len(ADD_SUFFIX)]
-
-    def search_fn(user_input: str) -> List[str]:
-        q = (user_input or "").strip()
-        options = fetch_options(q)[:limit]
-        if q and not exact_exists(q, options):
-            options.append(make_add_label(q))
-        return options
-
-    picked = st_searchbox(
-        search_function=search_fn,
-        key=key,
-        placeholder=placeholder,
-        clear_on_submit=False,
-    )
-
-    created = False
-    if isinstance(picked, str) and is_add_label(picked):
-        val = extract_val(picked)
-        if on_create:
-            on_create(val)
-        picked = val
-        created = True
-
-    return picked, created
 
 
 def _render_tag_boxes(tags: List[str]) -> str:
