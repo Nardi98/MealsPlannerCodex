@@ -169,11 +169,9 @@ def main() -> None:
                 st.subheader(day)
                 for meal in meals:
                     st.markdown(f"- {meal}")
-            st.button(
-                "View Plan",
-                on_click=lambda: st.switch_page("pages/3_PlanView.py"),
-            )
             clear_form()
+            if st.button("View Plan"):
+                st.switch_page("pages/3_PlanView.py")
 
 
 if __name__ == "__main__":
