@@ -165,7 +165,11 @@ def set_meal_plan(
 
 
 def save_plan(
-    plan: Dict[str, List[str]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
+    plan: Dict[str, List[str]],
+    *,
+    bulk_leftovers: bool | None = None,
+    keep_days: int | None = None,
+    accepted_recipes: Iterable[str] | None = None,
 ) -> None:
     """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
@@ -175,6 +179,8 @@ def save_plan(
         _PLAN_SETTINGS["bulk_leftovers"] = bulk_leftovers
     if keep_days is not None:
         _PLAN_SETTINGS["keep_days"] = keep_days
+    if accepted_recipes is not None:
+        _PLAN_SETTINGS["accepted_recipes"] = list(accepted_recipes)
 
 
 def get_plan(
