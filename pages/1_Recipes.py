@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from mealplanner import crud
+from mealplanner.UIUtils import combobox_with_add
 from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Ingredient, Recipe, Tag
 
@@ -28,7 +29,6 @@ TAG_STYLE = """
 """
 
 ALLOWED_UNITS = ["g", "l", "ml", "pieces"]
-
 
 
 def _render_tag_boxes(tags: List[str]) -> str:
@@ -98,16 +98,18 @@ def _render_recipe_fields(
     if count_key not in st.session_state:
         st.session_state[count_key] = len(existing)
 
-    if st.form_submit_button("➕"):
+    # The ingredient rows are dynamic. A small button allows users to add
+    # another row, and each click triggers a rerun to display the new inputs.
+    if st.button("➕", key=f"{prefix}_add_ingredient"):
         st.session_state[count_key] += 1
 
     ingredient_count = st.session_state[count_key]
 
-    existing_names = (
-        session.execute(select(Ingredient.name).distinct().order_by(Ingredient.name))
-        .scalars()
-        .all()
-    )
+    def fetch_ingredient_options(query: str) -> List[str]:
+        stmt = select(Ingredient.name).distinct().order_by(Ingredient.name)
+        if query:
+            stmt = stmt.where(Ingredient.name.ilike(f"%{query}%"))
+        return session.execute(stmt).scalars().all()
 
     ingredients: List[Ingredient] = []
     for idx in range(ingredient_count):
@@ -115,10 +117,16 @@ def _render_recipe_fields(
         cols = st.columns(4)
         name_key = f"{prefix}_ing_{idx}_name"
 
-        default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
-        name_val = cols[0].text_input(
-            f"Ingredient {idx + 1}", value=default_name, key=name_key
-        )
+        placeholder = getattr(ing, "name", f"Ingredient {idx + 1}")
+        with cols[0]:
+            name_val, _ = combobox_with_add(
+                key=name_key,
+                placeholder=placeholder,
+                fetch_options=fetch_ingredient_options,
+                allow_create=True,
+            )
+        if not name_val and ing:
+            name_val = ing.name
 
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
@@ -141,8 +149,6 @@ def _render_recipe_fields(
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
-        if name_val and name_val in existing_names:
-            name_val = existing_names[existing_names.index(name_val)]
         if name_val:
             ingredients.append(
                 Ingredient(
@@ -181,11 +187,10 @@ def main() -> None:
     session = SessionLocal()
 
     with st.expander("Create Recipe"):
-        with st.form("create_recipe_form"):
-            data = _render_recipe_fields(session, "create")
-            if st.form_submit_button("Create"):
-                crud.create_recipe(session, **data)
-                _refresh()
+        data = _render_recipe_fields(session, "create")
+        if st.button("Create", key="create_recipe_submit"):
+            crud.create_recipe(session, **data)
+            _refresh()
 
     selected_tags = _render_tag_filter(session)
 
@@ -213,11 +218,10 @@ def main() -> None:
         exp_col, tag_col = st.columns([4, 1])
         with exp_col:
             with st.expander(recipe.title):
-                with st.form(f"edit_{recipe.id}"):
-                    data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
-                    if st.form_submit_button("Update"):
-                        crud.update_recipe(session, recipe.id, **data)
-                        _refresh()
+                data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
+                if st.button("Update", key=f"update_{recipe.id}"):
+                    crud.update_recipe(session, recipe.id, **data)
+                    _refresh()
                 if st.button("Delete", key=f"delete_{recipe.id}"):
                     crud.delete_recipe(session, recipe.id)
                     _refresh()
