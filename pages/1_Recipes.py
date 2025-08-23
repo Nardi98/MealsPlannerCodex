@@ -115,15 +115,16 @@ def _render_recipe_fields(
         cols = st.columns(4)
         name_key = f"{prefix}_ing_{idx}_name"
 
-        if name_key not in st.session_state:
-            st.session_state[name_key] = getattr(ing, "name", "")
+        placeholder = getattr(ing, "name", f"Ingredient {idx + 1}")
         with cols[0]:
             name_val, _ = combobox_with_add(
                 key=name_key,
-                placeholder=f"Ingredient {idx + 1}",
+                placeholder=placeholder,
                 fetch_options=fetch_ingredient_options,
                 allow_create=True,
             )
+        if not name_val and ing:
+            name_val = ing.name
 
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
