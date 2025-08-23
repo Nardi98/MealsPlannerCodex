@@ -130,6 +130,8 @@ def _render_recipe_fields(
         name_key = f"{prefix}_ing_{row_id}_name"
 
         placeholder = getattr(ing, "name", f"Ingredient {pos + 1}")
+        if ing and name_key not in st.session_state:
+            st.session_state[name_key] = ing.name
         with cols[1]:
             name_val, _ = combobox_with_add(
                 key=name_key,
