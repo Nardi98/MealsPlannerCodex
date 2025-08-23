@@ -80,15 +80,17 @@ def main() -> None:
         except ValueError as exc:  # noqa: BLE001 - broad to show message
             st.error(f"Import failed: {exc}")
         else:
-            st.success("Data imported")
-            with SessionLocal() as session:
-                titles = session.execute(select(Recipe.title)).scalars().all()
-            if titles:
-                st.write("Imported recipes:")
-                for title in titles:
-                    st.write(f"- {title}")
-            else:
-                st.write("No recipes found")
+            st.success("Data imported successfully. Redirecting to recipes...")
+            st.markdown(
+                """
+                <script>
+                    setTimeout(function() {
+                        window.location.search = '?page=1_Recipes';
+                    }, 1500);
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
         finally:
             st.session_state.pop("pending_upload", None)
             st.session_state.pop("uploaded_file", None)
