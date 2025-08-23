@@ -27,13 +27,28 @@ def main() -> None:
     swap_slot = st.session_state.get("swap_slot")
     accepted = set(st.session_state.get("accepted_recipes", []))
     plan_items = list(plan.items())
+
+    # Determine the maximum number of meals per day to size the grid
+    max_meals = max(len(m) for m in plan.values()) if plan else 0
+
+    # Header row for the grid
+    header = st.columns(max_meals)
+    for i in range(max_meals):
+        header[i].markdown(f"**Meal {i + 1}**")
+
     for day_idx, (day, meals) in enumerate(plan_items):
         st.subheader(day)
+        cols = st.columns(max_meals)
         try:
             day_date = date.fromisoformat(str(day))
         except ValueError:
             day_date = None
-        for idx, meal in enumerate(meals):
+
+        for idx in range(max_meals):
+            cell = cols[idx]
+            if idx >= len(meals):
+                continue
+            meal = meals[idx]
             age: int | None = None
             if meal.endswith(" (leftover)") and day_date is not None:
                 base = meal[:-11]
@@ -46,25 +61,24 @@ def main() -> None:
                             break
                         age = (day_date - prev_date).days
                         break
+            cell.markdown(meal)
             if age is not None and age >= keep_days:
-                st.warning(f"{meal} is {age} days old (max {keep_days})")
-
-            cols = st.columns([3, 1, 1, 1])
-            cols[0].markdown(f"- {meal}")
+                cell.warning(f"{meal} is {age} days old (max {keep_days})")
             key = f"{day}-{idx}"
             if key in accepted:
-                cols[1].markdown(
+                cell.markdown(
                     "<button style='background-color: green; color: white; width: 100%' disabled>Accepted</button>",
                     unsafe_allow_html=True,
                 )
             else:
-                if cols[1].button("Accept", key=f"{key}-a"):
+                bcols = cell.columns(3)
+                if bcols[0].button("Accept", key=f"{key}-a"):
                     with SessionLocal() as session:
                         crud.accept_recipe(session, meal)
                     accepted.add(key)
                     st.session_state["accepted_recipes"] = list(accepted)
                     st.rerun()
-                if cols[2].button("Reject", key=f"{key}-r"):
+                if bcols[1].button("Reject", key=f"{key}-r"):
                     base = meal[:-11] if meal.endswith(" (leftover)") else meal
                     with SessionLocal() as session:
                         crud.reject_recipe(session, base)
@@ -106,7 +120,7 @@ def main() -> None:
                                 plan_date = date.today()
                             crud.set_meal_plan(session, plan_date, id_plan)
                     st.rerun()
-                if cols[3].button("Swap", key=f"{key}-s"):
+                if bcols[2].button("Swap", key=f"{key}-s"):
                     st.session_state["swap_slot"] = (day, idx)
                     st.rerun()
 
