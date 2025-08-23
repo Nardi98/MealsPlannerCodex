@@ -17,18 +17,21 @@ from sqlalchemy import select
 def clear_form() -> None:
     """Reset input widgets to their default values."""
 
-    st.session_state.start_date = date.today()
-    st.session_state.days = 7
-    st.session_state.meals_per_day = 1
-    st.session_state.epsilon = 0.0
-    st.session_state.seasonality_weight = 1.0
-    st.session_state.recency_weight = 1.0
-    st.session_state.tag_penalty_weight = 1.0
-    st.session_state.bulk_bonus_weight = 1.0
-    st.session_state.bulk_leftovers = True
-    st.session_state.keep_days = 7
-    st.session_state.avoid_text = ""
-    st.session_state.reduce_text = ""
+    for key in [
+        "start_date",
+        "days",
+        "meals_per_day",
+        "epsilon",
+        "seasonality_weight",
+        "recency_weight",
+        "tag_penalty_weight",
+        "bulk_bonus_weight",
+        "bulk_leftovers",
+        "keep_days",
+        "avoid_text",
+        "reduce_text",
+    ]:
+        st.session_state.pop(key, None)
 
 
 def main() -> None:
