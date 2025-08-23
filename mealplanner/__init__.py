@@ -7,5 +7,6 @@ __all__ = [
     "planner",
     "scoring",
     "utils",
+    "UIutils",
     "seed",
 ]
