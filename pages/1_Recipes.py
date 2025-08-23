@@ -94,23 +94,21 @@ def _render_recipe_fields(
 
     # Ingredient inputs
     existing = list(getattr(recipe, "ingredients", []))
-    count_key = f"{prefix}_ingredient_count"
-    if count_key not in st.session_state:
-        st.session_state[count_key] = len(existing)
+    rows_key = f"{prefix}_ingredient_rows"
+    next_key = f"{rows_key}_next"
+    if rows_key not in st.session_state:
+        st.session_state[rows_key] = list(range(len(existing)))
+        st.session_state[next_key] = len(existing)
 
-    # Buttons to dynamically add or remove ingredient rows. Each click triggers
-    # a rerun to display the updated set of inputs.
-    btn_cols = st.columns(2)
-    with btn_cols[0]:
-        if st.button("➕", key=f"{prefix}_add_ingredient"):
-            st.session_state[count_key] += 1
-    with btn_cols[1]:
-        if st.button("➖", key=f"{prefix}_remove_ingredient"):
-            st.session_state[count_key] = max(
-                len(existing), st.session_state[count_key] - 1
-            )
+    # Button to dynamically add ingredient rows. Each click triggers a rerun
+    # to display the updated set of inputs.
+    if st.button("➕", key=f"{prefix}_add_ingredient"):
+        row_id = st.session_state[next_key]
+        st.session_state[next_key] += 1
+        st.session_state[rows_key].append(row_id)
+        st.rerun()
 
-    ingredient_count = st.session_state[count_key]
+    ingredient_rows = st.session_state[rows_key]
 
     def fetch_ingredient_options(query: str) -> List[str]:
         stmt = select(Ingredient.name).distinct().order_by(Ingredient.name)
@@ -119,13 +117,19 @@ def _render_recipe_fields(
         return session.execute(stmt).scalars().all()
 
     ingredients: List[Ingredient] = []
-    for idx in range(ingredient_count):
-        ing = existing[idx] if idx < len(existing) else None
-        cols = st.columns(4)
-        name_key = f"{prefix}_ing_{idx}_name"
-
-        placeholder = getattr(ing, "name", f"Ingredient {idx + 1}")
+    for pos, row_id in enumerate(ingredient_rows):
+        ing = existing[row_id] if row_id < len(existing) else None
+        cols = st.columns(5)
         with cols[0]:
+            if st.button("✖", key=f"{prefix}_del_ing_{row_id}"):
+                ingredient_rows.remove(row_id)
+                for suffix in ("name", "qty", "unit", "season"):
+                    st.session_state.pop(f"{prefix}_ing_{row_id}_{suffix}", None)
+                st.rerun()
+        name_key = f"{prefix}_ing_{row_id}_name"
+
+        placeholder = getattr(ing, "name", f"Ingredient {pos + 1}")
+        with cols[1]:
             name_val, _ = combobox_with_add(
                 key=name_key,
                 placeholder=placeholder,
@@ -135,26 +139,28 @@ def _render_recipe_fields(
         if not name_val and ing:
             name_val = ing.name
 
-        quantity = cols[1].number_input(
-            f"Qty {idx + 1}",
+        quantity = cols[2].number_input(
+            f"Qty {pos + 1}",
             min_value=0.0,
             step=1.0,
             value=getattr(ing, "quantity", 0.0) or 0.0,
-            key=f"{prefix}_ing_{idx}_qty",
+            key=f"{prefix}_ing_{row_id}_qty",
         )
         unit_options = ALLOWED_UNITS
         current_unit = getattr(ing, "unit", "")
-        unit_index = unit_options.index(current_unit) if current_unit in unit_options else 0
-        unit = cols[2].selectbox(
-            f"Unit {idx + 1}",
+        unit_index = (
+            unit_options.index(current_unit) if current_unit in unit_options else 0
+        )
+        unit = cols[3].selectbox(
+            f"Unit {pos + 1}",
             unit_options,
             index=unit_index,
-            key=f"{prefix}_ing_{idx}_unit",
+            key=f"{prefix}_ing_{row_id}_unit",
         )
-        season = cols[3].text_input(
-            f"Season {idx + 1}",
+        season = cols[4].text_input(
+            f"Season {pos + 1}",
             value=getattr(ing, "season_months", ""),
-            key=f"{prefix}_ing_{idx}_season",
+            key=f"{prefix}_ing_{row_id}_season",
         )
         if name_val:
             ingredients.append(
