@@ -9,6 +9,8 @@ import streamlit as st
 
 from mealplanner import crud
 from mealplanner.db import SessionLocal
+from mealplanner.models import Recipe
+from sqlalchemy import select
 
 
 def main() -> None:
@@ -67,16 +69,42 @@ def main() -> None:
                     with SessionLocal() as session:
                         crud.reject_recipe(session, base)
                         options = crud.list_recipe_titles(session)
-                    existing = {
-                        m[:-11] if m.endswith(" (leftover)") else m
-                        for meals in plan.values()
-                        for m in meals
-                    }
-                    replacements = [r for r in options if r not in existing]
-                    if replacements:
-                        replacement = random.choice(replacements)
-                        plan[day][idx] = replacement
-                        crud.save_plan(plan)
+                        existing = {
+                            m[:-11] if m.endswith(" (leftover)") else m
+                            for meals in plan.values()
+                            for m in meals
+                        }
+                        replacements = [r for r in options if r not in existing]
+                        if replacements:
+                            replacement = random.choice(replacements)
+                            plan[day][idx] = replacement
+                            crud.save_plan(plan)
+                            id_plan: dict[str, list[int]] = {}
+                            for d, meals in plan.items():
+                                ids: list[int] = []
+                                for title in meals:
+                                    title_base = (
+                                        title[:-11]
+                                        if title.endswith(" (leftover)")
+                                        else title
+                                    )
+                                    rid = (
+                                        session.execute(
+                                            select(Recipe.id).where(
+                                                Recipe.title == title_base
+                                            )
+                                        )
+                                        .scalars()
+                                        .first()
+                                    )
+                                    if rid is not None:
+                                        ids.append(rid)
+                                id_plan[d] = ids
+                            try:
+                                plan_date = date.fromisoformat(next(iter(plan)))
+                            except Exception:
+                                plan_date = date.today()
+                            crud.set_meal_plan(session, plan_date, id_plan)
                     st.rerun()
                 if cols[3].button("Swap", key=f"{key}-s"):
                     st.session_state["swap_slot"] = (day, idx)
