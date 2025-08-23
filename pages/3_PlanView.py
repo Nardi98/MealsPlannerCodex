@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-import streamlit as st
-
+import random
 from datetime import date
+
+import streamlit as st
 
 from mealplanner import crud
 from mealplanner.db import SessionLocal
+from mealplanner.models import Recipe
+from sqlalchemy import select
 
 
 def main() -> None:
@@ -22,6 +25,7 @@ def main() -> None:
     settings = crud.get_plan_settings()
     keep_days = int(settings.get("keep_days", 1))
     swap_slot = st.session_state.get("swap_slot")
+    accepted = set(st.session_state.get("accepted_recipes", []))
     plan_items = list(plan.items())
     for day_idx, (day, meals) in enumerate(plan_items):
         st.subheader(day)
@@ -47,17 +51,64 @@ def main() -> None:
 
             cols = st.columns([3, 1, 1, 1])
             cols[0].markdown(f"- {meal}")
-            if cols[1].button("Accept", key=f"{day}-{idx}-a"):
-                with SessionLocal() as session:
-                    crud.accept_recipe(session, meal)
-                st.rerun()
-            if cols[2].button("Reject", key=f"{day}-{idx}-r"):
-                with SessionLocal() as session:
-                    crud.reject_recipe(session, meal)
-                st.rerun()
-            if cols[3].button("Swap", key=f"{day}-{idx}-s"):
-                st.session_state["swap_slot"] = (day, idx)
-                st.rerun()
+            key = f"{day}-{idx}"
+            if key in accepted:
+                cols[1].markdown(
+                    "<button style='background-color: green; color: white; width: 100%' disabled>Accepted</button>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                if cols[1].button("Accept", key=f"{key}-a"):
+                    with SessionLocal() as session:
+                        crud.accept_recipe(session, meal)
+                    accepted.add(key)
+                    st.session_state["accepted_recipes"] = list(accepted)
+                    st.rerun()
+                if cols[2].button("Reject", key=f"{key}-r"):
+                    base = meal[:-11] if meal.endswith(" (leftover)") else meal
+                    with SessionLocal() as session:
+                        crud.reject_recipe(session, base)
+                        options = crud.list_recipe_titles(session)
+                        existing = {
+                            m[:-11] if m.endswith(" (leftover)") else m
+                            for meals in plan.values()
+                            for m in meals
+                        }
+                        replacements = [r for r in options if r not in existing]
+                        if replacements:
+                            replacement = random.choice(replacements)
+                            plan[day][idx] = replacement
+                            crud.save_plan(plan)
+                            id_plan: dict[str, list[int]] = {}
+                            for d, meals in plan.items():
+                                ids: list[int] = []
+                                for title in meals:
+                                    title_base = (
+                                        title[:-11]
+                                        if title.endswith(" (leftover)")
+                                        else title
+                                    )
+                                    rid = (
+                                        session.execute(
+                                            select(Recipe.id).where(
+                                                Recipe.title == title_base
+                                            )
+                                        )
+                                        .scalars()
+                                        .first()
+                                    )
+                                    if rid is not None:
+                                        ids.append(rid)
+                                id_plan[d] = ids
+                            try:
+                                plan_date = date.fromisoformat(next(iter(plan)))
+                            except Exception:
+                                plan_date = date.today()
+                            crud.set_meal_plan(session, plan_date, id_plan)
+                    st.rerun()
+                if cols[3].button("Swap", key=f"{key}-s"):
+                    st.session_state["swap_slot"] = (day, idx)
+                    st.rerun()
 
     if swap_slot:
         day, idx = swap_slot
