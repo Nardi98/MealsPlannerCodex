@@ -98,7 +98,9 @@ def _render_recipe_fields(
     if count_key not in st.session_state:
         st.session_state[count_key] = len(existing)
 
-    if st.form_submit_button("➕"):
+    # The ingredient rows are dynamic. A small button allows users to add
+    # another row, and each click triggers a rerun to display the new inputs.
+    if st.button("➕", key=f"{prefix}_add_ingredient"):
         st.session_state[count_key] += 1
 
     ingredient_count = st.session_state[count_key]
@@ -185,11 +187,10 @@ def main() -> None:
     session = SessionLocal()
 
     with st.expander("Create Recipe"):
-        with st.form("create_recipe_form"):
-            data = _render_recipe_fields(session, "create")
-            if st.form_submit_button("Create"):
-                crud.create_recipe(session, **data)
-                _refresh()
+        data = _render_recipe_fields(session, "create")
+        if st.button("Create", key="create_recipe_submit"):
+            crud.create_recipe(session, **data)
+            _refresh()
 
     selected_tags = _render_tag_filter(session)
 
@@ -217,11 +218,10 @@ def main() -> None:
         exp_col, tag_col = st.columns([4, 1])
         with exp_col:
             with st.expander(recipe.title):
-                with st.form(f"edit_{recipe.id}"):
-                    data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
-                    if st.form_submit_button("Update"):
-                        crud.update_recipe(session, recipe.id, **data)
-                        _refresh()
+                data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
+                if st.button("Update", key=f"update_{recipe.id}"):
+                    crud.update_recipe(session, recipe.id, **data)
+                    _refresh()
                 if st.button("Delete", key=f"delete_{recipe.id}"):
                     crud.delete_recipe(session, recipe.id)
                     _refresh()
