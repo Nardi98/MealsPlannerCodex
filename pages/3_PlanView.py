@@ -112,18 +112,60 @@ def main() -> None:
 
     if swap_slot:
         day, idx = swap_slot
-        with st.dialog("Swap Recipe"):
+
+        @st.dialog("Swap Recipe")
+        def swap_dialog(d: str, i: int) -> None:
+            """Display recipe search and handle swapping the meal."""
+
             with SessionLocal() as session:
                 options = crud.list_recipe_titles(session)
-            replacement = st.selectbox("Alternate Recipe", options)
-            if st.button("Confirm Swap"):
-                plan[day][idx] = replacement
+
+            query = st.text_input("Search Recipe")
+            matches = [o for o in options if o.lower().startswith(query.lower())]
+            replacement = (
+                st.selectbox("Alternate Recipe", matches) if matches else None
+            )
+
+            if st.button("Confirm Swap") and replacement:
+                plan[d][i] = replacement
                 crud.save_plan(plan)
+                with SessionLocal() as session:
+                    # Persist the updated plan and mark the recipe as accepted
+                    id_plan: dict[str, list[int]] = {}
+                    for day_name, meals in plan.items():
+                        ids: list[int] = []
+                        for title in meals:
+                            title_base = (
+                                title[:-11] if title.endswith(" (leftover)") else title
+                            )
+                            rid = (
+                                session.execute(
+                                    select(Recipe.id).where(Recipe.title == title_base)
+                                )
+                                .scalars()
+                                .first()
+                            )
+                            if rid is not None:
+                                ids.append(rid)
+                        id_plan[day_name] = ids
+                    try:
+                        plan_date = date.fromisoformat(next(iter(plan)))
+                    except Exception:
+                        plan_date = date.today()
+                    crud.set_meal_plan(session, plan_date, id_plan)
+                    crud.accept_recipe(session, replacement)
+
+                key = f"{d}-{i}"
+                accepted.add(key)
+                st.session_state["accepted_recipes"] = list(accepted)
                 st.session_state.pop("swap_slot", None)
                 st.rerun()
+
             if st.button("Cancel"):
                 st.session_state.pop("swap_slot", None)
                 st.rerun()
+
+        swap_dialog(day, idx)
 
 
 if __name__ == "__main__":
