@@ -28,13 +28,6 @@ TAG_STYLE = """
 """
 
 
-def _set_existing_ingredient(prefix: str, idx: int) -> None:
-    """Copy the selected existing ingredient name into the text input."""
-
-    select_key = f"{prefix}_ing_{idx}_existing"
-    name_key = f"{prefix}_ing_{idx}_name"
-    st.session_state[name_key] = st.session_state.get(select_key, "")
-
 
 def _render_tag_boxes(tags: List[str]) -> str:
     """Return HTML for displaying tag names as colored boxes."""
@@ -127,17 +120,23 @@ def _render_recipe_fields(
     for idx in range(ingredient_count):
         ing = existing[idx] if idx < len(existing) else None
         cols = st.columns(4)
+        select_key = f"{prefix}_ing_{idx}_existing"
         name_key = f"{prefix}_ing_{idx}_name"
-        cols[0].text_input(
-            f"Ingredient {idx + 1}", value=getattr(ing, "name", ""), key=name_key
-        )
-        cols[0].selectbox(
+
+        selected = cols[0].selectbox(
             "Existing",
             [""] + existing_names,
-            key=f"{prefix}_ing_{idx}_existing",
-            on_change=_set_existing_ingredient,
-            args=(prefix, idx),
+            key=select_key,
         )
+
+        default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
+        if selected and not default_name:
+            default_name = selected
+
+        name_val = cols[0].text_input(
+            f"Ingredient {idx + 1}", value=default_name, key=name_key
+        )
+
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
             value=getattr(ing, "quantity", 0.0) or 0.0,
@@ -151,7 +150,6 @@ def _render_recipe_fields(
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
-        name_val = st.session_state.get(name_key, "")
         if name_val:
             ingredients.append(
                 Ingredient(
