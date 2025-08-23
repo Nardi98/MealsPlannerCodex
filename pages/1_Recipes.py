@@ -27,6 +27,9 @@ TAG_STYLE = """
 </style>
 """
 
+ALLOWED_UNITS = ["g", "l", "ml", "pieces"]
+
+
 
 def _render_tag_boxes(tags: List[str]) -> str:
     """Return HTML for displaying tag names as colored boxes."""
@@ -100,39 +103,60 @@ def _render_recipe_fields(
 
     # Ingredient inputs
     existing = list(getattr(recipe, "ingredients", []))
-    num_ing = int(
-        st.number_input(
-            "Number of ingredients",
-            min_value=0,
-            value=len(existing) if existing else 0,
-            step=1,
-            key=f"{prefix}_num_ing",
-        )
+    count_key = f"{prefix}_ingredient_count"
+    if count_key not in st.session_state:
+        st.session_state[count_key] = len(existing)
+
+    if st.form_submit_button("➕"):
+        st.session_state[count_key] += 1
+
+    ingredient_count = st.session_state[count_key]
+
+    existing_names = (
+        session.execute(select(Ingredient.name).distinct().order_by(Ingredient.name))
+        .scalars()
+        .all()
     )
 
     ingredients: List[Ingredient] = []
-    for idx in range(num_ing):
+    for idx in range(ingredient_count):
         ing = existing[idx] if idx < len(existing) else None
         cols = st.columns(4)
-        name = cols[0].text_input(
-            f"Name {idx + 1}", value=getattr(ing, "name", ""), key=f"{prefix}_ing_{idx}_name"
+        name_key = f"{prefix}_ing_{idx}_name"
+
+        default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
+        name_val = cols[0].text_input(
+            f"Ingredient {idx + 1}", value=default_name, key=name_key
         )
+
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
+            min_value=0.0,
+            step=1.0,
             value=getattr(ing, "quantity", 0.0) or 0.0,
             key=f"{prefix}_ing_{idx}_qty",
         )
-        unit = cols[2].text_input(
-            f"Unit {idx + 1}", value=getattr(ing, "unit", ""), key=f"{prefix}_ing_{idx}_unit"
+        unit_options = ALLOWED_UNITS
+        current_unit = getattr(ing, "unit", "")
+        unit_index = unit_options.index(current_unit) if current_unit in unit_options else 0
+        unit = cols[2].selectbox(
+            f"Unit {idx + 1}",
+            unit_options,
+            index=unit_index,
+            key=f"{prefix}_ing_{idx}_unit",
         )
         season = cols[3].text_input(
             f"Season {idx + 1}",
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
-        if name:
+        if name_val and name_val in existing_names:
+            name_val = existing_names[existing_names.index(name_val)]
+        if name_val:
             ingredients.append(
-                Ingredient(name=name, quantity=quantity, unit=unit, season_months=season)
+                Ingredient(
+                    name=name_val, quantity=quantity, unit=unit, season_months=season
+                )
             )
 
     if new_tag_names:
