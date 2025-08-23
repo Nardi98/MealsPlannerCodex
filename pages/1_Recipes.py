@@ -192,6 +192,20 @@ def _refresh() -> None:
     st.rerun()
 
 
+def _clear_form_state(prefix: str) -> None:
+    """Remove any widget state associated with a form prefix.
+
+    Streamlit persists widget values across reruns via ``st.session_state``.
+    When creating a new recipe we want a clean form after the page refresh,
+    so all keys that start with the given prefix are deleted before calling
+    :func:`_refresh`.
+    """
+
+    to_delete = [k for k in st.session_state if k.startswith(f"{prefix}_")]
+    for key in to_delete:
+        del st.session_state[key]
+
+
 def main() -> None:
     """Render the recipes page with CRUD operations."""
     if toast := st.session_state.pop("toast", None):
@@ -209,6 +223,7 @@ def main() -> None:
         if st.button("Create", key="create_recipe_submit"):
             crud.create_recipe(session, **data)
             st.session_state["toast"] = "Recipe created"
+            _clear_form_state("create")
             _refresh()
 
     selected_tags = _render_tag_filter(session)
