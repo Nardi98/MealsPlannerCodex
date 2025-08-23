@@ -28,6 +28,14 @@ TAG_STYLE = """
 """
 
 
+def _set_existing_ingredient(prefix: str, idx: int) -> None:
+    """Copy the selected existing ingredient name into the text input."""
+
+    select_key = f"{prefix}_ing_{idx}_existing"
+    name_key = f"{prefix}_ing_{idx}_name"
+    st.session_state[name_key] = st.session_state.get(select_key, "")
+
+
 def _render_tag_boxes(tags: List[str]) -> str:
     """Return HTML for displaying tag names as colored boxes."""
 
@@ -100,22 +108,35 @@ def _render_recipe_fields(
 
     # Ingredient inputs
     existing = list(getattr(recipe, "ingredients", []))
-    num_ing = int(
-        st.number_input(
-            "Number of ingredients",
-            min_value=0,
-            value=len(existing) if existing else 0,
-            step=1,
-            key=f"{prefix}_num_ing",
-        )
+    count_key = f"{prefix}_ingredient_count"
+    if count_key not in st.session_state:
+        st.session_state[count_key] = len(existing)
+
+    if st.form_submit_button("➕"):
+        st.session_state[count_key] += 1
+
+    ingredient_count = st.session_state[count_key]
+
+    existing_names = (
+        session.execute(select(Ingredient.name).distinct().order_by(Ingredient.name))
+        .scalars()
+        .all()
     )
 
     ingredients: List[Ingredient] = []
-    for idx in range(num_ing):
+    for idx in range(ingredient_count):
         ing = existing[idx] if idx < len(existing) else None
         cols = st.columns(4)
-        name = cols[0].text_input(
-            f"Name {idx + 1}", value=getattr(ing, "name", ""), key=f"{prefix}_ing_{idx}_name"
+        name_key = f"{prefix}_ing_{idx}_name"
+        cols[0].text_input(
+            f"Ingredient {idx + 1}", value=getattr(ing, "name", ""), key=name_key
+        )
+        cols[0].selectbox(
+            "Existing",
+            [""] + existing_names,
+            key=f"{prefix}_ing_{idx}_existing",
+            on_change=_set_existing_ingredient,
+            args=(prefix, idx),
         )
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
@@ -130,9 +151,12 @@ def _render_recipe_fields(
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
-        if name:
+        name_val = st.session_state.get(name_key, "")
+        if name_val:
             ingredients.append(
-                Ingredient(name=name, quantity=quantity, unit=unit, season_months=season)
+                Ingredient(
+                    name=name_val, quantity=quantity, unit=unit, season_months=season
+                )
             )
 
     if new_tag_names:
