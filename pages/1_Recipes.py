@@ -236,11 +236,14 @@ def main() -> None:
         tag_html = _render_tag_boxes([t.name for t in recipe.tags])
         exp_col, tag_col = st.columns([4, 1])
         with exp_col:
-            with st.expander(recipe.title):
+            suffix_key = f"expander_suffix_{recipe.id}"
+            suffix = "\u200b" * st.session_state.get(suffix_key, 0)
+            with st.expander(recipe.title + suffix):
                 data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
                 if st.button("Update", key=f"update_{recipe.id}"):
                     crud.update_recipe(session, recipe.id, **data)
                     st.session_state["toast"] = "Recipe updated"
+                    st.session_state[suffix_key] = st.session_state.get(suffix_key, 0) + 1
                     _refresh()
                 if st.button("Delete", key=f"delete_{recipe.id}"):
                     crud.delete_recipe(session, recipe.id)
