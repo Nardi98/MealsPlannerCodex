@@ -27,7 +27,7 @@ TAG_STYLE = """
 </style>
 """
 
-ALLOWED_UNITS = ["g", "kg", "oz", "lb"]
+ALLOWED_UNITS = ["g", "l", "ml", "pieces"]
 
 
 
