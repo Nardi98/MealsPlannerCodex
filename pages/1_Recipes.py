@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from mealplanner import crud
 from mealplanner.db import SessionLocal, init_db
 from mealplanner.models import Ingredient, Recipe, Tag
+from UI.UIutils import ingredient_selector
 
 
 TAG_STYLE = """
@@ -125,8 +126,12 @@ def _render_recipe_fields(
         name_key = f"{prefix}_ing_{idx}_name"
 
         default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
-        name_val = cols[0].text_input(
-            f"Ingredient {idx + 1}", value=default_name, key=name_key
+        name_val = ingredient_selector(
+            cols[0],
+            f"Ingredient {idx + 1}",
+            existing_names,
+            key=name_key,
+            default=default_name,
         )
 
         quantity = cols[1].number_input(
