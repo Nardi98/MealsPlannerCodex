@@ -42,20 +42,22 @@ def main() -> None:
                 existing = set(session.execute(select(Recipe.title)).scalars())
             dup_titles = [r["title"] for r in data.get("recipes", []) if r["title"] in existing]
 
-            if dup_titles and not st.session_state.get("duplicate_actions_confirmed"):
-                st.info("Recipes with matching titles were found. Choose how to proceed:")
-                for title in dup_titles:
-                    st.radio(
-                        f"Recipe '{title}' exists already",
-                        ["keep old", "keep new", "keep both"],
-                        key=f"dup_action_{title}",
+            if dup_titles:
+                if not st.session_state.get("duplicate_actions_confirmed"):
+                    st.info(
+                        "Recipes with matching titles were found. Choose how to proceed:"
                     )
-                if st.button("Continue Import"):
+                    for title in dup_titles:
+                        st.radio(
+                            f"Recipe '{title}' exists already",
+                            ["keep old", "keep new", "keep both"],
+                            key=f"dup_action_{title}",
+                        )
+                    if not st.button("Continue Import"):
+                        return
                     st.session_state["duplicate_actions_confirmed"] = True
                     st.session_state["duplicate_titles"] = dup_titles
-                return
 
-            if dup_titles:
                 with SessionLocal() as session:
                     for rec in list(data.get("recipes", [])):
                         title = rec.get("title")
@@ -65,7 +67,9 @@ def main() -> None:
                         if action == "keep old":
                             data["recipes"].remove(rec)
                         elif action == "keep new":
-                            existing_rec = session.execute(select(Recipe).where(Recipe.title == title)).scalar_one_or_none()
+                            existing_rec = session.execute(
+                                select(Recipe).where(Recipe.title == title)
+                            ).scalar_one_or_none()
                             if existing_rec is not None:
                                 session.delete(existing_rec)
                     session.commit()
@@ -83,11 +87,7 @@ def main() -> None:
             st.success("Data imported successfully. Redirecting to recipes...")
             st.markdown(
                 """
-                <script>
-                    setTimeout(function() {
-                        window.location.search = '?page=1_Recipes';
-                    }, 1500);
-                </script>
+                <meta http-equiv="refresh" content="1.5; url=/?page=1_Recipes">
                 """,
                 unsafe_allow_html=True,
             )
