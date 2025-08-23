@@ -121,30 +121,29 @@ def _render_recipe_fields(
         ing = existing[idx] if idx < len(existing) else None
         cols = st.columns(4)
         name_key = f"{prefix}_ing_{idx}_name"
-        match_key = f"{prefix}_ing_{idx}_match"
+        select_key = f"{prefix}_ing_{idx}_select"
 
         default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
         name_val = cols[0].text_input(
             f"Ingredient {idx + 1}", value=default_name, key=name_key
         )
 
-        if name_val and name_val not in existing_names:
-            suggestions = [
-                n for n in existing_names if n.lower().startswith(name_val.lower())
-            ]
-            if suggestions:
-                choice = cols[0].selectbox(
-                    "Existing",
-                    [""] + suggestions,
-                    key=match_key,
-                    label_visibility="collapsed",
-                )
-                if choice:
-                    st.session_state[name_key] = choice
-                    name_val = choice
+        default_index = (
+            existing_names.index(default_name) + 1
+            if default_name in existing_names
+            else 0
+        )
+        selected = cols[0].selectbox(
+            "Existing",
+            [""] + existing_names,
+            index=default_index,
+            key=select_key,
+        )
+        if selected:
+            st.session_state[name_key] = selected
+            name_val = selected
         else:
-            if match_key in st.session_state:
-                del st.session_state[match_key]
+            st.session_state.pop(select_key, None)
 
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
