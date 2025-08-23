@@ -27,6 +27,8 @@ TAG_STYLE = """
 </style>
 """
 
+ALLOWED_UNITS = ["g", "kg", "oz", "lb"]
+
 
 
 def _render_tag_boxes(tags: List[str]) -> str:
@@ -121,43 +123,35 @@ def _render_recipe_fields(
         ing = existing[idx] if idx < len(existing) else None
         cols = st.columns(4)
         name_key = f"{prefix}_ing_{idx}_name"
-        select_key = f"{prefix}_ing_{idx}_select"
 
         default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
         name_val = cols[0].text_input(
             f"Ingredient {idx + 1}", value=default_name, key=name_key
         )
 
-        default_index = (
-            existing_names.index(default_name) + 1
-            if default_name in existing_names
-            else 0
-        )
-        selected = cols[0].selectbox(
-            "Existing",
-            [""] + existing_names,
-            index=default_index,
-            key=select_key,
-        )
-        if selected:
-            st.session_state[name_key] = selected
-            name_val = selected
-        else:
-            st.session_state.pop(select_key, None)
-
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
+            min_value=0.0,
+            step=1.0,
             value=getattr(ing, "quantity", 0.0) or 0.0,
             key=f"{prefix}_ing_{idx}_qty",
         )
-        unit = cols[2].text_input(
-            f"Unit {idx + 1}", value=getattr(ing, "unit", ""), key=f"{prefix}_ing_{idx}_unit"
+        unit_options = ALLOWED_UNITS
+        current_unit = getattr(ing, "unit", "")
+        unit_index = unit_options.index(current_unit) if current_unit in unit_options else 0
+        unit = cols[2].selectbox(
+            f"Unit {idx + 1}",
+            unit_options,
+            index=unit_index,
+            key=f"{prefix}_ing_{idx}_unit",
         )
         season = cols[3].text_input(
             f"Season {idx + 1}",
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
+        if name_val and name_val in existing_names:
+            name_val = existing_names[existing_names.index(name_val)]
         if name_val:
             ingredients.append(
                 Ingredient(
