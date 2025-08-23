@@ -88,12 +88,21 @@ def generate_plan(
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
-            )
-            + (random.uniform(-epsilon, epsilon) if epsilon else 0.0),
+            ),
             reverse=True,
         )
+
+        ordered: List[Recipe] = []
+        candidates = scored[:]
+        while candidates:
+            if epsilon and random.random() < epsilon:
+                idx = random.randrange(len(candidates))
+                ordered.append(candidates.pop(idx))
+            else:
+                ordered.append(candidates.pop(0))
+
         weekly = generate_weekly_plan(
-            scored,
+            ordered,
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
             keep_days=keep_days if bulk_leftovers else 1,
