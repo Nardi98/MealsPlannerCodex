@@ -21,25 +21,38 @@ def main() -> None:
     meals_per_day = st.number_input(
         "Meals per Day", min_value=1, value=1, step=1
     )
-    epsilon = st.number_input("ε", min_value=0.0, value=0.0, step=0.1)
-    seasonality_weight = st.slider(
-        "Seasonality Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
-    )
-    recency_weight = st.slider(
-        "Recency Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
-    )
-    tag_penalty_weight = st.slider(
-        "Tag Penalty Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
-    )
-    bulk_bonus_weight = st.slider(
-        "Bulk-Prep Bonus Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1
-    )
-    bulk_leftovers = st.toggle("Bulk Leftovers", value=True)
-    keep_days = st.number_input(
-        "Keep Days", min_value=1, value=7, step=1
-    )
-    avoid_text = st.text_input("Avoid Tags", help="Comma separated")
-    reduce_text = st.text_input("Reduce Tags", help="Comma separated")
+    with st.expander("Advanced Options"):
+        epsilon = st.number_input(
+            "ε", min_value=0.0, value=0.0, step=0.1,
+            help="Randomness factor in plan generation"
+        )
+        seasonality_weight = st.slider(
+            "Seasonality Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1,
+            help="Higher values prioritize seasonal recipes"
+        )
+        recency_weight = st.slider(
+            "Recency Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1,
+            help="Higher values avoid recently used recipes"
+        )
+        tag_penalty_weight = st.slider(
+            "Tag Penalty Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1,
+            help="Increase to penalize recipes with avoid tags"
+        )
+        bulk_bonus_weight = st.slider(
+            "Bulk-Prep Bonus Weight", min_value=0.0, max_value=2.0, value=1.0, step=0.1,
+            help="Increase to prefer recipes that can be bulk-prepped"
+        )
+        bulk_leftovers = st.toggle(
+            "Bulk Leftovers", value=True,
+            help="Allow leftover portions from bulk-prepped meals"
+        )
+        keep_days = st.number_input(
+            "Keep Days", min_value=1, value=7, step=1,
+            help="Number of days to retain planned meals"
+        )
+        avoid_text = st.text_input("Avoid Tags", help="Comma separated")
+        reduce_text = st.text_input("Reduce Tags", help="Comma separated")
+
     avoid_tags = [t.strip() for t in avoid_text.split(",") if t.strip()]
     reduce_tags = [t.strip() for t in reduce_text.split(",") if t.strip()]
 
