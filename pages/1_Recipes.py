@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import streamlit as st
 from sqlalchemy import select
@@ -29,6 +29,57 @@ TAG_STYLE = """
 
 ALLOWED_UNITS = ["g", "l", "ml", "pieces"]
 
+
+def combobox_with_add(
+    key: str,
+    placeholder: str,
+    fetch_options: Callable[[str], List[str]],
+    on_create: Callable[[str], None] | None = None,
+    limit: int = 50,
+) -> tuple[str | None, bool]:
+    """Searchbox that lets users select existing values or add new ones."""
+
+    from streamlit_searchbox import st_searchbox
+
+    ADD_PREFIX = "➕ Add ‘"
+    ADD_SUFFIX = "’"
+
+    def exact_exists(q: str, opts: List[str]) -> bool:
+        qn = q.strip().lower()
+        return any(o.strip().lower() == qn for o in opts)
+
+    def make_add_label(q: str) -> str:
+        return f"{ADD_PREFIX}{q.strip()}{ADD_SUFFIX}"
+
+    def is_add_label(x: str) -> bool:
+        return isinstance(x, str) and x.startswith(ADD_PREFIX) and x.endswith(ADD_SUFFIX)
+
+    def extract_val(x: str) -> str:
+        return x[len(ADD_PREFIX) : -len(ADD_SUFFIX)]
+
+    def search_fn(user_input: str) -> List[str]:
+        q = (user_input or "").strip()
+        options = fetch_options(q)[:limit]
+        if q and not exact_exists(q, options):
+            options.append(make_add_label(q))
+        return options
+
+    picked = st_searchbox(
+        search_function=search_fn,
+        key=key,
+        placeholder=placeholder,
+        clear_on_submit=False,
+    )
+
+    created = False
+    if isinstance(picked, str) and is_add_label(picked):
+        val = extract_val(picked)
+        if on_create:
+            on_create(val)
+        picked = val
+        created = True
+
+    return picked, created
 
 
 def _render_tag_boxes(tags: List[str]) -> str:
@@ -103,11 +154,11 @@ def _render_recipe_fields(
 
     ingredient_count = st.session_state[count_key]
 
-    existing_names = (
-        session.execute(select(Ingredient.name).distinct().order_by(Ingredient.name))
-        .scalars()
-        .all()
-    )
+    def fetch_ingredient_options(query: str) -> List[str]:
+        stmt = select(Ingredient.name).distinct().order_by(Ingredient.name)
+        if query:
+            stmt = stmt.where(Ingredient.name.ilike(f"%{query}%"))
+        return session.execute(stmt).scalars().all()
 
     ingredients: List[Ingredient] = []
     for idx in range(ingredient_count):
@@ -115,10 +166,14 @@ def _render_recipe_fields(
         cols = st.columns(4)
         name_key = f"{prefix}_ing_{idx}_name"
 
-        default_name = st.session_state.get(name_key, getattr(ing, "name", ""))
-        name_val = cols[0].text_input(
-            f"Ingredient {idx + 1}", value=default_name, key=name_key
-        )
+        if name_key not in st.session_state:
+            st.session_state[name_key] = getattr(ing, "name", "")
+        with cols[0]:
+            name_val, _ = combobox_with_add(
+                key=name_key,
+                placeholder=f"Ingredient {idx + 1}",
+                fetch_options=fetch_ingredient_options,
+            )
 
         quantity = cols[1].number_input(
             f"Qty {idx + 1}",
@@ -141,8 +196,6 @@ def _render_recipe_fields(
             value=getattr(ing, "season_months", ""),
             key=f"{prefix}_ing_{idx}_season",
         )
-        if name_val and name_val in existing_names:
-            name_val = existing_names[existing_names.index(name_val)]
         if name_val:
             ingredients.append(
                 Ingredient(
