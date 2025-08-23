@@ -49,9 +49,8 @@ def _render_tag_filter(session: Session) -> List[str]:
 
     tag_names = [t.name for t in tags]
     selected: List[str] = st.multiselect(
-        "Filter by Tag", tag_names, default=st.session_state["selected_tags"]
+        "Filter by Tag", tag_names, key="selected_tags"
     )
-    st.session_state["selected_tags"] = selected
 
     return selected
 
