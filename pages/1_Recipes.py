@@ -122,6 +122,7 @@ def _render_recipe_fields(
                 key=name_key,
                 placeholder=f"Ingredient {idx + 1}",
                 fetch_options=fetch_ingredient_options,
+                allow_create=True,
             )
 
         quantity = cols[1].number_input(

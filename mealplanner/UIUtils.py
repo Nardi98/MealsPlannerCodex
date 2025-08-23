@@ -14,6 +14,7 @@ def combobox_with_add(
     fetch_options: Callable[[str], List[str]],
     on_create: Callable[[str], None] | None = None,
     limit: int = 50,
+    allow_create: bool = True,
 ) -> tuple[str | None, bool]:
     """Render a searchbox that lets users select or add items.
 
@@ -29,6 +30,9 @@ def combobox_with_add(
         Optional callback invoked when a new value is added.
     limit:
         Maximum number of suggestions to display. Defaults to 50.
+    allow_create:
+        When ``False`` the widget behaves as a plain searchbox and the user
+        cannot add new entries. Defaults to ``True``.
 
     Returns
     -------
@@ -58,7 +62,7 @@ def combobox_with_add(
     def search_fn(user_input: str) -> List[str]:
         q = (user_input or "").strip()
         options = fetch_options(q)[:limit]
-        if q and not exact_exists(q, options):
+        if allow_create and q and not exact_exists(q, options):
             options.append(make_add_label(q))
         return options
 
@@ -70,7 +74,7 @@ def combobox_with_add(
     )
 
     created = False
-    if isinstance(picked, str) and is_add_label(picked):
+    if allow_create and isinstance(picked, str) and is_add_label(picked):
         val = extract_val(picked)
         if on_create:
             on_create(val)
