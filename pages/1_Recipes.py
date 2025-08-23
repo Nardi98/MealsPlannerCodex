@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+import time
 import streamlit as st
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -181,7 +182,9 @@ def _refresh() -> None:
 def main() -> None:
     """Render the recipes page with CRUD operations."""
     if toast := st.session_state.pop("toast", None):
-        st.success(toast)
+        toast_msg = st.toast(toast)
+        time.sleep(1.5)
+        toast_msg.empty()
 
     st.header("Recipes")
     st.markdown(TAG_STYLE, unsafe_allow_html=True)
