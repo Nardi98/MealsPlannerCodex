@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+import time
 import streamlit as st
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -180,6 +181,10 @@ def _refresh() -> None:
 
 def main() -> None:
     """Render the recipes page with CRUD operations."""
+    if toast := st.session_state.pop("toast", None):
+        toast_msg = st.toast(toast)
+        time.sleep(1.5)
+        toast_msg.empty()
 
     st.header("Recipes")
     st.markdown(TAG_STYLE, unsafe_allow_html=True)
@@ -190,6 +195,7 @@ def main() -> None:
         data = _render_recipe_fields(session, "create")
         if st.button("Create", key="create_recipe_submit"):
             crud.create_recipe(session, **data)
+            st.session_state["toast"] = "Recipe created"
             _refresh()
 
     selected_tags = _render_tag_filter(session)
@@ -221,9 +227,11 @@ def main() -> None:
                 data = _render_recipe_fields(session, f"edit_{recipe.id}", recipe)
                 if st.button("Update", key=f"update_{recipe.id}"):
                     crud.update_recipe(session, recipe.id, **data)
+                    st.session_state["toast"] = "Recipe updated"
                     _refresh()
                 if st.button("Delete", key=f"delete_{recipe.id}"):
                     crud.delete_recipe(session, recipe.id)
+                    st.session_state["toast"] = "Recipe deleted"
                     _refresh()
         with tag_col:
             if tag_html:
