@@ -59,7 +59,14 @@ def main() -> None:
             swap_clicked = cols[3].button("Swap", key=f"{key}-s")
             if key in accepted:
                 cols[1].markdown(
-                    f"<style>div[data-testid='stButton'][data-key='{key}-a'] > button {{background-color: green; color: white;}}</style>",
+                    f"""
+                    <style>
+                    div[data-testid='stButton'][data-key='{key}-a'] > button {{
+                        background-color: green !important;
+                        color: white !important;
+                    }}
+                    </style>
+                    """,
                     unsafe_allow_html=True,
                 )
             if accept_clicked and key not in accepted:
