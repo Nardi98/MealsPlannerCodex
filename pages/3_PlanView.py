@@ -63,10 +63,16 @@ def main() -> None:
                     st.session_state["accepted_recipes"] = list(accepted)
                     st.rerun()
                 if cols[2].button("Reject", key=f"{key}-r"):
+                    base = meal[:-11] if meal.endswith(" (leftover)") else meal
                     with SessionLocal() as session:
-                        crud.reject_recipe(session, meal)
+                        crud.reject_recipe(session, base)
                         options = crud.list_recipe_titles(session)
-                    replacements = [r for r in options if r != meal]
+                    existing = {
+                        m[:-11] if m.endswith(" (leftover)") else m
+                        for meals in plan.values()
+                        for m in meals
+                    }
+                    replacements = [r for r in options if r not in existing]
                     if replacements:
                         replacement = random.choice(replacements)
                         plan[day][idx] = replacement
