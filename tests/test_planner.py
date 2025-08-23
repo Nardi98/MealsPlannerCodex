@@ -1,4 +1,5 @@
 import pytest
+import random
 from datetime import date
 
 from mealplanner.models import Recipe, Ingredient, Tag
@@ -163,6 +164,26 @@ def test_generate_plan_repeatable(db_session):
     plan2 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
     assert plan1 == expected
     assert plan1 == plan2
+
+
+def test_generate_plan_epsilon_randomness(db_session):
+    """With epsilon > 0 the selection may choose lower scoring recipes."""
+    recipes = [
+        Recipe(title="Top", servings_default=1, score=2.0, bulk_prep=True),
+        Recipe(title="Low", servings_default=1, score=1.0, bulk_prep=True),
+    ]
+    db_session.add_all(recipes)
+    db_session.commit()
+    start = date(2024, 1, 1)
+    random.seed(0)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=1.0,
+    )
+    assert plan["2024-01-01"] == ["Low"]
 
 
 def test_generate_plan_partial_week(db_session):
