@@ -23,7 +23,12 @@ export default function Recipes() {
     procedure: r.procedure || '',
     bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
     tags: (r.tags || []).map((t) => t.name || t),
-    ingredients: r.ingredients || [],
+    ingredients: (r.ingredients || []).map((ing) => ({
+      name: ing.name,
+      quantity: ing.quantity ?? '',
+      unit: ing.unit || 'g',
+      season: ing.season_months || ing.season || '',
+    })),
   })
 
   const refreshRecipes = () =>
@@ -71,7 +76,12 @@ export default function Recipes() {
       procedure,
       bulk_prep: bulkPrep,
       tags: selectedTags,
-      ingredients,
+      ingredients: ingredients.map((ing) => ({
+        name: ing.name,
+        quantity: ing.quantity === '' ? null : Number(ing.quantity),
+        unit: ing.unit,
+        season_months: ing.season,
+      })),
     }
     try {
       if (editingId !== null) {
@@ -173,12 +183,9 @@ export default function Recipes() {
         return filtered.map((r) => (
           <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
             <h3>{r.title}</h3>
-            {(r.tags || []).map((t) => {
-              const name = availableTags.find((tag) => tag.id === t || tag.name === t)?.name || t
-              return (
-                <span key={name} className="recipe-tag">{name}</span>
-              )
-            })}
+            {(r.tags || []).map((name) => (
+              <span key={name} className="recipe-tag">{name}</span>
+            ))}
             <ul>
               {(r.ingredients || []).map((ing, i) => (
                 <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
