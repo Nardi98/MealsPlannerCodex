@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect } from 'react'
 import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
+import TagSelector from '../components/TagSelector'
 import { tagsApi } from '../api'
 
 export default function Recipes() {
@@ -37,14 +38,11 @@ export default function Recipes() {
     setIngredients(copy)
   }
 
-  const handleTagChange = (e) => {
-    const opts = Array.from(e.target.selectedOptions).map((o) => o.value)
-    setSelectedTags(opts)
-  }
-
-  const handleFilterChange = (e) => {
-    const opts = Array.from(e.target.selectedOptions).map((o) => o.value)
-    setFilterTags(opts)
+  const handleCreateTag = (name) => {
+    tagsApi
+      .create({ name })
+      .then((tag) => setAvailableTags([...availableTags, tag]))
+      .catch(() => setAvailableTags([...availableTags, { name }]))
   }
 
   const submit = (e) => {
@@ -77,7 +75,11 @@ export default function Recipes() {
     setServings(r.servings)
     setProcedure(r.procedure)
     setBulkPrep(r.bulkPrep)
-    setSelectedTags(r.tags)
+    setSelectedTags(
+      (r.tags || []).map(
+        (t) => availableTags.find((tag) => tag.id === t || tag.name === t)?.name || t
+      )
+    )
     setIngredients(r.ingredients)
     setEditingIndex(idx)
   }
@@ -105,11 +107,12 @@ export default function Recipes() {
         </div>
         <div>
           <label>Tags </label>
-          <select multiple value={selectedTags} onChange={handleTagChange}>
-            {availableTags.map((t) => (
-              <option key={t.id || t.name} value={t.name}>{t.name}</option>
-            ))}
-          </select>
+          <TagSelector
+            tags={availableTags}
+            selected={selectedTags}
+            onChange={setSelectedTags}
+            onCreate={handleCreateTag}
+          />
         </div>
         <div>
           <h3>Ingredients</h3>
@@ -129,11 +132,7 @@ export default function Recipes() {
       <hr />
       <div>
         <label>Filter by tags </label>
-        <select multiple value={filterTags} onChange={handleFilterChange}>
-          {availableTags.map((t) => (
-            <option key={t.id || t.name} value={t.name}>{t.name}</option>
-          ))}
-        </select>
+        <TagSelector tags={availableTags} selected={filterTags} onChange={setFilterTags} />
       </div>
       {(() => {
         const filtered = filterTags.length
@@ -147,9 +146,12 @@ export default function Recipes() {
         return filtered.map(({ idx, ...r }) => (
           <div key={idx} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
             <h3>{r.title}</h3>
-            {r.tags.map((t) => (
-              <span key={t} className="recipe-tag">{t}</span>
-            ))}
+            {r.tags.map((t) => {
+              const name = availableTags.find((tag) => tag.id === t || tag.name === t)?.name || t
+              return (
+                <span key={name} className="recipe-tag">{name}</span>
+              )
+            })}
             <ul>
               {r.ingredients.map((ing, i) => (
                 <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
