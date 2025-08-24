@@ -34,9 +34,10 @@ def test_search_ingredients() -> None:
     res = client.get("/ingredients", params={"search": "sp"})
     assert res.status_code == 200
     data = res.json()
-    assert "Spaghetti" in data
-    assert "Spinach" in data
-    assert "Salt" not in data
+    names = {i["name"] for i in data}
+    assert "Spaghetti" in names
+    assert "Spinach" in names
+    assert "Salt" not in names
 
 
 def test_list_all_ingredients() -> None:
@@ -60,4 +61,33 @@ def test_list_all_ingredients() -> None:
     res = client.get("/ingredients")
     assert res.status_code == 200
     data = res.json()
-    assert set(data) == {"Water", "Carrot", "Salt"}
+    assert {i["name"] for i in data} == {"Water", "Carrot", "Salt"}
+    assert all(i["recipe_count"] == 1 for i in data)
+
+
+def test_update_ingredient() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Tea",
+        "servings_default": 1,
+        "procedure": "",
+        "bulk_prep": False,
+        "tags": [],
+        "ingredients": [
+            {"name": "Water", "quantity": 1, "unit": "l"},
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+
+    res = client.get("/ingredients")
+    ing = res.json()[0]
+    res = client.put(
+        f"/ingredients/{ing['id']}",
+        json={"name": "H2O", "season_months": [1, 2]},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["name"] == "H2O"
+    assert set(data["season_months"]) == {1, 2}
