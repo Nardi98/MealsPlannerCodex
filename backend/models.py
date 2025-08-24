@@ -17,8 +17,25 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import TypeDecorator
 
 from database import Base
+
+
+class IntList(TypeDecorator):
+    """Store ``list[int]`` values as comma separated strings."""
+
+    impl = String
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return ",".join(str(int(v)) for v in value)
+
+    def process_result_value(self, value, dialect):
+        if not value:
+            return []
+        return [int(v) for v in value.split(",") if v]
 
 # Association table linking recipes and tags for a many-to-many relationship.
 recipe_tag_table = Table(
@@ -69,7 +86,7 @@ class Ingredient(Base):
     name = Column(String, nullable=False)
     quantity = Column(Float)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
-    season_months = Column(String)
+    season_months = Column(IntList)
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
 
     recipe = relationship("Recipe", back_populates="ingredients")

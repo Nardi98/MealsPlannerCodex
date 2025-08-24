@@ -6,4 +6,4 @@ flake8
 fastapi
 httpx
 uvicorn
-httpx
+alembic
