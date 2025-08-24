@@ -36,7 +36,7 @@ export default function Recipes() {
       name: ing.name,
       quantity: ing.quantity ?? '',
       unit: ing.unit || 'g',
-      season: ing.season_months || ing.season || '',
+      season: Array.isArray(ing.season_months) ? ing.season_months : [],
     })),
   })
 
@@ -56,7 +56,7 @@ export default function Recipes() {
   }, [])
 
   const addIngredient = () => {
-    setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: '' }])
+    setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
   }
 
   const updateIngredient = (index, ing) => {
@@ -89,7 +89,7 @@ export default function Recipes() {
         name: ing.name,
         quantity: ing.quantity === '' ? null : Number(ing.quantity),
         unit: ing.unit,
-        season_months: ing.season,
+        season_months: ing.season.map((n) => Number(n)),
       })),
     }
     try {

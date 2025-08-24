@@ -352,11 +352,14 @@ def import_data(
                 recipe_id_map[rec_id] = recipe.id
 
             for ing_info in rec_info.get("ingredients", []):
+                season = ing_info.get("season_months")
+                if isinstance(season, list):
+                    season = ",".join(str(int(m)) for m in season)
                 ingredient = Ingredient(
                     name=ing_info["name"],
                     quantity=ing_info.get("quantity"),
                     unit=ing_info.get("unit"),
-                    season_months=ing_info.get("season_months"),
+                    season_months=season,
                     recipe=recipe,
                 )
                 session.add(ingredient)

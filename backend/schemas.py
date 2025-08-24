@@ -20,7 +20,7 @@ class IngredientOut(BaseModel):
     name: str
     quantity: Optional[float] = None
     unit: Optional[str] = None
-    season_months: Optional[str] = None
+    season_months: List[int] = []
 
     class Config:
         orm_mode = True
@@ -30,7 +30,7 @@ class IngredientIn(BaseModel):
     name: str
     quantity: Optional[float] = None
     unit: Optional[str] = None
-    season_months: Optional[str] = None
+    season_months: List[int] = []
 
 
 class RecipeIn(BaseModel):

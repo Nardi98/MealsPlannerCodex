@@ -45,12 +45,22 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
         <option value="ml">ml</option>
         <option value="pieces">pieces</option>
       </select>
-      <input
-        type="text"
-        placeholder="Season"
-        value={ingredient.season}
-        onChange={(e) => onChange(index, { ...ingredient, season: e.target.value })}
-      />
+      <select
+        multiple
+        value={(ingredient.season || []).map(String)}
+        onChange={(e) =>
+          onChange(index, {
+            ...ingredient,
+            season: Array.from(e.target.selectedOptions).map((opt) => Number(opt.value)),
+          })
+        }
+      >
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
       <button type="button" onClick={() => onRemove(index)}>✖</button>
     </div>
   )

@@ -20,14 +20,7 @@ def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
         "bulk_prep": recipe.bulk_prep,
         "date_last_consumed": recipe.date_last_consumed,
         "ingredients": [
-            {
-                "season_months": [
-                    int(m.strip())
-                    for m in (ing.season_months or "").split(",")
-                    if m.strip()
-                ]
-            }
-            for ing in recipe.ingredients
+            {"season_months": ing.season_months or []} for ing in recipe.ingredients
         ],
         "tags": [t.name for t in recipe.tags],
     }
@@ -126,15 +119,13 @@ def generate_plan(
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
 
-    ``Ingredient.season_months`` stores a comma separated list of month numbers
-    (``"1,2,3"``). If the field is empty the ingredient is assumed to be
-    available year round.
+    ``Ingredient.season_months`` is stored as a list of month numbers. An empty
+    list indicates availability year round.
     """
 
     if not ingredient.season_months:
         return True
-    months = {int(m.strip()) for m in ingredient.season_months.split(",") if m.strip()}
-    return month in months
+    return month in ingredient.season_months
 
 
 def filter_recipes(

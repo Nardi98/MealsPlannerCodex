@@ -56,10 +56,34 @@ class Ingredient(Base):
     name = Column(String, nullable=False)
     quantity = Column(Float)
     unit = Column(String)
-    season_months = Column(String)
+    _season_months = Column("season_months", String)
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
 
     recipe = relationship("Recipe", back_populates="ingredients")
+
+    @property
+    def season_months(self) -> list[int] | None:
+        """Return the list of seasonal months.
+
+        The value is stored in the database as a comma separated string.  When
+        accessed via the ORM a list of integers is returned.  ``None`` or an
+        empty string in the database are represented as an empty list.
+        """
+
+        if not self._season_months:
+            return []
+        return [int(m) for m in self._season_months.split(",") if m]
+
+    @season_months.setter
+    def season_months(self, value: list[int] | str | None) -> None:
+        """Store ``value`` as a comma separated string."""
+
+        if value is None:
+            self._season_months = None
+        elif isinstance(value, str):
+            self._season_months = value or None
+        else:
+            self._season_months = ",".join(str(int(v)) for v in value)
 
 
 class Tag(Base):

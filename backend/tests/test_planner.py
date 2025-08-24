@@ -11,8 +11,7 @@ def make_recipe(name, bulk=False, tags=None, season=None):
     if tags:
         r.tags = [Tag(name=t) for t in tags]
     if season:
-        months = ",".join(str(m) for m in season)
-        r.ingredients = [Ingredient(name=f"{name}-ing", season_months=months)]
+        r.ingredients = [Ingredient(name=f"{name}-ing", season_months=list(season))]
     return r
 
 
