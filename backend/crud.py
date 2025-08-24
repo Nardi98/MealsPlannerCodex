@@ -9,8 +9,8 @@ from typing import Any, Dict, Iterable, List, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .database import SessionLocal, Base
-from .models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
+from database import SessionLocal, Base
+from models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
