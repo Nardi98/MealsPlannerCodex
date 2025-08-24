@@ -23,13 +23,15 @@ def test_recipe_crud() -> None:
         "procedure": "Boil",
         "bulk_prep": False,
         "tags": ["vegan"],
-        "ingredients": [{"name": "Water", "quantity": 1, "unit": "l"}],
+        "ingredients": [
+            {"quantity": 1, "ingredient": {"name": "Water", "unit": "l"}}
+        ],
     }
     res = client.post("/recipes", json=payload)
     assert res.status_code == 201
     data = res.json()
     assert data["title"] == "Soup"
-    assert data["ingredients"][0]["name"] == "Water"
+    assert data["ingredients"][0]["ingredient"]["name"] == "Water"
     assert data["tags"][0]["name"] == "vegan"
 
     recipe_id = data["id"]

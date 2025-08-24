@@ -23,9 +23,9 @@ def test_search_ingredients() -> None:
         "bulk_prep": False,
         "tags": [],
         "ingredients": [
-            {"name": "Spaghetti", "quantity": 100, "unit": "g"},
-            {"name": "Spinach", "quantity": 50, "unit": "g"},
-            {"name": "Salt", "quantity": 1, "unit": "g"},
+            {"quantity": 100, "ingredient": {"name": "Spaghetti", "unit": "g"}},
+            {"quantity": 50, "ingredient": {"name": "Spinach", "unit": "g"}},
+            {"quantity": 1, "ingredient": {"name": "Salt", "unit": "g"}},
         ],
     }
     res = client.post("/recipes", json=payload)

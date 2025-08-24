@@ -23,7 +23,7 @@ def test_invalid_unit_rejected() -> None:
         "bulk_prep": False,
         "tags": [],
         "ingredients": [
-            {"name": "Lettuce", "quantity": 1, "unit": "bag"},
+            {"quantity": 1, "ingredient": {"name": "Lettuce", "unit": "bag"}},
         ],
     }
     res = client.post("/recipes", json=payload)
