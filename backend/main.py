@@ -4,13 +4,16 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import crud, models, schemas
+import crud
+import models
+import schemas
 from database import SessionLocal, engine
 
 # Ensure database tables exist on startup
