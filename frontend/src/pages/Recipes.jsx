@@ -2,7 +2,7 @@ import React, { useContext, useState, useEffect } from 'react'
 import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
-import { tagsApi, recipesApi } from '../api'
+import { tagsApi, recipesApi, ingredientsApi } from '../api'
 
 export default function Recipes() {
   const { recipes, setRecipes } = useContext(AppContext)
@@ -15,6 +15,15 @@ export default function Recipes() {
   const [filterTags, setFilterTags] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [editingId, setEditingId] = useState(null)
+
+  const fetchIngredientOptions = async (query) => {
+    if (!query) return []
+    try {
+      return await ingredientsApi.search(query)
+    } catch {
+      return []
+    }
+  }
 
   const normalizeRecipe = (r) => ({
     id: r.id,
@@ -162,6 +171,7 @@ export default function Recipes() {
               ingredient={ing}
               onChange={updateIngredient}
               onRemove={removeIngredient}
+              fetchOptions={fetchIngredientOptions}
             />
           ))}
           <button type="button" onClick={addIngredient}>Add Ingredient</button>

@@ -1,10 +1,12 @@
 import React, { useContext, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { mealPlansApi } from '../api'
 
 export default function NewPlan() {
   const { setPlan } = useContext(AppContext)
-  const [startDate, setStartDate] = useState('')
+  const navigate = useNavigate()
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [days, setDays] = useState(7)
   const [mealsPerDay, setMealsPerDay] = useState(1)
   const [epsilon, setEpsilon] = useState(0)
@@ -56,6 +58,7 @@ export default function NewPlan() {
         bulk_leftovers: Boolean(bulkLeftovers),
         keep_days: Number(keepDays),
       })
+      navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
     } catch (err) {
       setError(err.message)
     }
