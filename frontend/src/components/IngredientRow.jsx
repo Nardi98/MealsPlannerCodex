@@ -20,7 +20,12 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
 
   const handleNameChange = async (e) => {
     const value = e.target.value
-    onChange(index, { ...ingredient, name: value })
+    const updated = {
+      ...ingredient,
+      ingredient: { ...(ingredient.ingredient || {}), name: value },
+      name: undefined, // ensure legacy field isn't used
+    }
+    onChange(index, updated)
     if (fetchOptions) {
       try {
         const opts = await fetchOptions(value)
@@ -31,13 +36,16 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
     }
   }
 
+  const name = ingredient.ingredient?.name ?? ingredient.name ?? ''
+  const season = ingredient.ingredient?.season_months ?? ingredient.season ?? []
+
   return (
     <div className="ingredient-row">
       <input
         type="text"
         list={`ingredient-options-${index}`}
         placeholder={`Ingredient ${index + 1}`}
-        value={ingredient.name}
+        value={name}
         onChange={handleNameChange}
       />
       <datalist id={`ingredient-options-${index}`}>
@@ -48,7 +56,7 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
       <input
         type="number"
         placeholder="Qty"
-        value={ingredient.quantity}
+        value={ingredient.quantity ?? ''}
         onChange={(e) => onChange(index, { ...ingredient, quantity: e.target.value })}
       />
       <select
@@ -63,15 +71,16 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
       </select>
       <select
         multiple
-        value={ingredient.season.map((m) => String(m))}
+        value={season.map((m) => String(m))}
         onChange={(e) =>
-          onChange(
-            index,
-            {
-              ...ingredient,
-              season: Array.from(e.target.selectedOptions).map((o) => Number(o.value))
-            }
-          )
+          onChange(index, {
+            ...ingredient,
+            ingredient: {
+              ...(ingredient.ingredient || {}),
+              season_months: Array.from(e.target.selectedOptions).map((o) => Number(o.value)),
+            },
+            season: undefined,
+          })
         }
       >
         {MONTHS.map((m, i) => (
