@@ -24,7 +24,10 @@ export default function RecipeList() {
   return (
     <ul>
       {recipes.map((r) => (
-        <li key={r.id}>{r.title}</li>
+        <li key={r.id}>
+          {r.title}{' '}
+          {r.score !== undefined && `(${r.score.toFixed(2)})`}
+        </li>
       ))}
     </ul>
   );
