@@ -25,14 +25,18 @@ export default function RecipeList() {
 
   return (
     <div>
-      <label>
-        Order:
-        <select value={order} onChange={(e) => setOrder(e.target.value)}>
+      <div>
+        <label htmlFor="order-select">Order:</label>{' '}
+        <select
+          id="order-select"
+          value={order}
+          onChange={(e) => setOrder(e.target.value)}
+        >
           <option value="last_added">Last added</option>
           <option value="title_asc">A-Z</option>
           <option value="title_desc">Z-A</option>
         </select>
-      </label>
+      </div>
       <ul>
         {recipes.map((r) => (
           <li key={r.id}>
