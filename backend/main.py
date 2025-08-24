@@ -57,14 +57,28 @@ def get_db() -> Session:
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
     stmt = select(models.Recipe).options(
-        selectinload(models.Recipe.tags), selectinload(models.Recipe.ingredients)
+        selectinload(models.Recipe.tags),
+        selectinload(models.Recipe.ingredients).selectinload(
+            models.RecipeIngredient.ingredient
+        ),
     )
     return db.execute(stmt).scalars().all()
 
 
 def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
-    ingredients = [models.Ingredient(**ing.model_dump()) for ing in payload.ingredients]
+    ingredients: List[models.RecipeIngredient] = []
+    for ing in payload.ingredients:
+        if ing.id is None and not ing.name:
+            continue
+        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name)
+        ingredients.append(
+            models.RecipeIngredient(
+                ingredient=ingredient_obj,
+                quantity=ing.quantity,
+                unit=ing.unit,
+            )
+        )
     return {
         "title": payload.title,
         "servings_default": payload.servings_default,
@@ -117,7 +131,7 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
 
 @app.get("/ingredients", response_model=List[str])
 def search_ingredients(search: str = "", db: Session = Depends(get_db)) -> List[str]:
-    stmt = select(models.Ingredient.name).distinct().order_by(models.Ingredient.name)
+    stmt = select(models.Ingredient.name).order_by(models.Ingredient.name)
     if search:
         stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%"))
     return db.execute(stmt.limit(10)).scalars().all()

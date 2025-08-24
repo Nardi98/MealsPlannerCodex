@@ -36,29 +36,38 @@ RecipeDict = Dict[str, object]
 def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float:
     """Return a bonus based on the fraction of in-season ingredients.
 
+    The function accepts either a mapping as produced by
+    :func:`mealplanner.planner._recipe_to_dict` or an object providing a
+    ``recipe_ingredients`` attribute.  Each recipe ingredient must link to an
+    :class:`~mealplanner.models.Ingredient` supplying ``season_months`` data.
+
     Parameters
     ----------
     recipe:
-        Mapping describing the recipe.  Ingredients are expected under the
-        ``"ingredients"`` key as a sequence of mappings each containing a
-        ``"season_months"`` list.
+        Mapping or object describing the recipe.
     today:
         Date used to determine the current month.  Defaults to
         :func:`date.today` if not provided.
     """
 
     today = today or date.today()
-    ingredients: Iterable[Dict[str, Iterable[int]]] = recipe.get("ingredients") or []
-    ingredients = list(ingredients)
-    if not ingredients:
+
+    items = getattr(recipe, "recipe_ingredients", None)
+    if items is None and hasattr(recipe, "get"):
+        items = recipe.get("ingredients") or []
+    items = list(items or [])
+    if not items:
         return 0.0
     month = today.month
     in_season = 0
-    for ing in ingredients:
-        months = ing.get("season_months") or []
+    for ri in items:
+        if hasattr(ri, "ingredient"):
+            months = getattr(ri.ingredient, "season_months", []) or []
+        else:
+            months = ri.get("season_months") or []  # type: ignore[assignment]
         if month in months:
             in_season += 1
-    return in_season / len(ingredients)
+    return in_season / len(items)
 
 
 def recency_penalty(recipe: RecipeDict, today: Optional[date] = None) -> float:

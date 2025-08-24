@@ -7,14 +7,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
-from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, Tag
+from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, RecipeIngredient, Tag
 
 
 def _create_sample_data(session):
     """Populate the database with a small set of objects for testing."""
     tag = Tag(name="vegan")
     recipe = Recipe(title="Soup", servings_default=2)
-    recipe.ingredients.append(Ingredient(name="Water", quantity=1, unit="ml"))
+    base = Ingredient(name="Water")
+    recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
     plan.slots.append(MealSlot(meal_time="lunch", recipe=recipe))
@@ -36,7 +37,7 @@ def test_round_trip_export_import(db_session):
     assert db_session.query(MealPlan).count() == 1
 
     recipe = db_session.query(Recipe).one()
-    assert recipe.ingredients[0].name == "Water"
+    assert recipe.ingredients[0].ingredient.name == "Water"
     assert recipe.tags[0].name == "vegan"
 
     plan = db_session.query(MealPlan).one()

@@ -8,7 +8,7 @@ from typing import Dict, Iterable, List, Sequence, Set
 
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe
+from .models import Ingredient, Recipe, RecipeIngredient
 from .scoring import score_recipe
 
 
@@ -20,8 +20,8 @@ def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
         "bulk_prep": recipe.bulk_prep,
         "date_last_consumed": recipe.date_last_consumed,
         "ingredients": [
-            {"season_months": ing.season_months or []}
-            for ing in recipe.ingredients
+            {"season_months": ri.ingredient.season_months or []}
+            for ri in getattr(recipe, "recipe_ingredients", [])
         ],
         "tags": [t.name for t in recipe.tags],
     }
@@ -161,8 +161,10 @@ def filter_recipes(
             continue
         if tag_set and not recipe_tags.intersection(tag_set):
             continue
-        if season is not None and recipe.ingredients and not any(
-            _ingredient_in_season(ing, season) for ing in recipe.ingredients
+        recipe_ingredients = getattr(recipe, "recipe_ingredients", [])
+        if season is not None and recipe_ingredients and not any(
+            _ingredient_in_season(ri.ingredient, season)
+            for ri in recipe_ingredients
         ):
             continue
         if reduce_set and recipe_tags.intersection(reduce_set):

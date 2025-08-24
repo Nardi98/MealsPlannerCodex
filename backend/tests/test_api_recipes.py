@@ -45,3 +45,21 @@ def test_recipe_crud() -> None:
     assert res.status_code == 204
     res = client.get("/recipes")
     assert all(r["id"] != recipe_id for r in res.json())
+
+
+def test_create_recipe_ignores_blank_ingredients() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Tea",
+        "servings_default": 1,
+        "ingredients": [
+            {"name": "Water", "quantity": 1, "unit": "l"},
+            {},
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert len(data["ingredients"]) == 1
+    assert data["ingredients"][0]["name"] == "Water"

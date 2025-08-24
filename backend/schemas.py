@@ -29,7 +29,8 @@ class IngredientOut(BaseModel):
 
 
 class IngredientIn(BaseModel):
-    name: str
+    id: int | None = None
+    name: str | None = None
     quantity: Optional[float] = None
     unit: Optional[UnitEnum] = None
     season_months: List[int] = Field(default_factory=list)

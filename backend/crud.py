@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
-from models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
+from models import (
+    Ingredient,
+    MealPlan,
+    MealSlot,
+    Recipe,
+    Tag,
+    RecipeIngredient,
+    UnitEnum,
+    recipe_tag_table,
+)
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
@@ -18,6 +27,7 @@ _PLAN_SETTINGS: Dict[str, Any] = {}
 __all__ = [
     "create_recipe",
     "get_or_create_tag",
+    "get_or_create_ingredient",
     "get_recipe",
     "update_recipe",
     "delete_recipe",
@@ -79,13 +89,35 @@ def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Rec
     recipe = session.get(Recipe, recipe_id)
     if recipe is None:
         return None
-
     for attr, value in data.items():
-        setattr(recipe, attr, value)
+        if attr == "ingredients":
+            _update_recipe_ingredients(recipe, value)
+        else:
+            setattr(recipe, attr, value)
 
     session.commit()
     session.refresh(recipe)
     return recipe
+
+
+def _update_recipe_ingredients(recipe: Recipe, new_items: List[RecipeIngredient]) -> None:
+    """Synchronise ``recipe.ingredients`` with ``new_items``.
+
+    Existing associations are updated in-place when possible to avoid
+    unnecessary deletions. Any ingredients missing from ``new_items`` are
+    removed from the recipe.
+    """
+
+    existing = {ri.ingredient_id: ri for ri in recipe.ingredients}
+    for item in new_items:
+        current = existing.pop(item.ingredient_id, None)
+        if current is not None:
+            current.quantity = item.quantity
+            current.unit = item.unit
+        else:
+            recipe.ingredients.append(item)
+    for leftover in existing.values():
+        recipe.ingredients.remove(leftover)
 
 
 def delete_recipe(session: Session, recipe_id: int) -> bool:
@@ -117,6 +149,32 @@ def get_or_create_tag(session: Session, name: str) -> Tag:
         tag = Tag(name=name)
         session.add(tag)
     return tag
+
+
+def get_or_create_ingredient(
+    session: Session, ingredient_id: int | None, name: str | None
+) -> Ingredient:
+    """Return an :class:`Ingredient` looked up by ``ingredient_id`` or ``name``.
+
+    The ingredient is created and added to the session if it does not already
+    exist. The session is flushed so that ingredients added earlier in the
+    transaction are visible to lookup queries.
+    """
+
+    session.flush()
+    if ingredient_id is None and not name:
+        raise ValueError("Ingredient requires an id or name")
+    ingredient: Ingredient | None = None
+    if ingredient_id is not None:
+        ingredient = session.get(Ingredient, ingredient_id)
+    if ingredient is None and name is not None:
+        ingredient = session.execute(
+            select(Ingredient).where(Ingredient.name == name)
+        ).scalar_one_or_none()
+    if ingredient is None:
+        ingredient = Ingredient(name=name)
+        session.add(ingredient)
+    return ingredient
 
 
 def get_recipes() -> List[str]:
@@ -298,6 +356,7 @@ def import_data(
             session.execute(recipe_tag_table.delete())
             session.query(MealSlot).delete()
             session.query(MealPlan).delete()
+            session.query(RecipeIngredient).delete()
             session.query(Ingredient).delete()
             session.query(Tag).delete()
             session.query(Recipe).delete()
@@ -355,14 +414,20 @@ def import_data(
                 months = ing_info.get("season_months")
                 if isinstance(months, str):
                     months = [int(m) for m in months.split(",") if m.strip()]
-                ingredient = Ingredient(
-                    name=ing_info["name"],
-                    quantity=ing_info.get("quantity"),
-                    unit=ing_info.get("unit"),
-                    season_months=months,
-                    recipe=recipe,
+                ingredient_obj = get_or_create_ingredient(
+                    session, ing_info.get("id"), ing_info.get("name")
                 )
-                session.add(ingredient)
+                if months is not None:
+                    ingredient_obj.season_months = months
+                unit_val = ing_info.get("unit")
+                unit = UnitEnum(unit_val) if unit_val else None
+                recipe.ingredients.append(
+                    RecipeIngredient(
+                        ingredient=ingredient_obj,
+                        quantity=ing_info.get("quantity"),
+                        unit=unit,
+                    )
+                )
 
             for tag_id in rec_info.get("tags", []):
                 tag = tag_map.get(tag_id)
@@ -437,13 +502,13 @@ def export_data(session: Optional[Session] = None) -> str:
                     ),
                     "ingredients": [
                         {
-                            "id": ing.id,
-                            "name": ing.name,
-                            "quantity": ing.quantity,
-                            "unit": ing.unit,
-                            "season_months": ing.season_months,
+                            "id": ri.ingredient.id,
+                            "name": ri.ingredient.name,
+                            "quantity": ri.quantity,
+                            "unit": ri.unit.value if ri.unit else None,
+                            "season_months": ri.ingredient.season_months,
                         }
-                        for ing in recipe.ingredients
+                        for ri in recipe.ingredients
                     ],
                     "tags": [tag.id for tag in recipe.tags],
                 }

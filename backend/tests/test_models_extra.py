@@ -1,7 +1,7 @@
 from datetime import date
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Ingredient, Tag, recipe_tag_table
+from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag, recipe_tag_table
 
 
 def test_remove_tag_from_recipe(db_session):
@@ -31,18 +31,19 @@ def test_remove_tag_from_recipe(db_session):
 
 def test_update_ingredient_quantity(db_session):
     r = Recipe(title="Bread", servings_default=4)
-    ing = Ingredient(name="Flour", quantity=1, unit="kg")
-    r.ingredients.append(ing)
+    base = Ingredient(name="Flour")
+    ri = RecipeIngredient(ingredient=base, quantity=1, unit="kg")
+    r.ingredients.append(ri)
     db_session.add(r)
     db_session.commit()
 
-    ing.quantity = 2.5
+    ri.quantity = 2.5
     db_session.commit()
-    db_session.refresh(ing)
+    db_session.refresh(ri)
 
-    assert ing.quantity == 2.5
-    assert ing.unit == "kg"
-    assert ing.season_months == []
+    assert ri.quantity == 2.5
+    assert ri.unit == "kg"
+    assert base.season_months == []
 
 
 def test_tag_cascade_delete(db_session):
