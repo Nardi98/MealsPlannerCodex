@@ -22,3 +22,6 @@ export const recipesApi = createCrud('recipes');
 export const mealPlansApi = createCrud('meal-plans');
 export const tagsApi = createCrud('tags');
 export const feedbackApi = createCrud('feedback');
+export const ingredientsApi = {
+  search: (q) => request(`/ingredients?search=${encodeURIComponent(q)}`),
+};

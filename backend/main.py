@@ -61,6 +61,14 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
     return db.execute(select(models.Tag)).scalars().all()
 
 
+@app.get("/ingredients", response_model=List[str])
+def read_ingredients(search: str = "", db: Session = Depends(get_db)) -> List[str]:
+    stmt = select(models.Ingredient.name).distinct()
+    if search:
+        stmt = stmt.where(models.Ingredient.name.ilike(f"%{search}%"))
+    return db.execute(stmt).scalars().all()
+
+
 @app.get("/plan", response_model=Dict[str, List[str]])
 def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
     return crud.get_plan(db, plan_date)

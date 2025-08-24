@@ -1,13 +1,13 @@
 import React from 'react'
+import IngredientAutocomplete from './IngredientAutocomplete'
 
 export default function IngredientRow({ index, ingredient, onChange, onRemove }) {
   return (
     <div className="ingredient-row">
-      <input
-        type="text"
+      <IngredientAutocomplete
         placeholder={`Ingredient ${index + 1}`}
         value={ingredient.name}
-        onChange={(e) => onChange(index, { ...ingredient, name: e.target.value })}
+        onChange={(name) => onChange(index, { ...ingredient, name })}
       />
       <input
         type="number"
