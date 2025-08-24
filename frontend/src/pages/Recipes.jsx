@@ -28,6 +28,7 @@ export default function Recipes() {
   const normalizeRecipe = (r) => ({
     id: r.id,
     title: r.title,
+    score: r.score ?? 0,
     servings: r.servings ?? r.servings_default ?? 1,
     procedure: r.procedure || '',
     bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
@@ -192,7 +193,12 @@ export default function Recipes() {
         }
         return filtered.map((r) => (
           <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-            <h3>{r.title}</h3>
+            <h3>
+              {r.title}{' '}
+              <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
+                ({`Score: ${r.score.toFixed(2)}`})
+              </span>
+            </h3>
             {(r.tags || []).map((name) => (
               <span key={name} className="recipe-tag">{name}</span>
             ))}
