@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 import schemas
+from mealplanner import planner
 from database import SessionLocal, engine
 
 # Ensure database tables exist on startup
@@ -73,14 +74,63 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
 
 
 @app.get("/plan", response_model=Dict[str, List[str]])
+@app.get("/meal-plans", response_model=Dict[str, List[str]])
 def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
     return crud.get_plan(db, plan_date)
 
 
 @app.post("/plan", response_model=Dict[str, List[str]])
+@app.post("/meal-plans", response_model=Dict[str, List[str]])
 def set_plan(payload: schemas.MealPlanCreate, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
     crud.set_meal_plan(db, payload.plan_date, payload.plan)
+    title_plan: Dict[str, List[str]] = {}
+    for day, ids in payload.plan.items():
+        titles: List[str] = []
+        for rid in ids:
+            recipe = db.get(models.Recipe, rid)
+            if recipe is not None:
+                titles.append(recipe.title)
+        title_plan[day] = titles
+    crud.save_plan(
+        title_plan,
+        bulk_leftovers=payload.bulk_leftovers,
+        keep_days=payload.keep_days,
+    )
     return crud.get_plan(db, payload.plan_date)
+
+
+@app.post("/meal-plans/generate")
+def generate_plan_endpoint(
+    payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
+) -> Dict[str, List[Dict[str, object]]]:
+    plan_titles = planner.generate_plan(
+        db,
+        start=payload.start,
+        days=payload.days,
+        meals_per_day=payload.meals_per_day,
+        keep_days=payload.keep_days,
+        bulk_leftovers=payload.bulk_leftovers,
+        epsilon=payload.epsilon,
+        avoid_tags=payload.avoid_tags,
+        reduce_tags=payload.reduce_tags,
+        seasonality_weight=payload.seasonality_weight,
+        recency_weight=payload.recency_weight,
+        tag_penalty_weight=payload.tag_penalty_weight,
+        bulk_bonus_weight=payload.bulk_bonus_weight,
+    )
+    result: Dict[str, List[Dict[str, object]]] = {}
+    for day, titles in plan_titles.items():
+        items: List[Dict[str, object]] = []
+        for title in titles:
+            base = title.replace(" (leftover)", "")
+            recipe = db.execute(
+                select(models.Recipe).where(models.Recipe.title == base)
+            ).scalar_one_or_none()
+            if recipe is None:
+                raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
+            items.append({"id": recipe.id, "title": title})
+        result[day] = items
+    return result
 
 
 @app.get("/data/export")
