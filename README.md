@@ -54,14 +54,40 @@
 
 ## Tech Stack
 
--   **Language:** Python 3.13+
--   **UI:** Streamlit (local browser interface, no backend complexity).
--   **Database:** SQLite with SQLAlchemy ORM.
--   **Frontend styling:** Streamlit widgets (no custom CSS needed).
--   **Dependencies:**\
-    streamlit, SQLAlchemy, pandas, python-dateutil
--   **Version control:** Git.
--   **Deployment:** Local run with `streamlit run app.py`.
+- **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
+- **Frontend:** React.
+- **Database:** SQLite with SQLAlchemy ORM.
+- **Version control:** Git.
+
+## Development Setup
+
+### Backend (`backend/`)
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+### Frontend (`frontend/`)
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+The React app communicates with the backend over HTTP. By default it
+expects the API to be reachable at `http://localhost:8000` and sends
+requests such as:
+
+```javascript
+fetch('http://localhost:8000/api/recipes')
+  .then(res => res.json())
+  .then(data => console.log(data))
+```
 
 
 ## 📂 Project Structure
@@ -70,36 +96,54 @@
 meal-planner/
 │
 ├── README.md                  # project specs (already created)
-├── requirements.txt            # dependencies (streamlit, sqlalchemy, etc.)
-├── app.py                      # entry point, streamlit main app
-│
-├── /mealplanner/               # application package
-│   ├── __init__.py
-│   ├── db.py                   # db session + engine setup
-│   ├── models.py               # sqlalchemy models (recipes, ingredients, tags...)
-│   ├── crud.py                 # helper functions to read/write db
-│   ├── planner.py              # meal planning logic (scoring, ε-greedy, leftovers)
-│   ├── scoring.py              # scoring functions (seasonality, recency, tags, bulk-prep)
-│   ├── utils.py                # small helpers (date, json import/export)
-│   └── seed.py                 # optional seed data for testing
-│
-├── /pages/                     # streamlit multipage app
-│   ├── 1_Recipes.py            # CRUD for recipes, ingredients, tags
-│   ├── 2_NewPlan.py            # planner setup page (inputs, sliders, filters)
-│   ├── 3_PlanView.py           # view plan grid, accept/reject/swap, leftovers
-│   └── 4_ImportExport.py       # json import/export
-│
-├── /migrations/                # (optional) alembic migration scripts
-│
-└── /data/
-    └── app.db                  # sqlite database (created on first run)
+├── backend/                   # FastAPI application
+│   ├── app/                   # business logic and API routers
+│   ├── requirements.txt       # backend dependencies
+│   └── ...
+├── frontend/                  # React application
+│   ├── package.json
+│   ├── src/                   # React components
+│   └── ...
+├── migrations/                # (optional) alembic migration scripts
+└── data/
+    └── app.db                 # sqlite database (created on first run)
 ```
 
 ## 📦 Requirements
 
+### Backend
+
 ```
-streamlit
+fastapi
+uvicorn
 SQLAlchemy
 pandas
 python-dateutil
 ```
+
+### Frontend
+
+```
+Node.js
+npm
+React
+```
+
+## Deployment
+
+Use Docker Compose to build and run both services:
+
+```bash
+docker-compose up --build
+```
+
+Set the necessary environment variables before starting:
+
+- `DATABASE_URL` – connection string for the database
+- `API_BASE_URL` – URL used by the frontend to reach the backend
+- `PORT` – server port for the backend
+
+Build steps:
+
+- Backend: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- Frontend: `npm run build` and serve the contents of the `build/` directory
