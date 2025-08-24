@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from streamlit.testing.v1 import AppTest
 from mealplanner import crud
 from mealplanner.db import SessionLocal, init_db
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+
 
 def test_main_runs() -> None:
     """The root application should render without error."""
-    at = AppTest.from_file("app.py").run()
+    at = AppTest.from_file(BASE_DIR / "app.py").run()
     assert at.title[0].value == "Meals Planner Codex"
 
 
@@ -19,7 +23,7 @@ def test_recipes_page() -> None:
     with SessionLocal() as session:
         crud.create_recipe(session, title="Pasta", servings_default=1)
         crud.create_recipe(session, title="Salad", servings_default=1)
-    at = AppTest.from_file("pages/1_Recipes.py").run()
+    at = AppTest.from_file(BASE_DIR / "pages" / "1_Recipes.py").run()
     labels = [e.label for e in at.expander]
     assert any("Pasta" in l for l in labels)
     assert any("Salad" in l for l in labels)
@@ -31,7 +35,7 @@ def test_new_plan_page(monkeypatch) -> None:
         "mealplanner.planner.generate_plan",
         lambda: {"Mon": ["Soup"]},
     )
-    at = AppTest.from_file("pages/2_NewPlan.py").run()
+    at = AppTest.from_file(BASE_DIR / "pages" / "2_NewPlan.py").run()
     at.button[0].click().run()
     values = [m.value for m in at.markdown]
     assert any("Soup" in v for v in values)
@@ -53,7 +57,7 @@ def test_plan_view_page(monkeypatch) -> None:
     monkeypatch.setattr(
         "mealplanner.crud.reject_recipe", lambda *a, **k: calls.append("r")
     )
-    at = AppTest.from_file("pages/3_PlanView.py").run()
+    at = AppTest.from_file(BASE_DIR / "pages" / "3_PlanView.py").run()
     sub_values = [h.value for h in at.subheader]
     assert "Tue" in sub_values
     md_values = [m.value for m in at.markdown]
@@ -62,7 +66,7 @@ def test_plan_view_page(monkeypatch) -> None:
     at.button[0].click().run()
     assert "a" in calls
 
-    at = AppTest.from_file("pages/3_PlanView.py").run()
+    at = AppTest.from_file(BASE_DIR / "pages" / "3_PlanView.py").run()
     at.button[1].click().run()
     assert "r" in calls
 
@@ -79,7 +83,7 @@ def test_plan_view_expired_leftover_warning(monkeypatch) -> None:
         "mealplanner.crud.list_recipe_titles", lambda *a, **k: ["Bulk"]
     )
     try:
-        at = AppTest.from_file("pages/3_PlanView.py").run()
+        at = AppTest.from_file(BASE_DIR / "pages" / "3_PlanView.py").run()
         warnings = [w.value for w in at.warning]
         assert any("days old" in w for w in warnings)
     finally:
@@ -93,7 +97,7 @@ def test_export_page(monkeypatch) -> None:
         "mealplanner.crud.export_data",
         lambda: "exported",
     )
-    at = AppTest.from_file("pages/4_ImportExport.py").run()
+    at = AppTest.from_file(BASE_DIR / "pages" / "4_ImportExport.py").run()
     at = at.button[0].click().run()
     code_values = [c.value for c in at.code]
     assert any("exported" in v for v in code_values)

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # SQLAlchemy database URL for the application. Uses a SQLite file stored under
-# the repository's ``data`` directory.
-DATABASE_URL = "sqlite:///data/app.db"
+# the backend's ``data`` directory.  Build an absolute path so tests and the
+# app behave the same regardless of the current working directory.
+_BASE_DIR = Path(__file__).resolve().parent
+DATABASE_URL = f"sqlite:///{_BASE_DIR / 'data' / 'app.db'}"
 
 # Create the core SQLAlchemy engine and session factory. ``future=True`` enables
 # 2.0 style usage which is what this project is targeting.

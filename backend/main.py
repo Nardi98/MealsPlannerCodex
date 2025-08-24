@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import crud
 import models
@@ -54,7 +54,48 @@ def get_db() -> Session:
 
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
-    return db.execute(select(models.Recipe)).scalars().all()
+    stmt = select(models.Recipe).options(
+        selectinload(models.Recipe.tags), selectinload(models.Recipe.ingredients)
+    )
+    return db.execute(stmt).scalars().all()
+
+
+def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
+    tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
+    ingredients = [models.Ingredient(**ing.model_dump()) for ing in payload.ingredients]
+    return {
+        "title": payload.title,
+        "servings_default": payload.servings_default,
+        "procedure": payload.procedure,
+        "bulk_prep": payload.bulk_prep,
+        "tags": tags,
+        "ingredients": ingredients,
+    }
+
+
+@app.post("/recipes", response_model=schemas.RecipeOut, status_code=201)
+def create_recipe(payload: schemas.RecipeIn, db: Session = Depends(get_db)) -> schemas.RecipeOut:
+    data = _payload_to_data(payload, db)
+    return crud.create_recipe(db, **data)
+
+
+@app.put("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
+def update_recipe(
+    recipe_id: int, payload: schemas.RecipeIn, db: Session = Depends(get_db)
+) -> schemas.RecipeOut:
+    data = _payload_to_data(payload, db)
+    recipe = crud.update_recipe(db, recipe_id, **data)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+
+@app.delete("/recipes/{recipe_id}", status_code=204)
+def delete_recipe_route(recipe_id: int, db: Session = Depends(get_db)) -> Response:
+    deleted = crud.delete_recipe(db, recipe_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return Response(status_code=204)
 
 
 @app.delete("/recipes/{recipe_id}", status_code=204)
