@@ -1,8 +1,9 @@
 import React, { useContext, useState } from 'react'
 import { AppContext } from '../App'
+import { mealPlansApi } from '../api'
 
 export default function NewPlan() {
-  const { recipes, setPlan } = useContext(AppContext)
+  const { setPlan } = useContext(AppContext)
   const [startDate, setStartDate] = useState('')
   const [days, setDays] = useState(7)
   const [mealsPerDay, setMealsPerDay] = useState(1)
@@ -15,19 +16,49 @@ export default function NewPlan() {
   const [keepDays, setKeepDays] = useState(7)
   const [avoidTags, setAvoidTags] = useState('')
   const [reduceTags, setReduceTags] = useState('')
+  const [error, setError] = useState(null)
 
-  const generate = (e) => {
+  const generate = async (e) => {
     e.preventDefault()
-    const plan = {}
-    for (let d = 0; d < days; d++) {
-      const dayLabel = `Day ${d + 1}`
-      plan[dayLabel] = []
-      for (let m = 0; m < mealsPerDay; m++) {
-        const rand = recipes[Math.floor(Math.random() * recipes.length)]
-        if (rand) plan[dayLabel].push(rand.title)
+    setError(null)
+    try {
+      const params = {
+        start: startDate,
+        days: Number(days),
+        meals_per_day: Number(mealsPerDay),
+        epsilon: Number(epsilon),
+        avoid_tags: avoidTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        reduce_tags: reduceTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        seasonality_weight: Number(seasonalityWeight),
+        recency_weight: Number(recencyWeight),
+        tag_penalty_weight: Number(tagPenaltyWeight),
+        bulk_bonus_weight: Number(bulkBonusWeight),
+        bulk_leftovers: Boolean(bulkLeftovers),
+        keep_days: Number(keepDays),
       }
+      const generated = await mealPlansApi.generate(params)
+      const titlePlan = {}
+      const idPlan = {}
+      Object.entries(generated).forEach(([day, meals]) => {
+        titlePlan[day] = meals.map((m) => m.title)
+        idPlan[day] = meals.map((m) => m.id)
+      })
+      setPlan(titlePlan)
+      await mealPlansApi.create({
+        plan_date: startDate,
+        plan: idPlan,
+        bulk_leftovers: Boolean(bulkLeftovers),
+        keep_days: Number(keepDays),
+      })
+    } catch (err) {
+      setError(err.message)
     }
-    setPlan(plan)
   }
 
   return (
@@ -87,6 +118,7 @@ export default function NewPlan() {
         </details>
         <button type="submit">Generate Plan</button>
       </form>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </div>
   )
 }
