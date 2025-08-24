@@ -476,4 +476,3 @@ def export_data(session: Optional[Session] = None) -> str:
     finally:
         if close_session:
             session.close()
-

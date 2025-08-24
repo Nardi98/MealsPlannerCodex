@@ -1,6 +1,12 @@
-const API_BASE_URL = (
-  typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL
-) || process.env.REACT_APP_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || '';
+/* global process */
+const API_BASE_URL =
+  (typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.VITE_API_BASE_URL) ||
+  (typeof process !== 'undefined' &&
+    (process.env.REACT_APP_API_BASE_URL ||
+      process.env.NEXT_PUBLIC_API_BASE_URL)) ||
+  '';
 
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
