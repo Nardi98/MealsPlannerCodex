@@ -1,5 +1,20 @@
 import React, { useState } from 'react'
 
+const months = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
 export default function IngredientRow({ index, ingredient, onChange, onRemove, fetchOptions }) {
   const [options, setOptions] = useState([])
 
@@ -46,18 +61,34 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
         <option value="pieces">pieces</option>
       </select>
       <select
-        multiple
-        value={(ingredient.season || []).map(String)}
+        value={ingredient.seasonStart ?? ''}
         onChange={(e) =>
           onChange(index, {
             ...ingredient,
-            season: Array.from(e.target.selectedOptions).map((opt) => Number(opt.value)),
+            seasonStart: e.target.value === '' ? null : Number(e.target.value),
           })
         }
       >
-        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-          <option key={m} value={m}>
-            {m}
+        <option value="">Start month</option>
+        {months.map((name, i) => (
+          <option key={name} value={i + 1}>
+            {name}
+          </option>
+        ))}
+      </select>
+      <select
+        value={ingredient.seasonEnd ?? ''}
+        onChange={(e) =>
+          onChange(index, {
+            ...ingredient,
+            seasonEnd: e.target.value === '' ? null : Number(e.target.value),
+          })
+        }
+      >
+        <option value="">End month</option>
+        {months.map((name, i) => (
+          <option key={name} value={i + 1}>
+            {name}
           </option>
         ))}
       </select>

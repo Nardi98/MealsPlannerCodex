@@ -36,7 +36,14 @@ export default function Recipes() {
       name: ing.name,
       quantity: ing.quantity ?? '',
       unit: ing.unit || 'g',
-      season: Array.isArray(ing.season_months) ? ing.season_months : [],
+      seasonStart:
+        Array.isArray(ing.season_months) && ing.season_months.length
+          ? ing.season_months[0]
+          : null,
+      seasonEnd:
+        Array.isArray(ing.season_months) && ing.season_months.length
+          ? ing.season_months[ing.season_months.length - 1]
+          : null,
     })),
   })
 
@@ -56,7 +63,10 @@ export default function Recipes() {
   }, [])
 
   const addIngredient = () => {
-    setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
+    setIngredients([
+      ...ingredients,
+      { name: '', quantity: '', unit: 'g', seasonStart: null, seasonEnd: null },
+    ])
   }
 
   const updateIngredient = (index, ing) => {
@@ -85,12 +95,23 @@ export default function Recipes() {
       procedure,
       bulk_prep: bulkPrep,
       tags: selectedTags,
-      ingredients: ingredients.map((ing) => ({
-        name: ing.name,
-        quantity: ing.quantity === '' ? null : Number(ing.quantity),
-        unit: ing.unit,
-        season_months: ing.season.map((n) => Number(n)),
-      })),
+      ingredients: ingredients.map((ing) => {
+        const start = ing.seasonStart ? Number(ing.seasonStart) : 1
+        const end = ing.seasonEnd ? Number(ing.seasonEnd) : 12
+        const months = []
+        let m = start
+        for (let i = 0; i < 12; i += 1) {
+          months.push(m)
+          if (m === end) break
+          m = (m % 12) + 1
+        }
+        return {
+          name: ing.name,
+          quantity: ing.quantity === '' ? null : Number(ing.quantity),
+          unit: ing.unit,
+          season_months: months,
+        }
+      }),
     }
     try {
       if (editingId !== null) {
