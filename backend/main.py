@@ -69,6 +69,8 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
     ingredients: List[models.RecipeIngredient] = []
     for ing in payload.ingredients:
+        if ing.id is None and not ing.name:
+            continue
         ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name)
         ingredients.append(
             models.RecipeIngredient(

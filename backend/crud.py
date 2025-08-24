@@ -162,6 +162,8 @@ def get_or_create_ingredient(
     """
 
     session.flush()
+    if ingredient_id is None and not name:
+        raise ValueError("Ingredient requires an id or name")
     ingredient: Ingredient | None = None
     if ingredient_id is not None:
         ingredient = session.get(Ingredient, ingredient_id)
