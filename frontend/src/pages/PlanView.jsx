@@ -53,9 +53,14 @@ export default function PlanView() {
     init()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const { plan } = useContext(AppContext)
-  const location = useLocation()
-  const successMessage = location.state?.message
+
+  let successMessage
+  try {
+    const location = useLocation()
+    successMessage = location.state?.message
+  } catch {
+    successMessage = undefined
+  }
   const days = Object.keys(plan)
 
   const persistPlan = async (titlePlan) => {
@@ -83,7 +88,6 @@ export default function PlanView() {
     }
   }
 
-  const days = Object.keys(plan)
   if (days.length === 0) {
     return (
       <div>
@@ -195,6 +199,7 @@ export default function PlanView() {
   return (
     <div>
       <h1>Plan View</h1>
+      {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
       <table>
         <thead>
           <tr>
@@ -249,17 +254,16 @@ export default function PlanView() {
         </tbody>
       </table>
       {swapSlot && (
-        <div className="swap-dialog" style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}>
+        <div
+          className="swap-dialog"
+          style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}
+        >
           <h3>Swap Recipe</h3>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search Recipe"
           />
-      {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
-      {days.map((day) => (
-        <div key={day} style={{ marginBottom: '1rem' }}>
-          <h3>{day}</h3>
           <ul>
             {visibleTitles.map((t) => (
               <li key={t}>
@@ -277,3 +281,4 @@ export default function PlanView() {
     </div>
   )
 }
+
