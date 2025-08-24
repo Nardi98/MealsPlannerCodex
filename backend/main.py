@@ -4,7 +4,8 @@ from __future__ import annotations
 import io
 import json
 from datetime import date
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+import random
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -138,6 +139,43 @@ def set_plan(payload: schemas.MealPlanCreate, db: Session = Depends(get_db)) -> 
         keep_days=payload.keep_days,
     )
     return crud.get_plan(db, payload.plan_date)
+
+
+@app.get("/plan/settings", response_model=Dict[str, Any])
+def plan_settings() -> Dict[str, Any]:
+    """Return metadata about the current plan such as ``keep_days``."""
+
+    return crud.get_plan_settings()
+
+
+@app.post("/feedback/accept")
+def feedback_accept(
+    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+) -> Dict[str, str]:
+    """Record user acceptance of a recipe."""
+
+    if crud.accept_recipe(db, payload.title) is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return {"status": "ok"}
+
+
+@app.post("/feedback/reject")
+def feedback_reject(
+    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+) -> Dict[str, Optional[str]]:
+    """Record user rejection of a recipe and suggest a replacement."""
+
+    if crud.reject_recipe(db, payload.title) is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    existing = {
+        m[:-11] if m.endswith(" (leftover)") else m
+        for meals in crud.get_plan().values()
+        for m in meals
+    }
+    existing.add(payload.title)
+    available = list(set(crud.list_recipe_titles(db)) - existing)
+    replacement = random.choice(available) if available else None
+    return {"replacement": replacement}
 
 
 @app.post("/meal-plans/generate")

@@ -77,3 +77,9 @@ class MealPlanGenerate(BaseModel):
     bulk_bonus_weight: float = 1.0
     bulk_leftovers: bool = True
     keep_days: int = 7
+
+
+class FeedbackIn(BaseModel):
+    """Payload for feedback endpoints."""
+
+    title: str
