@@ -4,6 +4,7 @@ import Recipes from './pages/Recipes'
 import NewPlan from './pages/NewPlan'
 import PlanView from './pages/PlanView'
 import ImportExport from './pages/ImportExport'
+import Ingredients from './pages/Ingredients'
 
 export const AppContext = React.createContext()
 
@@ -20,12 +21,14 @@ export default function App() {
           <Link to="/new-plan">New Plan</Link>
           <Link to="/plan-view">Plan View</Link>
           <Link to="/import-export">Import / Export</Link>
+          <Link to="/ingredients">Ingredients</Link>
         </nav>
         <Routes>
           <Route path="/" element={<Recipes />} />
           <Route path="/new-plan" element={<NewPlan />} />
           <Route path="/plan-view" element={<PlanView />} />
           <Route path="/import-export" element={<ImportExport />} />
+          <Route path="/ingredients" element={<Ingredients />} />
         </Routes>
       </Router>
     </AppContext.Provider>

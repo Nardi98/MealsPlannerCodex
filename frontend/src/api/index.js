@@ -31,4 +31,16 @@ export const tagsApi = createCrud('tags');
 export const feedbackApi = createCrud('feedback');
 export const ingredientsApi = {
   search: (q) => request(`/ingredients?search=${encodeURIComponent(q)}`),
+  fetchAll: ({ search = '', order = 'asc' } = {}) => {
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (order) params.append('order', order);
+    const qs = params.toString();
+    return request(`/ingredients/details${qs ? `?${qs}` : ''}`);
+  },
+  update: (id, data) =>
+    request(`/ingredients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };

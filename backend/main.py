@@ -123,6 +123,27 @@ def search_ingredients(search: str = "", db: Session = Depends(get_db)) -> List[
     return db.execute(stmt.limit(10)).scalars().all()
 
 
+@app.get("/ingredients/details", response_model=List[schemas.IngredientOut])
+def read_ingredients(
+    search: str = "", order: str = "asc", db: Session = Depends(get_db)
+) -> List[schemas.IngredientOut]:
+    """Return all ingredients with optional search and ordering."""
+
+    return crud.list_ingredients(db, search, order)
+
+
+@app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientOut)
+def update_ingredient(
+    ingredient_id: int,
+    payload: schemas.IngredientIn,
+    db: Session = Depends(get_db),
+) -> schemas.IngredientOut:
+    ingredient = crud.update_ingredient(db, ingredient_id, **payload.model_dump())
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return ingredient
+
+
 @app.get("/plan", response_model=Dict[str, List[str]])
 @app.get("/meal-plans", response_model=Dict[str, List[str]])
 def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Dict[str, List[str]]:

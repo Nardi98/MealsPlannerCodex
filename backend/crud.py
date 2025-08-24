@@ -21,6 +21,8 @@ __all__ = [
     "get_recipe",
     "update_recipe",
     "delete_recipe",
+    "list_ingredients",
+    "update_ingredient",
     "set_meal_plan",
     "save_plan",
     "get_plan",
@@ -131,6 +133,36 @@ def get_recipes() -> List[str]:
     with SessionLocal() as session:
         stmt = select(Recipe.title).order_by(Recipe.title)
         return session.execute(stmt).scalars().all()
+
+
+def list_ingredients(
+    session: Session, search: str = "", order: str = "asc"
+) -> List[Ingredient]:
+    """Return ingredients optionally filtered by ``search`` and ``order``ed."""
+
+    stmt = select(Ingredient)
+    if search:
+        stmt = stmt.where(Ingredient.name.ilike(f"%{search}%"))
+    if order.lower() == "desc":
+        stmt = stmt.order_by(Ingredient.name.desc())
+    else:
+        stmt = stmt.order_by(Ingredient.name.asc())
+    return session.execute(stmt).scalars().all()
+
+
+def update_ingredient(session: Session, ingredient_id: int, **data: Any) -> Optional[Ingredient]:
+    """Update an ingredient's fields."""
+
+    ingredient = session.get(Ingredient, ingredient_id)
+    if ingredient is None:
+        return None
+
+    for attr, value in data.items():
+        setattr(ingredient, attr, value)
+
+    session.commit()
+    session.refresh(ingredient)
+    return ingredient
 
 
 def set_meal_plan(
