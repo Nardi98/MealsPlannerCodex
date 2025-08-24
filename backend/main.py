@@ -67,14 +67,30 @@ def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
 
 def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
-    ingredients = [models.Ingredient(**ing.model_dump()) for ing in payload.ingredients]
+    existing = {
+        ing.name: ing for ing in db.execute(select(models.Ingredient)).scalars()
+    }
+    recipe_ingredients: list[models.RecipeIngredient] = []
+    for ing in payload.ingredients:
+        ingredient = existing.get(ing.name)
+        if ingredient is None:
+            ingredient = models.Ingredient(
+                name=ing.name,
+                unit=ing.unit,
+                season_months=ing.season_months,
+            )
+            db.add(ingredient)
+            existing[ing.name] = ingredient
+        recipe_ingredients.append(
+            models.RecipeIngredient(ingredient=ingredient, quantity=ing.quantity)
+        )
     return {
         "title": payload.title,
         "servings_default": payload.servings_default,
         "procedure": payload.procedure,
         "bulk_prep": payload.bulk_prep,
         "tags": tags,
-        "ingredients": ingredients,
+        "recipe_ingredients": recipe_ingredients,
     }
 
 

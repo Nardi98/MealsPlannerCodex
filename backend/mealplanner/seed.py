@@ -16,7 +16,7 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe, Tag
+from .models import Ingredient, Recipe, Tag, RecipeIngredient
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +68,13 @@ def _create_recipe(
     session.add(recipe)
 
     for name, qty, unit in ingredients:
-        recipe.ingredients.append(Ingredient(name=name, quantity=qty, unit=unit))
+        session.flush()
+        ing = session.execute(select(Ingredient).where(Ingredient.name == name)).scalar_one_or_none()
+        if ing is None:
+            ing = Ingredient(name=name, unit=unit)
+            session.add(ing)
+        ri = RecipeIngredient(ingredient=ing, quantity=qty)
+        recipe.recipe_ingredients.append(ri)
 
     for tag_name in tags:
         recipe.tags.append(_get_or_create_tag(session, tag_name))

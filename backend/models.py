@@ -90,9 +90,7 @@ class Recipe(Base):
         cascade="all, delete-orphan",
     )
     ingredients = association_proxy(
-        "recipe_ingredients",
-        "ingredient",
-        creator=lambda ing: RecipeIngredient(ingredient=ing, quantity=getattr(ing, "_quantity", None)),
+        "recipe_ingredients", "ingredient", creator=lambda ing: RecipeIngredient(ingredient=ing)
     )
     tags = relationship(
         "Tag", secondary=recipe_tag_table, back_populates="recipes"
@@ -105,36 +103,14 @@ class Ingredient(Base):
     __tablename__ = "ingredients"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
     season_months = Column(IntList)
 
     recipe_ingredients = relationship(
         "RecipeIngredient", back_populates="ingredient"
     )
-
-    def __init__(self, **kwargs):
-        self._quantity = kwargs.pop("quantity", None)
-        super().__init__(**kwargs)
-
-    @property
-    def quantity(self) -> float | None:
-        if self.recipe_ingredients:
-            return self.recipe_ingredients[0].quantity
-        return self._quantity
-
-    @quantity.setter
-    def quantity(self, value: float | None) -> None:
-        if self.recipe_ingredients:
-            self.recipe_ingredients[0].quantity = value
-        else:
-            self._quantity = value
-
-    @property
-    def recipe_id(self) -> int | None:
-        if self.recipe_ingredients:
-            return self.recipe_ingredients[0].recipe_id
-        return None
+    recipes = association_proxy("recipe_ingredients", "recipe")
 
 
 class Tag(Base):

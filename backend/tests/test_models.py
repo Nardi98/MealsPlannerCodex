@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
 from sqlalchemy import select
-from mealplanner.models import Recipe, Ingredient, Tag
+from mealplanner.models import Recipe, Ingredient, Tag, RecipeIngredient
 
 def test_recipe_insert_defaults(db_session):
     r = Recipe(title="Pasta", servings_default=2)
@@ -17,24 +17,29 @@ def test_recipe_insert_defaults(db_session):
 
 def test_ingredient_relationship(db_session):
     r = Recipe(title="Soup", servings_default=4)
-    r.ingredients.append(Ingredient(name="Carrot", quantity=2, unit="piece"))
+    ri = RecipeIngredient(
+        quantity=2, ingredient=Ingredient(name="Carrot", unit="piece")
+    )
+    r.recipe_ingredients.append(ri)
     db_session.add(r)
     db_session.commit()
     db_session.refresh(r)
     assert len(r.ingredients) == 1
     assert r.ingredients[0].name == "Carrot"
-    assert r.ingredients[0].recipe_id == r.id  # FK set
+    assert r.recipe_ingredients[0].recipe_id == r.id  # FK set
 
 def test_delete_orphan_ingredients(db_session):
     r = Recipe(title="Stew", servings_default=3)
-    r.ingredients.append(Ingredient(name="Onion"))
+    r.recipe_ingredients.append(RecipeIngredient(ingredient=Ingredient(name="Onion")))
     db_session.add(r)
     db_session.commit()
     rid = r.id
     db_session.delete(r)
     db_session.commit()
-    # no stray ingredients after cascade delete-orphan
-    assert db_session.execute(select(Ingredient).where(Ingredient.recipe_id == rid)).first() is None
+    # no stray associations after cascade delete-orphan
+    assert db_session.execute(
+        select(RecipeIngredient).where(RecipeIngredient.recipe_id == rid)
+    ).first() is None
 
 def test_many_to_many_tags(db_session):
     r = Recipe(title="Salad", servings_default=1)

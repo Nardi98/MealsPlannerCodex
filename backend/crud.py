@@ -364,11 +364,17 @@ def import_data(
                 months = ing_info.get("season_months")
                 if isinstance(months, str):
                     months = [int(m) for m in months.split(",") if m.strip()]
-                ingredient = Ingredient(
-                    name=ing_info["name"],
-                    unit=ing_info.get("unit"),
-                    season_months=months,
-                )
+                session.flush()
+                ingredient = session.execute(
+                    select(Ingredient).where(Ingredient.name == ing_info["name"])
+                ).scalar_one_or_none()
+                if ingredient is None:
+                    ingredient = Ingredient(
+                        name=ing_info["name"],
+                        unit=ing_info.get("unit"),
+                        season_months=months,
+                    )
+                    session.add(ingredient)
                 recipe.recipe_ingredients.append(
                     RecipeIngredient(
                         ingredient=ingredient,
@@ -449,13 +455,13 @@ def export_data(session: Optional[Session] = None) -> str:
                     ),
                     "ingredients": [
                         {
-                            "id": ing.id,
-                            "name": ing.name,
-                            "quantity": ing.quantity,
-                            "unit": ing.unit,
-                            "season_months": ing.season_months,
+                            "id": ri.ingredient.id,
+                            "name": ri.ingredient.name,
+                            "quantity": ri.quantity,
+                            "unit": ri.ingredient.unit,
+                            "season_months": ri.ingredient.season_months,
                         }
-                        for ing in recipe.ingredients
+                        for ri in recipe.recipe_ingredients
                     ],
                     "tags": [tag.id for tag in recipe.tags],
                 }

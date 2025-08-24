@@ -7,14 +7,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
-from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, Tag
+from mealplanner.models import (
+    Ingredient,
+    MealPlan,
+    MealSlot,
+    Recipe,
+    RecipeIngredient,
+    Tag,
+)
 
 
 def _create_sample_data(session):
     """Populate the database with a small set of objects for testing."""
     tag = Tag(name="vegan")
     recipe = Recipe(title="Soup", servings_default=2)
-    recipe.ingredients.append(Ingredient(name="Water", quantity=1, unit="ml"))
+    recipe.recipe_ingredients.append(
+        RecipeIngredient(ingredient=Ingredient(name="Water", unit="ml"), quantity=1)
+    )
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
     plan.slots.append(MealSlot(meal_time="lunch", recipe=recipe))
