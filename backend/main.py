@@ -10,7 +10,7 @@ import random
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 import crud
@@ -71,7 +71,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     for ing in payload.ingredients:
         if ing.id is None and not ing.name:
             continue
-        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name)
+        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name, ing.unit)
         ingredients.append(
             models.RecipeIngredient(
                 ingredient=ingredient_obj,
@@ -129,12 +129,59 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
     return db.execute(select(models.Tag)).scalars().all()
 
 
-@app.get("/ingredients", response_model=List[str])
-def search_ingredients(search: str = "", db: Session = Depends(get_db)) -> List[str]:
-    stmt = select(models.Ingredient.name).order_by(models.Ingredient.name)
+@app.get("/ingredients", response_model=List[schemas.IngredientSummary])
+def search_ingredients(
+    search: str = "", db: Session = Depends(get_db)
+) -> List[schemas.IngredientSummary]:
+    stmt = (
+        select(
+            models.Ingredient,
+            func.count(models.RecipeIngredient.recipe_id).label("recipe_count"),
+        )
+        .outerjoin(models.Ingredient.recipes)
+        .group_by(models.Ingredient.id)
+        .order_by(models.Ingredient.name)
+    )
     if search:
-        stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%"))
-    return db.execute(stmt.limit(10)).scalars().all()
+        stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%")).limit(10)
+    rows = db.execute(stmt).all()
+    return [
+        schemas.IngredientSummary(
+            id=ing.id,
+            name=ing.name,
+            season_months=ing.season_months or [],
+            unit=ing.unit,
+            recipe_count=count,
+        )
+        for ing, count in rows
+    ]
+
+
+@app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientSummary)
+def update_ingredient(
+    ingredient_id: int,
+    payload: schemas.IngredientUpdate,
+    db: Session = Depends(get_db),
+) -> schemas.IngredientSummary:
+    ingredient = db.get(models.Ingredient, ingredient_id)
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    ingredient.name = payload.name
+    ingredient.season_months = payload.season_months
+    ingredient.unit = payload.unit
+    db.commit()
+    count = db.scalar(
+        select(func.count(models.RecipeIngredient.recipe_id)).where(
+            models.RecipeIngredient.ingredient_id == ingredient.id
+        )
+    )
+    return schemas.IngredientSummary(
+        id=ingredient.id,
+        name=ingredient.name,
+        season_months=ingredient.season_months or [],
+        unit=ingredient.unit,
+        recipe_count=count or 0,
+    )
 
 
 @app.get("/plan", response_model=Dict[str, List[str]])

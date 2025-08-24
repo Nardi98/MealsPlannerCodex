@@ -87,6 +87,7 @@ class Ingredient(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
     season_months = Column(IntList)
+    unit = Column(Enum(UnitEnum, name="unit_enum"))
 
     recipes = relationship(
         "RecipeIngredient", back_populates="ingredient", cascade="all, delete-orphan"

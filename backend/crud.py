@@ -152,7 +152,10 @@ def get_or_create_tag(session: Session, name: str) -> Tag:
 
 
 def get_or_create_ingredient(
-    session: Session, ingredient_id: int | None, name: str | None
+    session: Session,
+    ingredient_id: int | None,
+    name: str | None,
+    unit: UnitEnum | None = None,
 ) -> Ingredient:
     """Return an :class:`Ingredient` looked up by ``ingredient_id`` or ``name``.
 
@@ -172,8 +175,10 @@ def get_or_create_ingredient(
             select(Ingredient).where(Ingredient.name == name)
         ).scalar_one_or_none()
     if ingredient is None:
-        ingredient = Ingredient(name=name)
+        ingredient = Ingredient(name=name, unit=unit)
         session.add(ingredient)
+    elif ingredient.unit is None and unit is not None:
+        ingredient.unit = unit
     return ingredient
 
 
