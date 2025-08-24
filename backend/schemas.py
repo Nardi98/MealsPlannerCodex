@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from models import UnitEnum
 
@@ -22,7 +22,7 @@ class IngredientOut(BaseModel):
     name: str
     quantity: Optional[float] = None
     unit: Optional[UnitEnum] = None
-    season_months: Optional[str] = None
+    season_months: List[int] = Field(default_factory=list)
 
     class Config:
         orm_mode = True
@@ -32,7 +32,7 @@ class IngredientIn(BaseModel):
     name: str
     quantity: Optional[float] = None
     unit: Optional[UnitEnum] = None
-    season_months: Optional[str] = None
+    season_months: List[int] = Field(default_factory=list)
 
 
 class RecipeIn(BaseModel):

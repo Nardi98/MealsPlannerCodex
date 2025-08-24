@@ -1,5 +1,20 @@
 import React, { useState } from 'react'
 
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+]
+
 export default function IngredientRow({ index, ingredient, onChange, onRemove, fetchOptions }) {
   const [options, setOptions] = useState([])
 
@@ -46,12 +61,25 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
         <option value="ml">ml</option>
         <option value="piece">piece</option>
       </select>
-      <input
-        type="text"
-        placeholder="Season"
-        value={ingredient.season}
-        onChange={(e) => onChange(index, { ...ingredient, season: e.target.value })}
-      />
+      <select
+        multiple
+        value={ingredient.season.map((m) => String(m))}
+        onChange={(e) =>
+          onChange(
+            index,
+            {
+              ...ingredient,
+              season: Array.from(e.target.selectedOptions).map((o) => Number(o.value))
+            }
+          )
+        }
+      >
+        {MONTHS.map((m, i) => (
+          <option key={i + 1} value={i + 1}>
+            {m}
+          </option>
+        ))}
+      </select>
       <button type="button" onClick={() => onRemove(index)}>✖</button>
     </div>
   )

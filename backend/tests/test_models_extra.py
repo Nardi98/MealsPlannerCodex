@@ -42,7 +42,7 @@ def test_update_ingredient_quantity(db_session):
 
     assert ing.quantity == 2.5
     assert ing.unit == "kg"
-    assert ing.season_months is None
+    assert ing.season_months == []
 
 
 def test_tag_cascade_delete(db_session):
