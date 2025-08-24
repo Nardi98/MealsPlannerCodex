@@ -57,7 +57,10 @@ def get_db() -> Session:
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
     stmt = select(models.Recipe).options(
-        selectinload(models.Recipe.tags), selectinload(models.Recipe.ingredients)
+        selectinload(models.Recipe.tags),
+        selectinload(models.Recipe.recipe_ingredients).selectinload(
+            models.RecipeIngredient.ingredient
+        ),
     )
     return db.execute(stmt).scalars().all()
 

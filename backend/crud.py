@@ -10,7 +10,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
-from models import Ingredient, MealPlan, MealSlot, Recipe, Tag, recipe_tag_table
+from models import (
+    Ingredient,
+    MealPlan,
+    MealSlot,
+    Recipe,
+    Tag,
+    RecipeIngredient,
+    recipe_tag_table,
+)
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
@@ -293,6 +301,7 @@ def import_data(
         raise ValueError("mode must be 'overwrite' or 'merge'")
 
     try:
+        session.expunge_all()
         if mode == "overwrite":
             # Clear existing data
             session.execute(recipe_tag_table.delete())
@@ -357,12 +366,15 @@ def import_data(
                     months = [int(m) for m in months.split(",") if m.strip()]
                 ingredient = Ingredient(
                     name=ing_info["name"],
-                    quantity=ing_info.get("quantity"),
                     unit=ing_info.get("unit"),
                     season_months=months,
-                    recipe=recipe,
                 )
-                session.add(ingredient)
+                recipe.recipe_ingredients.append(
+                    RecipeIngredient(
+                        ingredient=ingredient,
+                        quantity=ing_info.get("quantity"),
+                    )
+                )
 
             for tag_id in rec_info.get("tags", []):
                 tag = tag_map.get(tag_id)

@@ -16,6 +16,7 @@ from sqlalchemy import (
     Table,
     Text,
 )
+from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -57,6 +58,19 @@ class UnitEnum(str, PyEnum):
     PIECE = "piece"
 
 
+class RecipeIngredient(Base):
+    """Association object linking recipes and ingredients with quantities."""
+
+    __tablename__ = "recipe_ingredients"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
+    ingredient_id = Column(Integer, ForeignKey("ingredients.id", ondelete="CASCADE"))
+    quantity = Column(Float)
+
+    recipe = relationship("Recipe", back_populates="recipe_ingredients")
+    ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
+
 class Recipe(Base):
     """A meal that can be prepared and consumed."""
 
@@ -70,8 +84,15 @@ class Recipe(Base):
     score = Column(Float)
     date_last_consumed = Column(Date)
 
-    ingredients = relationship(
-        "Ingredient", back_populates="recipe", cascade="all, delete-orphan"
+    recipe_ingredients = relationship(
+        "RecipeIngredient",
+        back_populates="recipe",
+        cascade="all, delete-orphan",
+    )
+    ingredients = association_proxy(
+        "recipe_ingredients",
+        "ingredient",
+        creator=lambda ing: RecipeIngredient(ingredient=ing, quantity=getattr(ing, "_quantity", None)),
     )
     tags = relationship(
         "Tag", secondary=recipe_tag_table, back_populates="recipes"
@@ -85,12 +106,35 @@ class Ingredient(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    quantity = Column(Float)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
     season_months = Column(IntList)
-    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
 
-    recipe = relationship("Recipe", back_populates="ingredients")
+    recipe_ingredients = relationship(
+        "RecipeIngredient", back_populates="ingredient"
+    )
+
+    def __init__(self, **kwargs):
+        self._quantity = kwargs.pop("quantity", None)
+        super().__init__(**kwargs)
+
+    @property
+    def quantity(self) -> float | None:
+        if self.recipe_ingredients:
+            return self.recipe_ingredients[0].quantity
+        return self._quantity
+
+    @quantity.setter
+    def quantity(self, value: float | None) -> None:
+        if self.recipe_ingredients:
+            self.recipe_ingredients[0].quantity = value
+        else:
+            self._quantity = value
+
+    @property
+    def recipe_id(self) -> int | None:
+        if self.recipe_ingredients:
+            return self.recipe_ingredients[0].recipe_id
+        return None
 
 
 class Tag(Base):
