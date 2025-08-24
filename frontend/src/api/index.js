@@ -2,7 +2,10 @@ import { request } from './client';
 
 function createCrud(resource) {
   return {
-    fetchAll: () => request(`/${resource}`),
+    fetchAll: (params) => {
+      const query = params ? `?${new URLSearchParams(params)}` : '';
+      return request(`/${resource}${query}`);
+    },
     fetch: (id) => request(`/${resource}/${id}`),
     create: (data) => request(`/${resource}`, {
       method: 'POST',

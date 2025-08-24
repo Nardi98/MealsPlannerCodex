@@ -5,6 +5,7 @@ import io
 import json
 from datetime import date
 from typing import Any, Dict, List, Optional
+from enum import Enum
 import random
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -54,11 +55,28 @@ def get_db() -> Session:
         db.close()
 
 
+class RecipeOrder(str, Enum):
+    """Available sorting options for recipe listing."""
+
+    title_asc = "title_asc"
+    title_desc = "title_desc"
+    last_added = "last_added"
+
+
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
-def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
+def read_recipes(
+    order: RecipeOrder = RecipeOrder.last_added,
+    db: Session = Depends(get_db),
+) -> List[schemas.RecipeOut]:
     stmt = select(models.Recipe).options(
         selectinload(models.Recipe.tags), selectinload(models.Recipe.ingredients)
     )
+    if order == RecipeOrder.title_asc:
+        stmt = stmt.order_by(models.Recipe.title.asc())
+    elif order == RecipeOrder.title_desc:
+        stmt = stmt.order_by(models.Recipe.title.desc())
+    else:  # last_added
+        stmt = stmt.order_by(models.Recipe.id.desc())
     return db.execute(stmt).scalars().all()
 
 
