@@ -10,10 +10,7 @@ export default function RecipeForm({ onCreated }) {
   const [error, setError] = useState(null)
 
   const addIngredient = () => {
-    setIngredients([
-      ...ingredients,
-      { ingredient: { name: '' }, quantity: '', unit: 'g' },
-    ])
+    setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
   }
 
   const updateIngredient = (index, ing) => {
@@ -43,12 +40,10 @@ export default function RecipeForm({ onCreated }) {
       title,
       servings_default: Number(servings),
       ingredients: ingredients.map((ing) => ({
-        ingredient: {
-          id: ing.ingredient?.id,
-          name: ing.ingredient?.name,
-        },
+        name: ing.name,
         quantity: ing.quantity === '' ? null : Number(ing.quantity),
         unit: ing.unit,
+        season_months: ing.season,
       })),
     }
     try {

@@ -24,12 +24,12 @@ function createCrud(resource) {
 function normaliseRecipe(recipe) {
   return {
     ...recipe,
-    ingredients: (recipe.ingredients || []).map((ri) => ({
-      id: ri.ingredient?.id ?? ri.id,
-      name: ri.ingredient?.name ?? ri.name,
-      quantity: ri.quantity ?? null,
-      unit: ri.unit ?? null,
-      season_months: ri.ingredient?.season_months ?? ri.season_months ?? [],
+    ingredients: (recipe.ingredients || []).map((ing) => ({
+      id: ing.id,
+      name: ing.name,
+      quantity: ing.quantity ?? null,
+      unit: ing.unit ?? null,
+      season_months: ing.season_months ?? [],
     })),
   };
 }
@@ -38,13 +38,11 @@ function serialiseRecipe(recipe) {
   return {
     ...recipe,
     ingredients: (recipe.ingredients || []).map((ing) => ({
-      ingredient: {
-        id: ing.id,
-        name: ing.name,
-        season_months: ing.season_months || ing.season || [],
-      },
+      id: ing.id,
+      name: ing.name,
       quantity: ing.quantity,
       unit: ing.unit,
+      season_months: ing.season_months || ing.season || [],
     })),
   };
 }
