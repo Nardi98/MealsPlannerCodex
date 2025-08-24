@@ -49,6 +49,27 @@ def test_delete_orphan_ingredients(db_session):
     )
 
 
+def test_shared_ingredient_multiple_recipes(db_session):
+    """A single Ingredient can appear in many recipes with different amounts."""
+    salt = Ingredient(name="Salt")
+    soup = Recipe(title="Soup", servings_default=2)
+    salad = Recipe(title="Salad", servings_default=1)
+
+    soup.ingredients.append(
+        RecipeIngredient(ingredient=salt, quantity=1, unit="g")
+    )
+    salad.ingredients.append(
+        RecipeIngredient(ingredient=salt, quantity=2, unit="g")
+    )
+    db_session.add_all([soup, salad])
+    db_session.commit()
+
+    assert soup.ingredients[0].ingredient_id == salt.id
+    assert salad.ingredients[0].ingredient_id == salt.id
+    assert soup.ingredients[0].quantity == 1
+    assert salad.ingredients[0].quantity == 2
+
+
 def test_many_to_many_tags(db_session):
     r = Recipe(title="Salad", servings_default=1)
     t1, t2 = Tag(name="vegetarian"), Tag(name="quick")
