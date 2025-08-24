@@ -15,7 +15,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from .database import Base
+from database import Base
 
 # Association table linking recipes and tags for a many-to-many relationship.
 recipe_tag_table = Table(

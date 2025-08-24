@@ -9,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import crud, models, schemas
-from .database import SessionLocal, engine
+import crud, models, schemas
+from database import SessionLocal, engine
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
