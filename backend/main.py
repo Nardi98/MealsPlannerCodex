@@ -71,7 +71,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     for ing in payload.ingredients:
         if ing.id is None and not ing.name:
             continue
-        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name)
+        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name, ing.unit)
         ingredients.append(
             models.RecipeIngredient(
                 ingredient=ingredient_obj,
@@ -150,6 +150,7 @@ def search_ingredients(
             id=ing.id,
             name=ing.name,
             season_months=ing.season_months or [],
+            unit=ing.unit,
             recipe_count=count,
         )
         for ing, count in rows
@@ -167,6 +168,7 @@ def update_ingredient(
         raise HTTPException(status_code=404, detail="Ingredient not found")
     ingredient.name = payload.name
     ingredient.season_months = payload.season_months
+    ingredient.unit = payload.unit
     db.commit()
     count = db.scalar(
         select(func.count(models.RecipeIngredient.recipe_id)).where(
@@ -177,6 +179,7 @@ def update_ingredient(
         id=ingredient.id,
         name=ingredient.name,
         season_months=ingredient.season_months or [],
+        unit=ingredient.unit,
         recipe_count=count or 0,
     )
 

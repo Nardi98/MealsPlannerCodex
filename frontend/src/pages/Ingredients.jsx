@@ -7,6 +7,7 @@ export default function Ingredients() {
   const dialogRef = useRef(null)
   const [formName, setFormName] = useState('')
   const [formSeason, setFormSeason] = useState('')
+  const [formUnit, setFormUnit] = useState('')
 
   useEffect(() => {
     ingredientsApi
@@ -19,6 +20,7 @@ export default function Ingredients() {
     setEditing(ing)
     setFormName(ing.name)
     setFormSeason(ing.season_months.join(','))
+    setFormUnit(ing.unit || '')
     dialogRef.current.showModal()
   }
 
@@ -37,6 +39,7 @@ export default function Ingredients() {
       const updated = await ingredientsApi.update(editing.id, {
         name: formName,
         season_months: season,
+        unit: formUnit,
       })
       setIngredients((ings) =>
         ings.map((i) => (i.id === updated.id ? updated : i))
@@ -58,6 +61,7 @@ export default function Ingredients() {
             <tr>
               <th>Name</th>
               <th>Season Months</th>
+              <th>Unit</th>
               <th>Recipes</th>
               <th></th>
             </tr>
@@ -67,6 +71,7 @@ export default function Ingredients() {
               <tr key={ing.id}>
                 <td>{ing.name}</td>
                 <td>{ing.season_months.join(', ')}</td>
+                <td>{ing.unit}</td>
                 <td>{ing.recipe_count}</td>
                 <td>
                   <button type="button" onClick={() => openEdit(ing)}>
@@ -97,6 +102,22 @@ export default function Ingredients() {
                   value={formSeason}
                   onChange={(e) => setFormSeason(e.target.value)}
                 />
+              </label>
+            </div>
+            <div>
+              <label>
+                Unit:
+                <select
+                  value={formUnit}
+                  onChange={(e) => setFormUnit(e.target.value)}
+                >
+                  <option value="">--</option>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="l">l</option>
+                  <option value="ml">ml</option>
+                  <option value="piece">piece</option>
+                </select>
               </label>
             </div>
             <button type="submit">Save</button>
