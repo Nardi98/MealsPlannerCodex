@@ -2,7 +2,7 @@ import pytest
 import random
 from datetime import date
 
-from mealplanner.models import Recipe, Ingredient, Tag
+from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
 from mealplanner.planner import generate_weekly_plan, generate_plan
 
 
@@ -11,7 +11,8 @@ def make_recipe(name, bulk=False, tags=None, season=None):
     if tags:
         r.tags = [Tag(name=t) for t in tags]
     if season:
-        r.ingredients = [Ingredient(name=f"{name}-ing", season_months=list(season))]
+        base = Ingredient(name=f"{name}-ing", season_months=list(season))
+        r.ingredients = [RecipeIngredient(ingredient=base)]
     return r
 
 

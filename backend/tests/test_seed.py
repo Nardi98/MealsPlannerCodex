@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Ingredient, Tag
+from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
 from mealplanner.seed import seed_sample_data
 
 
@@ -14,7 +14,7 @@ def test_seed_populates_sample_data(db_session):
     assert grilled is not None
 
     # Ingredients linked correctly
-    oatmeal_ing = {i.name for i in oatmeal.ingredients}
+    oatmeal_ing = {ri.ingredient.name for ri in oatmeal.ingredients}
     assert {"Oats", "Water"} <= oatmeal_ing
 
     tag_names = {t.name for t in db_session.execute(select(Tag)).scalars()}

@@ -70,8 +70,9 @@ class Recipe(Base):
     score = Column(Float)
     date_last_consumed = Column(Date)
 
+    # Relationship to ``RecipeIngredient`` association objects.
     ingredients = relationship(
-        "Ingredient", back_populates="recipe", cascade="all, delete-orphan"
+        "RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan"
     )
     tags = relationship(
         "Tag", secondary=recipe_tag_table, back_populates="recipes"
@@ -79,18 +80,48 @@ class Recipe(Base):
 
 
 class Ingredient(Base):
-    """An ingredient used within a recipe."""
+    """A unique ingredient that can appear in many recipes."""
 
     __tablename__ = "ingredients"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=False, unique=True)
+    season_months = Column(IntList)
+
+    recipes = relationship(
+        "RecipeIngredient", back_populates="ingredient", cascade="all, delete-orphan"
+    )
+
+
+class RecipeIngredient(Base):
+    """Association table linking recipes and ingredients with quantities."""
+
+    __tablename__ = "recipe_ingredients"
+
+    recipe_id = Column(
+        Integer, ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True
+    )
+    ingredient_id = Column(
+        Integer, ForeignKey("ingredients.id", ondelete="CASCADE"), primary_key=True
+    )
     quantity = Column(Float)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
-    season_months = Column(IntList)
-    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
 
     recipe = relationship("Recipe", back_populates="ingredients")
+    ingredient = relationship("Ingredient", back_populates="recipes")
+
+    # Convenience accessors so Pydantic schemas can read attributes directly
+    @property
+    def id(self) -> int:  # pragma: no cover - simple delegation
+        return self.ingredient_id
+
+    @property
+    def name(self) -> str:  # pragma: no cover - simple delegation
+        return self.ingredient.name
+
+    @property
+    def season_months(self) -> list[int] | None:  # pragma: no cover
+        return self.ingredient.season_months
 
 
 class Tag(Base):
