@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+.pytest_cache/
+node_modules/

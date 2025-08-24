@@ -1,5 +1,15 @@
 # 🍝 Meal Planner --- Project Spec
 
+## Running with Docker
+
+This repository is split into a `backend/` directory containing the Streamlit application and a placeholder `frontend/` directory.
+Use docker-compose to build and start both services:
+
+```bash
+docker-compose up --build
+```
+
+
 ## Core Features
 
 1.  **Recipes management**
@@ -67,32 +77,16 @@
 ## 📂 Project Structure
 
 ```
-meal-planner/
+project/
 │
-├── README.md                  # project specs (already created)
-├── requirements.txt            # dependencies (streamlit, sqlalchemy, etc.)
-├── app.py                      # entry point, streamlit main app
-│
-├── /mealplanner/               # application package
-│   ├── __init__.py
-│   ├── db.py                   # db session + engine setup
-│   ├── models.py               # sqlalchemy models (recipes, ingredients, tags...)
-│   ├── crud.py                 # helper functions to read/write db
-│   ├── planner.py              # meal planning logic (scoring, ε-greedy, leftovers)
-│   ├── scoring.py              # scoring functions (seasonality, recency, tags, bulk-prep)
-│   ├── utils.py                # small helpers (date, json import/export)
-│   └── seed.py                 # optional seed data for testing
-│
-├── /pages/                     # streamlit multipage app
-│   ├── 1_Recipes.py            # CRUD for recipes, ingredients, tags
-│   ├── 2_NewPlan.py            # planner setup page (inputs, sliders, filters)
-│   ├── 3_PlanView.py           # view plan grid, accept/reject/swap, leftovers
-│   └── 4_ImportExport.py       # json import/export
-│
-├── /migrations/                # (optional) alembic migration scripts
-│
-└── /data/
-    └── app.db                  # sqlite database (created on first run)
+├── backend/
+│   ├── app.py
+│   ├── mealplanner/
+│   ├── pages/
+│   └── tests/
+├── frontend/
+│   └── package.json
+└── docker-compose.yml
 ```
 
 ## 📦 Requirements

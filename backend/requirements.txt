@@ -4,3 +4,5 @@ python-dateutil
 pytest
 streamlit==1.48.1
 streamlit-searchbox==0.1.23
+
+flake8

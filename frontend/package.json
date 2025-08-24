@@ -1,0 +1,11 @@
+{
+  "name": "mealsplanner-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "echo 'Starting frontend'",
+    "build": "echo 'Building frontend'",
+    "lint": "echo 'Linting frontend'",
+    "test": "echo 'Running frontend tests'"
+  }
+}
