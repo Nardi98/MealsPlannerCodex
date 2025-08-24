@@ -10,7 +10,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
-from models import Ingredient, MealPlan, MealSlot, Recipe, Tag, RecipeIngredient, recipe_tag_table
+from models import (
+    Ingredient,
+    MealPlan,
+    MealSlot,
+    Recipe,
+    Tag,
+    RecipeIngredient,
+    UnitEnum,
+    recipe_tag_table,
+)
 
 _PLAN_CACHE: Dict[str, List[str]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
@@ -408,11 +417,13 @@ def import_data(
                 )
                 if months is not None:
                     ingredient_obj.season_months = months
+                unit_val = ing_info.get("unit")
+                unit = UnitEnum(unit_val) if unit_val else None
                 recipe.ingredients.append(
                     RecipeIngredient(
                         ingredient=ingredient_obj,
                         quantity=ing_info.get("quantity"),
-                        unit=ing_info.get("unit"),
+                        unit=unit,
                     )
                 )
 
@@ -492,7 +503,7 @@ def export_data(session: Optional[Session] = None) -> str:
                             "id": ri.ingredient.id,
                             "name": ri.ingredient.name,
                             "quantity": ri.quantity,
-                            "unit": ri.unit,
+                            "unit": ri.unit.value if ri.unit else None,
                             "season_months": ri.ingredient.season_months,
                         }
                         for ri in recipe.ingredients
