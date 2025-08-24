@@ -12,7 +12,7 @@ def make_recipe(name, bulk=False, tags=None, season=None):
         r.tags = [Tag(name=t) for t in tags]
     if season:
         base = Ingredient(name=f"{name}-ing", season_months=list(season))
-        r.ingredients = [RecipeIngredient(ingredient=base)]
+        r.recipe_ingredients = [RecipeIngredient(ingredient=base, recipe=r)]
     return r
 
 
