@@ -1,11 +1,12 @@
 """FastAPI application for Meals Planner Codex."""
 from __future__ import annotations
 
+import io
+import json
 from datetime import date
-from typing import Dict, List
+from typing import Any, Dict, List
 
-from fastapi import Depends
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select
@@ -56,6 +57,16 @@ def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
     return db.execute(select(models.Recipe)).scalars().all()
 
 
+@app.delete("/recipes/{recipe_id}", status_code=204)
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
+    recipe = db.get(models.Recipe, recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    db.delete(recipe)
+    db.commit()
+    return Response(status_code=204)
+
+
 @app.get("/tags", response_model=List[schemas.TagOut])
 def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
     return db.execute(select(models.Tag)).scalars().all()
@@ -70,6 +81,25 @@ def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Di
 def set_plan(payload: schemas.MealPlanCreate, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
     crud.set_meal_plan(db, payload.plan_date, payload.plan)
     return crud.get_plan(db, payload.plan_date)
+
+
+@app.get("/data/export")
+def export_data_endpoint(db: Session = Depends(get_db)) -> Response:
+    data = crud.export_data(db)
+    return Response(content=data, media_type="application/json")
+
+
+@app.post("/data/import")
+def import_data_endpoint(
+    payload: Dict[str, Any],
+    mode: str = "overwrite",
+    db: Session = Depends(get_db),
+) -> Dict[str, str]:
+    try:
+        crud.import_data(io.StringIO(json.dumps(payload)), db, mode=mode)
+    except ValueError as exc:  # pragma: no cover - value error path
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok"}
 
 
 if __name__ == "__main__":
