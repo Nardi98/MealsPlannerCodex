@@ -1,5 +1,6 @@
 import React, { useContext, useState } from 'react'
 import { AppContext } from '../App'
+import { mealPlansApi } from '../api'
 
 export default function NewPlan() {
   const { recipes, setPlan } = useContext(AppContext)
@@ -15,25 +16,56 @@ export default function NewPlan() {
   const [keepDays, setKeepDays] = useState(7)
   const [avoidTags, setAvoidTags] = useState('')
   const [reduceTags, setReduceTags] = useState('')
+  const [error, setError] = useState(null)
 
-  const generate = (e) => {
+  const generate = async (e) => {
     e.preventDefault()
-    const plan = {}
-    for (let d = 0; d < days; d++) {
-      const dayLabel = `Day ${d + 1}`
-      plan[dayLabel] = []
-      for (let m = 0; m < mealsPerDay; m++) {
-        const rand = recipes[Math.floor(Math.random() * recipes.length)]
-        if (rand) plan[dayLabel].push(rand.title)
+    setError(null)
+    try {
+      const params = {
+        start: startDate,
+        days: Number(days),
+        meals_per_day: Number(mealsPerDay),
+        epsilon: Number(epsilon),
+        seasonality_weight: Number(seasonalityWeight),
+        recency_weight: Number(recencyWeight),
+        tag_penalty_weight: Number(tagPenaltyWeight),
+        bulk_bonus_weight: Number(bulkBonusWeight),
+        bulk_leftovers: Boolean(bulkLeftovers),
+        keep_days: Number(keepDays),
+        avoid_tags: avoidTags.split(',').map((t) => t.trim()).filter(Boolean),
+        reduce_tags: reduceTags.split(',').map((t) => t.trim()).filter(Boolean),
       }
+      const plan = await mealPlansApi.generate(params)
+      setPlan(plan)
+
+      const idPlan = {}
+      Object.entries(plan).forEach(([day, meals]) => {
+        idPlan[day] = meals
+          .map((meal) => {
+            const base = meal.endsWith(' (leftover)') ? meal.slice(0, -11) : meal
+            const match = recipes.find((r) => r.title === base)
+            return match && match.id
+          })
+          .filter(Boolean)
+      })
+
+      const { start: _start, ...settings } = params
+      await mealPlansApi.create({
+        plan_date: startDate,
+        plan: idPlan,
+        ...settings,
+      })
+    } catch (err) {
+      setError(err.message)
     }
-    setPlan(plan)
   }
 
   return (
     <div>
       <h1>New Plan</h1>
       <form onSubmit={generate}>
+        {error && <p style={{ color: 'red' }}>{error}</p>}
         <div>
           <label>Start Date </label>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />

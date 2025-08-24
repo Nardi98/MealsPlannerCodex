@@ -19,6 +19,13 @@ function createCrud(resource) {
 }
 
 export const recipesApi = createCrud('recipes');
-export const mealPlansApi = createCrud('meal-plans');
+export const mealPlansApi = {
+  ...createCrud('meal-plans'),
+  generate: (data) =>
+    request('/meal-plans/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
 export const tagsApi = createCrud('tags');
 export const feedbackApi = createCrud('feedback');
