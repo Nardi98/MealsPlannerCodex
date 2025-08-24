@@ -6,5 +6,6 @@ flake8
 streamlit==1.48.1
 streamlit-searchbox==0.1.23
 fastapi
+httpx
 uvicorn
 httpx

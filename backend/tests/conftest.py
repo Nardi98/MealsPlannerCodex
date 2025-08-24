@@ -17,7 +17,9 @@ from mealplanner import models  # ensures tables are registered
 
 @pytest.fixture(scope="session")
 def engine():
-    eng = create_engine("sqlite:///:memory:", future=True)
+    eng = create_engine(
+        "sqlite:///:memory:", future=True, connect_args={"check_same_thread": False}
+    )
     Base.metadata.create_all(bind=eng)
     return eng
 
