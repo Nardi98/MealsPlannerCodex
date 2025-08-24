@@ -37,3 +37,27 @@ def test_search_ingredients() -> None:
     assert "Spaghetti" in data
     assert "Spinach" in data
     assert "Salt" not in data
+
+
+def test_list_all_ingredients() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Soup",
+        "servings_default": 2,
+        "procedure": "",
+        "bulk_prep": False,
+        "tags": [],
+        "ingredients": [
+            {"name": "Water", "quantity": 1, "unit": "l"},
+            {"name": "Carrot", "quantity": 2, "unit": "piece"},
+            {"name": "Salt", "quantity": 1, "unit": "g"},
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+
+    res = client.get("/ingredients")
+    assert res.status_code == 200
+    data = res.json()
+    assert set(data) == {"Water", "Carrot", "Salt"}

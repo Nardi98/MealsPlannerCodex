@@ -133,8 +133,8 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
 def search_ingredients(search: str = "", db: Session = Depends(get_db)) -> List[str]:
     stmt = select(models.Ingredient.name).order_by(models.Ingredient.name)
     if search:
-        stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%"))
-    return db.execute(stmt.limit(10)).scalars().all()
+        stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%")).limit(10)
+    return db.execute(stmt).scalars().all()
 
 
 @app.get("/plan", response_model=Dict[str, List[str]])

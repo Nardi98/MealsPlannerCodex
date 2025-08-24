@@ -88,4 +88,5 @@ export const tagsApi = createCrud('tags');
 export const feedbackApi = createCrud('feedback');
 export const ingredientsApi = {
   search: (q) => request(`/ingredients?search=${encodeURIComponent(q)}`),
+  fetchAll: () => request('/ingredients'),
 };
