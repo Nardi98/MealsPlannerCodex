@@ -42,4 +42,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:  # pragma: no cover - irreversibly cleans data
     pass
-

@@ -37,6 +37,7 @@ class IntList(TypeDecorator):
             return []
         return [int(v) for v in value.split(",") if v]
 
+
 # Association table linking recipes and tags for a many-to-many relationship.
 recipe_tag_table = Table(
     "recipe_tag",
