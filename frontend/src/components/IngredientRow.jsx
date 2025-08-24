@@ -12,7 +12,7 @@ const MONTHS = [
   'September',
   'October',
   'November',
-  'December'
+  'December',
 ]
 
 export default function IngredientRow({ index, ingredient, onChange, onRemove, fetchOptions }) {
@@ -20,12 +20,7 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
 
   const handleNameChange = async (e) => {
     const value = e.target.value
-    const updated = {
-      ...ingredient,
-      ingredient: { ...(ingredient.ingredient || {}), name: value },
-      name: undefined, // ensure legacy field isn't used
-    }
-    onChange(index, updated)
+    onChange(index, { ...ingredient, name: value })
     if (fetchOptions) {
       try {
         const opts = await fetchOptions(value)
@@ -36,8 +31,8 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
     }
   }
 
-  const name = ingredient.ingredient?.name ?? ingredient.name ?? ''
-  const season = ingredient.ingredient?.season_months ?? ingredient.season ?? []
+  const name = ingredient.name ?? ''
+  const season = ingredient.season ?? []
 
   return (
     <div className="ingredient-row">
@@ -75,11 +70,7 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
         onChange={(e) =>
           onChange(index, {
             ...ingredient,
-            ingredient: {
-              ...(ingredient.ingredient || {}),
-              season_months: Array.from(e.target.selectedOptions).map((o) => Number(o.value)),
-            },
-            season: undefined,
+            season: Array.from(e.target.selectedOptions).map((o) => Number(o.value)),
           })
         }
       >
