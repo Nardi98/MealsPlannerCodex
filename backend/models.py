@@ -102,4 +102,3 @@ class MealSlot(Base):
 
     plan = relationship("MealPlan", back_populates="slots")
     recipe = relationship("Recipe")
-
