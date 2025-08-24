@@ -14,7 +14,7 @@ def _create_sample_data(session):
     """Populate the database with a small set of objects for testing."""
     tag = Tag(name="vegan")
     recipe = Recipe(title="Soup", servings_default=2)
-    recipe.ingredients.append(Ingredient(name="Water", quantity=1, unit="cup"))
+    recipe.ingredients.append(Ingredient(name="Water", quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
     plan.slots.append(MealSlot(meal_time="lunch", recipe=recipe))

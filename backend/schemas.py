@@ -6,6 +6,8 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
+from models import UnitEnum
+
 
 class TagOut(BaseModel):
     id: int
@@ -19,7 +21,7 @@ class IngredientOut(BaseModel):
     id: int
     name: str
     quantity: Optional[float] = None
-    unit: Optional[str] = None
+    unit: Optional[UnitEnum] = None
     season_months: Optional[str] = None
 
     class Config:
@@ -29,7 +31,7 @@ class IngredientOut(BaseModel):
 class IngredientIn(BaseModel):
     name: str
     quantity: Optional[float] = None
-    unit: Optional[str] = None
+    unit: Optional[UnitEnum] = None
     season_months: Optional[str] = None
 
 
