@@ -1,6 +1,7 @@
-import React, { useContext, useState } from 'react'
+import React, { useContext, useState, useEffect } from 'react'
 import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
+import { tagsApi } from '../api'
 
 export default function Recipes() {
   const { recipes, setRecipes } = useContext(AppContext)
@@ -8,8 +9,18 @@ export default function Recipes() {
   const [servings, setServings] = useState(1)
   const [procedure, setProcedure] = useState('')
   const [bulkPrep, setBulkPrep] = useState(false)
-  const [tagText, setTagText] = useState('')
+  const [availableTags, setAvailableTags] = useState([])
+  const [selectedTags, setSelectedTags] = useState([])
+  const [filterTags, setFilterTags] = useState([])
   const [ingredients, setIngredients] = useState([])
+  const [editingIndex, setEditingIndex] = useState(null)
+
+  useEffect(() => {
+    tagsApi
+      .fetchAll()
+      .then(setAvailableTags)
+      .catch(() => setAvailableTags([]))
+  }, [])
 
   const addIngredient = () => {
     setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: '' }])
@@ -26,22 +37,49 @@ export default function Recipes() {
     setIngredients(copy)
   }
 
+  const handleTagChange = (e) => {
+    const opts = Array.from(e.target.selectedOptions).map((o) => o.value)
+    setSelectedTags(opts)
+  }
+
+  const handleFilterChange = (e) => {
+    const opts = Array.from(e.target.selectedOptions).map((o) => o.value)
+    setFilterTags(opts)
+  }
+
   const submit = (e) => {
     e.preventDefault()
-    const tags = tagText.split(',').map((t) => t.trim()).filter(Boolean)
-    const recipe = { title, servings, procedure, bulkPrep, tags, ingredients }
-    setRecipes([...recipes, recipe])
+    const recipe = { title, servings, procedure, bulkPrep, tags: selectedTags, ingredients }
+    if (editingIndex !== null) {
+      const copy = [...recipes]
+      copy[editingIndex] = recipe
+      setRecipes(copy)
+      setEditingIndex(null)
+    } else {
+      setRecipes([...recipes, recipe])
+    }
     setTitle('')
     setServings(1)
     setProcedure('')
     setBulkPrep(false)
-    setTagText('')
+    setSelectedTags([])
     setIngredients([])
   }
 
   const deleteRecipe = (idx) => {
     const copy = recipes.filter((_, i) => i !== idx)
     setRecipes(copy)
+  }
+
+  const editRecipe = (idx) => {
+    const r = recipes[idx]
+    setTitle(r.title)
+    setServings(r.servings)
+    setProcedure(r.procedure)
+    setBulkPrep(r.bulkPrep)
+    setSelectedTags(r.tags)
+    setIngredients(r.ingredients)
+    setEditingIndex(idx)
   }
 
   return (
@@ -66,8 +104,12 @@ export default function Recipes() {
           </label>
         </div>
         <div>
-          <label>Tags (comma separated) </label>
-          <input value={tagText} onChange={(e) => setTagText(e.target.value)} />
+          <label>Tags </label>
+          <select multiple value={selectedTags} onChange={handleTagChange}>
+            {availableTags.map((t) => (
+              <option key={t.id || t.name} value={t.name}>{t.name}</option>
+            ))}
+          </select>
         </div>
         <div>
           <h3>Ingredients</h3>
@@ -82,24 +124,42 @@ export default function Recipes() {
           ))}
           <button type="button" onClick={addIngredient}>Add Ingredient</button>
         </div>
-        <button type="submit">Add Recipe</button>
+        <button type="submit">{editingIndex !== null ? 'Save Recipe' : 'Add Recipe'}</button>
       </form>
       <hr />
-      {recipes.length === 0 && <p>No recipes yet.</p>}
-      {recipes.map((r, idx) => (
-        <div key={idx} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-          <h3>{r.title}</h3>
-          {r.tags.map((t) => (
-            <span key={t} className="recipe-tag">{t}</span>
+      <div>
+        <label>Filter by tags </label>
+        <select multiple value={filterTags} onChange={handleFilterChange}>
+          {availableTags.map((t) => (
+            <option key={t.id || t.name} value={t.name}>{t.name}</option>
           ))}
-          <ul>
-            {r.ingredients.map((ing, i) => (
-              <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
+        </select>
+      </div>
+      {(() => {
+        const filtered = filterTags.length
+          ? recipes
+              .map((r, idx) => ({ ...r, idx }))
+              .filter((r) => filterTags.every((t) => r.tags.includes(t)))
+          : recipes.map((r, idx) => ({ ...r, idx }))
+        if (filtered.length === 0) {
+          return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
+        }
+        return filtered.map(({ idx, ...r }) => (
+          <div key={idx} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
+            <h3>{r.title}</h3>
+            {r.tags.map((t) => (
+              <span key={t} className="recipe-tag">{t}</span>
             ))}
-          </ul>
-          <button type="button" onClick={() => deleteRecipe(idx)}>Delete</button>
-        </div>
-      ))}
+            <ul>
+              {r.ingredients.map((ing, i) => (
+                <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
+              ))}
+            </ul>
+            <button type="button" onClick={() => editRecipe(idx)}>Edit</button>
+            <button type="button" onClick={() => deleteRecipe(idx)}>Delete</button>
+          </div>
+        ))
+      })()}
     </div>
   )
 }
