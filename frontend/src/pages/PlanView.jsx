@@ -122,22 +122,36 @@ export default function PlanView() {
   const handleReject = async (day, idx) => {
     const meal = plan[day][idx]
     const base = meal.endsWith(' (leftover)') ? meal.slice(0, -11) : meal
-    try {
-      const resp = await request('/feedback/reject', {
-        method: 'POST',
-        body: JSON.stringify({ title: base }),
+    const existing = new Set()
+    Object.values(plan).forEach((meals) => {
+      meals.forEach((m) => {
+        const t = m.endsWith(' (leftover)') ? m.slice(0, -11) : m
+        existing.add(t)
       })
-      const replacement = resp.replacement || resp.title || null
-      if (replacement) {
-        const updated = {
-          ...plan,
-          [day]: plan[day].map((m, i) => (i === idx ? replacement : m)),
+    })
+    let replacement = null
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const resp = await request('/feedback/reject', {
+          method: 'POST',
+          body: JSON.stringify({ title: base }),
+        })
+        const candidate = resp.replacement || resp.title || null
+        if (candidate && !existing.has(candidate)) {
+          replacement = candidate
+          break
         }
-        setPlan(updated)
-        await persistPlan(updated)
+      } catch {
+        break
       }
-    } catch {
-      // ignore
+    }
+    if (replacement) {
+      const updated = {
+        ...plan,
+        [day]: plan[day].map((m, i) => (i === idx ? replacement : m)),
+      }
+      setPlan(updated)
+      await persistPlan(updated)
     }
   }
 
