@@ -41,9 +41,10 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
         onChange={(e) => onChange(index, { ...ingredient, unit: e.target.value })}
       >
         <option value="g">g</option>
+        <option value="kg">kg</option>
         <option value="l">l</option>
         <option value="ml">ml</option>
-        <option value="pieces">pieces</option>
+        <option value="piece">piece</option>
       </select>
       <input
         type="text"

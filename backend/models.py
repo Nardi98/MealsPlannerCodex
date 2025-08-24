@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from enum import Enum as PyEnum
+
 from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    Enum,
     Float,
     ForeignKey,
     Integer,
@@ -24,6 +27,16 @@ recipe_tag_table = Table(
     Column("recipe_id", ForeignKey("recipes.id"), primary_key=True),
     Column("tag_id", ForeignKey("tags.id"), primary_key=True),
 )
+
+
+class UnitEnum(str, PyEnum):
+    """Allowed measurement units for ingredients."""
+
+    G = "g"
+    KG = "kg"
+    L = "l"
+    ML = "ml"
+    PIECE = "piece"
 
 
 class Recipe(Base):
@@ -55,7 +68,7 @@ class Ingredient(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     quantity = Column(Float)
-    unit = Column(String)
+    unit = Column(Enum(UnitEnum, name="unit_enum"))
     season_months = Column(String)
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
 

@@ -88,8 +88,8 @@ def seed_sample_data(session: Session) -> None:
         servings=1,
         procedure="Boil water and oats until thick.",
         ingredients=[
-            ("Oats", 1.0, "cup"),
-            ("Water", 2.0, "cup"),
+            ("Oats", 100.0, "g"),
+            ("Water", 250.0, "ml"),
         ],
         tags=["vegetarian", "breakfast"],
     )
@@ -100,9 +100,9 @@ def seed_sample_data(session: Session) -> None:
         servings=1,
         procedure="Butter bread, add cheese and grill until golden.",
         ingredients=[
-            ("Bread", 2.0, "slice"),
-            ("Cheddar Cheese", 1.0, "slice"),
-            ("Butter", 1.0, "tbsp"),
+            ("Bread", 2.0, "piece"),
+            ("Cheddar Cheese", 1.0, "piece"),
+            ("Butter", 15.0, "g"),
         ],
         tags=["quick", "vegetarian"],
     )
