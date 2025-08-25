@@ -8,6 +8,7 @@ export default function Recipes() {
   const { recipes, setRecipes } = useContext(AppContext)
   const [title, setTitle] = useState('')
   const [servings, setServings] = useState(1)
+  const [course, setCourse] = useState('MAIN_DISH')
   const [procedure, setProcedure] = useState('')
   const [bulkPrep, setBulkPrep] = useState(false)
   const [availableTags, setAvailableTags] = useState([])
@@ -15,6 +16,7 @@ export default function Recipes() {
   const [filterTags, setFilterTags] = useState([])
   const [ingredients, setIngredients] = useState([])
   const [editingId, setEditingId] = useState(null)
+  const courseOptions = ['FIRST_COURSE', 'MAIN_DISH', 'SIDE_DISH']
 
   const fetchIngredientOptions = async (query) => {
     if (!query) return []
@@ -30,6 +32,7 @@ export default function Recipes() {
     title: r.title,
     score: r.score ?? 0,
     servings: r.servings ?? r.servings_default ?? 1,
+    course: r.course ?? 'MAIN_DISH',
     procedure: r.procedure || '',
     bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
     tags: (r.tags || []).map((t) => t.name || t),
@@ -83,6 +86,7 @@ export default function Recipes() {
     const payload = {
       title,
       servings_default: Number(servings),
+      course,
       procedure,
       bulk_prep: bulkPrep,
       tags: selectedTags,
@@ -103,6 +107,7 @@ export default function Recipes() {
       setEditingId(null)
       setTitle('')
       setServings(1)
+      setCourse('MAIN_DISH')
       setProcedure('')
       setBulkPrep(false)
       setSelectedTags([])
@@ -126,6 +131,7 @@ export default function Recipes() {
   const editRecipe = (r) => {
     setTitle(r.title)
     setServings(r.servings)
+    setCourse(r.course)
     setProcedure(r.procedure)
     setBulkPrep(r.bulkPrep)
     setSelectedTags(r.tags)
@@ -144,6 +150,16 @@ export default function Recipes() {
         <div>
           <label>Servings </label>
           <input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} />
+        </div>
+        <div>
+          <label>Course </label>
+          <select value={course} onChange={(e) => setCourse(e.target.value)}>
+            {courseOptions.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label>Procedure </label>
@@ -196,7 +212,7 @@ export default function Recipes() {
             <h3>
               {r.title}{' '}
               <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
+                ({r.course}, Score: {r.score.toFixed(2)})
               </span>
             </h3>
             {(r.tags || []).map((name) => (
