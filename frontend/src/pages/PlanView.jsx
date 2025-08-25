@@ -64,6 +64,7 @@ export default function PlanView() {
   const days = Object.keys(plan)
 
   const persistPlan = async (titlePlan) => {
+    let idPlan
     try {
       let list = recipes
       if (list.length === 0) {
@@ -74,7 +75,7 @@ export default function PlanView() {
       list.forEach((r) => {
         map[r.title] = r.id
       })
-      const idPlan = {}
+      idPlan = {}
       Object.entries(titlePlan).forEach(([day, meals]) => {
         idPlan[day] = meals
           .map((t) => map[t.endsWith(' (leftover)') ? t.slice(0, -11) : t])
@@ -83,8 +84,16 @@ export default function PlanView() {
       const planDate = Object.keys(titlePlan)[0]
       await mealPlansApi.create({ plan_date: planDate, plan: idPlan })
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err)
+      if (err.data && err.data.conflicts) {
+        const msg = `Overwrite existing plans on ${err.data.conflicts.join(', ')}?`
+        if (window.confirm(msg)) {
+          const planDate = Object.keys(titlePlan)[0]
+          await mealPlansApi.create({ plan_date: planDate, plan: idPlan }, true)
+        }
+      } else {
+        // eslint-disable-next-line no-console
+        console.error(err)
+      }
     }
   }
 

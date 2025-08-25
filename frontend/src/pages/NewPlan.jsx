@@ -23,6 +23,8 @@ export default function NewPlan() {
   const generate = async (e) => {
     e.preventDefault()
     setError(null)
+    let titlePlan
+    let idPlan
     try {
       const params = {
         start: startDate,
@@ -45,22 +47,37 @@ export default function NewPlan() {
         keep_days: Number(keepDays),
       }
       const generated = await mealPlansApi.generate(params)
-      const titlePlan = {}
-      const idPlan = {}
+      titlePlan = {}
+      idPlan = {}
       Object.entries(generated).forEach(([day, meals]) => {
         titlePlan[day] = meals.map((m) => m.title)
         idPlan[day] = meals.map((m) => m.id)
       })
       setPlan(titlePlan)
-      await mealPlansApi.create({
+      const payload = {
         plan_date: startDate,
         plan: idPlan,
         bulk_leftovers: Boolean(bulkLeftovers),
         keep_days: Number(keepDays),
-      })
+      }
+      await mealPlansApi.create(payload)
       navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
     } catch (err) {
-      setError(err.message)
+      if (err.data && err.data.conflicts) {
+        const msg = `Overwrite existing plans on ${err.data.conflicts.join(', ')}?`
+        if (window.confirm(msg)) {
+          const payload = {
+            plan_date: startDate,
+            plan: idPlan,
+            bulk_leftovers: Boolean(bulkLeftovers),
+            keep_days: Number(keepDays),
+          }
+          await mealPlansApi.create(payload, true)
+          navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
+        }
+      } else {
+        setError(err.message)
+      }
     }
   }
 

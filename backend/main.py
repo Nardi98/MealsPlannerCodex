@@ -195,8 +195,24 @@ def get_plan(
 @app.post("/plan", response_model=Dict[str, List[schemas.MealOut]])
 @app.post("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
 def set_plan(
-    payload: schemas.MealPlanCreate, db: Session = Depends(get_db)
+    payload: schemas.MealPlanCreate,
+    force: bool = False,
+    db: Session = Depends(get_db),
 ) -> Dict[str, List[schemas.MealOut]]:
+    plan_dates = [
+        day if isinstance(day, date) else date.fromisoformat(day)
+        for day in payload.plan.keys()
+    ]
+    stmt = select(models.MealPlan.plan_date).where(
+        models.MealPlan.plan_date.in_(plan_dates)
+    )
+    existing = db.execute(stmt).scalars().all()
+    if existing and not force:
+        conflicts = [d.isoformat() for d in existing]
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=409, content={"conflicts": conflicts})
+
     crud.set_meal_plan(db, payload.plan)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
     for day, ids in payload.plan.items():

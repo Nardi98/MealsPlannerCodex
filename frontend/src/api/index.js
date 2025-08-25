@@ -76,6 +76,11 @@ export const recipesApi = {
 };
 export const mealPlansApi = {
   ...createCrud('meal-plans'),
+  create: (data, force = false) =>
+    request(`/meal-plans${force ? '?force=true' : ''}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   generate: (data) =>
     request('/meal-plans/generate', {
       method: 'POST',
