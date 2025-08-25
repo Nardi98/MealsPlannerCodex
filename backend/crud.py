@@ -196,40 +196,39 @@ def get_recipes() -> List[str]:
         return session.execute(stmt).scalars().all()
 
 
-def set_meal_plan(
-    session: Session, plan_date: date, plan: Dict[str, Iterable[int]]
-) -> MealPlan:
-    """Create or replace a meal plan for the given date.
+def set_meal_plan(session: Session, plan: Dict[str, Iterable[int]]) -> Dict[str, MealPlan]:
+    """Create or replace meal plans for each day in ``plan``.
 
     Parameters
     ----------
     session:
         Database session for persistence.
-    plan_date:
-        The date this plan applies to.
     plan:
-        Mapping of arbitrary keys to iterables of recipe IDs. Ordering of
-        recipes determines the ``meal_number`` for each stored meal.
+        Mapping of ISO formatted date strings to iterables of recipe IDs. The
+        order of recipe IDs within each iterable determines the
+        ``meal_number`` for the created :class:`Meal` rows.
     """
 
-    stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
-    meal_plan = session.execute(stmt).scalar_one_or_none()
-    if meal_plan is None:
-        meal_plan = MealPlan(plan_date=plan_date)
-        session.add(meal_plan)
-        session.flush()
-    else:
-        meal_plan.meals = []
+    plans: Dict[str, MealPlan] = {}
+    for day, recipe_ids in plan.items():
+        plan_date = day if isinstance(day, date) else date.fromisoformat(day)
+        stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
+        meal_plan = session.execute(stmt).scalar_one_or_none()
+        if meal_plan is None:
+            meal_plan = MealPlan(plan_date=plan_date)
+            session.add(meal_plan)
+            session.flush()
+        else:
+            meal_plan.meals = []
 
-    index = 1
-    for recipe_ids in plan.values():
-        for rid in recipe_ids:
+        for index, rid in enumerate(recipe_ids, start=1):
             meal_plan.meals.append(Meal(meal_number=index, recipe_id=rid))
-            index += 1
+        plans[day] = meal_plan
 
     session.commit()
-    session.refresh(meal_plan)
-    return meal_plan
+    for meal_plan in plans.values():
+        session.refresh(meal_plan)
+    return plans
 
 
 def save_plan(

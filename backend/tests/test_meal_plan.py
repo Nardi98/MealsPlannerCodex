@@ -43,7 +43,7 @@ def test_generate_and_persist_plan(db_session):
             assert recipe_id is not None
             ids.append(recipe_id)
         id_plan[day] = ids
-    set_meal_plan(db_session, plan_date, id_plan)
+    set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     assert fetched == plan_titles
 
@@ -71,7 +71,7 @@ def test_duplicate_titles_do_not_break_plan(db_session):
             assert recipe_id is not None
             ids.append(recipe_id)
         id_plan[day] = ids
-    set_meal_plan(db_session, plan_date, id_plan)
+    set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     assert fetched == plan_titles
 

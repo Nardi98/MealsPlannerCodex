@@ -193,7 +193,7 @@ def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Di
 @app.post("/plan", response_model=Dict[str, List[str]])
 @app.post("/meal-plans", response_model=Dict[str, List[str]])
 def set_plan(payload: schemas.MealPlanCreate, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
-    crud.set_meal_plan(db, payload.plan_date, payload.plan)
+    crud.set_meal_plan(db, payload.plan)
     title_plan: Dict[str, List[str]] = {}
     for day, ids in payload.plan.items():
         titles: List[str] = []
