@@ -484,16 +484,12 @@ def import_data(
                     recipe.tags.append(tag)
 
         for plan_info in data.get("meal_plans", []):
-            plan_id = plan_info.get("id")
-            meal_plan = session.get(MealPlan, plan_id) if plan_id is not None else None
+            pdate = date.fromisoformat(plan_info["plan_date"])
+            meal_plan = session.get(MealPlan, pdate)
             if meal_plan is None:
-                meal_plan = MealPlan(
-                    id=plan_id,
-                    plan_date=date.fromisoformat(plan_info["plan_date"]),
-                )
+                meal_plan = MealPlan(plan_date=pdate)
                 session.add(meal_plan)
             else:
-                meal_plan.plan_date = date.fromisoformat(plan_info["plan_date"])
                 meal_plan.meals.clear()
                 session.flush()
 
@@ -501,9 +497,7 @@ def import_data(
                 rid = meal_info.get("recipe_id")
                 rid = recipe_id_map.get(rid, rid)
                 meal = Meal(
-                    plan_date=date.fromisoformat(
-                        meal_info.get("plan_date", plan_info["plan_date"])
-                    ),
+                    plan_date=pdate,
                     meal_number=meal_info["meal_number"],
                     recipe_id=rid,
                     accepted=meal_info.get("accepted", False),
@@ -576,7 +570,6 @@ def export_data(session: Optional[Session] = None) -> str:
         for plan in session.execute(select(MealPlan)).scalars().all():
             meal_plans_data.append(
                 {
-                    "id": plan.id,
                     "plan_date": plan.plan_date.isoformat(),
                     "meals": [
                         {

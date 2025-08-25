@@ -16,7 +16,6 @@ def test_meal_plan_model_relationships(db_session):
     db_session.commit()
     db_session.refresh(plan)
 
-    assert plan.id is not None
     assert meal.plan_date == plan.plan_date
     assert plan.meals[0].recipe_id == recipe.id
 
@@ -117,13 +116,12 @@ def test_delete_plan_cascades_meals(db_session):
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
-    pid = plan.id
     pdate = plan.plan_date
 
     db_session.delete(plan)
     db_session.commit()
 
-    assert db_session.get(MealPlan, pid) is None
+    assert db_session.get(MealPlan, pdate) is None
     remaining = db_session.get(Meal, (pdate, 1))
     assert remaining is None
 
@@ -141,13 +139,12 @@ def test_delete_plan_removes_all_meals(db_session):
     )
     db_session.add(plan)
     db_session.commit()
-    pid = plan.id
     pdate = plan.plan_date
 
     db_session.delete(plan)
     db_session.commit()
 
-    assert db_session.get(MealPlan, pid) is None
+    assert db_session.get(MealPlan, pdate) is None
     meals = db_session.execute(select(Meal).where(Meal.plan_date == pdate)).scalars().all()
     assert meals == []
 

@@ -145,8 +145,7 @@ class MealPlan(Base):
 
     __tablename__ = "meal_plans"
 
-    id = Column(Integer, primary_key=True)
-    plan_date = Column(Date, nullable=False, unique=True)
+    plan_date = Column(Date, primary_key=True)
 
     meals = relationship(
         "Meal", back_populates="plan", cascade="all, delete-orphan"
