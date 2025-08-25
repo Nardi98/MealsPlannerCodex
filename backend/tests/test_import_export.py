@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
-from mealplanner.models import Ingredient, MealPlan, MealSlot, Recipe, RecipeIngredient, Tag
+from mealplanner.models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
 
 
 def _create_sample_data(session):
@@ -18,7 +18,7 @@ def _create_sample_data(session):
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    plan.slots.append(MealSlot(meal_time="lunch", recipe=recipe))
+    plan.meals.append(Meal(meal_number=1, recipe=recipe))
     session.add_all([tag, recipe, plan])
     session.commit()
 
@@ -41,7 +41,7 @@ def test_round_trip_export_import(db_session):
     assert recipe.tags[0].name == "vegan"
 
     plan = db_session.query(MealPlan).one()
-    assert plan.slots[0].recipe_id == recipe.id
+    assert plan.meals[0].recipe_id == recipe.id
 
 
 def test_import_bad_data_raises(db_session):
@@ -97,8 +97,8 @@ def test_export_includes_related_objects(db_session):
     tag_id = data["recipes"][0]["tags"][0]
     tag_lookup = {t["id"]: t["name"] for t in data["tags"]}
     assert tag_lookup[tag_id] == "vegan"
-    assert data["meal_plans"][0]["slots"][0]["meal_time"] == "lunch"
-    assert data["meal_plans"][0]["slots"][0]["recipe_id"] == data["recipes"][0]["id"]
+    assert data["meal_plans"][0]["meals"][0]["meal_number"] == 1
+    assert data["meal_plans"][0]["meals"][0]["recipe_id"] == data["recipes"][0]["id"]
 
 
 def test_import_creates_tables_when_missing():

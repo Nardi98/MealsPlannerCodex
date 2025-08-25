@@ -13,7 +13,7 @@ from database import SessionLocal, Base
 from models import (
     Ingredient,
     MealPlan,
-    MealSlot,
+    Meal,
     Recipe,
     Tag,
     RecipeIngredient,
@@ -208,7 +208,8 @@ def set_meal_plan(
     plan_date:
         The date this plan applies to.
     plan:
-        Mapping of meal times to iterables of recipe IDs.
+        Mapping of arbitrary keys to iterables of recipe IDs. Ordering of
+        recipes determines the ``meal_number`` for each stored meal.
     """
 
     stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
@@ -218,11 +219,13 @@ def set_meal_plan(
         session.add(meal_plan)
         session.flush()
     else:
-        meal_plan.slots = []
+        meal_plan.meals = []
 
-    for meal_time, recipe_ids in plan.items():
+    index = 1
+    for recipe_ids in plan.values():
         for rid in recipe_ids:
-            meal_plan.slots.append(MealSlot(meal_time=meal_time, recipe_id=rid))
+            meal_plan.meals.append(Meal(meal_number=index, recipe_id=rid))
+            index += 1
 
     session.commit()
     session.refresh(meal_plan)
@@ -258,11 +261,12 @@ def get_plan(
     if meal_plan is None:
         return {}
 
-    result: Dict[str, List[str]] = {}
-    for slot in meal_plan.slots:
-        if slot.recipe is None:
+    key = meal_plan.plan_date.isoformat()
+    result: Dict[str, List[str]] = {key: []}
+    for meal in meal_plan.meals:
+        if meal.recipe is None:
             continue
-        result.setdefault(slot.meal_time, []).append(slot.recipe.title)
+        result[key].append(meal.recipe.title)
     return result
 
 
@@ -359,7 +363,7 @@ def import_data(
         if mode == "overwrite":
             # Clear existing data
             session.execute(recipe_tag_table.delete())
-            session.query(MealSlot).delete()
+            session.query(Meal).delete()
             session.query(MealPlan).delete()
             session.query(RecipeIngredient).delete()
             session.query(Ingredient).delete()
@@ -450,17 +454,18 @@ def import_data(
                 session.add(meal_plan)
             else:
                 meal_plan.plan_date = date.fromisoformat(plan_info["plan_date"])
-                meal_plan.slots.clear()
+                meal_plan.meals.clear()
                 session.flush()
 
-            for slot_info in plan_info.get("slots", []):
-                rid = slot_info.get("recipe_id")
+            for meal_info in plan_info.get("meals", []):
+                rid = meal_info.get("recipe_id")
                 rid = recipe_id_map.get(rid, rid)
-                slot = MealSlot(
-                    meal_time=slot_info["meal_time"],
+                meal = Meal(
+                    meal_number=meal_info["meal_number"],
                     recipe_id=rid,
+                    accepted=meal_info.get("accepted", False),
                 )
-                meal_plan.slots.append(slot)
+                meal_plan.meals.append(meal)
 
         session.commit()
     except Exception as exc:  # noqa: BLE001
@@ -530,12 +535,13 @@ def export_data(session: Optional[Session] = None) -> str:
                 {
                     "id": plan.id,
                     "plan_date": plan.plan_date.isoformat(),
-                    "slots": [
+                    "meals": [
                         {
-                            "meal_time": slot.meal_time,
-                            "recipe_id": slot.recipe_id,
+                            "meal_number": meal.meal_number,
+                            "recipe_id": meal.recipe_id,
+                            "accepted": meal.accepted,
                         }
-                        for slot in plan.slots
+                        for meal in plan.meals
                     ],
                 }
             )

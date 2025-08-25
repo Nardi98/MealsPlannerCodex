@@ -4,21 +4,21 @@ from sqlalchemy import select
 
 from mealplanner import planner
 from mealplanner.crud import create_recipe, set_meal_plan, get_plan
-from mealplanner.models import MealPlan, MealSlot, Recipe
+from mealplanner.models import MealPlan, Meal, Recipe
 
 
 def test_meal_plan_model_relationships(db_session):
     recipe = create_recipe(db_session, title="Toast", servings_default=1)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    slot = MealSlot(meal_time="breakfast", recipe=recipe)
-    plan.slots.append(slot)
+    meal = Meal(meal_number=1, recipe=recipe)
+    plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
     db_session.refresh(plan)
 
     assert plan.id is not None
-    assert slot.meal_plan_id == plan.id
-    assert plan.slots[0].recipe_id == recipe.id
+    assert meal.plan_date == plan.plan_date
+    assert plan.meals[0].recipe_id == recipe.id
 
 
 def test_generate_and_persist_plan(db_session):
@@ -55,7 +55,7 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     create_recipe(db_session, title="Dup", servings_default=1)
 
     plan_date = date(2024, 5, 18)
-    plan_titles = {"Mon": ["Dup"]}
+    plan_titles = {plan_date.isoformat(): ["Dup"]}
 
     id_plan: dict[str, list[int]] = {}
     for day, meals in plan_titles.items():
@@ -76,21 +76,22 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     assert fetched == plan_titles
 
 
-def test_delete_plan_cascades_slots(db_session):
-    """Deleting a meal plan should remove associated slots."""
+def test_delete_plan_cascades_meals(db_session):
+    """Deleting a meal plan should remove associated meals."""
     recipe = create_recipe(db_session, title="Stew", servings_default=2)
     plan = MealPlan(plan_date=date(2024, 6, 1))
-    slot = MealSlot(meal_time="dinner", recipe=recipe)
-    plan.slots.append(slot)
+    meal = Meal(meal_number=1, recipe=recipe)
+    plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
     pid = plan.id
+    pdate = plan.plan_date
 
     db_session.delete(plan)
     db_session.commit()
 
     assert db_session.get(MealPlan, pid) is None
     remaining = db_session.execute(
-        select(MealSlot).where(MealSlot.meal_plan_id == pid)
+        select(Meal).where(Meal.plan_date == pdate)
     ).first()
     assert remaining is None
