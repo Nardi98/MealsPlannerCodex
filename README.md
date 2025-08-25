@@ -177,10 +177,35 @@ constraint restricts `meal_number` to `1` or `2`.
 
 ## Meal Plan API
 
+### Generating a plan
+
+`POST /meal-plans/generate` creates a temporary plan without saving it. The
+payload controls how many days to generate and how many meals per day:
+
+```json
+{
+  "start": "2024-01-01",
+  "days": 2,
+  "meals_per_day": 2,
+  "keep_days": 3,
+  "bulk_leftovers": true
+}
+```
+
+The response maps dates to recipe suggestions, each including the recipe
+`id` and `title`:
+
+```json
+{
+  "2024-01-01": [{"id": 1, "title": "Soup"}],
+  "2024-01-02": [{"id": 2, "title": "Stew"}]
+}
+```
+
 ### Retrieving a plan
 
-`GET /plan` (or `/meal-plans`) returns a mapping of ISO dates to their
-meals, each including an `accepted` flag:
+`GET /meal-plans` returns a mapping of ISO dates to their meals, each including
+an `accepted` flag:
 
 ```json
 {

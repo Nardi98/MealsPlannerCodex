@@ -304,7 +304,7 @@ def generate_plan_endpoint(
         for title in titles:
             base = title.replace(" (leftover)", "")
             recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base)
+                select(models.Recipe).where(models.Recipe.title == base).limit(1)
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
