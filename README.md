@@ -59,6 +59,14 @@
 - **Database:** SQLite with SQLAlchemy ORM.
 - **Version control:** Git.
 
+### UI
+
+## Color palette 
+- white F8FAF9
+- positive colour 0c3a2d
+- negative colour bd210f
+- other colours 6d9773 FFB902 BB8A52
+
 ## Development Setup
 
 ### Backend (`backend/`)
@@ -147,3 +155,4 @@ Build steps:
 
 - Backend: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 - Frontend: `npm run build` and serve the contents of the `build/` directory
+
