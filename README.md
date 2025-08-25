@@ -156,3 +156,71 @@ Build steps:
 - Backend: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 - Frontend: `npm run build` and serve the contents of the `build/` directory
 
+## Database Schema
+
+The planner persists generated meals using two tables:
+
+* `meal_plans` – one row per day with the unique column `plan_date`.
+* `meals` – individual meal slots linked to a plan.
+
+The `meals` table has the following columns:
+
+| Column      | Type   | Notes |
+|-------------|--------|-------|
+| `plan_date` | DATE   | FK to `meal_plans.plan_date` |
+| `meal_number` | INTEGER | Meal slot within the day (1 or 2) |
+| `recipe_id` | INTEGER | FK to `recipes.id` |
+| `accepted`  | BOOLEAN | Whether the user accepted the suggestion |
+
+The primary key is the composite `(plan_date, meal_number)` and a check
+constraint restricts `meal_number` to `1` or `2`.
+
+## Meal Plan API
+
+### Retrieving a plan
+
+`GET /plan` (or `/meal-plans`) returns a mapping of ISO dates to their
+meals, each including an `accepted` flag:
+
+```json
+{
+  "2024-01-01": [
+    {"recipe": "Soup", "accepted": false},
+    {"recipe": "Salad", "accepted": true}
+  ]
+}
+```
+
+### Setting a plan and overwrite confirmation
+
+Plans are saved with `POST /meal-plans`. The payload uses a daily plan
+model mapping dates to recipe IDs:
+
+```json
+{
+  "plan_date": "2024-01-01",
+  "plan": {"2024-01-01": [1, 2]},
+  "bulk_leftovers": true,
+  "keep_days": 3
+}
+```
+
+If any of the supplied `plan_date` values already exist, the API returns
+`409` with a `conflicts` array. Resubmit the request with
+`?force=true` to overwrite existing plans.
+
+### Toggling meal acceptance
+
+Use `POST /meal-plans/accept` to update the `accepted` flag for a meal:
+
+```json
+{
+  "plan_date": "2024-01-01",
+  "meal_number": 1,
+  "accepted": true
+}
+```
+
+The updated meal is returned in the response.
+
+
