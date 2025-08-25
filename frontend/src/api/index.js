@@ -24,6 +24,7 @@ function createCrud(resource) {
 function normaliseRecipe(recipe) {
   return {
     ...recipe,
+    course: recipe.course ?? null,
     ingredients: (recipe.ingredients || []).map((ing) => ({
       id: ing.id,
       name: ing.name,
@@ -37,6 +38,7 @@ function normaliseRecipe(recipe) {
 function serialiseRecipe(recipe) {
   return {
     ...recipe,
+    course: recipe.course ?? null,
     ingredients: (recipe.ingredients || []).map((ing) => ({
       id: ing.id,
       name: ing.name,
