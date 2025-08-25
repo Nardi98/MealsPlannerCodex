@@ -459,6 +459,7 @@ def import_data(
                     servings_default=rec_info["servings_default"],
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
+                    course=rec_info.get("course", "main"),
                     score=rec_info.get("score"),
                     date_last_consumed=(
                         date.fromisoformat(rec_info["date_last_consumed"])
@@ -472,6 +473,7 @@ def import_data(
                     servings_default=rec_info["servings_default"],
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
+                    course=rec_info.get("course", "main"),
                     score=rec_info.get("score"),
                     date_last_consumed=(
                         date.fromisoformat(rec_info["date_last_consumed"])
@@ -566,6 +568,7 @@ def export_data(session: Optional[Session] = None) -> str:
                     "servings_default": recipe.servings_default,
                     "procedure": recipe.procedure,
                     "bulk_prep": recipe.bulk_prep,
+                    "course": recipe.course,
                     "score": recipe.score,
                     "date_last_consumed": (
                         recipe.date_last_consumed.isoformat()

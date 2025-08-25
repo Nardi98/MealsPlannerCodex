@@ -81,6 +81,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
         )
     return {
         "title": payload.title,
+        "course": payload.course,
         "servings_default": payload.servings_default,
         "procedure": payload.procedure,
         "bulk_prep": payload.bulk_prep,
