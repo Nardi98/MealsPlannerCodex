@@ -16,8 +16,7 @@ def test_meal_plan_model_relationships(db_session):
     db_session.commit()
     db_session.refresh(plan)
 
-    assert plan.id is not None
-    assert slot.meal_plan_id == plan.id
+    assert slot.plan_date == plan.plan_date
     assert plan.slots[0].recipe_id == recipe.id
 
 
@@ -84,13 +83,26 @@ def test_delete_plan_cascades_slots(db_session):
     plan.slots.append(slot)
     db_session.add(plan)
     db_session.commit()
-    pid = plan.id
+    pid = plan.plan_date
 
     db_session.delete(plan)
     db_session.commit()
 
     assert db_session.get(MealPlan, pid) is None
     remaining = db_session.execute(
-        select(MealSlot).where(MealSlot.meal_plan_id == pid)
+        select(MealSlot).where(MealSlot.plan_date == pid)
     ).first()
     assert remaining is None
+
+
+def test_set_meal_plan_overwrites_existing(db_session):
+    """Setting a plan for an existing date replaces the previous one."""
+    r1 = create_recipe(db_session, title="First", servings_default=1)
+    r2 = create_recipe(db_session, title="Second", servings_default=1)
+    plan_date = date(2024, 7, 1)
+
+    set_meal_plan(db_session, plan_date, {"breakfast": [r1.id]})
+    set_meal_plan(db_session, plan_date, {"breakfast": [r2.id]})
+
+    assert db_session.query(MealPlan).count() == 1
+    assert get_plan(db_session, plan_date) == {"breakfast": ["Second"]}

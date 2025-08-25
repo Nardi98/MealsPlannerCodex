@@ -143,8 +143,7 @@ class MealPlan(Base):
 
     __tablename__ = "meal_plans"
 
-    id = Column(Integer, primary_key=True)
-    plan_date = Column(Date, nullable=False, unique=True)
+    plan_date = Column(Date, primary_key=True)
 
     slots = relationship(
         "MealSlot", back_populates="plan", cascade="all, delete-orphan"
@@ -157,8 +156,8 @@ class MealSlot(Base):
     __tablename__ = "meal_slots"
 
     id = Column(Integer, primary_key=True)
-    meal_plan_id = Column(
-        Integer, ForeignKey("meal_plans.id", ondelete="CASCADE"), nullable=False
+    plan_date = Column(
+        Date, ForeignKey("meal_plans.plan_date", ondelete="CASCADE"), nullable=False
     )
     meal_time = Column(String, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
