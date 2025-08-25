@@ -16,7 +16,7 @@ def override_get_db(session):
 
 
 def test_toggle_meal_acceptance(db_session):
-    r = crud.create_recipe(db_session, title="A", servings_default=1)
+    r = crud.create_recipe(db_session, title="A", servings_default=1, course="main")
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [r.id]})
     os.makedirs("data", exist_ok=True)

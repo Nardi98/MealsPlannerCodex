@@ -5,7 +5,7 @@ from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag, recipe
 
 
 def test_remove_tag_from_recipe(db_session):
-    r = Recipe(title="Pizza", servings_default=2)
+    r = Recipe(title="Pizza", servings_default=2, course="main")
     t1 = Tag(name="italian")
     t2 = Tag(name="dinner")
     r.tags.extend([t1, t2])
@@ -30,7 +30,7 @@ def test_remove_tag_from_recipe(db_session):
 
 
 def test_update_ingredient_quantity(db_session):
-    r = Recipe(title="Bread", servings_default=4)
+    r = Recipe(title="Bread", servings_default=4, course="main")
     base = Ingredient(name="Flour")
     ri = RecipeIngredient(ingredient=base, quantity=1, unit="kg")
     r.ingredients.append(ri)
@@ -47,7 +47,7 @@ def test_update_ingredient_quantity(db_session):
 
 
 def test_tag_cascade_delete(db_session):
-    r = Recipe(title="Stir Fry", servings_default=1)
+    r = Recipe(title="Stir Fry", servings_default=1, course="main")
     tag = Tag(name="asian")
     r.tags.append(tag)
     db_session.add(r)
@@ -73,6 +73,7 @@ def test_optional_field_and_defaults_on_update(db_session):
 
     assert r.bulk_prep is False
     assert r.date_last_consumed is None
+    assert r.course == "main"
 
     r.title = "Tomato Soup"
     r.date_last_consumed = date(2023, 10, 1)

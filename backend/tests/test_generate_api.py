@@ -15,7 +15,7 @@ def override_get_db(session):
 
 def test_generate_endpoint_returns_plan(db_session):
     for i in range(3):
-        crud.create_recipe(db_session, title=f"Meal {i}", servings_default=1)
+        crud.create_recipe(db_session, title=f"Meal {i}", servings_default=1, course="main")
 
     os.makedirs("data", exist_ok=True)
     from main import app, get_db  # imported after data dir exists

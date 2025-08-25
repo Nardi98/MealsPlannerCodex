@@ -7,7 +7,7 @@ from mealplanner.planner import generate_weekly_plan, generate_plan
 
 
 def make_recipe(name, bulk=False, tags=None, season=None):
-    r = Recipe(title=name, servings_default=2, bulk_prep=bulk)
+    r = Recipe(title=name, servings_default=2, bulk_prep=bulk, course="main")
     if tags:
         r.tags = [Tag(name=t) for t in tags]
     if season:
@@ -56,8 +56,8 @@ def test_avoid_tags_filtering():
 
 def test_generate_plan_avoid_tags_from_ui(db_session):
     """Avoid tags supplied as a list should exclude recipes."""
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
-    bad = Recipe(title="Bad", servings_default=1, score=1.5, bulk_prep=True)
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
+    bad = Recipe(title="Bad", servings_default=1, score=1.5, bulk_prep=True, course="main")
     bad.tags = [Tag(name="avoid")]
     db_session.add_all([good, bad])
     db_session.commit()
@@ -74,8 +74,8 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
 
 
 def test_reduce_tags_penalty(db_session):
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
-    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True)
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
+    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True, course="main")
     reduce.tags = [Tag(name="reduce")]
     db_session.add_all([good, reduce])
     db_session.commit()
@@ -93,8 +93,8 @@ def test_reduce_tags_penalty(db_session):
 
 def test_generate_plan_reduce_tags_from_ui(db_session):
     """Reduce tags supplied as a list should downrank recipes."""
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True)
-    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True)
+    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
+    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True, course="main")
     reduce.tags = [Tag(name="reduce")]
     db_session.add_all([good, reduce])
     db_session.commit()
@@ -116,6 +116,7 @@ def test_recency_weight(db_session):
         servings_default=1,
         score=1.0,
         bulk_prep=True,
+        course="main",
         date_last_consumed=date(2023, 12, 1),
     )
     recent = Recipe(
@@ -123,6 +124,7 @@ def test_recency_weight(db_session):
         servings_default=1,
         score=1.2,
         bulk_prep=True,
+        course="main",
         date_last_consumed=date(2024, 1, 2),
     )
     db_session.add_all([fresh, recent])
@@ -152,7 +154,7 @@ def test_recency_weight(db_session):
 
 def test_generate_plan_repeatable(db_session):
     for i, score in enumerate(range(7, 0, -1), start=1):
-        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))
+        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score, course="main"))
     db_session.commit()
     start = date(2024, 1, 1)
     expected = {
@@ -169,8 +171,8 @@ def test_generate_plan_repeatable(db_session):
 def test_generate_plan_epsilon_randomness(db_session):
     """With epsilon > 0 the selection may choose lower scoring recipes."""
     recipes = [
-        Recipe(title="Top", servings_default=1, score=2.0, bulk_prep=True),
-        Recipe(title="Low", servings_default=1, score=1.0, bulk_prep=True),
+        Recipe(title="Top", servings_default=1, score=2.0, bulk_prep=True, course="main"),
+        Recipe(title="Low", servings_default=1, score=1.0, bulk_prep=True, course="main"),
     ]
     db_session.add_all(recipes)
     db_session.commit()
@@ -189,7 +191,7 @@ def test_generate_plan_epsilon_randomness(db_session):
 def test_generate_plan_partial_week(db_session):
     """Plans shorter than a week work with limited recipes."""
     for i, score in enumerate(range(3, 0, -1), start=1):
-        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score))
+        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score, course="main"))
     db_session.commit()
     start = date(2024, 1, 1)
     expected = {
@@ -222,7 +224,7 @@ def test_generate_weekly_plan_leftovers_marked():
 
 
 def test_generate_plan_leftover_expiry(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0)
+    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
@@ -244,7 +246,7 @@ def test_generate_plan_leftover_expiry(db_session):
 
 
 def test_generate_plan_bulk_leftovers_disabled(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0)
+    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
