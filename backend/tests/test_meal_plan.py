@@ -128,6 +128,30 @@ def test_delete_plan_cascades_meals(db_session):
     assert remaining is None
 
 
+def test_delete_plan_removes_all_meals(db_session):
+    """Deleting a plan removes all related meal entries."""
+    recipe1 = create_recipe(db_session, title="Soup", servings_default=1)
+    recipe2 = create_recipe(db_session, title="Salad", servings_default=1)
+    plan = MealPlan(plan_date=date(2024, 8, 2))
+    plan.meals.extend(
+        [
+            Meal(meal_number=1, recipe=recipe1, accepted=False),
+            Meal(meal_number=2, recipe=recipe2, accepted=False),
+        ]
+    )
+    db_session.add(plan)
+    db_session.commit()
+    pid = plan.id
+    pdate = plan.plan_date
+
+    db_session.delete(plan)
+    db_session.commit()
+
+    assert db_session.get(MealPlan, pid) is None
+    meals = db_session.execute(select(Meal).where(Meal.plan_date == pdate)).scalars().all()
+    assert meals == []
+
+
 def test_set_meal_plan_overwrites_existing(db_session):
     r1 = create_recipe(db_session, title="Old", servings_default=1)
     r2 = create_recipe(db_session, title="New", servings_default=1)
