@@ -72,9 +72,15 @@ export default function ImportExport() {
         body: JSON.stringify(payload),
       })
       const newRecipes = await request('/recipes')
-      const newPlan = await request('/plan')
+      const planResp = await request('/plan')
+      const titlePlan = {}
+      if (planResp && typeof planResp === 'object') {
+        Object.entries(planResp).forEach(([day, meals]) => {
+          titlePlan[day] = meals.map((m) => m.recipe || m.title || m)
+        })
+      }
       setRecipes(newRecipes)
-      setPlan(newPlan)
+      setPlan(titlePlan)
       navigate('/')
     } catch (err) {
       alert(`Import failed: ${err.message}`)

@@ -76,15 +76,32 @@ export const recipesApi = {
 };
 export const mealPlansApi = {
   ...createCrud('meal-plans'),
-  create: (data, force = false) =>
-    request(`/meal-plans${force ? '?force=true' : ''}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  create: async (data, { force = false } = {}) => {
+    try {
+      return await request(`/meal-plans${force ? '?force=true' : ''}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    } catch (err) {
+      if (err.data?.conflicts) {
+        err.conflicts = err.data.conflicts
+      }
+      throw err
+    }
+  },
   generate: (data) =>
     request('/meal-plans/generate', {
       method: 'POST',
       body: JSON.stringify(data),
+    }),
+  accept: (planDate, mealNumber, accepted) =>
+    request('/meal-plans/accept', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        accepted,
+      }),
     }),
 };
 export const tagsApi = createCrud('tags');

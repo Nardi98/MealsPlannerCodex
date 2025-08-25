@@ -18,12 +18,19 @@ export default function PlanView() {
         try {
           const fetched = await request('/plan')
           if (fetched && typeof fetched === 'object') {
-            if (fetched.plan) {
-              setPlan(fetched.plan)
-              if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
-            } else {
-              setPlan(fetched)
-            }
+            const p = fetched.plan || fetched
+            const titlePlan = {}
+            const acceptedInit = {}
+            Object.entries(p).forEach(([day, meals]) => {
+              titlePlan[day] = meals.map((m, idx) => {
+                const title = m.recipe || m.title || m
+                if (m.accepted) acceptedInit[`${day}-${idx}`] = true
+                return title
+              })
+            })
+            setPlan(titlePlan)
+            setAccepted(acceptedInit)
+            if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
           }
         } catch {
           // ignore errors
@@ -84,11 +91,14 @@ export default function PlanView() {
       const planDate = Object.keys(titlePlan)[0]
       await mealPlansApi.create({ plan_date: planDate, plan: idPlan })
     } catch (err) {
-      if (err.data && err.data.conflicts) {
-        const msg = `Overwrite existing plans on ${err.data.conflicts.join(', ')}?`
+      if (err.conflicts) {
+        const msg = `Overwrite existing plans on ${err.conflicts.join(', ')}?`
         if (window.confirm(msg)) {
           const planDate = Object.keys(titlePlan)[0]
-          await mealPlansApi.create({ plan_date: planDate, plan: idPlan }, true)
+          await mealPlansApi.create(
+            { plan_date: planDate, plan: idPlan },
+            { force: true }
+          )
         }
       } else {
         // eslint-disable-next-line no-console
@@ -125,13 +135,8 @@ export default function PlanView() {
   }
 
   const handleAccept = async (day, idx) => {
-    const meal = plan[day][idx]
-    const base = meal.endsWith(' (leftover)') ? meal.slice(0, -11) : meal
     try {
-      await request('/feedback/accept', {
-        method: 'POST',
-        body: JSON.stringify({ title: base }),
-      })
+      await mealPlansApi.accept(day, idx + 1, true)
     } catch {
       // ignore
     }
@@ -171,6 +176,9 @@ export default function PlanView() {
       }
       setPlan(updated)
       await persistPlan(updated)
+      const newAccepted = { ...accepted }
+      delete newAccepted[`${day}-${idx}`]
+      setAccepted(newAccepted)
     }
   }
 
@@ -189,10 +197,7 @@ export default function PlanView() {
     setPlan(updated)
     await persistPlan(updated)
     try {
-      await request('/feedback/accept', {
-        method: 'POST',
-        body: JSON.stringify({ title }),
-      })
+      await mealPlansApi.accept(day, idx + 1, true)
     } catch {
       // ignore
     }

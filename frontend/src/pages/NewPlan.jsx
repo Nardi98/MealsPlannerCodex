@@ -19,12 +19,13 @@ export default function NewPlan() {
   const [avoidTags, setAvoidTags] = useState('')
   const [reduceTags, setReduceTags] = useState('')
   const [error, setError] = useState(null)
+  const [conflicts, setConflicts] = useState(null)
+  const [pendingPayload, setPendingPayload] = useState(null)
 
   const generate = async (e) => {
     e.preventDefault()
     setError(null)
-    let titlePlan
-    let idPlan
+    setConflicts(null)
     try {
       const params = {
         start: startDate,
@@ -47,8 +48,8 @@ export default function NewPlan() {
         keep_days: Number(keepDays),
       }
       const generated = await mealPlansApi.generate(params)
-      titlePlan = {}
-      idPlan = {}
+      const titlePlan = {}
+      const idPlan = {}
       Object.entries(generated).forEach(([day, meals]) => {
         titlePlan[day] = meals.map((m) => m.title)
         idPlan[day] = meals.map((m) => m.id)
@@ -60,24 +61,26 @@ export default function NewPlan() {
         bulk_leftovers: Boolean(bulkLeftovers),
         keep_days: Number(keepDays),
       }
+      setPendingPayload(payload)
       await mealPlansApi.create(payload)
       navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
     } catch (err) {
-      if (err.data && err.data.conflicts) {
-        const msg = `Overwrite existing plans on ${err.data.conflicts.join(', ')}?`
-        if (window.confirm(msg)) {
-          const payload = {
-            plan_date: startDate,
-            plan: idPlan,
-            bulk_leftovers: Boolean(bulkLeftovers),
-            keep_days: Number(keepDays),
-          }
-          await mealPlansApi.create(payload, true)
-          navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
-        }
+      if (err.conflicts) {
+        setConflicts(err.conflicts)
       } else {
         setError(err.message)
       }
+    }
+  }
+
+  const confirmOverwrite = async () => {
+    if (!pendingPayload) return
+    try {
+      await mealPlansApi.create(pendingPayload, { force: true })
+      setConflicts(null)
+      navigate('/plan-view', { state: { message: 'Plan generated successfully.' } })
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -139,6 +142,20 @@ export default function NewPlan() {
         <button type="submit">Generate Plan</button>
       </form>
       {error && <p style={{ color: 'red' }}>{error}</p>}
+      {conflicts && (
+        <div
+          className="conflict-modal"
+          style={{ border: '1px solid #000', padding: '1rem', marginTop: '1rem' }}
+        >
+          <p>Existing plans found on: {conflicts.join(', ')}</p>
+          <button type="button" onClick={confirmOverwrite}>
+            Overwrite
+          </button>
+          <button type="button" onClick={() => setConflicts(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   )
 }
