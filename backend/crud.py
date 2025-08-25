@@ -267,14 +267,39 @@ def save_plan(
 
 
 def get_plan(
-    session: Session | None = None, plan_date: Optional[date] = None
+    session: Session | None = None,
+    plan_date: Optional[date] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Return the cached plan or fetch from the database if a session is given."""
+    """Return the cached plan or fetch from the database if a session is given.
+
+    When ``start_date`` and ``end_date`` are provided, all plans within the
+    inclusive date range are returned.
+    """
 
     if session is None:
         return {
             day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()
         }
+
+    if start_date is not None and end_date is not None:
+        stmt = (
+            select(MealPlan)
+            .where(MealPlan.plan_date.between(start_date, end_date))
+            .order_by(MealPlan.plan_date)
+        )
+        meal_plans = session.execute(stmt).scalars().all()
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        for meal_plan in meal_plans:
+            key = meal_plan.plan_date.isoformat()
+            items: List[Dict[str, Any]] = []
+            for meal in meal_plan.meals:
+                if meal.recipe is None:
+                    continue
+                items.append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+            result[key] = items
+        return result
 
     if plan_date is None:
         plan_date = date.today()

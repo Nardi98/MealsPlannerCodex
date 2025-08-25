@@ -11,30 +11,50 @@ export default function PlanView() {
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
   const [query, setQuery] = useState('')
+  const getWeekRange = () => {
+    const today = new Date()
+    const day = today.getDay()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - ((day + 6) % 7))
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    const format = (d) => d.toISOString().split('T')[0]
+    return { start: format(monday), end: format(sunday) }
+  }
+  const { start: defaultStart, end: defaultEnd } = getWeekRange()
+  const [startDate, setStartDate] = useState(defaultStart)
+  const [endDate, setEndDate] = useState(defaultEnd)
+
+  const loadPlanRange = async () => {
+    if (!startDate || !endDate) return
+    try {
+      const fetched = await request(
+        `/plan?start_date=${startDate}&end_date=${endDate}`
+      )
+      if (fetched && typeof fetched === 'object') {
+        const p = fetched.plan || fetched
+        const titlePlan = {}
+        const acceptedInit = {}
+        Object.entries(p).forEach(([day, meals]) => {
+          titlePlan[day] = meals.map((m, idx) => {
+            const title = m.recipe || m.title || m
+            if (m.accepted) acceptedInit[`${day}-${idx}`] = true
+            return title
+          })
+        })
+        setPlan(titlePlan)
+        setAccepted(acceptedInit)
+        if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
+      }
+    } catch {
+      // ignore errors
+    }
+  }
 
   useEffect(() => {
     async function init() {
       if (Object.keys(plan).length === 0) {
-        try {
-          const fetched = await request('/plan')
-          if (fetched && typeof fetched === 'object') {
-            const p = fetched.plan || fetched
-            const titlePlan = {}
-            const acceptedInit = {}
-            Object.entries(p).forEach(([day, meals]) => {
-              titlePlan[day] = meals.map((m, idx) => {
-                const title = m.recipe || m.title || m
-                if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-                return title
-              })
-            })
-            setPlan(titlePlan)
-            setAccepted(acceptedInit)
-            if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
-          }
-        } catch {
-          // ignore errors
-        }
+        await loadPlanRange()
       }
       try {
         const settings = await request('/plan/settings')
@@ -112,6 +132,23 @@ export default function PlanView() {
       <div>
         <h1>Plan View</h1>
         {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+        <div>
+          <input
+            type="date"
+            aria-label="Start date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <input
+            type="date"
+            aria-label="End date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          <button type="button" onClick={loadPlanRange}>
+            Load Plan
+          </button>
+        </div>
         <p>No plan available.</p>
       </div>
     )
@@ -214,6 +251,23 @@ export default function PlanView() {
     <div>
       <h1>Plan View</h1>
       {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+      <div>
+        <input
+          type="date"
+          aria-label="Start date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <input
+          type="date"
+          aria-label="End date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+        <button type="button" onClick={loadPlanRange}>
+          Load Plan
+        </button>
+      </div>
       <table>
         <thead>
           <tr>

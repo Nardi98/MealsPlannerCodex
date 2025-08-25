@@ -187,9 +187,12 @@ def update_ingredient(
 @app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
 @app.get("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
 def get_plan(
-    plan_date: date | None = None, db: Session = Depends(get_db)
+    plan_date: date | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    db: Session = Depends(get_db),
 ) -> Dict[str, List[schemas.MealOut]]:
-    return crud.get_plan(db, plan_date)
+    return crud.get_plan(db, plan_date, start_date, end_date)
 
 
 @app.post("/plan", response_model=Dict[str, List[schemas.MealOut]])
