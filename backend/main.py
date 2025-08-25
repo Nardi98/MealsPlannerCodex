@@ -17,10 +17,10 @@ import crud
 import models
 import schemas
 from mealplanner import planner
-from database import SessionLocal, engine
+from database import SessionLocal, init_db
 
-# Ensure database tables exist on startup
-models.Base.metadata.create_all(bind=engine)
+# Ensure database tables exist on startup and run migrations
+init_db()
 
 app = FastAPI()
 
