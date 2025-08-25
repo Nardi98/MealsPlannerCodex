@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import PlanView from '../PlanView'
 import { AppContext } from '../../App'
 import { vi, afterEach, test, expect } from 'vitest'
@@ -11,9 +12,11 @@ function renderWithPlan(initialPlan) {
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>
   }
   return render(
-    <Wrapper>
-      <PlanView />
-    </Wrapper>
+    <MemoryRouter>
+      <Wrapper>
+        <PlanView />
+      </Wrapper>
+    </MemoryRouter>
   )
 }
 

@@ -1,11 +1,12 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { mealPlansApi, recipesApi } from '../api'
 import { request } from '../api/client'
 
 export default function PlanView() {
   const { plan, setPlan, recipes, setRecipes } = useContext(AppContext)
+  const navigate = useNavigate()
   const [accepted, setAccepted] = useState({})
   const [swapSlot, setSwapSlot] = useState(null)
   const [keepDays, setKeepDays] = useState(1)
@@ -148,6 +149,9 @@ export default function PlanView() {
           <button type="button" onClick={loadPlanRange}>
             Load Plan
           </button>
+          <button type="button" onClick={() => navigate('/grocery-list')}>
+            Grocery List
+          </button>
         </div>
         <p>No plan available.</p>
       </div>
@@ -266,6 +270,9 @@ export default function PlanView() {
         />
         <button type="button" onClick={loadPlanRange}>
           Load Plan
+        </button>
+        <button type="button" onClick={() => navigate('/grocery-list')}>
+          Grocery List
         </button>
       </div>
       <table>
