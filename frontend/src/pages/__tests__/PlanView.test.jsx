@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import PlanView from '../PlanView'
 import { AppContext } from '../../App'
 import { vi, afterEach, test, expect } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 function renderWithPlan(initialPlan) {
   function Wrapper({ children }) {
@@ -12,7 +13,9 @@ function renderWithPlan(initialPlan) {
   }
   return render(
     <Wrapper>
-      <PlanView />
+      <MemoryRouter>
+        <PlanView />
+      </MemoryRouter>
     </Wrapper>
   )
 }
