@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import PlanView from '../PlanView'
 import { AppContext } from '../../App'
 import { vi, afterEach, test, expect } from 'vitest'
@@ -8,7 +9,11 @@ function renderWithPlan(initialPlan) {
   function Wrapper({ children }) {
     const [plan, setPlan] = useState(initialPlan)
     const value = { plan, setPlan, recipes: [], setRecipes: () => {} }
-    return <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    return (
+      <AppContext.Provider value={value}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </AppContext.Provider>
+    )
   }
   return render(
     <Wrapper>
