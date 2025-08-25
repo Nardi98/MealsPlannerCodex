@@ -123,3 +123,26 @@ test('loads plan with chosen start and end dates', async () => {
     ).toBe(true)
   )
 })
+
+test('renders weekday and formatted date for each plan day', async () => {
+  global.fetch = vi.fn((url) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  const plan = {
+    '2024-01-01': ['A'],
+    '2024-01-02': ['B'],
+  }
+  renderWithPlan(plan)
+  await screen.findByText('A')
+
+  Object.keys(plan).forEach((d) => {
+    const weekday = new Date(d).toLocaleDateString(undefined, { weekday: 'long' })
+    const formatted = new Date(d).toLocaleDateString()
+    expect(screen.getByText(weekday)).toBeInTheDocument()
+    expect(screen.getByText(formatted)).toBeInTheDocument()
+  })
+})

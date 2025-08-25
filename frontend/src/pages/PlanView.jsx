@@ -250,53 +250,61 @@ export default function PlanView() {
             <thead>
               <tr>
                 <th>Day</th>
-                {Array.from({ length: maxMeals }).map((_, i) => (
-                  <th key={i}>Meal {i + 1}</th>
-                ))}
+                    {Array.from({ length: maxMeals }).map((_, i) => (
+                      <th key={i}>Meal {i + 1}</th>
+                    ))}
               </tr>
             </thead>
             <tbody>
-              {planEntries.map(([day, meals], dayIdx) => (
-                <tr key={day}>
-                  <td>{day}</td>
-                  {Array.from({ length: maxMeals }).map((_, idx) => {
-                    if (idx >= meals.length) return <td key={idx} />
-                    const meal = meals[idx]
-                    const age = getAge(dayIdx, meal)
-                    return (
-                      <td key={idx}>
-                        <div>{meal}</div>
-                        {age !== null && age >= keepDays && (
-                          <div style={{ color: 'red' }}>
-                            {`${meal} is ${age} days old (max ${keepDays})`}
-                          </div>
-                        )}
-                        {isAccepted(day, idx) ? (
-                          <button
-                            type="button"
-                            disabled
-                            style={{ backgroundColor: 'green', color: 'white' }}
-                          >
-                            Accepted
-                          </button>
-                        ) : (
-                          <div>
-                            <button type="button" onClick={() => handleAccept(day, idx)}>
-                              Accept
+              {planEntries.map(([day, meals], dayIdx) => {
+                const dateObj = new Date(day)
+                const weekday = dateObj.toLocaleDateString(undefined, { weekday: 'long' })
+                const formatted = dateObj.toLocaleDateString()
+                return (
+                  <tr key={day}>
+                    <td>
+                      {weekday}
+                      <div style={{ fontSize: '0.8em' }}>{formatted}</div>
+                    </td>
+                    {Array.from({ length: maxMeals }).map((_, idx) => {
+                      if (idx >= meals.length) return <td key={idx} />
+                      const meal = meals[idx]
+                      const age = getAge(dayIdx, meal)
+                      return (
+                        <td key={idx}>
+                          <div>{meal}</div>
+                          {age !== null && age >= keepDays && (
+                            <div style={{ color: 'red' }}>
+                              {`${meal} is ${age} days old (max ${keepDays})`}
+                            </div>
+                          )}
+                          {isAccepted(day, idx) ? (
+                            <button
+                              type="button"
+                              disabled
+                              style={{ backgroundColor: 'green', color: 'white' }}
+                            >
+                              Accepted
                             </button>
-                            <button type="button" onClick={() => handleReject(day, idx)}>
-                              Reject
-                            </button>
-                            <button type="button" onClick={() => handleSwap(day, idx)}>
-                              Swap
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+                          ) : (
+                            <div>
+                              <button type="button" onClick={() => handleAccept(day, idx)}>
+                                Accept
+                              </button>
+                              <button type="button" onClick={() => handleReject(day, idx)}>
+                                Reject
+                              </button>
+                              <button type="button" onClick={() => handleSwap(day, idx)}>
+                                Swap
+                              </button>
+                              </div>
+                            )}
+                          </td>
+                        )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {swapSlot && (
@@ -310,15 +318,15 @@ export default function PlanView() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search Recipe"
               />
-              <ul>
-                {visibleTitles.map((t) => (
-                  <li key={t}>
-                    <button type="button" onClick={() => confirmSwap(t)}>
-                      {t}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                <ul>
+                  {visibleTitles.map((t) => (
+                    <li key={t}>
+                      <button type="button" onClick={() => confirmSwap(t)}>
+                        {t}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               <button type="button" onClick={() => setSwapSlot(null)}>
                 Cancel
               </button>
