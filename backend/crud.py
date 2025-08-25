@@ -21,7 +21,7 @@ from models import (
     recipe_tag_table,
 )
 
-_PLAN_CACHE: Dict[str, List[str]] = {}
+_PLAN_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     "save_plan",
     "get_plan",
     "get_plan_settings",
+    "mark_meal_accepted",
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
@@ -232,12 +233,26 @@ def set_meal_plan(session: Session, plan: Dict[str, Iterable[int]]) -> Dict[str,
 
 
 def save_plan(
-    plan: Dict[str, List[str]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
+    plan: Dict[str, Iterable[Any]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
 ) -> None:
     """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
     _PLAN_CACHE.clear()
-    _PLAN_CACHE.update(plan)
+    normalised: Dict[str, List[Dict[str, Any]]] = {}
+    for day, meals in plan.items():
+        items: List[Dict[str, Any]] = []
+        for meal in meals:
+            if isinstance(meal, str):
+                items.append({"recipe": meal, "accepted": False})
+            else:
+                items.append(
+                    {
+                        "recipe": meal.get("recipe"),
+                        "accepted": bool(meal.get("accepted", False)),
+                    }
+                )
+        normalised[day] = items
+    _PLAN_CACHE.update(normalised)
     if bulk_leftovers is not None:
         _PLAN_SETTINGS["bulk_leftovers"] = bulk_leftovers
     if keep_days is not None:
@@ -246,11 +261,11 @@ def save_plan(
 
 def get_plan(
     session: Session | None = None, plan_date: Optional[date] = None
-) -> Dict[str, List[str]]:
+) -> Dict[str, List[Dict[str, Any]]]:
     """Return the cached plan or fetch from the database if a session is given."""
 
     if session is None:
-        return dict(_PLAN_CACHE)
+        return {day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()}
 
     if plan_date is None:
         plan_date = date.today()
@@ -261,11 +276,11 @@ def get_plan(
         return {}
 
     key = meal_plan.plan_date.isoformat()
-    result: Dict[str, List[str]] = {key: []}
+    result: Dict[str, List[Dict[str, Any]]] = {key: []}
     for meal in meal_plan.meals:
         if meal.recipe is None:
             continue
-        result[key].append(meal.recipe.title)
+        result[key].append({"recipe": meal.recipe.title, "accepted": meal.accepted})
     return result
 
 
@@ -278,6 +293,23 @@ def get_plan_settings() -> Dict[str, Any]:
     """
 
     return dict(_PLAN_SETTINGS)
+
+
+def mark_meal_accepted(
+    session: Session, plan_date: date, meal_number: int, accepted: bool
+) -> Optional[Meal]:
+    """Update the acceptance status of a specific meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None:
+        return None
+    meal.accepted = accepted
+    session.commit()
+    session.refresh(meal)
+    return meal
 
 
 def accept_recipe(session: Session, title: str) -> Optional[Recipe]:

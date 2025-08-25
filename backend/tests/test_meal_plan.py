@@ -3,7 +3,7 @@ from datetime import date
 from sqlalchemy import select
 
 from mealplanner import planner
-from mealplanner.crud import create_recipe, set_meal_plan, get_plan
+from mealplanner.crud import create_recipe, set_meal_plan, get_plan, mark_meal_accepted
 from mealplanner.models import MealPlan, Meal, Recipe
 
 
@@ -45,7 +45,11 @@ def test_generate_and_persist_plan(db_session):
         id_plan[day] = ids
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
-    assert fetched == plan_titles
+    expected = {
+        day: [{"recipe": title, "accepted": False} for title in meals]
+        for day, meals in plan_titles.items()
+    }
+    assert fetched == expected
 
 
 def test_duplicate_titles_do_not_break_plan(db_session):
@@ -73,7 +77,21 @@ def test_duplicate_titles_do_not_break_plan(db_session):
         id_plan[day] = ids
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
-    assert fetched == plan_titles
+    expected = {
+        day: [{"recipe": title, "accepted": False} for title in meals]
+        for day, meals in plan_titles.items()
+    }
+    assert fetched == expected
+
+
+def test_mark_meal_accepted(db_session):
+    r = create_recipe(db_session, title="Meal", servings_default=1)
+    plan_date = date(2024, 5, 19)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r.id]})
+    meal = mark_meal_accepted(db_session, plan_date, 1, True)
+    assert meal is not None and meal.accepted is True
+    fetched = get_plan(db_session, plan_date)
+    assert fetched == {plan_date.isoformat(): [{"recipe": r.title, "accepted": True}]}
 
 
 def test_delete_plan_cascades_meals(db_session):
