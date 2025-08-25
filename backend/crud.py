@@ -199,9 +199,11 @@ def get_or_create_ingredient(
     if ingredient_id is not None:
         ingredient = session.get(Ingredient, ingredient_id)
     if ingredient is None and name is not None:
-        ingredient = session.execute(
-            select(Ingredient).where(Ingredient.name == name)
-        ).scalar_one_or_none()
+        ingredient = (
+            session.execute(
+                select(Ingredient).where(Ingredient.name == name).limit(1)
+            ).scalar_one_or_none()
+        )
     if ingredient is None:
         ingredient = Ingredient(name=name, unit=unit)
         session.add(ingredient)

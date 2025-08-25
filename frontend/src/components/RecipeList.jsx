@@ -25,8 +25,7 @@ export default function RecipeList() {
     <ul>
       {recipes.map((r) => (
         <li key={r.id}>
-          {r.title}{' '}
-          {r.score !== undefined && `(${r.score.toFixed(2)})`}
+          {r.title} ({r.course}) {r.score !== undefined && `(${r.score.toFixed(2)})`}
         </li>
       ))}
     </ul>

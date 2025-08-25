@@ -5,9 +5,11 @@ import { recipesApi, ingredientsApi } from '../api'
 export default function RecipeForm({ onCreated }) {
   const [title, setTitle] = useState('')
   const [servings, setServings] = useState('')
+  const [course, setCourse] = useState('MAIN_DISH')
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const courseOptions = ['FIRST_COURSE', 'MAIN_DISH', 'SIDE_DISH']
 
   const addIngredient = () => {
     setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
@@ -39,6 +41,7 @@ export default function RecipeForm({ onCreated }) {
     const payload = {
       title,
       servings_default: Number(servings),
+      course,
       ingredients: ingredients.map((ing) => ({
         name: ing.name,
         quantity: ing.quantity === '' ? null : Number(ing.quantity),
@@ -50,6 +53,7 @@ export default function RecipeForm({ onCreated }) {
       const recipe = await recipesApi.create(payload)
       setTitle('')
       setServings('')
+      setCourse('MAIN_DISH')
       setIngredients([])
       onCreated?.(recipe)
     } catch (err) {
@@ -69,6 +73,16 @@ export default function RecipeForm({ onCreated }) {
       <label>
         Servings:
         <input value={servings} onChange={(e) => setServings(e.target.value)} />
+      </label>
+      <label>
+        Course:
+        <select value={course} onChange={(e) => setCourse(e.target.value)}>
+          {courseOptions.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
       </label>
       <div>
         <h3>Ingredients</h3>
