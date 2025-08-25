@@ -53,6 +53,8 @@ def _create_recipe(
     procedure: str,
     ingredients: Iterable[tuple[str, float, str | UnitEnum]],
     tags: Iterable[str],
+    *,
+    course: str = "main",
 ) -> None:
     """Create a recipe with ``ingredients`` and ``tags``.
 
@@ -64,7 +66,12 @@ def _create_recipe(
     if exists is not None:
         return
 
-    recipe = Recipe(title=title, servings_default=servings, procedure=procedure)
+    recipe = Recipe(
+        title=title,
+        servings_default=servings,
+        procedure=procedure,
+        course=course,
+    )
     session.add(recipe)
 
     for name, qty, unit in ingredients:
