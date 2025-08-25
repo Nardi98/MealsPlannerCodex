@@ -59,6 +59,14 @@ class UnitEnum(str, PyEnum):
     PIECE = "piece"
 
 
+class CourseEnum(str, PyEnum):
+    """Meal course classification for recipes."""
+
+    FIRST_COURSE = "FIRST_COURSE"
+    MAIN_DISH = "MAIN_DISH"
+    SIDE_DISH = "SIDE_DISH"
+
+
 class Recipe(Base):
     """A meal that can be prepared and consumed."""
 
@@ -67,6 +75,11 @@ class Recipe(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String, nullable=False)
     servings_default = Column(Integer, nullable=False)
+    course = Column(
+        Enum(CourseEnum, name="course_enum"),
+        nullable=False,
+        default=CourseEnum.MAIN_DISH,
+    )
     procedure = Column(Text)
     bulk_prep = Column(Boolean, default=False)
     score = Column(Float)
