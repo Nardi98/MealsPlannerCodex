@@ -481,11 +481,14 @@ def import_data(
         for rec_info in data.get("recipes", []):
             rec_id = rec_info.get("id")
             existing = session.get(Recipe, rec_id) if rec_id is not None else None
+            course_val = rec_info.get("course")
+            course = CourseEnum(course_val) if course_val else None
             if existing is None:
                 recipe = Recipe(
                     id=rec_id,
                     title=rec_info["title"],
                     servings_default=rec_info["servings_default"],
+                    course=course,
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
                     score=rec_info.get("score"),
@@ -499,6 +502,7 @@ def import_data(
                 recipe = Recipe(
                     title=rec_info["title"],
                     servings_default=rec_info["servings_default"],
+                    course=course,
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
                     score=rec_info.get("score"),
@@ -593,6 +597,7 @@ def export_data(session: Optional[Session] = None) -> str:
                     "id": recipe.id,
                     "title": recipe.title,
                     "servings_default": recipe.servings_default,
+                    "course": recipe.course.value,
                     "procedure": recipe.procedure,
                     "bulk_prep": recipe.bulk_prep,
                     "score": recipe.score,

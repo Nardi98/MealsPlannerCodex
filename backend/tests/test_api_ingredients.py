@@ -19,6 +19,7 @@ def test_search_ingredients() -> None:
     payload = {
         "title": "Pasta",
         "servings_default": 2,
+        "course": "MAIN_DISH",
         "procedure": "",
         "bulk_prep": False,
         "tags": [],
@@ -48,6 +49,7 @@ def test_list_all_ingredients() -> None:
     payload = {
         "title": "Soup",
         "servings_default": 2,
+        "course": "MAIN_DISH",
         "procedure": "",
         "bulk_prep": False,
         "tags": [],
@@ -75,6 +77,7 @@ def test_update_ingredient() -> None:
     payload = {
         "title": "Tea",
         "servings_default": 1,
+        "course": "MAIN_DISH",
         "procedure": "",
         "bulk_prep": False,
         "tags": [],

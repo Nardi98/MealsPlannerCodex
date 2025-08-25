@@ -20,6 +20,7 @@ def test_recipe_crud() -> None:
     payload = {
         "title": "Soup",
         "servings_default": 2,
+        "course": "MAIN_DISH",
         "procedure": "Boil",
         "bulk_prep": False,
         "tags": ["vegan"],
@@ -56,6 +57,7 @@ def test_create_recipe_ignores_blank_ingredients() -> None:
     payload = {
         "title": "Tea",
         "servings_default": 1,
+        "course": "MAIN_DISH",
         "ingredients": [
             {"name": "Water", "quantity": 1, "unit": "l"},
             {},

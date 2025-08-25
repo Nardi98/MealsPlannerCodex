@@ -7,13 +7,21 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
-from mealplanner.models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
+from mealplanner.models import (
+    Ingredient,
+    MealPlan,
+    Meal,
+    Recipe,
+    RecipeIngredient,
+    Tag,
+    CourseEnum,
+)
 
 
 def _create_sample_data(session):
     """Populate the database with a small set of objects for testing."""
     tag = Tag(name="vegan")
-    recipe = Recipe(title="Soup", servings_default=2)
+    recipe = Recipe(title="Soup", servings_default=2, course=CourseEnum.MAIN_DISH)
     base = Ingredient(name="Water")
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
@@ -60,6 +68,7 @@ def test_import_merge_adds_data(db_session):
             {
                 "title": "Salad",
                 "servings_default": 1,
+                "course": "MAIN_DISH",
                 "ingredients": [],
                 "tags": [],
             }
@@ -95,6 +104,7 @@ def test_export_includes_related_objects(db_session):
     data = json.loads(exported)
 
     assert data["recipes"][0]["title"] == "Soup"
+    assert data["recipes"][0]["course"] == "MAIN_DISH"
     assert data["recipes"][0]["ingredients"][0]["name"] == "Water"
     tag_id = data["recipes"][0]["tags"][0]
     tag_lookup = {t["id"]: t["name"] for t in data["tags"]}
@@ -114,7 +124,13 @@ def test_import_creates_tables_when_missing():
 
     payload = {
         "recipes": [
-            {"title": "Temp", "servings_default": 1, "ingredients": [], "tags": []}
+            {
+                "title": "Temp",
+                "servings_default": 1,
+                "course": "MAIN_DISH",
+                "ingredients": [],
+                "tags": [],
+            }
         ],
         "tags": [],
         "meal_plans": [],

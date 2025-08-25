@@ -19,6 +19,7 @@ def test_invalid_unit_rejected() -> None:
     payload = {
         "title": "Salad",
         "servings_default": 1,
+        "course": "MAIN_DISH",
         "procedure": "",
         "bulk_prep": False,
         "tags": [],

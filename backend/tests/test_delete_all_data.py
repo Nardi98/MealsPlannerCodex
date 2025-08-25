@@ -22,7 +22,7 @@ def test_delete_all_data_function() -> None:
 def test_delete_data_endpoint() -> None:
     _reset_db()
     client = TestClient(app)
-    payload = {"title": "Soup", "servings_default": 2}
+    payload = {"title": "Soup", "servings_default": 2, "course": "MAIN_DISH"}
     client.post("/recipes", json=payload)
     assert client.get("/recipes").json()
     res = client.delete("/data")

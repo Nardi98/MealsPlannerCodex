@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Tag
+from mealplanner.models import Recipe, Tag, CourseEnum
 from mealplanner.seed import _create_recipe
 
 
@@ -10,6 +10,7 @@ def test_new_tag_creation_and_linking(db_session):
         title="Tag Test Recipe",
         servings=1,
         procedure="Boil water.",
+        course=CourseEnum.MAIN_DISH,
         ingredients=[],
         tags=["novel"],
     )

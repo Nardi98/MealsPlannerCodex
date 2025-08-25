@@ -16,7 +16,7 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe, Tag, RecipeIngredient, UnitEnum
+from .models import Ingredient, Recipe, Tag, RecipeIngredient, UnitEnum, CourseEnum
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +51,7 @@ def _create_recipe(
     title: str,
     servings: int,
     procedure: str,
+    course: CourseEnum,
     ingredients: Iterable[tuple[str, float, str | UnitEnum]],
     tags: Iterable[str],
 ) -> None:
@@ -64,7 +65,12 @@ def _create_recipe(
     if exists is not None:
         return
 
-    recipe = Recipe(title=title, servings_default=servings, procedure=procedure)
+    recipe = Recipe(
+        title=title,
+        servings_default=servings,
+        procedure=procedure,
+        course=course,
+    )
     session.add(recipe)
 
     for name, qty, unit in ingredients:
@@ -95,6 +101,7 @@ def seed_sample_data(session: Session) -> None:
         title="Oatmeal",
         servings=1,
         procedure="Boil water and oats until thick.",
+        course=CourseEnum.FIRST_COURSE,
         ingredients=[
             ("Oats", 100.0, "g"),
             ("Water", 250.0, "ml"),
@@ -107,6 +114,7 @@ def seed_sample_data(session: Session) -> None:
         title="Grilled Cheese",
         servings=1,
         procedure="Butter bread, add cheese and grill until golden.",
+        course=CourseEnum.MAIN_DISH,
         ingredients=[
             ("Bread", 2.0, "piece"),
             ("Cheddar Cheese", 1.0, "piece"),
