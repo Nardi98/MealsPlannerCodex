@@ -10,6 +10,7 @@ export default function Recipes() {
   const [servings, setServings] = useState(1)
   const [procedure, setProcedure] = useState('')
   const [bulkPrep, setBulkPrep] = useState(false)
+  const [course, setCourse] = useState('main')
   const [availableTags, setAvailableTags] = useState([])
   const [selectedTags, setSelectedTags] = useState([])
   const [filterTags, setFilterTags] = useState([])
@@ -31,6 +32,7 @@ export default function Recipes() {
     score: r.score ?? 0,
     servings: r.servings ?? r.servings_default ?? 1,
     procedure: r.procedure || '',
+    course: r.course ?? 'main',
     bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
     tags: (r.tags || []).map((t) => t.name || t),
     ingredients: (r.ingredients || []).map((ing) => ({
@@ -82,6 +84,7 @@ export default function Recipes() {
     e.preventDefault()
     const payload = {
       title,
+      course,
       servings_default: Number(servings),
       procedure,
       bulk_prep: bulkPrep,
@@ -105,6 +108,7 @@ export default function Recipes() {
       setServings(1)
       setProcedure('')
       setBulkPrep(false)
+      setCourse('main')
       setSelectedTags([])
       setIngredients([])
     } catch (err) {
@@ -127,6 +131,7 @@ export default function Recipes() {
     setTitle(r.title)
     setServings(r.servings)
     setProcedure(r.procedure)
+    setCourse(r.course)
     setBulkPrep(r.bulkPrep)
     setSelectedTags(r.tags)
     setIngredients(r.ingredients)
@@ -144,6 +149,14 @@ export default function Recipes() {
         <div>
           <label>Servings </label>
           <input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} />
+        </div>
+        <div>
+          <label>Course </label>
+          <select value={course} onChange={(e) => setCourse(e.target.value)}>
+            <option value="main">main</option>
+            <option value="side">side</option>
+            <option value="dessert">dessert</option>
+          </select>
         </div>
         <div>
           <label>Procedure </label>
