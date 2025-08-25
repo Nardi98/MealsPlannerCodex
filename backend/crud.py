@@ -34,6 +34,7 @@ __all__ = [
     "set_meal_plan",
     "save_plan",
     "get_plan",
+    "get_plan_range",
     "get_plan_settings",
     "accept_recipe",
     "reject_recipe",
@@ -264,6 +265,22 @@ def get_plan(
             continue
         result.setdefault(slot.meal_time, []).append(slot.recipe.title)
     return result
+
+
+def get_plan_range(session: Session, start: date, end: date) -> Dict[str, List[str]]:
+    """Return meal plans between ``start`` and ``end`` merged into one map."""
+
+    stmt = select(MealPlan).where(
+        MealPlan.plan_date >= start, MealPlan.plan_date <= end
+    )
+    plans = session.execute(stmt).scalars().all()
+    combined: Dict[str, List[str]] = {}
+    for plan in plans:
+        for slot in plan.slots:
+            if slot.recipe is None:
+                continue
+            combined.setdefault(slot.meal_time, []).append(slot.recipe.title)
+    return combined
 
 
 def get_plan_settings() -> Dict[str, Any]:

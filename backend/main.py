@@ -186,7 +186,16 @@ def update_ingredient(
 
 @app.get("/plan", response_model=Dict[str, List[str]])
 @app.get("/meal-plans", response_model=Dict[str, List[str]])
-def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
+def get_plan(
+    plan_date: date | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> Dict[str, List[str]]:
+    if start is not None or end is not None:
+        if start is None or end is None:
+            raise HTTPException(status_code=400, detail="start and end required")
+        return crud.get_plan_range(db, start, end)
     return crud.get_plan(db, plan_date)
 
 
