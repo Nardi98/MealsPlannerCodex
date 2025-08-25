@@ -11,8 +11,19 @@ export default function PlanView() {
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
   const [query, setQuery] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const getWeekRange = () => {
+    const today = new Date()
+    const day = today.getDay()
+    const monday = new Date(today)
+    monday.setDate(today.getDate() - ((day + 6) % 7))
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+    const format = (d) => d.toISOString().split('T')[0]
+    return { start: format(monday), end: format(sunday) }
+  }
+  const { start: defaultStart, end: defaultEnd } = getWeekRange()
+  const [startDate, setStartDate] = useState(defaultStart)
+  const [endDate, setEndDate] = useState(defaultEnd)
 
   useEffect(() => {
     async function init() {

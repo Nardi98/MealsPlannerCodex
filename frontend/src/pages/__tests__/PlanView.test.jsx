@@ -19,6 +19,7 @@ function renderWithPlan(initialPlan) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 test('accept disables further actions', async () => {
@@ -89,6 +90,30 @@ test('leftover age warning respects keep_days', async () => {
   expect(
     screen.getByText('A (leftover) is 2 days old (max 1)')
   ).toBeInTheDocument()
+})
+
+test('defaults date inputs to current week', async () => {
+  global.fetch = vi.fn((url) => {
+    if (url.endsWith('/plan')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+  renderWithPlan({})
+  const start = screen.getAllByLabelText('Start date')[0]
+  const end = screen.getAllByLabelText('End date')[0]
+  const today = new Date()
+  const day = today.getDay()
+  const monday = new Date(today)
+  monday.setDate(today.getDate() - ((day + 6) % 7))
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const fmt = (d) => d.toISOString().split('T')[0]
+  expect(start.value).toBe(fmt(monday))
+  expect(end.value).toBe(fmt(sunday))
 })
 
 test('loads plan for date range', async () => {
