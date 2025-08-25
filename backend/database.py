@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 # SQLAlchemy database URL for the application. Uses a SQLite file stored under
@@ -26,12 +26,28 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
-def init_db() -> None:
-    """Create database tables.
+def _ensure_course_column() -> None:
+    """Add the ``course`` column to the ``recipes`` table if missing."""
 
-    Applications can call this on startup to ensure all tables are created in
-    the configured database. It is safe to call multiple times; existing tables
-    are left untouched.
+    inspector = inspect(engine)
+    columns = [col["name"] for col in inspector.get_columns("recipes")]
+    if "course" in columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE recipes ADD COLUMN course VARCHAR NOT NULL DEFAULT 'MAIN_DISH'"
+            )
+        )
+
+
+def init_db() -> None:
+    """Create or upgrade database schema.
+
+    Ensures all tables exist and performs simple migrations for older
+    databases. Safe to call multiple times; existing data is left intact.
     """
 
     Base.metadata.create_all(bind=engine)
+    if engine.url.database != ":memory:":
+        _ensure_course_column()
