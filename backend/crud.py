@@ -18,6 +18,7 @@ from models import (
     Tag,
     RecipeIngredient,
     UnitEnum,
+    CourseEnum,
     recipe_tag_table,
 )
 
@@ -41,10 +42,13 @@ __all__ = [
     "list_recipe_titles",
     "import_data",
     "export_data",
+    "delete_all_data",
 ]
 
 
-def create_recipe(session: Session, **data: Any) -> Recipe:
+def create_recipe(
+    session: Session, *, course: CourseEnum | None = None, **data: Any
+) -> Recipe:
     """Create a new :class:`~mealplanner.models.Recipe`.
 
     Parameters
@@ -61,6 +65,8 @@ def create_recipe(session: Session, **data: Any) -> Recipe:
         The newly created and persisted recipe instance.
     """
 
+    if course is not None:
+        data["course"] = course
     recipe = Recipe(**data)
     session.add(recipe)
     session.commit()
@@ -74,7 +80,9 @@ def get_recipe(session: Session, recipe_id: int) -> Optional[Recipe]:
     return session.get(Recipe, recipe_id)
 
 
-def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Recipe]:
+def update_recipe(
+    session: Session, recipe_id: int, *, course: CourseEnum | None = None, **data: Any
+) -> Optional[Recipe]:
     """Update fields on an existing recipe.
 
     Parameters
@@ -86,6 +94,9 @@ def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Rec
     **data:
         Mapping of attribute names to their new values.
     """
+
+    if course is not None:
+        data["course"] = course
 
     recipe = session.get(Recipe, recipe_id)
     if recipe is None:
@@ -136,6 +147,20 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
     session.delete(recipe)
     session.commit()
     return True
+
+
+def delete_all_data(session: Session) -> None:
+    """Remove all data from all tables."""
+
+    session.execute(recipe_tag_table.delete())
+    session.query(Meal).delete()
+    session.query(MealPlan).delete()
+    session.query(RecipeIngredient).delete()
+    session.query(Ingredient).delete()
+    session.query(Tag).delete()
+    session.query(Recipe).delete()
+    session.commit()
+    session.expunge_all()
 
 
 def get_or_create_tag(session: Session, name: str) -> Tag:
@@ -439,16 +464,7 @@ def import_data(
 
     try:
         if mode == "overwrite":
-            # Clear existing data
-            session.execute(recipe_tag_table.delete())
-            session.query(Meal).delete()
-            session.query(MealPlan).delete()
-            session.query(RecipeIngredient).delete()
-            session.query(Ingredient).delete()
-            session.query(Tag).delete()
-            session.query(Recipe).delete()
-            session.commit()
-            session.expunge_all()
+            delete_all_data(session)
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):

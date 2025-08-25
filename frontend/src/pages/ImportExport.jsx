@@ -26,6 +26,18 @@ export default function ImportExport() {
     URL.revokeObjectURL(url)
   }
 
+  const handleDeleteAll = async () => {
+    if (!window.confirm('This will delete all data. Continue?')) return
+    try {
+      await request('/data', { method: 'DELETE' })
+      setRecipes([])
+      setPlan({})
+      alert('All data deleted')
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`)
+    }
+  }
+
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -92,6 +104,7 @@ export default function ImportExport() {
       <h1>Import / Export</h1>
       <div>
         <button type="button" onClick={handleExport}>Export Data</button>
+        <button type="button" onClick={handleDeleteAll}>Delete All Data</button>
       </div>
       {exportData && (
         <div>

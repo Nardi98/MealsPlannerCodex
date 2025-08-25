@@ -342,6 +342,14 @@ def import_data_endpoint(
     return {"status": "ok"}
 
 
+@app.delete("/data", status_code=204)
+def delete_data_endpoint(db: Session = Depends(get_db)) -> Response:
+    """Remove all application data from the database."""
+
+    crud.delete_all_data(db)
+    return Response(status_code=204)
+
+
 if __name__ == "__main__":
     import uvicorn
 
