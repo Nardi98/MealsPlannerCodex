@@ -103,3 +103,18 @@ class FeedbackIn(BaseModel):
     """Payload for feedback endpoints."""
 
     title: str
+
+
+class MealOut(BaseModel):
+    """Represents a meal within a plan."""
+
+    recipe: str
+    accepted: bool
+
+
+class MealAcceptanceIn(BaseModel):
+    """Payload for toggling a meal's acceptance status."""
+
+    plan_date: date
+    meal_number: int
+    accepted: bool

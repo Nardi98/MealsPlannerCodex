@@ -26,7 +26,7 @@ test('accept disables further actions', async () => {
     if (url.endsWith('/plan/settings')) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
     }
-    if (url.endsWith('/feedback/accept')) {
+    if (url.endsWith('/meal-plans/accept')) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
     }
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })

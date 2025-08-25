@@ -15,8 +15,20 @@ async function request(path, options = {}) {
 
   const response = await fetch(url, config);
   if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || `Request failed with status ${response.status}`);
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = null;
+    }
+    const message =
+      (data && typeof data.detail === 'string')
+        ? data.detail
+        : text || `Request failed with status ${response.status}`;
+    const error = new Error(message);
+    if (data) error.data = data;
+    throw error;
   }
   if (response.status === 204) {
     return null;

@@ -13,7 +13,7 @@ from database import SessionLocal, Base
 from models import (
     Ingredient,
     MealPlan,
-    MealSlot,
+    Meal,
     Recipe,
     Tag,
     RecipeIngredient,
@@ -21,7 +21,7 @@ from models import (
     recipe_tag_table,
 )
 
-_PLAN_CACHE: Dict[str, List[str]] = {}
+_PLAN_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
 
 __all__ = [
@@ -35,6 +35,7 @@ __all__ = [
     "save_plan",
     "get_plan",
     "get_plan_settings",
+    "mark_meal_accepted",
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
@@ -100,7 +101,9 @@ def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Rec
     return recipe
 
 
-def _update_recipe_ingredients(recipe: Recipe, new_items: List[RecipeIngredient]) -> None:
+def _update_recipe_ingredients(
+    recipe: Recipe, new_items: List[RecipeIngredient]
+) -> None:
     """Synchronise ``recipe.ingredients`` with ``new_items``.
 
     Existing associations are updated in-place when possible to avoid
@@ -197,45 +200,66 @@ def get_recipes() -> List[str]:
 
 
 def set_meal_plan(
-    session: Session, plan_date: date, plan: Dict[str, Iterable[int]]
-) -> MealPlan:
-    """Create or replace a meal plan for the given date.
+    session: Session, plan: Dict[str, Iterable[int]]
+) -> Dict[str, MealPlan]:
+    """Create or replace meal plans for each day in ``plan``.
 
     Parameters
     ----------
     session:
         Database session for persistence.
-    plan_date:
-        The date this plan applies to.
     plan:
-        Mapping of meal times to iterables of recipe IDs.
+        Mapping of ISO formatted date strings to iterables of recipe IDs. The
+        order of recipe IDs within each iterable determines the
+        ``meal_number`` for the created :class:`Meal` rows.
     """
 
-    stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
-    meal_plan = session.execute(stmt).scalar_one_or_none()
-    if meal_plan is None:
-        meal_plan = MealPlan(plan_date=plan_date)
-        session.add(meal_plan)
-        session.flush()
-    else:
-        meal_plan.slots = []
+    plans: Dict[str, MealPlan] = {}
+    for day, recipe_ids in plan.items():
+        plan_date = day if isinstance(day, date) else date.fromisoformat(day)
+        stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
+        meal_plan = session.execute(stmt).scalar_one_or_none()
+        if meal_plan is None:
+            meal_plan = MealPlan(plan_date=plan_date)
+            session.add(meal_plan)
+            session.flush()
+        else:
+            meal_plan.meals = []
 
-    for meal_time, recipe_ids in plan.items():
-        for rid in recipe_ids:
-            meal_plan.slots.append(MealSlot(meal_time=meal_time, recipe_id=rid))
+        for index, rid in enumerate(recipe_ids, start=1):
+            meal_plan.meals.append(Meal(meal_number=index, recipe_id=rid))
+        plans[day] = meal_plan
 
     session.commit()
-    session.refresh(meal_plan)
-    return meal_plan
+    for meal_plan in plans.values():
+        session.refresh(meal_plan)
+    return plans
 
 
 def save_plan(
-    plan: Dict[str, List[str]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
+    plan: Dict[str, Iterable[Any]],
+    *,
+    bulk_leftovers: bool | None = None,
+    keep_days: int | None = None,
 ) -> None:
     """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
     _PLAN_CACHE.clear()
-    _PLAN_CACHE.update(plan)
+    normalised: Dict[str, List[Dict[str, Any]]] = {}
+    for day, meals in plan.items():
+        items: List[Dict[str, Any]] = []
+        for meal in meals:
+            if isinstance(meal, str):
+                items.append({"recipe": meal, "accepted": False})
+            else:
+                items.append(
+                    {
+                        "recipe": meal.get("recipe"),
+                        "accepted": bool(meal.get("accepted", False)),
+                    }
+                )
+        normalised[day] = items
+    _PLAN_CACHE.update(normalised)
     if bulk_leftovers is not None:
         _PLAN_SETTINGS["bulk_leftovers"] = bulk_leftovers
     if keep_days is not None:
@@ -244,11 +268,13 @@ def save_plan(
 
 def get_plan(
     session: Session | None = None, plan_date: Optional[date] = None
-) -> Dict[str, List[str]]:
+) -> Dict[str, List[Dict[str, Any]]]:
     """Return the cached plan or fetch from the database if a session is given."""
 
     if session is None:
-        return dict(_PLAN_CACHE)
+        return {
+            day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()
+        }
 
     if plan_date is None:
         plan_date = date.today()
@@ -258,11 +284,12 @@ def get_plan(
     if meal_plan is None:
         return {}
 
-    result: Dict[str, List[str]] = {}
-    for slot in meal_plan.slots:
-        if slot.recipe is None:
+    key = meal_plan.plan_date.isoformat()
+    result: Dict[str, List[Dict[str, Any]]] = {key: []}
+    for meal in meal_plan.meals:
+        if meal.recipe is None:
             continue
-        result.setdefault(slot.meal_time, []).append(slot.recipe.title)
+        result[key].append({"recipe": meal.recipe.title, "accepted": meal.accepted})
     return result
 
 
@@ -275,6 +302,23 @@ def get_plan_settings() -> Dict[str, Any]:
     """
 
     return dict(_PLAN_SETTINGS)
+
+
+def mark_meal_accepted(
+    session: Session, plan_date: date, meal_number: int, accepted: bool
+) -> Optional[Meal]:
+    """Update the acceptance status of a specific meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None:
+        return None
+    meal.accepted = accepted
+    session.commit()
+    session.refresh(meal)
+    return meal
 
 
 def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
@@ -359,7 +403,7 @@ def import_data(
         if mode == "overwrite":
             # Clear existing data
             session.execute(recipe_tag_table.delete())
-            session.query(MealSlot).delete()
+            session.query(Meal).delete()
             session.query(MealPlan).delete()
             session.query(RecipeIngredient).delete()
             session.query(Ingredient).delete()
@@ -440,27 +484,25 @@ def import_data(
                     recipe.tags.append(tag)
 
         for plan_info in data.get("meal_plans", []):
-            plan_id = plan_info.get("id")
-            meal_plan = session.get(MealPlan, plan_id) if plan_id is not None else None
+            pdate = date.fromisoformat(plan_info["plan_date"])
+            meal_plan = session.get(MealPlan, pdate)
             if meal_plan is None:
-                meal_plan = MealPlan(
-                    id=plan_id,
-                    plan_date=date.fromisoformat(plan_info["plan_date"]),
-                )
+                meal_plan = MealPlan(plan_date=pdate)
                 session.add(meal_plan)
             else:
-                meal_plan.plan_date = date.fromisoformat(plan_info["plan_date"])
-                meal_plan.slots.clear()
+                meal_plan.meals.clear()
                 session.flush()
 
-            for slot_info in plan_info.get("slots", []):
-                rid = slot_info.get("recipe_id")
+            for meal_info in plan_info.get("meals", []):
+                rid = meal_info.get("recipe_id")
                 rid = recipe_id_map.get(rid, rid)
-                slot = MealSlot(
-                    meal_time=slot_info["meal_time"],
+                meal = Meal(
+                    plan_date=pdate,
+                    meal_number=meal_info["meal_number"],
                     recipe_id=rid,
+                    accepted=meal_info.get("accepted", False),
                 )
-                meal_plan.slots.append(slot)
+                meal_plan.meals.append(meal)
 
         session.commit()
     except Exception as exc:  # noqa: BLE001
@@ -528,14 +570,15 @@ def export_data(session: Optional[Session] = None) -> str:
         for plan in session.execute(select(MealPlan)).scalars().all():
             meal_plans_data.append(
                 {
-                    "id": plan.id,
                     "plan_date": plan.plan_date.isoformat(),
-                    "slots": [
+                    "meals": [
                         {
-                            "meal_time": slot.meal_time,
-                            "recipe_id": slot.recipe_id,
+                            "plan_date": meal.plan_date.isoformat(),
+                            "meal_number": meal.meal_number,
+                            "recipe_id": meal.recipe_id,
+                            "accepted": meal.accepted,
                         }
-                        for slot in plan.slots
+                        for meal in plan.meals
                     ],
                 }
             )

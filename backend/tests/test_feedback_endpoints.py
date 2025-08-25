@@ -17,7 +17,14 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     a = crud.create_recipe(db_session, title="A", servings_default=1, score=0)
     crud.create_recipe(db_session, title="B", servings_default=1, score=0)
     crud.create_recipe(db_session, title="C", servings_default=1, score=0)
-    crud.save_plan({"2024-01-01": ["A", "C (leftover)"]})
+    crud.save_plan(
+        {
+            "2024-01-01": [
+                {"recipe": "A", "accepted": False},
+                {"recipe": "C (leftover)", "accepted": False},
+            ]
+        }
+    )
     client = TestClient(app)
 
     resp = client.post("/feedback/accept", json={"title": "A"})

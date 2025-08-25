@@ -12,6 +12,8 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    CheckConstraint,
+    PrimaryKeyConstraint,
     String,
     Table,
     Text,
@@ -143,25 +145,29 @@ class MealPlan(Base):
 
     __tablename__ = "meal_plans"
 
-    id = Column(Integer, primary_key=True)
-    plan_date = Column(Date, nullable=False, unique=True)
+    plan_date = Column(Date, primary_key=True)
 
-    slots = relationship(
-        "MealSlot", back_populates="plan", cascade="all, delete-orphan"
+    meals = relationship(
+        "Meal", back_populates="plan", cascade="all, delete-orphan"
     )
 
 
-class MealSlot(Base):
-    """A specific meal time within a :class:`MealPlan`."""
+class Meal(Base):
+    """A specific meal within a :class:`MealPlan`."""
 
-    __tablename__ = "meal_slots"
+    __tablename__ = "meals"
 
-    id = Column(Integer, primary_key=True)
-    meal_plan_id = Column(
-        Integer, ForeignKey("meal_plans.id", ondelete="CASCADE"), nullable=False
+    plan_date = Column(
+        Date, ForeignKey("meal_plans.plan_date", ondelete="CASCADE"), nullable=False
     )
-    meal_time = Column(String, nullable=False)
+    meal_number = Column(Integer, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
+    accepted = Column(Boolean, default=False)
 
-    plan = relationship("MealPlan", back_populates="slots")
+    plan = relationship("MealPlan", back_populates="meals")
     recipe = relationship("Recipe")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("plan_date", "meal_number"),
+        CheckConstraint("meal_number IN (1,2)"),
+    )

@@ -184,23 +184,43 @@ def update_ingredient(
     )
 
 
-@app.get("/plan", response_model=Dict[str, List[str]])
-@app.get("/meal-plans", response_model=Dict[str, List[str]])
-def get_plan(plan_date: date | None = None, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
+@app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
+@app.get("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
+def get_plan(
+    plan_date: date | None = None, db: Session = Depends(get_db)
+) -> Dict[str, List[schemas.MealOut]]:
     return crud.get_plan(db, plan_date)
 
 
-@app.post("/plan", response_model=Dict[str, List[str]])
-@app.post("/meal-plans", response_model=Dict[str, List[str]])
-def set_plan(payload: schemas.MealPlanCreate, db: Session = Depends(get_db)) -> Dict[str, List[str]]:
-    crud.set_meal_plan(db, payload.plan_date, payload.plan)
-    title_plan: Dict[str, List[str]] = {}
+@app.post("/plan", response_model=Dict[str, List[schemas.MealOut]])
+@app.post("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
+def set_plan(
+    payload: schemas.MealPlanCreate,
+    force: bool = False,
+    db: Session = Depends(get_db),
+) -> Dict[str, List[schemas.MealOut]]:
+    plan_dates = [
+        day if isinstance(day, date) else date.fromisoformat(day)
+        for day in payload.plan.keys()
+    ]
+    stmt = select(models.MealPlan.plan_date).where(
+        models.MealPlan.plan_date.in_(plan_dates)
+    )
+    existing = db.execute(stmt).scalars().all()
+    if existing and not force:
+        conflicts = [d.isoformat() for d in existing]
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=409, content={"conflicts": conflicts})
+
+    crud.set_meal_plan(db, payload.plan)
+    title_plan: Dict[str, List[Dict[str, object]]] = {}
     for day, ids in payload.plan.items():
-        titles: List[str] = []
+        titles: List[Dict[str, object]] = []
         for rid in ids:
             recipe = db.get(models.Recipe, rid)
             if recipe is not None:
-                titles.append(recipe.title)
+                titles.append({"recipe": recipe.title, "accepted": False})
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -215,6 +235,18 @@ def plan_settings() -> Dict[str, Any]:
     """Return metadata about the current plan such as ``keep_days``."""
 
     return crud.get_plan_settings()
+
+
+@app.post("/meal-plans/accept", response_model=schemas.MealOut)
+def toggle_meal_acceptance(
+    payload: schemas.MealAcceptanceIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    meal = crud.mark_meal_accepted(
+        db, payload.plan_date, payload.meal_number, payload.accepted
+    )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
 
 
 @app.post("/feedback/accept")
@@ -237,9 +269,9 @@ def feedback_reject(
     if crud.reject_recipe(db, payload.title) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     existing = {
-        m[:-11] if m.endswith(" (leftover)") else m
+        meal["recipe"][:-11] if meal["recipe"].endswith(" (leftover)") else meal["recipe"]
         for meals in crud.get_plan().values()
-        for m in meals
+        for meal in meals
     }
     existing.add(payload.title)
     available = list(set(crud.list_recipe_titles(db)) - existing)
@@ -272,7 +304,7 @@ def generate_plan_endpoint(
         for title in titles:
             base = title.replace(" (leftover)", "")
             recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base)
+                select(models.Recipe).where(models.Recipe.title == base).limit(1)
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
