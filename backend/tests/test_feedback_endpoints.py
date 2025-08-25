@@ -20,8 +20,12 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     crud.save_plan(
         {
             "2024-01-01": [
-                {"recipe": "A", "accepted": False},
-                {"recipe": "C (leftover)", "accepted": False},
+                {"recipe": "A", "course": "MAIN_DISH", "accepted": False},
+                {
+                    "recipe": "C (leftover)",
+                    "course": "MAIN_DISH",
+                    "accepted": False,
+                },
             ]
         }
     )

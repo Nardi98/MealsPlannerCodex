@@ -29,6 +29,7 @@ def test_recipe_crud() -> None:
     assert res.status_code == 201
     data = res.json()
     assert data["title"] == "Soup"
+    assert data["course"] == "MAIN_DISH"
     assert data["ingredients"][0]["name"] == "Water"
     assert data["tags"][0]["name"] == "vegan"
 
@@ -39,7 +40,9 @@ def test_recipe_crud() -> None:
     update = dict(payload, title="Stew")
     res = client.put(f"/recipes/{recipe_id}", json=update)
     assert res.status_code == 200
-    assert res.json()["title"] == "Stew"
+    updated = res.json()
+    assert updated["title"] == "Stew"
+    assert updated["course"] == "MAIN_DISH"
 
     res = client.delete(f"/recipes/{recipe_id}")
     assert res.status_code == 204
@@ -61,5 +64,6 @@ def test_create_recipe_ignores_blank_ingredients() -> None:
     res = client.post("/recipes", json=payload)
     assert res.status_code == 201
     data = res.json()
+    assert data["course"] == "MAIN_DISH"
     assert len(data["ingredients"]) == 1
     assert data["ingredients"][0]["name"] == "Water"

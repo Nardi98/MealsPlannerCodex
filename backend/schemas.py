@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from models import UnitEnum
+from models import UnitEnum, CourseEnum
 
 
 class TagOut(BaseModel):
@@ -56,6 +56,7 @@ class IngredientUpdate(BaseModel):
 class RecipeIn(BaseModel):
     title: str
     servings_default: int
+    course: CourseEnum = CourseEnum.MAIN_DISH
     procedure: Optional[str] = None
     bulk_prep: bool = False
     tags: List[str] = []
@@ -66,6 +67,7 @@ class RecipeOut(BaseModel):
     id: int
     title: str
     servings_default: int
+    course: CourseEnum
     procedure: Optional[str] = None
     bulk_prep: bool
     score: Optional[float] = None
@@ -109,6 +111,7 @@ class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
     recipe: str
+    course: CourseEnum
     accepted: bool
 
 

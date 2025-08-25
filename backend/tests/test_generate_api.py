@@ -32,3 +32,4 @@ def test_generate_endpoint_returns_plan(db_session):
     assert "2024-01-01" in data
     assert isinstance(data["2024-01-01"][0]["id"], int)
     assert data["2024-01-01"][0]["title"].startswith("Meal")
+    assert data["2024-01-01"][0]["course"] == "MAIN_DISH"

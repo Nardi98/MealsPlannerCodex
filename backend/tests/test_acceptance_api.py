@@ -28,12 +28,18 @@ def test_toggle_meal_acceptance(db_session):
         json={"plan_date": "2024-01-01", "meal_number": 1, "accepted": True},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"recipe": "A", "accepted": True}
+    assert resp.json() == {
+        "recipe": "A",
+        "course": "MAIN_DISH",
+        "accepted": True,
+    }
 
     resp2 = client.get("/plan", params={"plan_date": "2024-01-01"})
     assert resp2.status_code == 200
     assert resp2.json() == {
-        "2024-01-01": [{"recipe": "A", "accepted": True}]
+        "2024-01-01": [
+            {"recipe": "A", "course": "MAIN_DISH", "accepted": True}
+        ]
     }
 
     app.dependency_overrides.clear()

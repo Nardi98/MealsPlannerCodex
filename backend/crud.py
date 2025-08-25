@@ -250,11 +250,12 @@ def save_plan(
         items: List[Dict[str, Any]] = []
         for meal in meals:
             if isinstance(meal, str):
-                items.append({"recipe": meal, "accepted": False})
+                items.append({"recipe": meal, "course": None, "accepted": False})
             else:
                 items.append(
                     {
                         "recipe": meal.get("recipe"),
+                        "course": meal.get("course"),
                         "accepted": bool(meal.get("accepted", False)),
                     }
                 )
@@ -297,7 +298,13 @@ def get_plan(
             for meal in meal_plan.meals:
                 if meal.recipe is None:
                     continue
-                items.append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+                items.append(
+                    {
+                        "recipe": meal.recipe.title,
+                        "course": meal.recipe.course,
+                        "accepted": meal.accepted,
+                    }
+                )
             result[key] = items
         return result
 
@@ -314,7 +321,13 @@ def get_plan(
     for meal in meal_plan.meals:
         if meal.recipe is None:
             continue
-        result[key].append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+        result[key].append(
+            {
+                "recipe": meal.recipe.title,
+                "course": meal.recipe.course,
+                "accepted": meal.accepted,
+            }
+        )
     return result
 
 

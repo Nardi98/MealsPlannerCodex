@@ -82,6 +82,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     return {
         "title": payload.title,
         "servings_default": payload.servings_default,
+        "course": payload.course,
         "procedure": payload.procedure,
         "bulk_prep": payload.bulk_prep,
         "tags": tags,
@@ -213,7 +214,13 @@ def set_plan(
         for rid in ids:
             recipe = db.get(models.Recipe, rid)
             if recipe is not None:
-                titles.append({"recipe": recipe.title, "accepted": False})
+                titles.append(
+                    {
+                        "recipe": recipe.title,
+                        "course": recipe.course,
+                        "accepted": False,
+                    }
+                )
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -239,7 +246,11 @@ def toggle_meal_acceptance(
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        course=meal.recipe.course,
+        accepted=meal.accepted,
+    )
 
 
 @app.post("/feedback/accept")
@@ -301,7 +312,13 @@ def generate_plan_endpoint(
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
-            items.append({"id": recipe.id, "title": title})
+            items.append(
+                {
+                    "id": recipe.id,
+                    "title": title,
+                    "course": recipe.course,
+                }
+            )
         result[day] = items
     return result
 

@@ -45,7 +45,10 @@ def test_generate_and_persist_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "accepted": False} for title in meals]
+        day: [
+            {"recipe": title, "course": "MAIN_DISH", "accepted": False}
+            for title in meals
+        ]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -84,7 +87,10 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "accepted": False} for title in meals]
+        day: [
+            {"recipe": title, "course": "MAIN_DISH", "accepted": False}
+            for title in meals
+        ]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -103,7 +109,11 @@ def test_mark_meal_accepted(db_session):
     meal = mark_meal_accepted(db_session, plan_date, 1, True)
     assert meal is not None and meal.accepted is True
     fetched = get_plan(db_session, plan_date)
-    assert fetched == {plan_date.isoformat(): [{"recipe": r.title, "accepted": True}]}
+    assert fetched == {
+        plan_date.isoformat(): [
+            {"recipe": r.title, "course": "MAIN_DISH", "accepted": True}
+        ]
+    }
     stored = db_session.get(Meal, (plan_date, 1))
     assert stored is not None and stored.accepted is True
 

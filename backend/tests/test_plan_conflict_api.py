@@ -39,7 +39,9 @@ def test_post_meal_plan_conflict_requires_force(db_session):
     resp3 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
     assert resp3.status_code == 200
     assert resp3.json() == {
-        plan_date.isoformat(): [{"recipe": "B", "accepted": False}]
+        plan_date.isoformat(): [
+            {"recipe": "B", "course": "MAIN_DISH", "accepted": False}
+        ]
     }
     assert db_session.query(MealPlan).count() == 1
     meal = db_session.get(Meal, (plan_date, 1))
