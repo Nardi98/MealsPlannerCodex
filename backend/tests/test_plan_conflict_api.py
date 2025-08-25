@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 import crud
 from main import app, get_db
+from mealplanner.models import MealPlan, Meal
 
 
 def override_get_db(session):
@@ -40,5 +41,8 @@ def test_post_meal_plan_conflict_requires_force(db_session):
     assert resp3.json() == {
         plan_date.isoformat(): [{"recipe": "B", "accepted": False}]
     }
+    assert db_session.query(MealPlan).count() == 1
+    meal = db_session.get(Meal, (plan_date, 1))
+    assert meal is not None and meal.recipe_id == r2.id
 
     app.dependency_overrides.clear()

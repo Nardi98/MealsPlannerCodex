@@ -10,7 +10,7 @@ from mealplanner.models import MealPlan, Meal, Recipe
 def test_meal_plan_model_relationships(db_session):
     recipe = create_recipe(db_session, title="Toast", servings_default=1)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    meal = Meal(meal_number=1, recipe=recipe)
+    meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
@@ -50,6 +50,13 @@ def test_generate_and_persist_plan(db_session):
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
+    # Only one MealPlan should exist per date
+    assert db_session.query(MealPlan).count() == len(plan_titles)
+    for day, ids in id_plan.items():
+        d = date.fromisoformat(day)
+        for idx, rid in enumerate(ids, start=1):
+            meal = db_session.get(Meal, (d, idx))
+            assert meal is not None and meal.recipe_id == rid and meal.meal_number == idx
 
 
 def test_duplicate_titles_do_not_break_plan(db_session):
@@ -82,6 +89,12 @@ def test_duplicate_titles_do_not_break_plan(db_session):
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
+    assert db_session.query(MealPlan).count() == len(plan_titles)
+    for day, ids in id_plan.items():
+        d = date.fromisoformat(day)
+        for idx, rid in enumerate(ids, start=1):
+            meal = db_session.get(Meal, (d, idx))
+            assert meal is not None and meal.recipe_id == rid
 
 
 def test_mark_meal_accepted(db_session):
@@ -92,13 +105,15 @@ def test_mark_meal_accepted(db_session):
     assert meal is not None and meal.accepted is True
     fetched = get_plan(db_session, plan_date)
     assert fetched == {plan_date.isoformat(): [{"recipe": r.title, "accepted": True}]}
+    stored = db_session.get(Meal, (plan_date, 1))
+    assert stored is not None and stored.accepted is True
 
 
 def test_delete_plan_cascades_meals(db_session):
     """Deleting a meal plan should remove associated meals."""
     recipe = create_recipe(db_session, title="Stew", servings_default=2)
     plan = MealPlan(plan_date=date(2024, 6, 1))
-    meal = Meal(meal_number=1, recipe=recipe)
+    meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
@@ -109,7 +124,16 @@ def test_delete_plan_cascades_meals(db_session):
     db_session.commit()
 
     assert db_session.get(MealPlan, pid) is None
-    remaining = db_session.execute(
-        select(Meal).where(Meal.plan_date == pdate)
-    ).first()
+    remaining = db_session.get(Meal, (pdate, 1))
     assert remaining is None
+
+
+def test_set_meal_plan_overwrites_existing(db_session):
+    r1 = create_recipe(db_session, title="Old", servings_default=1)
+    r2 = create_recipe(db_session, title="New", servings_default=1)
+    plan_date = date(2024, 7, 1)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
+    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]})
+    assert db_session.query(MealPlan).count() == 1
+    meal = db_session.get(Meal, (plan_date, 1))
+    assert meal is not None and meal.recipe_id == r2.id
