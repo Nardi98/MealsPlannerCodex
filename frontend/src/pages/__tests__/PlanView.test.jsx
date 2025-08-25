@@ -90,3 +90,30 @@ test('leftover age warning respects keep_days', async () => {
     screen.getByText('A (leftover) is 2 days old (max 1)')
   ).toBeInTheDocument()
 })
+
+test('loads plan for date range', async () => {
+  const rangePlan = {
+    '2024-01-01': [{ recipe: 'A', accepted: false }],
+    '2024-01-02': [{ recipe: 'B', accepted: false }],
+  }
+  global.fetch = vi.fn((url) => {
+    if (url.includes('/plan?start_date=2024-01-01&end_date=2024-01-02')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(rangePlan) })
+    }
+    if (url.endsWith('/plan')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+  renderWithPlan({})
+  const start = screen.getAllByLabelText('Start date')[0]
+  const end = screen.getAllByLabelText('End date')[0]
+  fireEvent.change(start, { target: { value: '2024-01-01' } })
+  fireEvent.change(end, { target: { value: '2024-01-02' } })
+  fireEvent.click(screen.getAllByText('Load Plan')[0])
+  await waitFor(() => expect(screen.getAllByText('A').length).toBeGreaterThan(0))
+  expect(screen.getAllByText('B').length).toBeGreaterThan(0)
+})

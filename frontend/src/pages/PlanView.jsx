@@ -11,6 +11,8 @@ export default function PlanView() {
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
   const [query, setQuery] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   useEffect(() => {
     async function init() {
@@ -70,6 +72,31 @@ export default function PlanView() {
   }
   const days = Object.keys(plan)
 
+  const loadPlanRange = async () => {
+    if (!startDate || !endDate) return
+    try {
+      const fetched = await request(
+        `/plan?start_date=${startDate}&end_date=${endDate}`
+      )
+      if (fetched && typeof fetched === 'object') {
+        const p = fetched.plan || fetched
+        const titlePlan = {}
+        const acceptedInit = {}
+        Object.entries(p).forEach(([day, meals]) => {
+          titlePlan[day] = meals.map((m, idx) => {
+            const title = m.recipe || m.title || m
+            if (m.accepted) acceptedInit[`${day}-${idx}`] = true
+            return title
+          })
+        })
+        setPlan(titlePlan)
+        setAccepted(acceptedInit)
+      }
+    } catch {
+      // ignore errors
+    }
+  }
+
   const persistPlan = async (titlePlan) => {
     let idPlan
     try {
@@ -112,6 +139,23 @@ export default function PlanView() {
       <div>
         <h1>Plan View</h1>
         {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+        <div>
+          <input
+            type="date"
+            aria-label="Start date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <input
+            type="date"
+            aria-label="End date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          <button type="button" onClick={loadPlanRange}>
+            Load Plan
+          </button>
+        </div>
         <p>No plan available.</p>
       </div>
     )
@@ -214,6 +258,23 @@ export default function PlanView() {
     <div>
       <h1>Plan View</h1>
       {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+      <div>
+        <input
+          type="date"
+          aria-label="Start date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <input
+          type="date"
+          aria-label="End date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+        <button type="button" onClick={loadPlanRange}>
+          Load Plan
+        </button>
+      </div>
       <table>
         <thead>
           <tr>
