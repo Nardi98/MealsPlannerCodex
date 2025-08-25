@@ -25,29 +25,36 @@ export default function PlanView() {
   const [startDate, setStartDate] = useState(defaultStart)
   const [endDate, setEndDate] = useState(defaultEnd)
 
+  const loadPlanRange = async () => {
+    if (!startDate || !endDate) return
+    try {
+      const fetched = await request(
+        `/plan?start_date=${startDate}&end_date=${endDate}`
+      )
+      if (fetched && typeof fetched === 'object') {
+        const p = fetched.plan || fetched
+        const titlePlan = {}
+        const acceptedInit = {}
+        Object.entries(p).forEach(([day, meals]) => {
+          titlePlan[day] = meals.map((m, idx) => {
+            const title = m.recipe || m.title || m
+            if (m.accepted) acceptedInit[`${day}-${idx}`] = true
+            return title
+          })
+        })
+        setPlan(titlePlan)
+        setAccepted(acceptedInit)
+        if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
+      }
+    } catch {
+      // ignore errors
+    }
+  }
+
   useEffect(() => {
     async function init() {
       if (Object.keys(plan).length === 0) {
-        try {
-          const fetched = await request('/plan')
-          if (fetched && typeof fetched === 'object') {
-            const p = fetched.plan || fetched
-            const titlePlan = {}
-            const acceptedInit = {}
-            Object.entries(p).forEach(([day, meals]) => {
-              titlePlan[day] = meals.map((m, idx) => {
-                const title = m.recipe || m.title || m
-                if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-                return title
-              })
-            })
-            setPlan(titlePlan)
-            setAccepted(acceptedInit)
-            if (fetched.keep_days !== undefined) setKeepDays(fetched.keep_days)
-          }
-        } catch {
-          // ignore errors
-        }
+        await loadPlanRange()
       }
       try {
         const settings = await request('/plan/settings')
@@ -82,31 +89,6 @@ export default function PlanView() {
     successMessage = undefined
   }
   const days = Object.keys(plan)
-
-  const loadPlanRange = async () => {
-    if (!startDate || !endDate) return
-    try {
-      const fetched = await request(
-        `/plan?start_date=${startDate}&end_date=${endDate}`
-      )
-      if (fetched && typeof fetched === 'object') {
-        const p = fetched.plan || fetched
-        const titlePlan = {}
-        const acceptedInit = {}
-        Object.entries(p).forEach(([day, meals]) => {
-          titlePlan[day] = meals.map((m, idx) => {
-            const title = m.recipe || m.title || m
-            if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-            return title
-          })
-        })
-        setPlan(titlePlan)
-        setAccepted(acceptedInit)
-      }
-    } catch {
-      // ignore errors
-    }
-  }
 
   const persistPlan = async (titlePlan) => {
     let idPlan
