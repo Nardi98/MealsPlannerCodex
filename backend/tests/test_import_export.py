@@ -13,7 +13,7 @@ from mealplanner.models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredi
 def _create_sample_data(session):
     """Populate the database with a small set of objects for testing."""
     tag = Tag(name="vegan")
-    recipe = Recipe(title="Soup", servings_default=2)
+    recipe = Recipe(title="Soup", servings_default=2, course="main")
     base = Ingredient(name="Water")
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
@@ -39,6 +39,7 @@ def test_round_trip_export_import(db_session):
     recipe = db_session.query(Recipe).one()
     assert recipe.ingredients[0].ingredient.name == "Water"
     assert recipe.tags[0].name == "vegan"
+    assert recipe.course == "main"
 
     plan = db_session.query(MealPlan).one()
     assert plan.plan_date == date(2024, 1, 1)
@@ -60,6 +61,7 @@ def test_import_merge_adds_data(db_session):
             {
                 "title": "Salad",
                 "servings_default": 1,
+                "course": "main",
                 "ingredients": [],
                 "tags": [],
             }
@@ -95,6 +97,7 @@ def test_export_includes_related_objects(db_session):
     data = json.loads(exported)
 
     assert data["recipes"][0]["title"] == "Soup"
+    assert data["recipes"][0]["course"] == "main"
     assert data["recipes"][0]["ingredients"][0]["name"] == "Water"
     tag_id = data["recipes"][0]["tags"][0]
     tag_lookup = {t["id"]: t["name"] for t in data["tags"]}
@@ -114,7 +117,13 @@ def test_import_creates_tables_when_missing():
 
     payload = {
         "recipes": [
-            {"title": "Temp", "servings_default": 1, "ingredients": [], "tags": []}
+            {
+                "title": "Temp",
+                "servings_default": 1,
+                "course": "main",
+                "ingredients": [],
+                "tags": [],
+            }
         ],
         "tags": [],
         "meal_plans": [],

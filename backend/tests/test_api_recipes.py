@@ -22,6 +22,7 @@ def test_recipe_crud() -> None:
         "servings_default": 2,
         "procedure": "Boil",
         "bulk_prep": False,
+        "course": "main",
         "tags": ["vegan"],
         "ingredients": [{"name": "Water", "quantity": 1, "unit": "l"}],
     }
@@ -29,6 +30,7 @@ def test_recipe_crud() -> None:
     assert res.status_code == 201
     data = res.json()
     assert data["title"] == "Soup"
+    assert data["course"] == "main"
     assert data["ingredients"][0]["name"] == "Water"
     assert data["tags"][0]["name"] == "vegan"
 
@@ -53,6 +55,7 @@ def test_create_recipe_ignores_blank_ingredients() -> None:
     payload = {
         "title": "Tea",
         "servings_default": 1,
+        "course": "main",
         "ingredients": [
             {"name": "Water", "quantity": 1, "unit": "l"},
             {},
@@ -63,3 +66,16 @@ def test_create_recipe_ignores_blank_ingredients() -> None:
     data = res.json()
     assert len(data["ingredients"]) == 1
     assert data["ingredients"][0]["name"] == "Water"
+
+
+def test_create_recipe_defaults_course_api() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Rice",
+        "servings_default": 1,
+        "ingredients": [],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+    assert res.json()["course"] == "main"

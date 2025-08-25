@@ -15,7 +15,7 @@ def override_get_db(session):
 
 def test_generate_endpoint_handles_duplicate_titles(db_session):
     for _ in range(2):
-        crud.create_recipe(db_session, title="Dup", servings_default=1)
+        crud.create_recipe(db_session, title="Dup", servings_default=1, course="main")
 
     os.makedirs("data", exist_ok=True)
     from main import app, get_db  # imported after data dir exists

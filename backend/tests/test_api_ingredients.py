@@ -21,6 +21,7 @@ def test_search_ingredients() -> None:
         "servings_default": 2,
         "procedure": "",
         "bulk_prep": False,
+        "course": "main",
         "tags": [],
         "ingredients": [
             {"name": "Spaghetti", "quantity": 100, "unit": "g"},
@@ -50,6 +51,7 @@ def test_list_all_ingredients() -> None:
         "servings_default": 2,
         "procedure": "",
         "bulk_prep": False,
+        "course": "main",
         "tags": [],
         "ingredients": [
             {"name": "Water", "quantity": 1, "unit": "l"},
@@ -77,6 +79,7 @@ def test_update_ingredient() -> None:
         "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
+        "course": "main",
         "tags": [],
         "ingredients": [
             {"name": "Water", "quantity": 1, "unit": "l"},

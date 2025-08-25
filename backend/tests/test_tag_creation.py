@@ -10,6 +10,7 @@ def test_new_tag_creation_and_linking(db_session):
         title="Tag Test Recipe",
         servings=1,
         procedure="Boil water.",
+        course="main",
         ingredients=[],
         tags=["novel"],
     )
@@ -21,3 +22,4 @@ def test_new_tag_creation_and_linking(db_session):
     assert tag.name == "novel"
     assert tag in recipe.tags
     assert recipe in tag.recipes
+    assert recipe.course == "main"

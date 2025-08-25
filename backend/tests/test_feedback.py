@@ -12,6 +12,7 @@ def test_accept_recipe_updates_score_and_date(db_session):
         db_session,
         title="Test",
         servings_default=1,
+        course="main",
         score=0,
     )
     crud.accept_recipe(db_session, "Test")
@@ -25,6 +26,7 @@ def test_reject_recipe_updates_score(db_session):
         db_session,
         title="Test2",
         servings_default=1,
+        course="main",
         score=0,
     )
     crud.reject_recipe(db_session, "Test2")
@@ -36,8 +38,8 @@ def test_reject_recipe_updates_score(db_session):
 def test_accept_recipe_handles_duplicates(db_session):
     """Accepting a recipe with a non-unique title updates only one entry."""
 
-    r1 = crud.create_recipe(db_session, title="Dup", servings_default=1, score=0)
-    r2 = crud.create_recipe(db_session, title="Dup", servings_default=1, score=0)
+    r1 = crud.create_recipe(db_session, title="Dup", servings_default=1, course="main", score=0)
+    r2 = crud.create_recipe(db_session, title="Dup", servings_default=1, course="main", score=0)
 
     # Should not raise MultipleResultsFound even with duplicate titles
     crud.accept_recipe(db_session, "Dup")
