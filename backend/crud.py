@@ -101,7 +101,9 @@ def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Rec
     return recipe
 
 
-def _update_recipe_ingredients(recipe: Recipe, new_items: List[RecipeIngredient]) -> None:
+def _update_recipe_ingredients(
+    recipe: Recipe, new_items: List[RecipeIngredient]
+) -> None:
     """Synchronise ``recipe.ingredients`` with ``new_items``.
 
     Existing associations are updated in-place when possible to avoid
@@ -197,7 +199,9 @@ def get_recipes() -> List[str]:
         return session.execute(stmt).scalars().all()
 
 
-def set_meal_plan(session: Session, plan: Dict[str, Iterable[int]]) -> Dict[str, MealPlan]:
+def set_meal_plan(
+    session: Session, plan: Dict[str, Iterable[int]]
+) -> Dict[str, MealPlan]:
     """Create or replace meal plans for each day in ``plan``.
 
     Parameters
@@ -233,7 +237,10 @@ def set_meal_plan(session: Session, plan: Dict[str, Iterable[int]]) -> Dict[str,
 
 
 def save_plan(
-    plan: Dict[str, Iterable[Any]], *, bulk_leftovers: bool | None = None, keep_days: int | None = None
+    plan: Dict[str, Iterable[Any]],
+    *,
+    bulk_leftovers: bool | None = None,
+    keep_days: int | None = None,
 ) -> None:
     """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
@@ -265,7 +272,9 @@ def get_plan(
     """Return the cached plan or fetch from the database if a session is given."""
 
     if session is None:
-        return {day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()}
+        return {
+            day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()
+        }
 
     if plan_date is None:
         plan_date = date.today()
@@ -492,6 +501,9 @@ def import_data(
                 rid = meal_info.get("recipe_id")
                 rid = recipe_id_map.get(rid, rid)
                 meal = Meal(
+                    plan_date=date.fromisoformat(
+                        meal_info.get("plan_date", plan_info["plan_date"])
+                    ),
                     meal_number=meal_info["meal_number"],
                     recipe_id=rid,
                     accepted=meal_info.get("accepted", False),
@@ -568,6 +580,7 @@ def export_data(session: Optional[Session] = None) -> str:
                     "plan_date": plan.plan_date.isoformat(),
                     "meals": [
                         {
+                            "plan_date": meal.plan_date.isoformat(),
                             "meal_number": meal.meal_number,
                             "recipe_id": meal.recipe_id,
                             "accepted": meal.accepted,

@@ -18,7 +18,7 @@ def _create_sample_data(session):
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    plan.meals.append(Meal(meal_number=1, recipe=recipe))
+    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True))
     session.add_all([tag, recipe, plan])
     session.commit()
 
@@ -41,7 +41,9 @@ def test_round_trip_export_import(db_session):
     assert recipe.tags[0].name == "vegan"
 
     plan = db_session.query(MealPlan).one()
+    assert plan.plan_date == date(2024, 1, 1)
     assert plan.meals[0].recipe_id == recipe.id
+    assert plan.meals[0].accepted is True
 
 
 def test_import_bad_data_raises(db_session):
@@ -97,8 +99,12 @@ def test_export_includes_related_objects(db_session):
     tag_id = data["recipes"][0]["tags"][0]
     tag_lookup = {t["id"]: t["name"] for t in data["tags"]}
     assert tag_lookup[tag_id] == "vegan"
-    assert data["meal_plans"][0]["meals"][0]["meal_number"] == 1
-    assert data["meal_plans"][0]["meals"][0]["recipe_id"] == data["recipes"][0]["id"]
+    assert data["meal_plans"][0]["plan_date"] == "2024-01-01"
+    meal_info = data["meal_plans"][0]["meals"][0]
+    assert meal_info["plan_date"] == "2024-01-01"
+    assert meal_info["meal_number"] == 1
+    assert meal_info["recipe_id"] == data["recipes"][0]["id"]
+    assert meal_info["accepted"] is True
 
 
 def test_import_creates_tables_when_missing():
@@ -117,4 +123,3 @@ def test_import_creates_tables_when_missing():
     with Session() as session:
         crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
         assert session.query(Recipe).count() == 1
-
