@@ -76,9 +76,9 @@ export default function RecipeForm({ onCreated }) {
       <label>
         Course:
         <select value={course} onChange={(e) => setCourse(e.target.value)}>
+          <option value="first">first</option>
           <option value="main">main</option>
           <option value="side">side</option>
-          <option value="dessert">dessert</option>
         </select>
       </label>
       <div>

@@ -18,12 +18,12 @@ test('course selector defaults to main', () => {
 test('submitting recipe sends selected course', async () => {
   const createMock = vi
     .spyOn(recipesApi, 'create')
-    .mockResolvedValue({ course: 'dessert' })
+    .mockResolvedValue({ course: 'side' })
   render(<RecipeForm />)
   fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Pie' } })
   fireEvent.change(screen.getByLabelText(/servings/i), { target: { value: '4' } })
-  fireEvent.change(screen.getByLabelText(/course/i), { target: { value: 'dessert' } })
+  fireEvent.change(screen.getByLabelText(/course/i), { target: { value: 'side' } })
   fireEvent.click(screen.getByText('Save'))
   await waitFor(() => expect(createMock).toHaveBeenCalled())
-  expect(createMock.mock.calls[0][0].course).toBe('dessert')
+  expect(createMock.mock.calls[0][0].course).toBe('side')
 })

@@ -7,6 +7,7 @@
     -   Each recipe has:
         -   Title
         -   Servings default
+        -   Course (`first`, `main`, or `side`)
         -   Procedure (nullable)
         -   Bulk preparation flag (leftovers possible)
         -   Ingredients (name, quantity, unit in
@@ -76,8 +77,13 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+alembic upgrade head  # apply database migrations
 uvicorn app.main:app --reload
 ```
+
+Run `alembic upgrade head` whenever the schema changes to update an existing
+database (for example, to add the new `course` column to the `recipes`
+table).
 
 ### Frontend (`frontend/`)
 
@@ -94,7 +100,7 @@ requests such as:
 ```javascript
 fetch('http://localhost:8000/api/recipes')
   .then(res => res.json())
-  .then(data => console.log(data))
+  .then(data => console.log(data)) // => [{ id: 1, title: 'Soup', course: 'first', ... }]
 ```
 
 
@@ -112,7 +118,7 @@ meal-planner/
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-├── migrations/                # (optional) alembic migration scripts
+├── migrations/                # Alembic migration scripts (run with `alembic upgrade head`)
 └── data/
     └── app.db                 # sqlite database (created on first run)
 ```
@@ -163,6 +169,9 @@ The planner persists generated meals using two tables:
 * `meal_plans` – one row per day with the unique column `plan_date`.
 * `meals` – individual meal slots linked to a plan.
 
+Recipes are stored in the `recipes` table, which includes a `course` column
+to classify each dish (`first`, `main`, or `side`).
+
 The `meals` table has the following columns:
 
 | Column      | Type   | Notes |
@@ -193,12 +202,12 @@ payload controls how many days to generate and how many meals per day:
 ```
 
 The response maps dates to recipe suggestions, each including the recipe
-`id` and `title`:
+`id`, `title`, and `course`:
 
 ```json
 {
-  "2024-01-01": [{"id": 1, "title": "Soup"}],
-  "2024-01-02": [{"id": 2, "title": "Stew"}]
+  "2024-01-01": [{"id": 1, "title": "Soup", "course": "first"}],
+  "2024-01-02": [{"id": 2, "title": "Stew", "course": "main"}]
 }
 ```
 

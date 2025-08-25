@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -53,12 +53,15 @@ class IngredientUpdate(BaseModel):
     unit: Optional[UnitEnum] = None
 
 
+Course = Literal["first", "main", "side"]
+
+
 class RecipeIn(BaseModel):
     title: str
     servings_default: int
     procedure: Optional[str] = None
     bulk_prep: bool = False
-    course: str = "main"
+    course: Course = "main"
     tags: List[str] = []
     ingredients: List[IngredientIn] = []
 
@@ -69,7 +72,7 @@ class RecipeOut(BaseModel):
     servings_default: int
     procedure: Optional[str] = None
     bulk_prep: bool
-    course: str
+    course: Course
     score: Optional[float] = None
     date_last_consumed: Optional[date] = None
     ingredients: List[IngredientOut] = []
