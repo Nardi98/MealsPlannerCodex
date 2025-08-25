@@ -280,9 +280,13 @@ def generate_plan_endpoint(
         items: List[Dict[str, object]] = []
         for title in titles:
             base = title.replace(" (leftover)", "")
-            recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base)
-            ).scalar_one_or_none()
+            recipe = (
+                db.execute(
+                    select(models.Recipe).where(models.Recipe.title == base).limit(1)
+                )
+                .scalars()
+                .first()
+            )
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
             items.append({"id": recipe.id, "title": title})
