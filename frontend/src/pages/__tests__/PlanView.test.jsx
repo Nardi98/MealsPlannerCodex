@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import PlanView from '../PlanView'
 import { AppContext } from '../../App'
 import { vi, afterEach, test, expect } from 'vitest'
@@ -19,6 +19,7 @@ function renderWithPlan(initialPlan) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  cleanup()
 })
 
 test('accept disables further actions', async () => {
@@ -89,4 +90,36 @@ test('leftover age warning respects keep_days', async () => {
   expect(
     screen.getByText('A (leftover) is 2 days old (max 1)')
   ).toBeInTheDocument()
+})
+
+test('loads plan with chosen start and end dates', async () => {
+  const fetchMock = vi.fn((url) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+    }
+    if (url.includes('/plan?')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ '2024-02-01': ['X'] }) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+  global.fetch = fetchMock
+
+  renderWithPlan({ '2024-01-01': ['A'] })
+  const startInput = await screen.findByLabelText(/start date/i)
+  const endInput = await screen.findByLabelText(/end date/i)
+
+  fireEvent.change(startInput, { target: { value: '2024-02-01' } })
+  fireEvent.change(endInput, { target: { value: '2024-02-07' } })
+  fireEvent.click(screen.getByText('Load'))
+
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        url.endsWith('/plan?start=2024-02-01&end=2024-02-07')
+      )
+    ).toBe(true)
+  )
 })

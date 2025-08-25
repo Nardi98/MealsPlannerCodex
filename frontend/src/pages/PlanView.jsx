@@ -11,6 +11,17 @@ export default function PlanView() {
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
   const [query, setQuery] = useState('')
+  const toDateValue = (d) => d.toISOString().slice(0, 10)
+  const today = new Date()
+  const day = today.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const defaultStart = new Date(today)
+  defaultStart.setDate(today.getDate() + diff)
+  const defaultEnd = new Date(defaultStart)
+  defaultEnd.setDate(defaultStart.getDate() + 6)
+  const [startDate, setStartDate] = useState(toDateValue(defaultStart))
+  const [endDate, setEndDate] = useState(toDateValue(defaultEnd))
+  const [loadMessage, setLoadMessage] = useState('')
 
   useEffect(() => {
     async function init() {
@@ -63,6 +74,27 @@ export default function PlanView() {
   }
   const days = Object.keys(plan)
 
+  const handleLoad = async (e) => {
+    e.preventDefault()
+    try {
+      const fetched = await request(`/plan?start=${startDate}&end=${endDate}`)
+      let newPlan
+      if (fetched && typeof fetched === 'object') {
+        newPlan = fetched.plan || fetched
+      }
+      if (newPlan && Object.keys(newPlan).length > 0) {
+        setPlan(newPlan)
+        setLoadMessage('')
+      } else {
+        setPlan({})
+        setLoadMessage('No plan found for selected dates.')
+      }
+    } catch {
+      setPlan({})
+      setLoadMessage('No plan found for selected dates.')
+    }
+  }
+
   const persistPlan = async (titlePlan) => {
     try {
       let list = recipes
@@ -88,18 +120,12 @@ export default function PlanView() {
     }
   }
 
-  if (days.length === 0) {
-    return (
-      <div>
-        <h1>Plan View</h1>
-        {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
-        <p>No plan available.</p>
-      </div>
-    )
+  let maxMeals = 0
+  let planEntries = []
+  if (days.length > 0) {
+    maxMeals = days.reduce((max, d) => Math.max(max, plan[d].length), 0)
+    planEntries = days.map((d) => [d, plan[d]])
   }
-
-  const maxMeals = days.reduce((max, d) => Math.max(max, plan[d].length), 0)
-  const planEntries = days.map((d) => [d, plan[d]])
 
   const getAge = (dayIdx, meal) => {
     if (!meal.endsWith(' (leftover)')) return null
@@ -200,83 +226,105 @@ export default function PlanView() {
     <div>
       <h1>Plan View</h1>
       {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
-      <table>
-        <thead>
-          <tr>
-            <th>Day</th>
-            {Array.from({ length: maxMeals }).map((_, i) => (
-              <th key={i}>Meal {i + 1}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {planEntries.map(([day, meals], dayIdx) => (
-            <tr key={day}>
-              <td>{day}</td>
-              {Array.from({ length: maxMeals }).map((_, idx) => {
-                if (idx >= meals.length) return <td key={idx} />
-                const meal = meals[idx]
-                const age = getAge(dayIdx, meal)
-                return (
-                  <td key={idx}>
-                    <div>{meal}</div>
-                    {age !== null && age >= keepDays && (
-                      <div style={{ color: 'red' }}>
-                        {`${meal} is ${age} days old (max ${keepDays})`}
-                      </div>
-                    )}
-                    {isAccepted(day, idx) ? (
-                      <button
-                        type="button"
-                        disabled
-                        style={{ backgroundColor: 'green', color: 'white' }}
-                      >
-                        Accepted
-                      </button>
-                    ) : (
-                      <div>
-                        <button type="button" onClick={() => handleAccept(day, idx)}>
-                          Accept
-                        </button>
-                        <button type="button" onClick={() => handleReject(day, idx)}>
-                          Reject
-                        </button>
-                        <button type="button" onClick={() => handleSwap(day, idx)}>
-                          Swap
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {swapSlot && (
-        <div
-          className="swap-dialog"
-          style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}
-        >
-          <h3>Swap Recipe</h3>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search Recipe"
-          />
-          <ul>
-            {visibleTitles.map((t) => (
-              <li key={t}>
-                <button type="button" onClick={() => confirmSwap(t)}>
-                  {t}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button type="button" onClick={() => setSwapSlot(null)}>
-            Cancel
-          </button>
-        </div>
+      <form onSubmit={handleLoad} style={{ marginBottom: '1rem' }}>
+        <input
+          type="date"
+          aria-label="start date"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+        />
+        <input
+          type="date"
+          aria-label="end date"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+        <button type="submit">Load</button>
+      </form>
+      {loadMessage && <p>{loadMessage}</p>}
+      {days.length === 0 ? (
+        <p>No plan available.</p>
+      ) : (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Day</th>
+                {Array.from({ length: maxMeals }).map((_, i) => (
+                  <th key={i}>Meal {i + 1}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {planEntries.map(([day, meals], dayIdx) => (
+                <tr key={day}>
+                  <td>{day}</td>
+                  {Array.from({ length: maxMeals }).map((_, idx) => {
+                    if (idx >= meals.length) return <td key={idx} />
+                    const meal = meals[idx]
+                    const age = getAge(dayIdx, meal)
+                    return (
+                      <td key={idx}>
+                        <div>{meal}</div>
+                        {age !== null && age >= keepDays && (
+                          <div style={{ color: 'red' }}>
+                            {`${meal} is ${age} days old (max ${keepDays})`}
+                          </div>
+                        )}
+                        {isAccepted(day, idx) ? (
+                          <button
+                            type="button"
+                            disabled
+                            style={{ backgroundColor: 'green', color: 'white' }}
+                          >
+                            Accepted
+                          </button>
+                        ) : (
+                          <div>
+                            <button type="button" onClick={() => handleAccept(day, idx)}>
+                              Accept
+                            </button>
+                            <button type="button" onClick={() => handleReject(day, idx)}>
+                              Reject
+                            </button>
+                            <button type="button" onClick={() => handleSwap(day, idx)}>
+                              Swap
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {swapSlot && (
+            <div
+              className="swap-dialog"
+              style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}
+            >
+              <h3>Swap Recipe</h3>
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search Recipe"
+              />
+              <ul>
+                {visibleTitles.map((t) => (
+                  <li key={t}>
+                    <button type="button" onClick={() => confirmSwap(t)}>
+                      {t}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <button type="button" onClick={() => setSwapSlot(null)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
