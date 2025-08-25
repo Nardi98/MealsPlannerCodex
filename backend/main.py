@@ -107,20 +107,10 @@ def update_recipe(
 
 
 @app.delete("/recipes/{recipe_id}", status_code=204)
-def delete_recipe_route(recipe_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
     deleted = crud.delete_recipe(db, recipe_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    return Response(status_code=204)
-
-
-@app.delete("/recipes/{recipe_id}", status_code=204)
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
-    recipe = db.get(models.Recipe, recipe_id)
-    if recipe is None:
-        raise HTTPException(status_code=404, detail="Recipe not found")
-    db.delete(recipe)
-    db.commit()
     return Response(status_code=204)
 
 
