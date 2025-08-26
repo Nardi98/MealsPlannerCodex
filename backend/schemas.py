@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from models import UnitEnum
 
@@ -91,6 +91,29 @@ class MealPlanCreate(BaseModel):
     plan: Dict[str, List[MealPlanMeal]]
     bulk_leftovers: bool | None = None
     keep_days: int | None = None
+
+    @field_validator("plan", mode="before")
+    @classmethod
+    def _coerce_plan(cls, value: Dict[str, List[object]]) -> Dict[str, List[object]]:
+        """Allow plan entries to be simple integers.
+
+        The frontend may submit each meal as just a recipe ID. Normalise such
+        entries into the ``{"main": id, "sides": []}`` structure expected by
+        :class:`MealPlanMeal` so the API remains backwards compatible.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        normalised: Dict[str, List[object]] = {}
+        for day, meals in value.items():
+            items: List[object] = []
+            for meal in meals:
+                if isinstance(meal, int):
+                    items.append({"main": meal, "sides": []})
+                else:
+                    items.append(meal)
+            normalised[day] = items
+        return normalised
 
 
 class MealPlanGenerate(BaseModel):
