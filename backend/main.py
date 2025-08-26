@@ -72,6 +72,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
         if ing.id is None and not ing.name:
             continue
         ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name, ing.unit)
+        ingredient_obj.season_months = ing.season_months or list(range(1, 13))
         ingredients.append(
             models.RecipeIngredient(
                 ingredient=ingredient_obj,

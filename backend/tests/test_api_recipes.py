@@ -79,3 +79,42 @@ def test_create_recipe_defaults_course_api() -> None:
     res = client.post("/recipes", json=payload)
     assert res.status_code == 201
     assert res.json()["course"] == "main"
+
+
+def test_recipe_persists_ingredient_season_months() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Veggies",
+        "servings_default": 2,
+        "course": "main",
+        "ingredients": [
+            {
+                "name": "Zucchini",
+                "quantity": 1,
+                "unit": "piece",
+                "season_months": [6, 7],
+            }
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["ingredients"][0]["season_months"] == [6, 7]
+
+
+def test_recipe_defaults_ingredient_season_months() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {
+        "title": "Pepper Soup",
+        "servings_default": 1,
+        "course": "main",
+        "ingredients": [
+            {"name": "Pepper", "quantity": 1, "unit": "piece"}
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["ingredients"][0]["season_months"] == list(range(1, 13))
