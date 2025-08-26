@@ -92,6 +92,20 @@ alembic upgrade head
 
 This applies schema changes such as the new `course` column on recipes.
 
+#### Sample data
+
+A helper is available to populate the database with a few demonstration recipes:
+
+```python
+from mealplanner.seed import seed_sample_data
+from database import SessionLocal
+
+db = SessionLocal()
+seed_sample_data(db)
+```
+
+The seeded data now includes examples of main courses, a first course, and a side dish.
+
 ### Frontend (`frontend/`)
 
 ```bash
