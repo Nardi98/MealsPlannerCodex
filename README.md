@@ -9,6 +9,7 @@
         -   Servings default
         -   Procedure (nullable)
         -   Bulk preparation flag (leftovers possible)
+        -   Course (e.g., main, side, dessert)
         -   Ingredients (name, quantity, unit in
             `{g, kg, ml, l, piece}`)
         -   Tags (many-to-many, user-addable, e.g., *vegetarian, meat,
@@ -78,6 +79,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
+
+#### Database migrations
+
+If you already have a database, run the Alembic migrations to bring it up to
+date:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+This applies schema changes such as the new `course` column on recipes.
 
 ### Frontend (`frontend/`)
 
