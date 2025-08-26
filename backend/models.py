@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     CheckConstraint,
     PrimaryKeyConstraint,
@@ -167,8 +168,34 @@ class Meal(Base):
 
     plan = relationship("MealPlan", back_populates="meals")
     recipe = relationship("Recipe")
+    side_dishes = relationship(
+        "MealSideDish", back_populates="meal", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         PrimaryKeyConstraint("plan_date", "meal_number"),
         CheckConstraint("meal_number IN (1,2)"),
+    )
+
+
+class MealSideDish(Base):
+    """A side dish assigned to a particular meal."""
+
+    __tablename__ = "meal_side_dishes"
+
+    plan_date = Column(Date, nullable=False)
+    meal_number = Column(Integer, nullable=False)
+    side_number = Column(Integer, nullable=False)
+    recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+
+    meal = relationship("Meal", back_populates="side_dishes")
+    recipe = relationship("Recipe")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("plan_date", "meal_number", "side_number"),
+        ForeignKeyConstraint(
+            ["plan_date", "meal_number"],
+            ["meals.plan_date", "meals.meal_number"],
+            ondelete="CASCADE",
+        ),
     )
