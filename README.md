@@ -276,3 +276,37 @@ Use `POST /meal-plans/accept` to update the `accepted` flag for a meal:
 The updated meal is returned in the response.
 
 
+### Courses and side dishes
+
+Recipes declare their `course`, which must be one of `"first course"`,
+`"main course"`, or `"side dish"`. When a plan includes a main course,
+the API can attach one or more side dishes to that meal. Responses include
+side dish titles alongside the main recipe, and requests can supply side
+dish IDs when creating plans.
+
+#### Example: creating a plan with side dishes
+
+```json
+{
+  "plan_date": "2024-01-01",
+  "plan": {
+    "2024-01-01": [
+      {"main": 1, "sides": [2, 3]}
+    ]
+  },
+  "bulk_leftovers": true,
+  "keep_days": 3
+}
+```
+
+#### Example: retrieving a plan with side dishes
+
+```json
+{
+  "2024-01-01": [
+    {"recipe": "Steak", "accepted": false, "side_dishes": ["Salad", "Fries"]}
+  ]
+}
+```
+
+
