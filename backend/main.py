@@ -207,14 +207,29 @@ def set_plan(
 
         return JSONResponse(status_code=409, content={"conflicts": conflicts})
 
-    crud.set_meal_plan(db, payload.plan)
+    id_plan: Dict[str, List[Dict[str, Any]]] = {
+        day: [meal.model_dump() for meal in meals] for day, meals in payload.plan.items()
+    }
+    crud.set_meal_plan(db, id_plan)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
-    for day, ids in payload.plan.items():
+    for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
-        for rid in ids:
-            recipe = db.get(models.Recipe, rid)
-            if recipe is not None:
-                titles.append({"recipe": recipe.title, "accepted": False})
+        for meal in meals:
+            recipe = db.get(models.Recipe, meal.main)
+            if recipe is None:
+                continue
+            side_titles: List[str] = []
+            for sid in meal.sides:
+                side_rec = db.get(models.Recipe, sid)
+                if side_rec is not None:
+                    side_titles.append(side_rec.title)
+            titles.append(
+                {
+                    "recipe": recipe.title,
+                    "accepted": False,
+                    "side_dishes": side_titles,
+                }
+            )
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -240,7 +255,12 @@ def toggle_meal_acceptance(
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
+    side_titles = [
+        sd.recipe.title for sd in meal.side_dishes if sd.recipe is not None
+    ]
+    return schemas.MealOut(
+        recipe=meal.recipe.title, accepted=meal.accepted, side_dishes=side_titles
+    )
 
 
 @app.post("/feedback/accept")
