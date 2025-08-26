@@ -108,7 +108,17 @@ class MealPlanCreate(BaseModel):
         for day, meals in value.items():
             items: List[object] = []
             for meal in meals:
-                if isinstance(meal, int):
+                if meal is None:
+                    continue
+                if isinstance(meal, list):
+                    if not meal:
+                        continue
+                    main, *sides = meal
+                    if not isinstance(main, int):
+                        continue
+                    side_ids = [sid for sid in sides if isinstance(sid, int)]
+                    items.append({"main": main, "sides": side_ids})
+                elif isinstance(meal, int):
                     items.append({"main": meal, "sides": []})
                 else:
                     items.append(meal)
