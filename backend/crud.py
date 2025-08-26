@@ -41,6 +41,7 @@ __all__ = [
     "list_recipe_titles",
     "import_data",
     "export_data",
+    "clear_data",
 ]
 
 
@@ -383,6 +384,20 @@ def list_recipe_titles(session: Session) -> List[str]:
     return session.scalars(select(Recipe.title)).all()
 
 
+def clear_data(session: Session) -> None:
+    """Remove all application data from the database."""
+
+    session.execute(recipe_tag_table.delete())
+    session.query(Meal).delete()
+    session.query(MealPlan).delete()
+    session.query(RecipeIngredient).delete()
+    session.query(Ingredient).delete()
+    session.query(Tag).delete()
+    session.query(Recipe).delete()
+    session.commit()
+    session.expunge_all()
+
+
 def import_data(
     file_obj: Any, session: Optional[Session] = None, mode: str = "overwrite"
 ) -> None:
@@ -426,16 +441,7 @@ def import_data(
 
     try:
         if mode == "overwrite":
-            # Clear existing data
-            session.execute(recipe_tag_table.delete())
-            session.query(Meal).delete()
-            session.query(MealPlan).delete()
-            session.query(RecipeIngredient).delete()
-            session.query(Ingredient).delete()
-            session.query(Tag).delete()
-            session.query(Recipe).delete()
-            session.commit()
-            session.expunge_all()
+            clear_data(session)
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):
