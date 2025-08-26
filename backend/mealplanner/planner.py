@@ -110,7 +110,7 @@ def generate_plan(
     side_candidates_primary: List[Recipe] = []
     side_candidates_reduced: List[Recipe] = []
     for rec in recipes:
-        if rec.course != "side dish":
+        if rec.course.lower() != "side dish":
             continue
         r_tags = {t.name for t in rec.tags}
         if avoid_set and r_tags.intersection(avoid_set):
@@ -126,7 +126,7 @@ def generate_plan(
     updated: List[tuple[Recipe, List[Recipe], bool]] = []
     for recipe, _, leftover in selections:
         sides: List[Recipe] = []
-        if recipe.course == "main course" and side_dishes:
+        if recipe.course.lower() == "main course" and side_dishes:
             sides = random.sample(side_dishes, k=min(2, len(side_dishes)))
         updated.append((recipe, sides, leftover))
 
@@ -182,7 +182,7 @@ def filter_recipes(
     primary: List[Recipe] = []
     reduced: List[Recipe] = []
     for recipe in recipes:
-        if recipe.course not in {"first course", "main course"}:
+        if recipe.course.lower() not in {"first course", "main course"}:
             continue
         recipe_tags = {t.name for t in recipe.tags}
         if avoid_set and recipe_tags.intersection(avoid_set):
