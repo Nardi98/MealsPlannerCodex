@@ -79,9 +79,16 @@ class RecipeOut(BaseModel):
         orm_mode = True
 
 
+class MealPlanMeal(BaseModel):
+    """Input structure for a meal containing a main and optional sides."""
+
+    main: int
+    sides: List[int] = Field(default_factory=list)
+
+
 class MealPlanCreate(BaseModel):
     plan_date: date
-    plan: Dict[str, List[int]]
+    plan: Dict[str, List[MealPlanMeal]]
     bulk_leftovers: bool | None = None
     keep_days: int | None = None
 
@@ -107,11 +114,21 @@ class FeedbackIn(BaseModel):
     title: str
 
 
+class SideDishOut(BaseModel):
+    """Represents a side dish associated with a meal."""
+
+    title: str
+
+    class Config:
+        orm_mode = True
+
+
 class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
     recipe: str
     accepted: bool
+    side_dishes: List[str] = Field(default_factory=list)
 
 
 class MealAcceptanceIn(BaseModel):

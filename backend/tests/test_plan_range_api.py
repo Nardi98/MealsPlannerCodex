@@ -23,8 +23,8 @@ def test_get_plan_range(db_session):
     crud.set_meal_plan(
         db_session,
         {
-            start.isoformat(): [r1.id],
-            second.isoformat(): [r2.id],
+            start.isoformat(): [{"main": r1.id, "sides": []}],
+            second.isoformat(): [{"main": r2.id, "sides": []}],
         },
     )
 
@@ -38,8 +38,12 @@ def test_get_plan_range(db_session):
     )
     assert resp.status_code == 200
     assert resp.json() == {
-        start.isoformat(): [{"recipe": "A", "accepted": False}],
-        second.isoformat(): [{"recipe": "B", "accepted": False}],
+        start.isoformat(): [
+            {"recipe": "A", "accepted": False, "side_dishes": []}
+        ],
+        second.isoformat(): [
+            {"recipe": "B", "accepted": False, "side_dishes": []}
+        ],
     }
 
     app.dependency_overrides.clear()
