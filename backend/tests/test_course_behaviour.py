@@ -90,3 +90,23 @@ def test_course_names_case_insensitive(db_session):
     assert plan["2024-01-01"][0][1:] == ["Side"]
     assert plan["2024-01-02"][0][0] == "Starter"
 
+
+def test_course_name_variants(db_session):
+    """Hyphenated or short course names are normalised for planning."""
+
+    main = Recipe(title="Main", servings_default=1, score=2.0, course="main")
+    first = Recipe(
+        title="Starter", servings_default=1, score=1.0, course="first-course"
+    )
+    side = Recipe(title="Side", servings_default=1, score=1.0, course="side")
+    db_session.add_all([main, first, side])
+    db_session.commit()
+
+    start = date(2024, 1, 1)
+    random.seed(0)
+    plan = generate_plan(db_session, start, days=2, meals_per_day=1, epsilon=0.0)
+
+    assert plan["2024-01-01"][0][0] == "Main"
+    assert plan["2024-01-01"][0][1:] == ["Side"]
+    assert plan["2024-01-02"][0][0] == "Starter"
+

@@ -12,6 +12,24 @@ from .models import Ingredient, Recipe, RecipeIngredient
 from .scoring import score_recipe
 
 
+def _normalize_course(name: str) -> str:
+    """Return a normalised course name.
+
+    The database may store course names in a variety of formats (e.g. ``"main"``,
+    ``"main-course"", ``"side"``). To keep planning logic robust we collapse
+    these variants into a small canonical set.
+    """
+
+    course = name.strip().lower().replace("-", " ")
+    if course in {"main", "second", "second course"}:
+        return "main course"
+    if course in {"first", "starter"}:
+        return "first course"
+    if course in {"side", "side dish"}:
+        return "side dish"
+    return course
+
+
 def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
     """Return a mapping representation of ``recipe`` for scoring functions."""
 
@@ -110,7 +128,7 @@ def generate_plan(
     side_candidates_primary: List[Recipe] = []
     side_candidates_reduced: List[Recipe] = []
     for rec in recipes:
-        if rec.course.lower() != "side dish":
+        if _normalize_course(rec.course) != "side dish":
             continue
         r_tags = {t.name for t in rec.tags}
         if avoid_set and r_tags.intersection(avoid_set):
@@ -126,7 +144,7 @@ def generate_plan(
     updated: List[tuple[Recipe, List[Recipe], bool]] = []
     for recipe, _, leftover in selections:
         sides: List[Recipe] = []
-        if recipe.course.lower() == "main course" and side_dishes:
+        if _normalize_course(recipe.course) == "main course" and side_dishes:
             sides = random.sample(side_dishes, k=min(2, len(side_dishes)))
         updated.append((recipe, sides, leftover))
 
@@ -182,7 +200,8 @@ def filter_recipes(
     primary: List[Recipe] = []
     reduced: List[Recipe] = []
     for recipe in recipes:
-        if recipe.course.lower() not in {"first course", "main course"}:
+        course = _normalize_course(recipe.course)
+        if course not in {"first course", "main course"}:
             continue
         recipe_tags = {t.name for t in recipe.tags}
         if avoid_set and recipe_tags.intersection(avoid_set):
