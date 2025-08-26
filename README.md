@@ -278,11 +278,16 @@ The updated meal is returned in the response.
 
 ### Courses and side dishes
 
-Recipes declare their `course`, which must be one of `"first course"`,
-`"main course"`, or `"side dish"`. When a plan includes a main course,
-the API can attach one or more side dishes to that meal. Responses include
-side dish titles alongside the main recipe, and requests can supply side
-dish IDs when creating plans.
+Recipes declare their `course`. Valid values are:
+
+- `"first course"`
+- `"main course"`
+- `"side dish"`
+
+When a plan includes a main course, the API can attach one or more side
+dishes to that meal using the `side_dishes` field. Responses include side
+dish titles alongside the main recipe, and requests can supply side dish
+IDs when creating plans.
 
 #### Example: creating a plan with side dishes
 
@@ -291,7 +296,7 @@ dish IDs when creating plans.
   "plan_date": "2024-01-01",
   "plan": {
     "2024-01-01": [
-      {"main": 1, "sides": [2, 3]}
+      {"main": 1, "side_dishes": [2, 3]}
     ]
   },
   "bulk_leftovers": true,
