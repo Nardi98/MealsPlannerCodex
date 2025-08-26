@@ -122,6 +122,34 @@ def seed_sample_data(session: Session) -> None:
         tags=["quick", "vegetarian"],
     )
 
+    _create_recipe(
+        session,
+        title="Tomato Soup",
+        servings=2,
+        procedure="Simmer tomatoes with broth and onion.",
+        ingredients=[
+            ("Tomatoes", 400.0, "g"),
+            ("Vegetable Broth", 500.0, "ml"),
+            ("Onion", 1.0, "piece"),
+        ],
+        tags=["vegetarian"],
+        course="first course",
+    )
+
+    _create_recipe(
+        session,
+        title="Garlic Bread",
+        servings=2,
+        procedure="Spread garlic butter on bread and bake until crisp.",
+        ingredients=[
+            ("Bread", 2.0, "piece"),
+            ("Butter", 20.0, "g"),
+            ("Garlic", 2.0, "piece"),
+        ],
+        tags=["quick", "vegetarian"],
+        course="side dish",
+    )
+
     session.commit()
 
 

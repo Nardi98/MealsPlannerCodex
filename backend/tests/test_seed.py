@@ -10,14 +10,22 @@ def test_seed_populates_sample_data(db_session):
 
     oatmeal = db_session.execute(select(Recipe).where(Recipe.title == "Oatmeal")).scalar_one_or_none()
     grilled = db_session.execute(select(Recipe).where(Recipe.title == "Grilled Cheese")).scalar_one_or_none()
+    tomato = db_session.execute(select(Recipe).where(Recipe.title == "Tomato Soup")).scalar_one_or_none()
+    garlic = db_session.execute(select(Recipe).where(Recipe.title == "Garlic Bread")).scalar_one_or_none()
     assert oatmeal is not None
     assert grilled is not None
+    assert tomato is not None
+    assert garlic is not None
     assert oatmeal.course == "main course"
     assert grilled.course == "main course"
+    assert tomato.course == "first course"
+    assert garlic.course == "side dish"
 
     # Ingredients linked correctly
     oatmeal_ing = {ri.ingredient.name for ri in oatmeal.ingredients}
     assert {"Oats", "Water"} <= oatmeal_ing
+    tomato_ing = {ri.ingredient.name for ri in tomato.ingredients}
+    assert {"Tomatoes", "Vegetable Broth", "Onion"} <= tomato_ing
 
     tag_names = {t.name for t in db_session.execute(select(Tag)).scalars()}
     assert {"vegetarian", "breakfast", "quick"} <= tag_names
