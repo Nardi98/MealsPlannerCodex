@@ -1,5 +1,7 @@
 import { request } from './client';
 
+const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+
 function createCrud(resource) {
   return {
     fetchAll: () => request(`/${resource}`),
@@ -37,13 +39,16 @@ function normaliseRecipe(recipe) {
 function serialiseRecipe(recipe) {
   return {
     ...recipe,
-    ingredients: (recipe.ingredients || []).map((ing) => ({
-      id: ing.id,
-      name: ing.name,
-      quantity: ing.quantity,
-      unit: ing.unit,
-      season_months: ing.season_months || ing.season || [],
-    })),
+    ingredients: (recipe.ingredients || []).map((ing) => {
+      const months = ing.season_months ?? ing.season;
+      return {
+        id: ing.id,
+        name: ing.name,
+        quantity: ing.quantity,
+        unit: ing.unit,
+        season_months: months && months.length ? months : ALL_MONTHS,
+      };
+    }),
   };
 }
 
