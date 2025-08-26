@@ -229,8 +229,8 @@ def generate_weekly_plan(
         days: Number of days to plan for. Defaults to a full week (``7``).
 
     Raises:
-        ValueError: If there are insufficient recipes (including repeats of
-            ``bulk_prep`` recipes) to create a plan for ``days`` days.
+        ValueError: If no recipes are available to create a plan for ``days``
+            days.
     """
 
     available = filter_recipes(
@@ -255,7 +255,14 @@ def generate_weekly_plan(
         return plan
 
     if not bulk_recipes:
-        raise ValueError("Not enough recipes to generate a full weekly plan")
+        if not plan:
+            raise ValueError("Not enough recipes to generate a full weekly plan")
+        idx = 0
+        while len(plan) < days:
+            recipe = non_bulk[idx % len(non_bulk)]
+            plan.append((recipe, [], False))
+            idx += 1
+        return plan
 
     idx = 0
     while len(plan) < days:

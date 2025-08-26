@@ -204,10 +204,11 @@ def test_generate_plan_partial_week(db_session):
 
 
 def test_generate_weekly_plan_insufficient_recipes():
-    """Generating a plan without enough recipes should raise an error."""
+    """When recipes are limited they should be repeated to fill the plan."""
     recipes = [make_recipe("OnlyOne")]
-    with pytest.raises(ValueError):
-        generate_weekly_plan(recipes)
+    plan = generate_weekly_plan(recipes)
+    assert len(plan) == 7
+    assert all(r.title == "OnlyOne" and not leftover for r, _, leftover in plan)
 
 
 def test_generate_weekly_plan_leftovers_marked():
