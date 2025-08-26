@@ -9,7 +9,7 @@
         -   Servings default
         -   Procedure (nullable)
         -   Bulk preparation flag (leftovers possible)
-        -   Course (e.g., main, side, dessert)
+        -   Course (e.g., main, side, first course)
         -   Ingredients (name, quantity, unit in
             `{g, kg, ml, l, piece}`)
         -   Tags (many-to-many, user-addable, e.g., *vegetarian, meat,
