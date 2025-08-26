@@ -327,6 +327,12 @@ def import_data_endpoint(
     return {"status": "ok"}
 
 
+@app.delete("/data")
+def clear_data_endpoint(db: Session = Depends(get_db)) -> Dict[str, str]:
+    crud.clear_data(db)
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     import uvicorn
 

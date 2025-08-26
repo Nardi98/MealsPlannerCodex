@@ -132,3 +132,14 @@ def test_import_creates_tables_when_missing():
     with Session() as session:
         crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
         assert session.query(Recipe).count() == 1
+
+
+def test_clear_data(db_session):
+    _create_sample_data(db_session)
+    assert db_session.query(Recipe).count() == 1
+    crud.clear_data(db_session)
+    assert db_session.query(Recipe).count() == 0
+    assert db_session.query(Tag).count() == 0
+    assert db_session.query(Ingredient).count() == 0
+    assert db_session.query(MealPlan).count() == 0
+    assert db_session.query(Meal).count() == 0

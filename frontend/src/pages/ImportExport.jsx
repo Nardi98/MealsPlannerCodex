@@ -87,11 +87,26 @@ export default function ImportExport() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!window.confirm('This will permanently delete all data. Continue?')) return
+    try {
+      await request('/data', { method: 'DELETE' })
+      setRecipes([])
+      setPlan({})
+      navigate('/')
+    } catch (err) {
+      alert(`Delete failed: ${err.message}`)
+    }
+  }
+
   return (
     <div>
       <h1>Import / Export</h1>
       <div>
         <button type="button" onClick={handleExport}>Export Data</button>
+      </div>
+      <div>
+        <button type="button" onClick={handleDelete}>Delete All Data</button>
       </div>
       {exportData && (
         <div>
