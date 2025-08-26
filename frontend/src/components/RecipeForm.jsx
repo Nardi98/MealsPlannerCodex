@@ -2,6 +2,8 @@ import { useState } from 'react'
 import IngredientRow from './IngredientRow'
 import { recipesApi, ingredientsApi } from '../api'
 
+const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+
 export default function RecipeForm({ onCreated }) {
   const [title, setTitle] = useState('')
   const [servings, setServings] = useState('')
@@ -45,7 +47,7 @@ export default function RecipeForm({ onCreated }) {
         name: ing.name,
         quantity: ing.quantity === '' ? null : Number(ing.quantity),
         unit: ing.unit,
-        season_months: ing.season,
+        season_months: ing.season.length ? ing.season : ALL_MONTHS,
       })),
     }
     try {

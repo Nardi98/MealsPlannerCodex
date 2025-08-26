@@ -4,6 +4,8 @@ import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
 
+const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+
 export default function Recipes() {
   const { recipes, setRecipes } = useContext(AppContext)
   const [title, setTitle] = useState('')
@@ -93,7 +95,7 @@ export default function Recipes() {
         name: ing.name,
         quantity: ing.quantity === '' ? null : Number(ing.quantity),
         unit: ing.unit,
-        season_months: ing.season,
+        season_months: ing.season.length ? ing.season : ALL_MONTHS,
       })),
     }
     try {
