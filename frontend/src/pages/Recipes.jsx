@@ -155,7 +155,7 @@ export default function Recipes() {
           <select value={course} onChange={(e) => setCourse(e.target.value)}>
             <option value="main">main</option>
             <option value="side">side</option>
-            <option value="dessert">dessert</option>
+            <option value="first-course">first course</option>
           </select>
         </div>
         <div>
