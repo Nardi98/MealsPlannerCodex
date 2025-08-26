@@ -14,9 +14,9 @@ def override_get_db(session):
 
 def test_feedback_endpoints_return_unique_replacement(db_session):
     app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main course", score=0)
+    crud.create_recipe(db_session, title="B", servings_default=1, course="main course", score=0)
+    crud.create_recipe(db_session, title="C", servings_default=1, course="main course", score=0)
     crud.save_plan(
         {
             "2024-01-01": [

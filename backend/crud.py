@@ -459,7 +459,7 @@ def import_data(
                     servings_default=rec_info["servings_default"],
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
-                    course=rec_info.get("course", "main"),
+                    course=rec_info.get("course", "main course"),
                     score=rec_info.get("score"),
                     date_last_consumed=(
                         date.fromisoformat(rec_info["date_last_consumed"])
@@ -473,7 +473,7 @@ def import_data(
                     servings_default=rec_info["servings_default"],
                     procedure=rec_info.get("procedure"),
                     bulk_prep=rec_info.get("bulk_prep", False),
-                    course=rec_info.get("course", "main"),
+                    course=rec_info.get("course", "main course"),
                     score=rec_info.get("score"),
                     date_last_consumed=(
                         date.fromisoformat(rec_info["date_last_consumed"])

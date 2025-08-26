@@ -8,7 +8,7 @@ from mealplanner.models import MealPlan, Meal, Recipe
 
 
 def test_meal_plan_model_relationships(db_session):
-    recipe = create_recipe(db_session, title="Toast", servings_default=1, course="main")
+    recipe = create_recipe(db_session, title="Toast", servings_default=1, course="main course")
     plan = MealPlan(plan_date=date(2024, 1, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
@@ -22,7 +22,7 @@ def test_meal_plan_model_relationships(db_session):
 
 def test_generate_and_persist_plan(db_session):
     for i in range(7):
-        create_recipe(db_session, title=f"Meal {i}", servings_default=1, course="main")
+        create_recipe(db_session, title=f"Meal {i}", servings_default=1, course="main course")
     plan_date = date(2024, 5, 17)
 
     plan_titles = planner.generate_plan(
@@ -34,7 +34,7 @@ def test_generate_and_persist_plan(db_session):
         for meal in meals:
             recipe_id = (
                 db_session.execute(
-                    select(Recipe.id).where(Recipe.title == meal)
+                    select(Recipe.id).where(Recipe.title == meal[0])
                 )
                 .scalars()
                 .first()
@@ -45,7 +45,7 @@ def test_generate_and_persist_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "accepted": False} for title in meals]
+        day: [{"recipe": title[0], "accepted": False} for title in meals]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -60,9 +60,9 @@ def test_generate_and_persist_plan(db_session):
 
 def test_duplicate_titles_do_not_break_plan(db_session):
     """Generating a plan works even if recipe titles are duplicated."""
-    create_recipe(db_session, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, title="Dup", servings_default=1, course="main course")
     # duplicate title intentionally
-    create_recipe(db_session, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, title="Dup", servings_default=1, course="main course")
 
     plan_date = date(2024, 5, 18)
     plan_titles = {plan_date.isoformat(): ["Dup"]}
@@ -97,7 +97,7 @@ def test_duplicate_titles_do_not_break_plan(db_session):
 
 
 def test_mark_meal_accepted(db_session):
-    r = create_recipe(db_session, title="Meal", servings_default=1, course="main")
+    r = create_recipe(db_session, title="Meal", servings_default=1, course="main course")
     plan_date = date(2024, 5, 19)
     set_meal_plan(db_session, {plan_date.isoformat(): [r.id]})
     meal = mark_meal_accepted(db_session, plan_date, 1, True)
@@ -110,7 +110,7 @@ def test_mark_meal_accepted(db_session):
 
 def test_delete_plan_cascades_meals(db_session):
     """Deleting a meal plan should remove associated meals."""
-    recipe = create_recipe(db_session, title="Stew", servings_default=2, course="main")
+    recipe = create_recipe(db_session, title="Stew", servings_default=2, course="main course")
     plan = MealPlan(plan_date=date(2024, 6, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
@@ -128,8 +128,8 @@ def test_delete_plan_cascades_meals(db_session):
 
 def test_delete_plan_removes_all_meals(db_session):
     """Deleting a plan removes all related meal entries."""
-    recipe1 = create_recipe(db_session, title="Soup", servings_default=1, course="main")
-    recipe2 = create_recipe(db_session, title="Salad", servings_default=1, course="main")
+    recipe1 = create_recipe(db_session, title="Soup", servings_default=1, course="main course")
+    recipe2 = create_recipe(db_session, title="Salad", servings_default=1, course="main course")
     plan = MealPlan(plan_date=date(2024, 8, 2))
     plan.meals.extend(
         [
@@ -150,8 +150,8 @@ def test_delete_plan_removes_all_meals(db_session):
 
 
 def test_set_meal_plan_overwrites_existing(db_session):
-    r1 = create_recipe(db_session, title="Old", servings_default=1, course="main")
-    r2 = create_recipe(db_session, title="New", servings_default=1, course="main")
+    r1 = create_recipe(db_session, title="Old", servings_default=1, course="main course")
+    r2 = create_recipe(db_session, title="New", servings_default=1, course="main course")
     plan_date = date(2024, 7, 1)
     set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
     set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]})

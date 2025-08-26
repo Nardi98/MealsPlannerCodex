@@ -11,9 +11,9 @@ afterEach(() => {
 
 test('displays course label', async () => {
   vi.spyOn(recipesApi, 'fetchAll').mockResolvedValue([
-    { id: 1, title: 'Soup', course: 'main' },
+    { id: 1, title: 'Soup', course: 'main course' },
   ])
   render(<RecipeList />)
   await waitFor(() => screen.getByText('Soup'))
-  expect(screen.getByText('[main]')).toBeInTheDocument()
+  expect(screen.getByText('[main course]')).toBeInTheDocument()
 })

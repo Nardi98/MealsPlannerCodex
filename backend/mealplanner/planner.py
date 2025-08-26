@@ -42,7 +42,7 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
-) -> Dict[str, List[str]]:
+) -> Dict[str, List[List[str]]]:
     """Generate a meal plan mapping dates to recipe titles.
 
     Recipes are filtered and scored using :func:`filter_recipes` and
@@ -60,7 +60,7 @@ def generate_plan(
 
     recipes = session.query(Recipe).all()
     total_slots = days * meals_per_day
-    selections: List[tuple[Recipe, bool]] = []
+    selections: List[tuple[Recipe, List[Recipe], bool]] = []
     week = 0
     while len(selections) < total_slots:
         week_start = start + timedelta(days=7 * week)
@@ -104,17 +104,43 @@ def generate_plan(
         )
         selections.extend(weekly)
         week += 1
+    tag_set: Set[str] | None = set(tags) if tags else None
+    avoid_set: Set[str] = set(avoid_tags or [])
+    reduce_set: Set[str] = set(reduce_tags or [])
+    side_candidates_primary: List[Recipe] = []
+    side_candidates_reduced: List[Recipe] = []
+    for rec in recipes:
+        if rec.course != "side dish":
+            continue
+        r_tags = {t.name for t in rec.tags}
+        if avoid_set and r_tags.intersection(avoid_set):
+            continue
+        if tag_set and not r_tags.intersection(tag_set):
+            continue
+        if reduce_set and r_tags.intersection(reduce_set):
+            side_candidates_reduced.append(rec)
+        else:
+            side_candidates_primary.append(rec)
+    side_dishes = side_candidates_primary + side_candidates_reduced
 
-    schedule: Dict[str, List[str]] = {}
+    updated: List[tuple[Recipe, List[Recipe], bool]] = []
+    for recipe, _, leftover in selections:
+        sides: List[Recipe] = []
+        if recipe.course == "main course" and side_dishes:
+            sides = random.sample(side_dishes, k=min(2, len(side_dishes)))
+        updated.append((recipe, sides, leftover))
+
+    schedule: Dict[str, List[List[str]]] = {}
     for day_offset in range(days):
         current = start + timedelta(days=day_offset)
         key = current.isoformat()
         schedule[key] = []
         for meal_idx in range(meals_per_day):
             idx = day_offset * meals_per_day + meal_idx
-            recipe, leftover = selections[idx]
-            title = recipe.title + (" (leftover)" if leftover else "")
-            schedule[key].append(title)
+            recipe, sides, leftover = updated[idx]
+            titles = [recipe.title + (" (leftover)" if leftover else "")]
+            titles.extend([s.title for s in sides])
+            schedule[key].append(titles)
     return schedule
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
@@ -156,6 +182,8 @@ def filter_recipes(
     primary: List[Recipe] = []
     reduced: List[Recipe] = []
     for recipe in recipes:
+        if recipe.course not in {"first course", "main course"}:
+            continue
         recipe_tags = {t.name for t in recipe.tags}
         if avoid_set and recipe_tags.intersection(avoid_set):
             continue
@@ -182,7 +210,7 @@ def generate_weekly_plan(
     reduce_tags: Iterable[str] | None = None,
     keep_days: int = 7,
     days: int = 7,
-) -> List[tuple[Recipe, bool]]:
+) -> List[tuple[Recipe, List[Recipe], bool]]:
     """Generate a list of recipes for ``days`` days.
 
     Recipes are filtered by ``season`` and tag parameters before planning. Non
@@ -216,12 +244,12 @@ def generate_weekly_plan(
     non_bulk = [r for r in available if not r.bulk_prep]
     bulk_recipes = [r for r in available if r.bulk_prep]
 
-    plan: List[tuple[Recipe, bool]] = []
+    plan: List[tuple[Recipe, List[Recipe], bool]] = []
 
     for recipe in non_bulk:
         if len(plan) >= days:
             break
-        plan.append((recipe, False))
+        plan.append((recipe, [], False))
 
     if len(plan) == days:
         return plan
@@ -232,10 +260,10 @@ def generate_weekly_plan(
     idx = 0
     while len(plan) < days:
         recipe = bulk_recipes[idx % len(bulk_recipes)]
-        plan.append((recipe, False))
+        plan.append((recipe, [], False))
         leftover_slots = min(keep_days - 1, days - len(plan))
         for _ in range(leftover_slots):
-            plan.append((recipe, True))
+            plan.append((recipe, [], True))
             if len(plan) >= days:
                 break
         idx += 1

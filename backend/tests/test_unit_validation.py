@@ -21,7 +21,7 @@ def test_invalid_unit_rejected() -> None:
         "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
-        "course": "main",
+        "course": "main course",
         "tags": [],
         "ingredients": [
             {"name": "Lettuce", "quantity": 1, "unit": "bag"},

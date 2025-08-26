@@ -13,7 +13,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "recipes",
-        sa.Column("course", sa.String(), nullable=False, server_default="main"),
+        sa.Column("course", sa.String(), nullable=False, server_default="main course"),
     )
 
 

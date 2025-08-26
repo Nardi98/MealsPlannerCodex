@@ -54,7 +54,7 @@ def _create_recipe(
     ingredients: Iterable[tuple[str, float, str | UnitEnum]],
     tags: Iterable[str],
     *,
-    course: str = "main",
+    course: str = "main course",
 ) -> None:
     """Create a recipe with ``ingredients`` and ``tags``.
 

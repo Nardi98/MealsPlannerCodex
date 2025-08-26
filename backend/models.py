@@ -72,7 +72,7 @@ class Recipe(Base):
     bulk_prep = Column(Boolean, default=False)
     score = Column(Float)
     date_last_consumed = Column(Date)
-    course = Column(String, nullable=False, default="main")
+    course = Column(String, nullable=False, default="main course")
 
     # Relationship to ``RecipeIngredient`` association objects.
     ingredients = relationship(

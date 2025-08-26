@@ -58,7 +58,7 @@ class RecipeIn(BaseModel):
     servings_default: int
     procedure: Optional[str] = None
     bulk_prep: bool = False
-    course: str = "main"
+    course: str = "main course"
     tags: List[str] = []
     ingredients: List[IngredientIn] = []
 
