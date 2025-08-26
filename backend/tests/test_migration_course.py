@@ -32,5 +32,5 @@ def test_migration_adds_course_default(tmp_path):
     conn.commit()
 
     result = conn.execute(sa.text("SELECT course FROM recipes")).fetchone()
-    assert result[0] == "main"
+    assert result[0] == "main course"
 

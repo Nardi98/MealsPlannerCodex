@@ -16,8 +16,8 @@ def override_get_db(session):
 
 
 def test_get_plan_range(db_session):
-    r1 = crud.create_recipe(db_session, title="A", servings_default=1, course="main")
-    r2 = crud.create_recipe(db_session, title="B", servings_default=1, course="main")
+    r1 = crud.create_recipe(db_session, title="A", servings_default=1, course="main course")
+    r2 = crud.create_recipe(db_session, title="B", servings_default=1, course="main course")
     start = date(2024, 1, 1)
     second = start + timedelta(days=1)
     crud.set_meal_plan(

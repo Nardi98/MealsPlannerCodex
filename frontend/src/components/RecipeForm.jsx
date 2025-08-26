@@ -5,7 +5,7 @@ import { recipesApi, ingredientsApi } from '../api'
 export default function RecipeForm({ onCreated }) {
   const [title, setTitle] = useState('')
   const [servings, setServings] = useState('')
-  const [course, setCourse] = useState('main')
+  const [course, setCourse] = useState('main course')
   const [ingredients, setIngredients] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -52,7 +52,7 @@ export default function RecipeForm({ onCreated }) {
       const recipe = await recipesApi.create(payload)
       setTitle('')
       setServings('')
-      setCourse('main')
+      setCourse('main course')
       setIngredients([])
       onCreated?.(recipe)
     } catch (err) {
@@ -76,8 +76,8 @@ export default function RecipeForm({ onCreated }) {
       <label>
         Course:
         <select value={course} onChange={(e) => setCourse(e.target.value)}>
-          <option value="main">main</option>
-          <option value="side">side</option>
+          <option value="main course">main course</option>
+          <option value="side dish">side dish</option>
           <option value="dessert">dessert</option>
         </select>
       </label>

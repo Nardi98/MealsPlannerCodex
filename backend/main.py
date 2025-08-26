@@ -276,7 +276,7 @@ def feedback_reject(
 @app.post("/meal-plans/generate")
 def generate_plan_endpoint(
     payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
-) -> Dict[str, List[Dict[str, object]]]:
+) -> Dict[str, List[List[Dict[str, object]]]]:
     plan_titles = planner.generate_plan(
         db,
         start=payload.start,
@@ -292,17 +292,22 @@ def generate_plan_endpoint(
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
     )
-    result: Dict[str, List[Dict[str, object]]] = {}
-    for day, titles in plan_titles.items():
-        items: List[Dict[str, object]] = []
-        for title in titles:
-            base = title.replace(" (leftover)", "")
-            recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base).limit(1)
-            ).scalar_one_or_none()
-            if recipe is None:
-                raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
-            items.append({"id": recipe.id, "title": title})
+    result: Dict[str, List[List[Dict[str, object]]]] = {}
+    for day, meals in plan_titles.items():
+        items: List[List[Dict[str, object]]] = []
+        for meal in meals:
+            meal_items: List[Dict[str, object]] = []
+            for title in meal:
+                base = title.replace(" (leftover)", "")
+                recipe = db.execute(
+                    select(models.Recipe).where(models.Recipe.title == base).limit(1)
+                ).scalar_one_or_none()
+                if recipe is None:
+                    raise HTTPException(
+                        status_code=404, detail=f"Recipe '{base}' not found"
+                    )
+                meal_items.append({"id": recipe.id, "title": title})
+            items.append(meal_items)
         result[day] = items
     return result
 

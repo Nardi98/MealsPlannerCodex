@@ -10,7 +10,7 @@ export default function Recipes() {
   const [servings, setServings] = useState(1)
   const [procedure, setProcedure] = useState('')
   const [bulkPrep, setBulkPrep] = useState(false)
-  const [course, setCourse] = useState('main')
+  const [course, setCourse] = useState('main course')
   const [availableTags, setAvailableTags] = useState([])
   const [selectedTags, setSelectedTags] = useState([])
   const [filterTags, setFilterTags] = useState([])
@@ -32,7 +32,7 @@ export default function Recipes() {
     score: r.score ?? 0,
     servings: r.servings ?? r.servings_default ?? 1,
     procedure: r.procedure || '',
-    course: r.course ?? 'main',
+    course: r.course ?? 'main course',
     bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
     tags: (r.tags || []).map((t) => t.name || t),
     ingredients: (r.ingredients || []).map((ing) => ({
@@ -108,7 +108,7 @@ export default function Recipes() {
       setServings(1)
       setProcedure('')
       setBulkPrep(false)
-      setCourse('main')
+      setCourse('main course')
       setSelectedTags([])
       setIngredients([])
     } catch (err) {
@@ -153,9 +153,9 @@ export default function Recipes() {
         <div>
           <label>Course </label>
           <select value={course} onChange={(e) => setCourse(e.target.value)}>
-            <option value="main">main</option>
-            <option value="side">side</option>
-            <option value="first-course">first course</option>
+            <option value="main course">main course</option>
+            <option value="side dish">side dish</option>
+            <option value="first course">first course</option>
           </select>
         </div>
         <div>

@@ -9,10 +9,10 @@ afterEach(() => {
   cleanup()
 })
 
-test('course selector defaults to main', () => {
+test('course selector defaults to main course', () => {
   render(<RecipeForm />)
   const select = screen.getByLabelText(/course/i)
-  expect(select.value).toBe('main')
+  expect(select.value).toBe('main course')
 })
 
 test('submitting recipe sends selected course', async () => {

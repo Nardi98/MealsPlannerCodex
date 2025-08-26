@@ -12,8 +12,8 @@ def test_seed_populates_sample_data(db_session):
     grilled = db_session.execute(select(Recipe).where(Recipe.title == "Grilled Cheese")).scalar_one_or_none()
     assert oatmeal is not None
     assert grilled is not None
-    assert oatmeal.course == "main"
-    assert grilled.course == "main"
+    assert oatmeal.course == "main course"
+    assert grilled.course == "main course"
 
     # Ingredients linked correctly
     oatmeal_ing = {ri.ingredient.name for ri in oatmeal.ingredients}
