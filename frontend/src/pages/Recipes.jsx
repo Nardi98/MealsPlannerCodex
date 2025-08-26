@@ -209,7 +209,7 @@ export default function Recipes() {
             <h3>
               {r.title}{' '}
               <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
+                ({`Score: ${r.score.toFixed(2)} | Course: ${r.course}`})
               </span>
             </h3>
             {(r.tags || []).map((name) => (
