@@ -106,7 +106,11 @@ export default function PlanView() {
       idPlan = {}
       Object.entries(titlePlan).forEach(([day, meals]) => {
         idPlan[day] = meals
-          .map((t) => map[t.endsWith(' (leftover)') ? t.slice(0, -11) : t])
+          .map((t) => {
+            const base = t.endsWith(' (leftover)') ? t.slice(0, -11) : t
+            const id = map[base]
+            return id ? { main: id, sides: [] } : null
+          })
           .filter(Boolean)
       })
       const planDate = Object.keys(titlePlan)[0]
