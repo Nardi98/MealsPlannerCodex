@@ -79,9 +79,26 @@ class RecipeOut(BaseModel):
         orm_mode = True
 
 
+class RecipeRef(BaseModel):
+    """Reference to a recipe by id with optional title."""
+
+    id: int
+    title: str | None = None
+
+
 class MealIn(BaseModel):
-    main: int
-    sides: List[int] = []
+    """Meal payload that accepts ids or ``RecipeRef`` objects."""
+
+    main: int | RecipeRef
+    sides: List[int | RecipeRef] = []
+
+    def as_ids(self) -> Dict[str, List[int] | int]:
+        """Return ``main`` and ``sides`` fields coerced to plain ids."""
+
+        def _id(value: int | RecipeRef) -> int:
+            return value.id if isinstance(value, RecipeRef) else value
+
+        return {"main": _id(self.main), "sides": [_id(s) for s in self.sides]}
 
 
 class MealPlanCreate(BaseModel):

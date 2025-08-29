@@ -210,17 +210,18 @@ def set_plan(
 
     plan_payload: Dict[str, List[Dict[str, object]]] = {}
     for day, meals in payload.plan.items():
-        plan_payload[day] = [m.dict() for m in meals]
+        plan_payload[day] = [m.as_ids() for m in meals]
     crud.set_meal_plan(db, plan_payload)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
     for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
         for meal in meals:
-            main_recipe = db.get(models.Recipe, meal.main)
+            ids = meal.as_ids()
+            main_recipe = db.get(models.Recipe, ids["main"])
             if main_recipe is None:
                 continue
             side_titles: List[str] = []
-            for sid in meal.sides:
+            for sid in ids["sides"]:
                 side = db.get(models.Recipe, sid)
                 if side is not None:
                     side_titles.append(side.title)
