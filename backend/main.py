@@ -269,7 +269,9 @@ def feedback_reject(
         for meal in meals
     }
     existing.add(payload.title)
-    available = list(set(crud.list_recipe_titles(db)) - existing)
+    available = list(
+        set(crud.list_recipe_titles(db, courses=["main", "first-course"])) - existing
+    )
     replacement = random.choice(available) if available else None
     return {"replacement": replacement}
 
