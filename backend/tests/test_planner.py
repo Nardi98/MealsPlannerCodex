@@ -152,6 +152,27 @@ def test_recency_weight(db_session):
     assert plan["2024-01-01"] == ["Fresh"]
 
 
+def test_generate_plan_course_filter(db_session):
+    """Only 'main' and 'first-course' recipes should be considered."""
+    main = Recipe(title="Main", servings_default=1, score=2.0, course="main")
+    first = Recipe(title="First", servings_default=1, score=1.0, course="first-course")
+    dessert = Recipe(title="Dessert", servings_default=1, score=3.0, course="dessert")
+    db_session.add_all([main, first, dessert])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=2,
+        meals_per_day=1,
+        epsilon=0.0,
+    )
+    assert plan == {
+        "2024-01-01": ["Main"],
+        "2024-01-02": ["First"],
+    }
+
+
 def test_generate_plan_repeatable(db_session):
     for i, score in enumerate(range(7, 0, -1), start=1):
         db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score, course="main"))

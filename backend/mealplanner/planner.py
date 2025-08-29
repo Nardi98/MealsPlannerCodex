@@ -58,7 +58,11 @@ def generate_plan(
     down-weighting of recipes.
     """
 
-    recipes = session.query(Recipe).all()
+    recipes = (
+        session.query(Recipe)
+        .filter(Recipe.course.in_(["main", "first-course"]))
+        .all()
+    )
     total_slots = days * meals_per_day
     selections: List[tuple[Recipe, bool]] = []
     week = 0
