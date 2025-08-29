@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 from main import app, get_db
 from mealplanner import crud
 
@@ -20,8 +21,8 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     crud.save_plan(
         {
             "2024-01-01": [
-                {"recipe": "A", "accepted": False},
-                {"recipe": "C (leftover)", "accepted": False},
+                {"main": "A", "sides": [], "accepted": False},
+                {"main": "C (leftover)", "sides": [], "accepted": False},
             ]
         }
     )
@@ -49,7 +50,7 @@ def test_reject_replacement_limited_to_main_courses(db_session):
     crud.create_recipe(
         db_session, title="C", servings_default=1, course="dessert", score=0
     )
-    crud.save_plan({"2024-01-01": [{"recipe": "A", "accepted": False}]})
+    crud.save_plan({"2024-01-01": [{"main": "A", "sides": [], "accepted": False}]})
     client = TestClient(app)
 
     resp = client.post("/feedback/reject", json={"title": "A"})

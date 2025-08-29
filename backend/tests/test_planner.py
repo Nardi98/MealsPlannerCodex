@@ -70,7 +70,7 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
         epsilon=0.0,
         avoid_tags=["avoid"],
     )
-    assert plan["2024-01-01"] == ["Good"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Good"]
 
 
 def test_reduce_tags_penalty(db_session):
@@ -88,7 +88,7 @@ def test_reduce_tags_penalty(db_session):
         epsilon=0.0,
         reduce_tags={"reduce"},
     )
-    assert plan["2024-01-01"] == ["Good"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Good"]
 
 
 def test_generate_plan_reduce_tags_from_ui(db_session):
@@ -107,7 +107,7 @@ def test_generate_plan_reduce_tags_from_ui(db_session):
         epsilon=0.0,
         reduce_tags=["reduce"],
     )
-    assert plan["2024-01-01"] == ["Good"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Good"]
 
 
 def test_recency_weight(db_session):
@@ -139,7 +139,7 @@ def test_recency_weight(db_session):
         recency_weight=0.0,
     )
     # Without recency penalty, higher base score wins
-    assert plan["2024-01-01"] == ["Recent"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Recent"]
     plan = generate_plan(
         db_session,
         start,
@@ -149,7 +149,7 @@ def test_recency_weight(db_session):
         recency_weight=2.0,
     )
     # Heavier penalty pushes the fresher recipe to the top
-    assert plan["2024-01-01"] == ["Fresh"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Fresh"]
 
 
 def test_generate_plan_course_filter(db_session):
@@ -167,7 +167,9 @@ def test_generate_plan_course_filter(db_session):
         meals_per_day=1,
         epsilon=0.0,
     )
-    assert plan == {
+    assert {
+        day: [m["main"] for m in meals] for day, meals in plan.items()
+    } == {
         "2024-01-01": ["Main"],
         "2024-01-02": ["First"],
     }
@@ -185,7 +187,9 @@ def test_generate_plan_repeatable(db_session):
     }
     plan1 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
     plan2 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
-    assert plan1 == expected
+    assert {
+        day: [m["main"] for m in meals] for day, meals in plan1.items()
+    } == expected
     assert plan1 == plan2
 
 
@@ -206,7 +210,7 @@ def test_generate_plan_epsilon_randomness(db_session):
         meals_per_day=1,
         epsilon=1.0,
     )
-    assert plan["2024-01-01"] == ["Low"]
+    assert [m["main"] for m in plan["2024-01-01"]] == ["Low"]
 
 
 def test_generate_plan_partial_week(db_session):
@@ -221,7 +225,9 @@ def test_generate_plan_partial_week(db_session):
         "2024-01-03": ["R3"],
     }
     plan = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
-    assert plan == expected
+    assert {
+        day: [m["main"] for m in meals] for day, meals in plan.items()
+    } == expected
 
 
 def test_generate_weekly_plan_insufficient_recipes():
@@ -263,7 +269,9 @@ def test_generate_plan_leftover_expiry(db_session):
         "2024-01-03": ["Bulk"],
         "2024-01-04": ["Bulk (leftover)"],
     }
-    assert plan == expected
+    assert {
+        day: [m["main"] for m in meals] for day, meals in plan.items()
+    } == expected
 
 
 def test_generate_plan_bulk_leftovers_disabled(db_session):
@@ -280,7 +288,31 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
         keep_days=2,
         bulk_leftovers=False,
     )
-    assert plan == {
+    assert {
+        day: [m["main"] for m in meals] for day, meals in plan.items()
+    } == {
         "2024-01-01": ["Bulk"],
         "2024-01-02": ["Bulk"],
     }
+
+
+def test_generate_plan_with_side_dishes(db_session):
+    for i in range(2):
+        db_session.add(Recipe(title=f"Main{i}", servings_default=1, score=1.0, course="main"))
+    for i in range(3):
+        db_session.add(Recipe(title=f"Side{i}", servings_default=1, score=1.0, course="side"))
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        side_dishes=2,
+    )
+    meals = plan["2024-01-01"]
+    assert len(meals) == 1
+    meal = meals[0]
+    assert len(meal["sides"]) == 2
+    assert len(set(meal["sides"])) == 2

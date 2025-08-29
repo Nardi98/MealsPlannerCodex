@@ -42,7 +42,8 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
-) -> Dict[str, List[str]]:
+    side_dishes: int = 0,
+) -> Dict[str, List[Dict[str, List[str]]]]:
     """Generate a meal plan mapping dates to recipe titles.
 
     Recipes are filtered and scored using :func:`filter_recipes` and
@@ -63,6 +64,7 @@ def generate_plan(
         .filter(Recipe.course.in_(["main", "first-course"]))
         .all()
     )
+    side_recipes = session.query(Recipe).filter(Recipe.course == "side").all()
     total_slots = days * meals_per_day
     selections: List[tuple[Recipe, bool]] = []
     week = 0
@@ -109,7 +111,7 @@ def generate_plan(
         selections.extend(weekly)
         week += 1
 
-    schedule: Dict[str, List[str]] = {}
+    schedule: Dict[str, List[Dict[str, List[str]]]] = {}
     for day_offset in range(days):
         current = start + timedelta(days=day_offset)
         key = current.isoformat()
@@ -118,7 +120,15 @@ def generate_plan(
             idx = day_offset * meals_per_day + meal_idx
             recipe, leftover = selections[idx]
             title = recipe.title + (" (leftover)" if leftover else "")
-            schedule[key].append(title)
+            sides: List[str] = []
+            if side_dishes > 0 and side_recipes:
+                sides = [
+                    s.title
+                    for s in random.sample(
+                        side_recipes, k=min(side_dishes, len(side_recipes))
+                    )
+                ]
+            schedule[key].append({"main": title, "sides": sides})
     return schedule
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:

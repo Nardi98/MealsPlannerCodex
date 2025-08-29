@@ -18,7 +18,7 @@ def _create_sample_data(session):
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True))
+    plan.meals.append(Meal(meal_number=1, main_recipe=recipe, accepted=True))
     session.add_all([tag, recipe, plan])
     session.commit()
 
@@ -43,7 +43,7 @@ def test_round_trip_export_import(db_session):
 
     plan = db_session.query(MealPlan).one()
     assert plan.plan_date == date(2024, 1, 1)
-    assert plan.meals[0].recipe_id == recipe.id
+    assert plan.meals[0].main_recipe_id == recipe.id
     assert plan.meals[0].accepted is True
 
 

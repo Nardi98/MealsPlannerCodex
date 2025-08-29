@@ -79,9 +79,14 @@ class RecipeOut(BaseModel):
         orm_mode = True
 
 
+class MealIn(BaseModel):
+    main: int
+    sides: List[int] = []
+
+
 class MealPlanCreate(BaseModel):
     plan_date: date
-    plan: Dict[str, List[int]]
+    plan: Dict[str, List[MealIn]]
     bulk_leftovers: bool | None = None
     keep_days: int | None = None
 
@@ -99,6 +104,7 @@ class MealPlanGenerate(BaseModel):
     bulk_bonus_weight: float = 1.0
     bulk_leftovers: bool = True
     keep_days: int = 7
+    side_dishes: int = 0
 
 
 class FeedbackIn(BaseModel):
@@ -110,7 +116,8 @@ class FeedbackIn(BaseModel):
 class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
-    recipe: str
+    main: str
+    sides: List[str] = []
     accepted: bool
 
 

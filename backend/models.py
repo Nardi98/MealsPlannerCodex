@@ -11,12 +11,14 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     CheckConstraint,
     PrimaryKeyConstraint,
     String,
     Table,
     Text,
+    and_,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
@@ -162,13 +164,42 @@ class Meal(Base):
         Date, ForeignKey("meal_plans.plan_date", ondelete="CASCADE"), nullable=False
     )
     meal_number = Column(Integer, nullable=False)
-    recipe_id = Column(Integer, ForeignKey("recipes.id"))
+    main_recipe_id = Column(Integer, ForeignKey("recipes.id"))
     accepted = Column(Boolean, default=False)
 
     plan = relationship("MealPlan", back_populates="meals")
-    recipe = relationship("Recipe")
+    main_recipe = relationship("Recipe")
+    side_dishes = relationship(
+        "MealSide", back_populates="meal", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         PrimaryKeyConstraint("plan_date", "meal_number"),
         CheckConstraint("meal_number IN (1,2)"),
+    )
+
+
+class MealSide(Base):
+    """Association table linking a meal to its side dishes."""
+
+    __tablename__ = "meal_sides"
+
+    plan_date = Column(Date, nullable=False)
+    meal_number = Column(Integer, nullable=False)
+    side_recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+
+    meal = relationship(
+        "Meal",
+        back_populates="side_dishes",
+        primaryjoin=and_(plan_date == Meal.plan_date, meal_number == Meal.meal_number),
+    )
+    side_recipe = relationship("Recipe")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("plan_date", "meal_number", "side_recipe_id"),
+        ForeignKeyConstraint(
+            ["plan_date", "meal_number"],
+            ["meals.plan_date", "meals.meal_number"],
+            ondelete="CASCADE",
+        ),
     )

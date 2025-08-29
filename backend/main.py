@@ -208,14 +208,23 @@ def set_plan(
 
         return JSONResponse(status_code=409, content={"conflicts": conflicts})
 
-    crud.set_meal_plan(db, payload.plan)
+    plan_payload: Dict[str, List[Dict[str, object]]] = {}
+    for day, meals in payload.plan.items():
+        plan_payload[day] = [m.dict() for m in meals]
+    crud.set_meal_plan(db, plan_payload)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
-    for day, ids in payload.plan.items():
+    for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
-        for rid in ids:
-            recipe = db.get(models.Recipe, rid)
-            if recipe is not None:
-                titles.append({"recipe": recipe.title, "accepted": False})
+        for meal in meals:
+            main_recipe = db.get(models.Recipe, meal.main)
+            if main_recipe is None:
+                continue
+            side_titles: List[str] = []
+            for sid in meal.sides:
+                side = db.get(models.Recipe, sid)
+                if side is not None:
+                    side_titles.append(side.title)
+            titles.append({"main": main_recipe.title, "sides": side_titles, "accepted": False})
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -239,9 +248,14 @@ def toggle_meal_acceptance(
     meal = crud.mark_meal_accepted(
         db, payload.plan_date, payload.meal_number, payload.accepted
     )
-    if meal is None or meal.recipe is None:
+    if meal is None or meal.main_recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
+    sides = [
+        ms.side_recipe.title
+        for ms in meal.side_dishes
+        if ms.side_recipe is not None
+    ]
+    return schemas.MealOut(main=meal.main_recipe.title, sides=sides, accepted=meal.accepted)
 
 
 @app.post("/feedback/accept")
@@ -264,9 +278,9 @@ def feedback_reject(
     if crud.reject_recipe(db, payload.title) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     existing = {
-        meal["recipe"][:-11] if meal["recipe"].endswith(" (leftover)") else meal["recipe"]
+        m["main"][:-11] if m["main"].endswith(" (leftover)") else m["main"]
         for meals in crud.get_plan().values()
-        for meal in meals
+        for m in meals
     }
     existing.add(payload.title)
     available = list(
@@ -294,18 +308,27 @@ def generate_plan_endpoint(
         recency_weight=payload.recency_weight,
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
+        side_dishes=payload.side_dishes,
     )
     result: Dict[str, List[Dict[str, object]]] = {}
-    for day, titles in plan_titles.items():
+    for day, meals in plan_titles.items():
         items: List[Dict[str, object]] = []
-        for title in titles:
-            base = title.replace(" (leftover)", "")
+        for meal in meals:
+            base = meal["main"].replace(" (leftover)", "")
             recipe = db.execute(
                 select(models.Recipe).where(models.Recipe.title == base).limit(1)
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
-            items.append({"id": recipe.id, "title": title})
+            main_info = {"id": recipe.id, "title": meal["main"]}
+            side_infos: List[Dict[str, object]] = []
+            for title in meal["sides"]:
+                side_rec = db.execute(
+                    select(models.Recipe).where(models.Recipe.title == title).limit(1)
+                ).scalar_one_or_none()
+                if side_rec is not None:
+                    side_infos.append({"id": side_rec.id, "title": title})
+            items.append({"main": main_info, "sides": side_infos})
         result[day] = items
     return result
 
