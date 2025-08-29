@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 import json
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -378,10 +378,22 @@ def reject_recipe(session: Session, title: str) -> Optional[Recipe]:
     return recipe
 
 
-def list_recipe_titles(session: Session) -> List[str]:
-    """Return all recipe titles from the database."""
+def list_recipe_titles(session: Session, courses: Sequence[str] | None = None) -> List[str]:
+    """Return recipe titles from the database.
 
-    return session.scalars(select(Recipe.title)).all()
+    Parameters
+    ----------
+    session:
+        SQLAlchemy session used for the query.
+    courses:
+        Optional sequence of course names. If provided, only recipes whose
+        ``course`` attribute is one of these values will be returned.
+    """
+
+    stmt = select(Recipe.title)
+    if courses:
+        stmt = stmt.where(Recipe.course.in_(courses))
+    return session.scalars(stmt).all()
 
 
 def clear_data(session: Session) -> None:
