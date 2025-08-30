@@ -260,25 +260,48 @@ export default function PlanView() {
     setQuery('')
   }
 
-  const confirmSwap = async (title) => {
+  const handleGenerateSide = async () => {
+    if (!swapSlot) return
+    const params = {
+      epsilon: Number(epsilon),
+      avoid_tags: avoidTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      reduce_tags: reduceTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      keep_days: Number(keepDays),
+    }
+    try {
+      const res = await mealPlansApi.generateSide(params)
+      await confirmSwap(res)
+    } catch {
+      // ignore errors
+    }
+  }
+
+  const confirmSwap = async (choice) => {
     if (!swapSlot) return
     const { day, idx, type } = swapSlot
     if (type === 'side') {
+      const title = typeof choice === 'string' ? choice : choice.title
       const updated = {
         ...plan,
         [day]: plan[day].map((m, i) => (i === idx ? { ...m, side: title } : m)),
       }
       setPlan(updated)
-      let list = recipes
-      if (list.length === 0) {
-        list = await recipesApi.fetchAll()
-        setRecipes(list)
+      let sideId = typeof choice === 'string' ? null : choice.id
+      if (!sideId) {
+        let list = recipes
+        if (list.length === 0) {
+          list = await recipesApi.fetchAll()
+          setRecipes(list)
+        }
+        const found = list.find((r) => r.title === title)
+        sideId = found ? found.id : null
       }
-      const map = {}
-      list.forEach((r) => {
-        map[r.title] = r.id
-      })
-      const sideId = map[title]
       if (sideId) {
         try {
           await mealPlansApi.addSide(day, idx + 1, sideId)
@@ -295,6 +318,7 @@ export default function PlanView() {
         setAccepted({ ...accepted, [`${day}-${idx}`]: true })
       }
     } else {
+      const title = choice
       const updated = {
         ...plan,
         [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
@@ -469,6 +493,11 @@ export default function PlanView() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search Recipe"
           />
+          {swapSlot.type === 'side' && (
+            <button type="button" onClick={handleGenerateSide}>
+              Generate Side
+            </button>
+          )}
           <ul>
             {visibleTitles.map((t) => (
               <li key={t}>
