@@ -126,3 +126,11 @@ class MealAcceptanceIn(BaseModel):
     plan_date: date
     meal_number: int
     accepted: bool
+
+
+class MealSideIn(BaseModel):
+    """Payload for attaching or replacing a side dish for a meal."""
+
+    plan_date: date
+    meal_number: int
+    side_id: int | None = None
