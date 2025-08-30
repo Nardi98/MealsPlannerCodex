@@ -89,7 +89,7 @@ export const mealPlansApi = {
           if (typeof m === 'number' || typeof m === 'string') return m
           if ('main_id' in m || 'side_ids' in m) return m
           const res = { main_id: m.main }
-          if (m.side !== undefined) res.side_ids = [m.side]
+          if (m.sides && m.sides.length) res.side_ids = m.sides
           return res
         })
       })
@@ -122,23 +122,14 @@ export const mealPlansApi = {
         accepted,
       }),
     }),
-  addSide: (planDate, mealNumber, sideId) =>
+  addSide: (planDate, mealNumber, sideId, index) =>
     request('/meal-plans/side', {
       method: 'POST',
       body: JSON.stringify({
         plan_date: planDate,
         meal_number: mealNumber,
         side_id: sideId,
-      }),
-    }),
-  replaceSide: (planDate, mealNumber, index, sideId) =>
-    request('/meal-plans/side', {
-      method: 'POST',
-      body: JSON.stringify({
-        plan_date: planDate,
-        meal_number: mealNumber,
         index,
-        side_id: sideId,
       }),
     }),
   removeSide: (planDate, mealNumber, index) =>

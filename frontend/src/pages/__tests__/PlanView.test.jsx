@@ -42,7 +42,7 @@ test('accept disables further actions', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': [{ main: 'A' }] })
+  renderWithPlan({ '2024-01-01': [{ main: 'A', sides: [] }] })
   const btn = await screen.findByText('Accept')
   fireEvent.click(btn)
   await waitFor(() => expect(screen.getByText('Accepted')).toBeInTheDocument())
@@ -75,7 +75,7 @@ test('reject retries until unique suggestion', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': [{ main: 'A' }, { main: 'C' }] })
+  renderWithPlan({ '2024-01-01': [{ main: 'A', sides: [] }, { main: 'C', sides: [] }] })
   const [btn] = await screen.findAllByText('Reject')
   fireEvent.click(btn)
   await waitFor(() => expect(screen.getByText('B')).toBeInTheDocument())
@@ -92,8 +92,8 @@ test('leftover age warning respects keep_days', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
   renderWithPlan({
-    '2024-01-01': [{ main: 'A' }],
-    '2024-01-03': [{ main: 'A (leftover)' }],
+    '2024-01-01': [{ main: 'A', sides: [] }],
+    '2024-01-03': [{ main: 'A (leftover)', sides: [] }],
   })
   await screen.findByText('A (leftover)')
   expect(
@@ -192,15 +192,16 @@ test('add side dish persists via API', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': [{ main: 'Main' }] })
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: [] }] })
   const btn = await screen.findByText('Add Side Dish')
   fireEvent.click(btn)
   const dialog = await screen.findByText('Choose Side Dish')
   const list = dialog.parentElement.querySelector('ul')
   expect(within(list).queryByText('Main')).toBeNull()
   fireEvent.click(within(list).getByText('Side'))
-  await screen.findByText('Side')
-  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 2 })
+  const cell = screen.getByText('Main').closest('td')
+  await within(cell).findByText('Side', { exact: true })
+  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 2, index: 0 })
 })
 
 test('generate side dish persists via API', async () => {
@@ -236,7 +237,7 @@ test('generate side dish persists via API', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': [{ main: 'Main' }] })
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: [] }] })
   fireEvent.click(screen.getByText('Show Settings'))
   await screen.findByText('Advanced Options')
   fireEvent.change(screen.getByLabelText('ε'), { target: { value: '0.2' } })
@@ -247,14 +248,15 @@ test('generate side dish persists via API', async () => {
   fireEvent.click(addBtn)
   const genBtn = await screen.findByText('Generate Side')
   fireEvent.click(genBtn)
-  await screen.findByText('Generated')
+  const cell = screen.getByText('Main').closest('td')
+  await within(cell).findByText('Generated', { exact: false })
   expect(generatePayload).toEqual({
     epsilon: 0.2,
     avoid_tags: ['a', 'b'],
     reduce_tags: ['c'],
     keep_days: 5,
   })
-  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 3 })
+  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 3, index: 0 })
 })
 
 test('settings panel toggles and updates inputs', async () => {
@@ -268,7 +270,7 @@ test('settings panel toggles and updates inputs', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': [{ main: 'A' }] })
+  renderWithPlan({ '2024-01-01': [{ main: 'A', sides: [] }] })
   expect(screen.queryByText('Advanced Options')).toBeNull()
   fireEvent.click(screen.getByText('Show Settings'))
   await screen.findByText('Advanced Options')

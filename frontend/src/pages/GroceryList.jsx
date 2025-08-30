@@ -7,9 +7,8 @@ export default function GroceryList() {
   const items = useMemo(() => {
     const acc = {}
     Object.values(plan).forEach((meals) => {
-      meals.forEach(({ main, side }) => {
-        const titles = [main]
-        if (side) titles.push(side)
+      meals.forEach(({ main, sides = [] }) => {
+        const titles = [main, ...sides]
         titles.forEach((title) => {
           if (!title || title.endsWith(' (leftover)')) return
           const recipe = recipes.find((r) => r.title === title)

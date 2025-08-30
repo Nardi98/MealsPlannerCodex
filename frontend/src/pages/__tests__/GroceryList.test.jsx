@@ -16,8 +16,8 @@ function renderWithContext(plan, recipes) {
 describe('GroceryList', () => {
   test('aggregates ingredients and ignores leftovers', () => {
     const plan = {
-      '2024-01-01': [{ main: 'A', side: 'B (leftover)' }],
-      '2024-01-02': [{ main: 'A', side: 'B' }],
+      '2024-01-01': [{ main: 'A', sides: ['B (leftover)'] }],
+      '2024-01-02': [{ main: 'A', sides: ['B'] }],
     }
     const recipes = [
       {
@@ -41,7 +41,7 @@ describe('GroceryList', () => {
 
   test('includes ingredients from side dishes', () => {
     const plan = {
-      '2024-01-01': [{ main: 'A', side: 'B' }],
+      '2024-01-01': [{ main: 'A', sides: ['B'] }],
     }
     const recipes = [
       {
