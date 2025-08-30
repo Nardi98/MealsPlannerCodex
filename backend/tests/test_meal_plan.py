@@ -45,7 +45,7 @@ def test_generate_and_persist_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "side_recipe": None, "accepted": False} for title in meals]
+        day: [{"recipe": title, "side_recipes": [], "accepted": False} for title in meals]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -84,7 +84,7 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "side_recipe": None, "accepted": False} for title in meals]
+        day: [{"recipe": title, "side_recipes": [], "accepted": False} for title in meals]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -105,7 +105,7 @@ def test_mark_meal_accepted(db_session):
     fetched = get_plan(db_session, plan_date)
     assert fetched == {
         plan_date.isoformat(): [
-            {"recipe": r.title, "side_recipe": None, "accepted": True}
+            {"recipe": r.title, "side_recipes": [], "accepted": True}
         ]
     }
     stored = db_session.get(Meal, (plan_date, 1))
@@ -123,7 +123,7 @@ def test_meal_with_side_recipe(db_session):
     fetched = get_plan(db_session, plan_date)
     assert fetched == {
         plan_date.isoformat(): [
-            {"recipe": main.title, "side_recipe": side.title, "accepted": False}
+            {"recipe": main.title, "side_recipes": [side.title], "accepted": False}
         ]
     }
     meal = db_session.get(Meal, (plan_date, 1))

@@ -78,7 +78,11 @@ export default function ImportExport() {
         Object.entries(planResp).forEach(([day, meals]) => {
           titlePlan[day] = meals.map((m) => ({
             main: m.recipe || m.title || m,
-            ...(m.side_recipe ? { side: m.side_recipe } : {}),
+            ...(m.side_recipes && m.side_recipes.length
+              ? { side: m.side_recipes[0] }
+              : m.side_recipe
+              ? { side: m.side_recipe }
+              : {}),
           }))
         })
       }

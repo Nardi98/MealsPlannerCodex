@@ -123,12 +123,31 @@ export const mealPlansApi = {
       }),
     }),
   addSide: (planDate, mealNumber, sideId) =>
-    request('/meal-plans/side', {
+    request('/meal-plans/side/add', {
       method: 'POST',
       body: JSON.stringify({
         plan_date: planDate,
         meal_number: mealNumber,
         side_id: sideId,
+      }),
+    }),
+  replaceSide: (planDate, mealNumber, index, sideId) =>
+    request('/meal-plans/side/replace', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        index,
+        side_id: sideId,
+      }),
+    }),
+  removeSide: (planDate, mealNumber, index) =>
+    request('/meal-plans/side/remove', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        index,
       }),
     }),
   generateSide: (payload) =>
