@@ -2,6 +2,7 @@ import React, { useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppContext } from '../App'
 import { request } from '../api/client'
+import { mealPlansApi } from '../api'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -72,13 +73,7 @@ export default function ImportExport() {
         body: JSON.stringify(payload),
       })
       const newRecipes = await request('/recipes')
-      const planResp = await request('/plan')
-      const titlePlan = {}
-      if (planResp && typeof planResp === 'object') {
-        Object.entries(planResp).forEach(([day, meals]) => {
-          titlePlan[day] = meals.map((m) => m.recipe || m.title || m)
-        })
-      }
+      const titlePlan = await mealPlansApi.fetchAll()
       setRecipes(newRecipes)
       setPlan(titlePlan)
       navigate('/')

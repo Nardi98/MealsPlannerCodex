@@ -11,7 +11,12 @@ export default function PlanView() {
   const [swapSlot, setSwapSlot] = useState(null)
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
+  const [sideTitles, setSideTitles] = useState([])
   const [query, setQuery] = useState('')
+  const [epsilon, setEpsilon] = useState(0)
+  const [avoidTags, setAvoidTags] = useState('')
+  const [reduceTags, setReduceTags] = useState('')
+  const [showSideSettings, setShowSideSettings] = useState(false)
   const getWeekRange = () => {
     const today = new Date()
     const day = today.getDay()
@@ -38,9 +43,18 @@ export default function PlanView() {
         const acceptedInit = {}
         Object.entries(p).forEach(([day, meals]) => {
           titlePlan[day] = meals.map((m, idx) => {
-            const title = m.recipe || m.title || m
+            const main = m.recipe || m.title || m
+            const sides =
+              m.side_recipes ||
+              (m.side_recipe
+                ? [m.side_recipe]
+                : m.side_recipe_title
+                ? [m.side_recipe_title]
+                : m.side
+                ? [m.side]
+                : [])
             if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-            return title
+            return { main, sides }
           })
         })
         setPlan(titlePlan)
@@ -59,8 +73,21 @@ export default function PlanView() {
       }
       try {
         const settings = await request('/plan/settings')
-        if (settings && settings.keep_days !== undefined) {
-          setKeepDays(settings.keep_days)
+        if (settings) {
+          if (settings.keep_days !== undefined) setKeepDays(settings.keep_days)
+          if (settings.epsilon !== undefined) setEpsilon(settings.epsilon)
+          if (settings.avoid_tags)
+            setAvoidTags(
+              Array.isArray(settings.avoid_tags)
+                ? settings.avoid_tags.join(', ')
+                : settings.avoid_tags
+            )
+          if (settings.reduce_tags)
+            setReduceTags(
+              Array.isArray(settings.reduce_tags)
+                ? settings.reduce_tags.join(', ')
+                : settings.reduce_tags
+            )
         }
       } catch {
         // ignore errors
@@ -70,12 +97,15 @@ export default function PlanView() {
           const data = await recipesApi.fetchAll()
           setRecipes(data)
           setAllTitles(data.map((r) => r.title))
+          setSideTitles(data.filter((r) => r.course === 'side').map((r) => r.title))
         } catch {
           setRecipes([])
           setAllTitles([])
+          setSideTitles([])
         }
       } else {
         setAllTitles(recipes.map((r) => r.title))
+        setSideTitles(recipes.filter((r) => r.course === 'side').map((r) => r.title))
       }
     }
     init()
@@ -106,7 +136,17 @@ export default function PlanView() {
       idPlan = {}
       Object.entries(titlePlan).forEach(([day, meals]) => {
         idPlan[day] = meals
-          .map((t) => map[t.endsWith(' (leftover)') ? t.slice(0, -11) : t])
+          .map((m) => {
+            const main = map[m.main.endsWith(' (leftover)') ? m.main.slice(0, -11) : m.main]
+            if (!main) return null
+            const sides = (m.sides || [])
+              .map((s) => {
+                const t = s.endsWith(' (leftover)') ? s.slice(0, -11) : s
+                return map[t]
+              })
+              .filter(Boolean)
+            return { main, sides }
+          })
           .filter(Boolean)
       })
       const planDate = Object.keys(titlePlan)[0]
@@ -159,12 +199,12 @@ export default function PlanView() {
   const planEntries = days.map((d) => [d, plan[d]])
 
   const getAge = (dayIdx, meal) => {
-    if (!meal.endsWith(' (leftover)')) return null
-    const base = meal.slice(0, -11)
+    if (!meal.main.endsWith(' (leftover)')) return null
+    const base = meal.main.slice(0, -11)
     const dayDate = new Date(planEntries[dayIdx][0])
     for (let i = dayIdx - 1; i >= 0; i -= 1) {
       const [prevDay, prevMeals] = planEntries[i]
-      if (prevMeals.includes(base)) {
+      if (prevMeals.some((m) => m.main === base)) {
         const prevDate = new Date(prevDay)
         return Math.round((dayDate.getTime() - prevDate.getTime()) / 86400000)
       }
@@ -178,16 +218,43 @@ export default function PlanView() {
     } catch {
       // ignore
     }
+    const meal = plan[day][idx]
+    const mainTitle = meal.main.endsWith(' (leftover)')
+      ? meal.main.slice(0, -11)
+      : meal.main
+    try {
+      await request('/feedback/accept', {
+        method: 'POST',
+        body: JSON.stringify({ title: mainTitle }),
+      })
+    } catch {
+      // ignore
+    }
+    if (meal.sides && meal.sides.length) {
+      for (const s of meal.sides) {
+        const sideTitle = s.endsWith(' (leftover)') ? s.slice(0, -11) : s
+        try {
+          await request('/feedback/accept', {
+            method: 'POST',
+            body: JSON.stringify({ title: sideTitle }),
+          })
+        } catch {
+          // ignore
+        }
+      }
+    }
     setAccepted({ ...accepted, [`${day}-${idx}`]: true })
   }
 
   const handleReject = async (day, idx) => {
     const meal = plan[day][idx]
-    const base = meal.endsWith(' (leftover)') ? meal.slice(0, -11) : meal
+    const base = meal.main.endsWith(' (leftover)')
+      ? meal.main.slice(0, -11)
+      : meal.main
     const existing = new Set()
     Object.values(plan).forEach((meals) => {
       meals.forEach((m) => {
-        const t = m.endsWith(' (leftover)') ? m.slice(0, -11) : m
+        const t = m.main.endsWith(' (leftover)') ? m.main.slice(0, -11) : m.main
         existing.add(t)
       })
     })
@@ -210,7 +277,7 @@ export default function PlanView() {
     if (replacement) {
       const updated = {
         ...plan,
-        [day]: plan[day].map((m, i) => (i === idx ? replacement : m)),
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: replacement } : m)),
       }
       setPlan(updated)
       await persistPlan(updated)
@@ -221,30 +288,142 @@ export default function PlanView() {
   }
 
   const handleSwap = (day, idx) => {
-    setSwapSlot({ day, idx })
+    setSwapSlot({ day, idx, type: 'main' })
     setQuery('')
   }
 
-  const confirmSwap = async (title) => {
-    if (!swapSlot) return
-    const { day, idx } = swapSlot
+  const handleAddSide = (day, idx) => {
+    const meal = plan[day][idx]
+    setSwapSlot({ day, idx, type: 'side', sideIdx: meal.sides.length })
+    setQuery('')
+  }
+
+  const handleSwapSide = (day, idx, sideIdx) => {
+    setSwapSlot({ day, idx, type: 'side', sideIdx })
+    setQuery('')
+  }
+
+  const handleRemoveSide = async (day, idx, sideIdx) => {
     const updated = {
       ...plan,
-      [day]: plan[day].map((m, i) => (i === idx ? title : m)),
+      [day]: plan[day].map((m, i) =>
+        i === idx ? { ...m, sides: m.sides.filter((_, s) => s !== sideIdx) } : m
+      ),
     }
     setPlan(updated)
-    await persistPlan(updated)
     try {
-      await mealPlansApi.accept(day, idx + 1, true)
+      await mealPlansApi.removeSide(day, idx + 1, sideIdx)
     } catch {
       // ignore
     }
-    setAccepted({ ...accepted, [`${day}-${idx}`]: true })
+    if (isAccepted(day, idx)) {
+      try {
+        await mealPlansApi.accept(day, idx + 1, true)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const handleGenerateSide = async () => {
+    if (!swapSlot) return
+    const params = {
+      epsilon: Number(epsilon),
+      avoid_tags: avoidTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      reduce_tags: reduceTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      keep_days: Number(keepDays),
+    }
+    try {
+      const res = await mealPlansApi.generateSide(params)
+      await confirmSwap(res)
+    } catch {
+      // ignore errors
+    }
+  }
+
+  const confirmSwap = async (choice) => {
+    if (!swapSlot) return
+    const { day, idx, type, sideIdx } = swapSlot
+    if (type === 'side') {
+      const title = typeof choice === 'string' ? choice : choice.title
+      const meal = plan[day][idx]
+      const sideIndex = sideIdx ?? meal.sides.length
+      const newSides =
+        sideIndex < meal.sides.length
+          ? meal.sides.map((s, i) => (i === sideIndex ? title : s))
+          : [...meal.sides, title]
+      const updated = {
+        ...plan,
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, sides: newSides } : m)),
+      }
+      setPlan(updated)
+      let sideId = typeof choice === 'string' ? null : choice.id
+      if (!sideId) {
+        let list = recipes
+        if (list.length === 0) {
+          list = await recipesApi.fetchAll()
+          setRecipes(list)
+        }
+        const found = list.find((r) => r.title === title)
+        sideId = found ? found.id : null
+      }
+      if (sideId) {
+        try {
+          await mealPlansApi.addSide(day, idx + 1, sideId, sideIndex)
+        } catch {
+          // ignore
+        }
+      }
+      if (isAccepted(day, idx)) {
+        try {
+          await mealPlansApi.accept(day, idx + 1, true)
+        } catch {
+          // ignore
+        }
+        try {
+          await request('/feedback/accept', {
+            method: 'POST',
+            body: JSON.stringify({ title }),
+          })
+        } catch {
+          // ignore
+        }
+        setAccepted({ ...accepted, [`${day}-${idx}`]: true })
+      }
+    } else {
+      const title = choice
+      const updated = {
+        ...plan,
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
+      }
+      setPlan(updated)
+      await persistPlan(updated)
+      try {
+        await mealPlansApi.accept(day, idx + 1, true)
+      } catch {
+        // ignore
+      }
+      try {
+        await request('/feedback/accept', {
+          method: 'POST',
+          body: JSON.stringify({ title }),
+        })
+      } catch {
+        // ignore
+      }
+      setAccepted({ ...accepted, [`${day}-${idx}`]: true })
+    }
     setSwapSlot(null)
   }
 
   const isAccepted = (day, idx) => accepted[`${day}-${idx}`]
-  const visibleTitles = allTitles.filter((t) =>
+  const visibleTitles = (swapSlot?.type === 'side' ? sideTitles : allTitles).filter((t) =>
     t.toLowerCase().includes(query.toLowerCase())
   )
 
@@ -271,6 +450,9 @@ export default function PlanView() {
         <button type="button" onClick={() => navigate('/grocery-list')}>
           Grocery List
         </button>
+        <button type="button" onClick={() => setShowSideSettings((s) => !s)}>
+          {showSideSettings ? 'Hide Settings' : 'Show Settings'}
+        </button>
       </div>
       <table>
         <thead>
@@ -291,10 +473,23 @@ export default function PlanView() {
                 const age = getAge(dayIdx, meal)
                 return (
                   <td key={idx}>
-                    <div>{meal}</div>
+                    <div>
+                      <div>{meal.main}</div>
+                      {meal.sides.map((s, sIdx) => (
+                        <div key={sIdx}>
+                          {s}{' '}
+                          <button type="button" onClick={() => handleSwapSide(day, idx, sIdx)}>
+                            Swap
+                          </button>{' '}
+                          <button type="button" onClick={() => handleRemoveSide(day, idx, sIdx)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                     {age !== null && age >= keepDays && (
                       <div style={{ color: 'red' }}>
-                        {`${meal} is ${age} days old (max ${keepDays})`}
+                        {`${meal.main} is ${age} days old (max ${keepDays})`}
                       </div>
                     )}
                     {isAccepted(day, idx) ? (
@@ -318,6 +513,9 @@ export default function PlanView() {
                         </button>
                       </div>
                     )}
+                    <button type="button" onClick={() => handleAddSide(day, idx)}>
+                      Add Side Dish
+                    </button>
                   </td>
                 )
               })}
@@ -325,17 +523,78 @@ export default function PlanView() {
           ))}
         </tbody>
       </table>
+      {showSideSettings && (
+        <div
+          className="side-settings"
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            width: '250px',
+            height: '100%',
+            backgroundColor: '#f7f7f7',
+            borderLeft: '1px solid #ccc',
+            padding: '1rem',
+            overflowY: 'auto',
+          }}
+        >
+          <h3>Advanced Options</h3>
+          <div>
+            <label htmlFor="epsilon-input">ε </label>
+            <input
+              id="epsilon-input"
+              type="number"
+              step="0.1"
+              value={epsilon}
+              onChange={(e) => setEpsilon(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="keep-days-input">Keep Days </label>
+            <input
+              id="keep-days-input"
+              type="number"
+              min="1"
+              value={keepDays}
+              onChange={(e) => setKeepDays(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="avoid-tags-input">Avoid Tags </label>
+            <input
+              id="avoid-tags-input"
+              value={avoidTags}
+              onChange={(e) => setAvoidTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+          <div>
+            <label htmlFor="reduce-tags-input">Reduce Tags </label>
+            <input
+              id="reduce-tags-input"
+              value={reduceTags}
+              onChange={(e) => setReduceTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+        </div>
+      )}
       {swapSlot && (
         <div
           className="swap-dialog"
           style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}
         >
-          <h3>Swap Recipe</h3>
+          <h3>{swapSlot.type === 'side' ? 'Choose Side Dish' : 'Swap Recipe'}</h3>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search Recipe"
           />
+          {swapSlot.type === 'side' && (
+            <button type="button" onClick={handleGenerateSide}>
+              Generate Side
+            </button>
+          )}
           <ul>
             {visibleTitles.map((t) => (
               <li key={t}>

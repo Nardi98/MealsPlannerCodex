@@ -7,23 +7,27 @@ export default function GroceryList() {
   const items = useMemo(() => {
     const acc = {}
     Object.values(plan).forEach((meals) => {
-      meals.forEach((title) => {
-        if (title.endsWith(' (leftover)')) return
-        const recipe = recipes.find((r) => r.title === title)
-        if (!recipe) return
-        ;(recipe.ingredients || []).forEach(({ name, quantity, unit }) => {
-          const key = `${name}||${unit || ''}`
-          if (!acc[key]) {
-            acc[key] = {
-              name,
-              unit: unit || '',
-              quantity: quantity ?? null,
+      meals.forEach(({ main, sides }) => {
+        const sideArr = Array.isArray(sides) ? sides : sides ? [sides] : []
+        const titles = [main, ...sideArr]
+        titles.forEach((title) => {
+          if (!title || title.endsWith(' (leftover)')) return
+          const recipe = recipes.find((r) => r.title === title)
+          if (!recipe) return
+          ;(recipe.ingredients || []).forEach(({ name, quantity, unit }) => {
+            const key = `${name}||${unit || ''}`
+            if (!acc[key]) {
+              acc[key] = {
+                name,
+                unit: unit || '',
+                quantity: quantity ?? null,
+              }
+            } else if (acc[key].quantity != null && quantity != null) {
+              acc[key].quantity += quantity
+            } else {
+              acc[key].quantity = null
             }
-          } else if (acc[key].quantity != null && quantity != null) {
-            acc[key].quantity += quantity
-          } else {
-            acc[key].quantity = null
-          }
+          })
         })
       })
     })

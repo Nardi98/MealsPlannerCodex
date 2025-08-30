@@ -49,15 +49,16 @@ export default function NewPlan() {
       }
       const generated = await mealPlansApi.generate(params)
       const titlePlan = {}
-      const idPlan = {}
       Object.entries(generated).forEach(([day, meals]) => {
-        titlePlan[day] = meals.map((m) => m.title)
-        idPlan[day] = meals.map((m) => m.id)
+        titlePlan[day] = meals.map((m) => ({
+          main: m.title,
+          sides: m.side_recipes || [],
+        }))
       })
       setPlan(titlePlan)
       const payload = {
         plan_date: startDate,
-        plan: idPlan,
+        plan: titlePlan,
         bulk_leftovers: Boolean(bulkLeftovers),
         keep_days: Number(keepDays),
       }

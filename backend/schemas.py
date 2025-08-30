@@ -79,9 +79,14 @@ class RecipeOut(BaseModel):
         orm_mode = True
 
 
+class MealAssignment(BaseModel):
+    main_id: int
+    side_ids: List[int] = Field(default_factory=list)
+
+
 class MealPlanCreate(BaseModel):
     plan_date: date
-    plan: Dict[str, List[int]]
+    plan: Dict[str, List[MealAssignment]]
     bulk_leftovers: bool | None = None
     keep_days: int | None = None
 
@@ -90,6 +95,20 @@ class MealPlanGenerate(BaseModel):
     start: date
     days: int
     meals_per_day: int
+    epsilon: float = 0.0
+    avoid_tags: List[str] = []
+    reduce_tags: List[str] = []
+    seasonality_weight: float = 1.0
+    recency_weight: float = 1.0
+    tag_penalty_weight: float = 1.0
+    bulk_bonus_weight: float = 1.0
+    bulk_leftovers: bool = True
+    keep_days: int = 7
+
+
+class SideDishGenerate(BaseModel):
+    """Parameters for generating a side dish recommendation."""
+
     epsilon: float = 0.0
     avoid_tags: List[str] = []
     reduce_tags: List[str] = []
@@ -111,6 +130,7 @@ class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
     recipe: str
+    side_recipes: List[str] = Field(default_factory=list)
     accepted: bool
 
 
@@ -120,3 +140,20 @@ class MealAcceptanceIn(BaseModel):
     plan_date: date
     meal_number: int
     accepted: bool
+
+
+class MealSideIn(BaseModel):
+    """Payload for adding or replacing a side dish."""
+
+    plan_date: date
+    meal_number: int
+    side_id: int
+    index: int | None = None
+
+
+class MealSideRemoveIn(BaseModel):
+    """Payload for removing a side dish from a meal."""
+
+    plan_date: date
+    meal_number: int
+    index: int

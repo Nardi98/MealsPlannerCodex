@@ -14,6 +14,7 @@ from models import (
     Ingredient,
     MealPlan,
     Meal,
+    MealSide,
     Recipe,
     Tag,
     RecipeIngredient,
@@ -36,6 +37,9 @@ __all__ = [
     "get_plan",
     "get_plan_settings",
     "mark_meal_accepted",
+    "add_meal_side",
+    "replace_meal_side",
+    "remove_meal_side",
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
@@ -201,7 +205,7 @@ def get_recipes() -> List[str]:
 
 
 def set_meal_plan(
-    session: Session, plan: Dict[str, Iterable[int]]
+    session: Session, plan: Dict[str, Iterable[Any]]
 ) -> Dict[str, MealPlan]:
     """Create or replace meal plans for each day in ``plan``.
 
@@ -210,13 +214,15 @@ def set_meal_plan(
     session:
         Database session for persistence.
     plan:
-        Mapping of ISO formatted date strings to iterables of recipe IDs. The
-        order of recipe IDs within each iterable determines the
-        ``meal_number`` for the created :class:`Meal` rows.
+        Mapping of ISO formatted date strings to iterables describing meals.
+        Each meal may be an integer recipe ID (main dish only) or a mapping/
+        object with ``main_id`` and optional ``side_ids`` attribute.
+        The order of meals within each iterable determines the ``meal_number``
+        for the created :class:`Meal` rows.
     """
 
     plans: Dict[str, MealPlan] = {}
-    for day, recipe_ids in plan.items():
+    for day, meals in plan.items():
         plan_date = day if isinstance(day, date) else date.fromisoformat(day)
         stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
         meal_plan = session.execute(stmt).scalar_one_or_none()
@@ -227,8 +233,27 @@ def set_meal_plan(
         else:
             meal_plan.meals = []
 
-        for index, rid in enumerate(recipe_ids, start=1):
-            meal_plan.meals.append(Meal(meal_number=index, recipe_id=rid))
+        for index, meal in enumerate(meals, start=1):
+            if isinstance(meal, int):
+                main_id = meal
+                side_ids: List[int] = []
+            elif isinstance(meal, dict):
+                main_id = meal.get("main_id")
+                side_ids = list(meal.get("side_ids", []) or [])
+            else:
+                main_id = getattr(meal, "main_id")
+                side_ids = list(getattr(meal, "side_ids", []) or [])
+
+            meal_plan.meals.append(
+                Meal(
+                    meal_number=index,
+                    recipe_id=main_id,
+                    sides=[
+                        MealSide(position=i + 1, side_recipe_id=sid)
+                        for i, sid in enumerate(side_ids)
+                    ],
+                )
+            )
         plans[day] = meal_plan
 
     session.commit()
@@ -251,11 +276,16 @@ def save_plan(
         items: List[Dict[str, Any]] = []
         for meal in meals:
             if isinstance(meal, str):
-                items.append({"recipe": meal, "accepted": False})
+                items.append({"recipe": meal, "side_recipes": [], "accepted": False})
             else:
+                side_recipes = meal.get("side_recipes")
+                if side_recipes is None:
+                    sr = meal.get("side_recipe")
+                    side_recipes = [sr] if sr else []
                 items.append(
                     {
                         "recipe": meal.get("recipe"),
+                        "side_recipes": side_recipes,
                         "accepted": bool(meal.get("accepted", False)),
                     }
                 )
@@ -298,7 +328,15 @@ def get_plan(
             for meal in meal_plan.meals:
                 if meal.recipe is None:
                     continue
-                items.append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+                items.append(
+                    {
+                        "recipe": meal.recipe.title,
+                        "side_recipes": [
+                            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+                        ],
+                        "accepted": meal.accepted,
+                    }
+                )
             result[key] = items
         return result
 
@@ -315,7 +353,15 @@ def get_plan(
     for meal in meal_plan.meals:
         if meal.recipe is None:
             continue
-        result[key].append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+        result[key].append(
+            {
+                "recipe": meal.recipe.title,
+                "side_recipes": [
+                    ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+                ],
+                "accepted": meal.accepted,
+            }
+        )
     return result
 
 
@@ -344,6 +390,91 @@ def mark_meal_accepted(
     meal.accepted = accepted
     session.commit()
     session.refresh(meal)
+    return meal
+
+
+def add_meal_side(
+    session: Session, plan_date: date, meal_number: int, side_id: int
+) -> Optional[Meal]:
+    """Append a side dish to an existing meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None:
+        return None
+
+    position = len(meal.sides) + 1
+    meal.sides.append(MealSide(position=position, side_recipe_id=side_id))
+    session.commit()
+    session.refresh(meal)
+
+    key = plan_date.isoformat()
+    meals = _PLAN_CACHE.get(key)
+    if meals and 0 < meal_number <= len(meals):
+        meals[meal_number - 1]["side_recipes"] = [
+            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+        ]
+    return meal
+
+
+def replace_meal_side(
+    session: Session, plan_date: date, meal_number: int, index: int, side_id: int
+) -> Optional[Meal]:
+    """Replace a side dish at ``index`` for a meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None or index >= len(meal.sides):
+        return None
+
+    old_side_id = meal.sides[index].side_recipe_id
+    if old_side_id != side_id:
+        old_side = session.get(Recipe, old_side_id)
+        if old_side is not None:
+            old_side.score = (old_side.score or 0) - 1
+
+    meal.sides[index].side_recipe_id = side_id
+    session.commit()
+    session.refresh(meal)
+
+    key = plan_date.isoformat()
+    meals = _PLAN_CACHE.get(key)
+    if meals and 0 < meal_number <= len(meals):
+        meals[meal_number - 1]["side_recipes"] = [
+            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+        ]
+    return meal
+
+
+def remove_meal_side(
+    session: Session, plan_date: date, meal_number: int, index: int
+) -> Optional[Meal]:
+    """Remove a side dish at ``index`` from a meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None or index >= len(meal.sides):
+        return None
+
+    meal.sides.pop(index)
+    for pos, side in enumerate(meal.sides, start=1):
+        side.position = pos
+
+    session.commit()
+    session.refresh(meal)
+
+    key = plan_date.isoformat()
+    meals = _PLAN_CACHE.get(key)
+    if meals and 0 < meal_number <= len(meals):
+        meals[meal_number - 1]["side_recipes"] = [
+            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+        ]
     return meal
 
 

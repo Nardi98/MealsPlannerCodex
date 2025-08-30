@@ -11,7 +11,7 @@ export const AppContext = React.createContext()
 
 export default function App() {
   const [recipes, setRecipes] = useState([])
-  const [plan, setPlan] = useState({})
+  const [plan, setPlan] = useState({}) // { [date]: Array<{ main: string, sides: string[] }> }
   const value = { recipes, setRecipes, plan, setPlan }
 
   return (

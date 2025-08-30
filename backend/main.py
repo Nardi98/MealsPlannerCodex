@@ -210,12 +210,23 @@ def set_plan(
 
     crud.set_meal_plan(db, payload.plan)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
-    for day, ids in payload.plan.items():
+    for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
-        for rid in ids:
-            recipe = db.get(models.Recipe, rid)
+        for item in meals:
+            recipe = db.get(models.Recipe, item.main_id)
+            side_titles: List[str] = []
+            for sid in getattr(item, "side_ids", []) or []:
+                sr = db.get(models.Recipe, sid)
+                if sr is not None:
+                    side_titles.append(sr.title)
             if recipe is not None:
-                titles.append({"recipe": recipe.title, "accepted": False})
+                titles.append(
+                    {
+                        "recipe": recipe.title,
+                        "side_recipes": side_titles,
+                        "accepted": False,
+                    }
+                )
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -241,7 +252,48 @@ def toggle_meal_acceptance(
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
+        accepted=meal.accepted,
+    )
+
+
+@app.post("/meal-plans/side", response_model=schemas.MealOut)
+def upsert_side_dish(
+    payload: schemas.MealSideIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    if payload.index is None:
+        meal = crud.add_meal_side(
+            db, payload.plan_date, payload.meal_number, payload.side_id
+        )
+    else:
+        meal = crud.replace_meal_side(
+            db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
+        )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
+        accepted=meal.accepted,
+    )
+
+
+@app.delete("/meal-plans/side", response_model=schemas.MealOut)
+def delete_side_dish(
+    payload: schemas.MealSideRemoveIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    meal = crud.remove_meal_side(
+        db, payload.plan_date, payload.meal_number, payload.index
+    )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
+        accepted=meal.accepted,
+    )
 
 
 @app.post("/feedback/accept")
@@ -308,6 +360,28 @@ def generate_plan_endpoint(
             items.append({"id": recipe.id, "title": title})
         result[day] = items
     return result
+
+
+@app.post("/side-dishes/generate")
+def generate_side_dish_endpoint(
+    payload: schemas.SideDishGenerate, db: Session = Depends(get_db)
+) -> Dict[str, object]:
+    try:
+        recipe = planner.generate_side_dish(
+            db,
+            avoid_tags=payload.avoid_tags,
+            reduce_tags=payload.reduce_tags,
+            epsilon=payload.epsilon,
+            keep_days=payload.keep_days,
+            bulk_leftovers=payload.bulk_leftovers,
+            seasonality_weight=payload.seasonality_weight,
+            recency_weight=payload.recency_weight,
+            tag_penalty_weight=payload.tag_penalty_weight,
+            bulk_bonus_weight=payload.bulk_bonus_weight,
+        )
+    except ValueError as exc:  # pragma: no cover - error path
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"id": recipe.id, "title": recipe.title}
 
 
 @app.get("/data/export")
