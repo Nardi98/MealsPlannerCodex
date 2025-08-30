@@ -14,6 +14,7 @@ from models import (
     Ingredient,
     MealPlan,
     Meal,
+    MealSide,
     Recipe,
     Tag,
     RecipeIngredient,
@@ -241,7 +242,13 @@ def set_meal_plan(
                 main_id = getattr(meal, "main_id")
                 side_id = getattr(meal, "side_id")
             meal_plan.meals.append(
-                Meal(meal_number=index, recipe_id=main_id, side_recipe_id=side_id)
+                Meal(
+                    meal_number=index,
+                    recipe_id=main_id,
+                    sides=[MealSide(position=1, side_recipe_id=side_id)]
+                    if side_id
+                    else [],
+                )
             )
         plans[day] = meal_plan
 
@@ -392,7 +399,12 @@ def set_meal_side(
         old_side = session.get(Recipe, old_side_id)
         if old_side is not None:
             old_side.score = (old_side.score or 0) - 1
-    meal.side_recipe_id = side_id
+    if side_id is None:
+        meal.sides = []
+    elif meal.sides:
+        meal.sides[0].side_recipe_id = side_id
+    else:
+        meal.sides.append(MealSide(position=1, side_recipe_id=side_id))
     session.commit()
     session.refresh(meal)
 
