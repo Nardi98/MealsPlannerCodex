@@ -20,8 +20,8 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     crud.save_plan(
         {
             "2024-01-01": [
-                {"recipe": "A", "side_recipe": None, "accepted": False},
-                {"recipe": "C (leftover)", "side_recipe": None, "accepted": False},
+                {"recipe": "A", "side_recipes": [], "accepted": False},
+                {"recipe": "C (leftover)", "side_recipes": [], "accepted": False},
             ]
         }
     )
@@ -50,7 +50,7 @@ def test_reject_replacement_limited_to_main_courses(db_session):
         db_session, title="C", servings_default=1, course="dessert", score=0
     )
     crud.save_plan(
-        {"2024-01-01": [{"recipe": "A", "side_recipe": None, "accepted": False}]}
+        {"2024-01-01": [{"recipe": "A", "side_recipes": [], "accepted": False}]}
     )
     client = TestClient(app)
 

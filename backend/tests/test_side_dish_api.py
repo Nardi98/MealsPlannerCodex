@@ -32,7 +32,7 @@ def test_post_plan_with_side_recipe(db_session):
     assert resp.status_code == 200
     expected = {
         plan_date.isoformat(): [
-            {"recipe": "Main", "side_recipe": "Side", "accepted": False}
+            {"recipe": "Main", "side_recipes": ["Side"], "accepted": False}
         ]
     }
     assert resp.json() == expected
@@ -44,7 +44,7 @@ def test_post_plan_with_side_recipe(db_session):
     app.dependency_overrides.clear()
 
 
-def test_set_side_dish_endpoint(db_session):
+def test_add_side_dish_endpoint(db_session):
     main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
     side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
     plan_date = date(2024, 1, 1)
@@ -55,13 +55,13 @@ def test_set_side_dish_endpoint(db_session):
     client = TestClient(app)
 
     resp = client.post(
-        "/meal-plans/side",
+        "/meal-plans/side/add",
         json={"plan_date": plan_date.isoformat(), "meal_number": 1, "side_id": side.id},
     )
     assert resp.status_code == 200
     assert resp.json() == {
         "recipe": "Main",
-        "side_recipe": "Side",
+        "side_recipes": ["Side"],
         "accepted": False,
     }
 
@@ -69,20 +69,22 @@ def test_set_side_dish_endpoint(db_session):
     assert resp2.status_code == 200
     assert resp2.json() == {
         plan_date.isoformat(): [
-            {"recipe": "Main", "side_recipe": "Side", "accepted": False}
+            {"recipe": "Main", "side_recipes": ["Side"], "accepted": False}
         ]
     }
 
     app.dependency_overrides.clear()
 
 
-def test_swap_side_dish_reduces_score(db_session):
+def test_replace_and_remove_side_dish_scores(db_session):
     main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
     side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
     side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
-    crud.set_meal_side(db_session, plan_date, 1, side1.id)
+    crud.add_meal_side(db_session, plan_date, 1, side1.id)
     assert crud.get_recipe(db_session, side1.id).score == 0
-    crud.set_meal_side(db_session, plan_date, 1, side2.id)
+    crud.replace_meal_side(db_session, plan_date, 1, 0, side2.id)
     assert crud.get_recipe(db_session, side1.id).score == -1
+    crud.remove_meal_side(db_session, plan_date, 1, 0)
+    assert crud.get_recipe(db_session, side2.id).score == 0

@@ -44,7 +44,11 @@ export default function PlanView() {
         Object.entries(p).forEach(([day, meals]) => {
           titlePlan[day] = meals.map((m, idx) => {
             const main = m.recipe || m.title || m
-            const side = m.side_recipe || m.side_recipe_title || m.side
+            const side =
+              (m.side_recipes && m.side_recipes[0]) ||
+              m.side_recipe ||
+              m.side_recipe_title ||
+              m.side
             if (m.accepted) acceptedInit[`${day}-${idx}`] = true
             return side ? { main, side } : { main }
           })

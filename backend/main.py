@@ -214,12 +214,22 @@ def set_plan(
         titles: List[Dict[str, object]] = []
         for item in meals:
             recipe = db.get(models.Recipe, item.main_id)
-            side_recipe = db.get(models.Recipe, item.side_id) if item.side_id else None
+            side_titles: List[str] = []
+            side_ids = getattr(item, "side_ids", None)
+            if side_ids:
+                for sid in side_ids:
+                    sr = db.get(models.Recipe, sid)
+                    if sr is not None:
+                        side_titles.append(sr.title)
+            elif getattr(item, "side_id", None):
+                sr = db.get(models.Recipe, item.side_id)
+                if sr is not None:
+                    side_titles.append(sr.title)
             if recipe is not None:
                 titles.append(
                     {
                         "recipe": recipe.title,
-                        "side_recipe": side_recipe.title if side_recipe else None,
+                        "side_recipes": side_titles,
                         "accepted": False,
                     }
                 )
@@ -250,23 +260,53 @@ def toggle_meal_acceptance(
         raise HTTPException(status_code=404, detail="Meal not found")
     return schemas.MealOut(
         recipe=meal.recipe.title,
-        side_recipe=meal.side_recipe.title if meal.side_recipe else None,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
         accepted=meal.accepted,
     )
 
 
-@app.post("/meal-plans/side", response_model=schemas.MealOut)
-def set_side_dish(
-    payload: schemas.MealSideIn, db: Session = Depends(get_db)
+@app.post("/meal-plans/side/add", response_model=schemas.MealOut)
+def add_side_dish(
+    payload: schemas.MealSideAddIn, db: Session = Depends(get_db)
 ) -> schemas.MealOut:
-    """Attach or replace a side dish for a specific meal."""
-
-    meal = crud.set_meal_side(db, payload.plan_date, payload.meal_number, payload.side_id)
+    meal = crud.add_meal_side(db, payload.plan_date, payload.meal_number, payload.side_id)
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
     return schemas.MealOut(
         recipe=meal.recipe.title,
-        side_recipe=meal.side_recipe.title if meal.side_recipe else None,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
+        accepted=meal.accepted,
+    )
+
+
+@app.post("/meal-plans/side/replace", response_model=schemas.MealOut)
+def replace_side_dish(
+    payload: schemas.MealSideReplaceIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    meal = crud.replace_meal_side(
+        db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
+    )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
+        accepted=meal.accepted,
+    )
+
+
+@app.post("/meal-plans/side/remove", response_model=schemas.MealOut)
+def remove_side_dish(
+    payload: schemas.MealSideRemoveIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    meal = crud.remove_meal_side(
+        db, payload.plan_date, payload.meal_number, payload.index
+    )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
         accepted=meal.accepted,
     )
 
