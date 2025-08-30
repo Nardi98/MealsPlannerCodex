@@ -79,9 +79,14 @@ class RecipeOut(BaseModel):
         orm_mode = True
 
 
+class MealAssignment(BaseModel):
+    main_id: int
+    side_id: int | None = None
+
+
 class MealPlanCreate(BaseModel):
     plan_date: date
-    plan: Dict[str, List[int]]
+    plan: Dict[str, List[MealAssignment]]
     bulk_leftovers: bool | None = None
     keep_days: int | None = None
 
@@ -111,6 +116,7 @@ class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
     recipe: str
+    side_recipe: str | None = None
     accepted: bool
 
 

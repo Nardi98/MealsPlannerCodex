@@ -210,12 +210,19 @@ def set_plan(
 
     crud.set_meal_plan(db, payload.plan)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
-    for day, ids in payload.plan.items():
+    for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
-        for rid in ids:
-            recipe = db.get(models.Recipe, rid)
+        for item in meals:
+            recipe = db.get(models.Recipe, item.main_id)
+            side_recipe = db.get(models.Recipe, item.side_id) if item.side_id else None
             if recipe is not None:
-                titles.append({"recipe": recipe.title, "accepted": False})
+                titles.append(
+                    {
+                        "recipe": recipe.title,
+                        "side_recipe": side_recipe.title if side_recipe else None,
+                        "accepted": False,
+                    }
+                )
         title_plan[day] = titles
     crud.save_plan(
         title_plan,
@@ -241,7 +248,11 @@ def toggle_meal_acceptance(
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(recipe=meal.recipe.title, accepted=meal.accepted)
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipe=meal.side_recipe.title if meal.side_recipe else None,
+        accepted=meal.accepted,
+    )
 
 
 @app.post("/feedback/accept")
