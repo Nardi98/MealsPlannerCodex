@@ -42,7 +42,7 @@ def upgrade() -> None:
     results = connection.execute(
         sa.select(
             meals.c.plan_date, meals.c.meal_number, meals.c.side_recipe_id
-        ).where(meals.c.side_recipe_id != None)
+        ).where(meals.c.side_recipe_id.is_not(None))
     )
     for plan_date, meal_number, side_recipe_id in results:
         connection.execute(
@@ -57,7 +57,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.add_column("meals", sa.Column("side_recipe_id", sa.Integer(), nullable=True))
+    op.add_column(
+        "meals", sa.Column("side_recipe_id", sa.Integer(), nullable=True)
+    )
     op.create_foreign_key(
         "fk_meals_side_recipe_id_recipes",
         "meals",
