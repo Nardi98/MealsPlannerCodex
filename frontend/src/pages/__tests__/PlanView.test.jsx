@@ -259,6 +259,112 @@ test('generate side dish persists via API', async () => {
   expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 3, index: 0 })
 })
 
+test('add multiple side dishes uses correct indexes', async () => {
+  const sideCalls = []
+  global.fetch = vi.fn((url, opts) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve([
+            { id: 1, title: 'Main', course: 'main' },
+            { id: 2, title: 'Side1', course: 'side' },
+            { id: 3, title: 'Side2', course: 'side' },
+          ]),
+      })
+    }
+    if (url.endsWith('/meal-plans/side')) {
+      sideCalls.push(JSON.parse(opts.body))
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: [] }] })
+  const first = await screen.findByText('Add Side Dish')
+  fireEvent.click(first)
+  let dialog = await screen.findByText('Choose Side Dish')
+  let list = dialog.parentElement.querySelector('ul')
+  fireEvent.click(within(list).getByText('Side1'))
+  const cell = screen.getByText('Main').closest('td')
+  await within(cell).findByText('Side1', { exact: true })
+
+  const second = screen.getByText('Add Side Dish')
+  fireEvent.click(second)
+  dialog = await screen.findByText('Choose Side Dish')
+  list = dialog.parentElement.querySelector('ul')
+  fireEvent.click(within(list).getByText('Side2'))
+  await within(cell).findByText('Side2', { exact: true })
+
+  expect(sideCalls).toEqual([
+    { plan_date: '2024-01-01', meal_number: 1, side_id: 2, index: 0 },
+    { plan_date: '2024-01-01', meal_number: 1, side_id: 3, index: 1 },
+  ])
+})
+
+test('swap side dish persists via API with correct index', async () => {
+  let sidePayload = null
+  global.fetch = vi.fn((url, opts) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve([
+            { id: 1, title: 'Main', course: 'main' },
+            { id: 2, title: 'Side1', course: 'side' },
+            { id: 3, title: 'Side2', course: 'side' },
+            { id: 4, title: 'Side3', course: 'side' },
+          ]),
+      })
+    }
+    if (url.endsWith('/meal-plans/side')) {
+      if (opts.method === 'POST') sidePayload = JSON.parse(opts.body)
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: ['Side1', 'Side2'] }] })
+  const cell = screen.getByText('Main').closest('td')
+  const side2 = within(cell).getAllByText('Side2')[0].closest('div')
+  fireEvent.click(within(side2).getByText('Swap'))
+  const dialog = await screen.findByText('Choose Side Dish')
+  const list = dialog.parentElement.querySelector('ul')
+  fireEvent.click(within(list).getByText('Side3'))
+  await within(cell).findByText('Side3', { exact: true })
+  expect(within(cell).getAllByText('Side1').length).toBe(1)
+  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 4, index: 1 })
+})
+
+test('remove side dish persists via API with correct index', async () => {
+  let removePayload = null
+  global.fetch = vi.fn((url, opts) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/meal-plans/side')) {
+      if (opts.method === 'DELETE') removePayload = JSON.parse(opts.body)
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: ['Side1', 'Side2'] }] })
+  const cell = screen.getByText('Main').closest('td')
+  const side2 = within(cell).getAllByText('Side2')[0].closest('div')
+  fireEvent.click(within(side2).getByText('Remove'))
+  await waitFor(() => expect(within(cell).queryByText('Side2')).toBeNull())
+  expect(removePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, index: 1 })
+})
+
 test('settings panel toggles and updates inputs', async () => {
   global.fetch = vi.fn((url) => {
     if (url.endsWith('/plan/settings')) {

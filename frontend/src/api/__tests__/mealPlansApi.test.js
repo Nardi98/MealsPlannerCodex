@@ -23,26 +23,26 @@ test('create serialises meal objects', async () => {
 })
 
 test('addSide posts payload', async () => {
-  await mealPlansApi.addSide('2024-01-01', 1, 2, 0)
+  await mealPlansApi.addSide('2024-01-01', 1, 2, 1)
   expect(request).toHaveBeenCalledWith('/meal-plans/side', {
     method: 'POST',
     body: JSON.stringify({
       plan_date: '2024-01-01',
       meal_number: 1,
       side_id: 2,
-      index: 0,
+      index: 1,
     }),
   })
 })
 
 test('removeSide posts payload', async () => {
-  await mealPlansApi.removeSide('2024-01-01', 1, 0)
+  await mealPlansApi.removeSide('2024-01-01', 1, 1)
   expect(request).toHaveBeenCalledWith('/meal-plans/side', {
     method: 'DELETE',
     body: JSON.stringify({
       plan_date: '2024-01-01',
       meal_number: 1,
-      index: 0,
+      index: 1,
     }),
   })
 })
