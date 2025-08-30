@@ -405,6 +405,12 @@ def add_meal_side(
     if meal is None:
         return None
 
+    if meal.accepted:
+        raise ValueError("Meal already accepted")
+
+    if any(ms.side_recipe_id == side_id for ms in meal.sides):
+        raise ValueError("Side dish already added")
+
     position = len(meal.sides) + 1
     meal.sides.append(MealSide(position=position, side_recipe_id=side_id))
     session.commit()
@@ -430,6 +436,12 @@ def replace_meal_side(
     meal = session.execute(stmt).scalar_one_or_none()
     if meal is None or index >= len(meal.sides):
         return None
+
+    if any(
+        ms.side_recipe_id == side_id and i != index
+        for i, ms in enumerate(meal.sides)
+    ):
+        raise ValueError("Side dish already added")
 
     old_side_id = meal.sides[index].side_recipe_id
     if old_side_id != side_id:

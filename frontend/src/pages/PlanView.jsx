@@ -423,9 +423,16 @@ export default function PlanView() {
   }
 
   const isAccepted = (day, idx) => accepted[`${day}-${idx}`]
-  const visibleTitles = (swapSlot?.type === 'side' ? sideTitles : allTitles).filter((t) =>
-    t.toLowerCase().includes(query.toLowerCase())
-  )
+  const visibleTitles = (
+    swapSlot?.type === 'side'
+      ? sideTitles.filter(
+          (t) =>
+            !plan[swapSlot.day][swapSlot.idx].sides
+              .filter((_, i) => i !== swapSlot.sideIdx)
+              .includes(t)
+        )
+      : allTitles
+  ).filter((t) => t.toLowerCase().includes(query.toLowerCase()))
 
   return (
     <div>
@@ -511,11 +518,11 @@ export default function PlanView() {
                         <button type="button" onClick={() => handleSwap(day, idx)}>
                           Swap
                         </button>
+                        <button type="button" onClick={() => handleAddSide(day, idx)}>
+                          Add Side Dish
+                        </button>
                       </div>
                     )}
-                    <button type="button" onClick={() => handleAddSide(day, idx)}>
-                      Add Side Dish
-                    </button>
                   </td>
                 )
               })}

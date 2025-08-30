@@ -263,14 +263,17 @@ def toggle_meal_acceptance(
 def upsert_side_dish(
     payload: schemas.MealSideIn, db: Session = Depends(get_db)
 ) -> schemas.MealOut:
-    if payload.index is None:
-        meal = crud.add_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.side_id
-        )
-    else:
-        meal = crud.replace_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
-        )
+    try:
+        if payload.index is None:
+            meal = crud.add_meal_side(
+                db, payload.plan_date, payload.meal_number, payload.side_id
+            )
+        else:
+            meal = crud.replace_meal_side(
+                db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
     return schemas.MealOut(

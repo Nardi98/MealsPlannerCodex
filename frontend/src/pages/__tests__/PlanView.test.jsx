@@ -259,6 +259,56 @@ test('generate side dish persists via API', async () => {
   expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 3, index: 0 })
 })
 
+test('no add side button once meal accepted', async () => {
+  global.fetch = vi.fn((url, opts) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/meal-plans/accept')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    if (url.endsWith('/feedback/accept')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: [] }] })
+  const cell = screen.getByText('Main').closest('td')
+  const acceptBtn = within(cell).getByText('Accept')
+  fireEvent.click(acceptBtn)
+  await within(cell).findByText('Accepted')
+  expect(within(cell).queryByText('Add Side Dish')).toBeNull()
+})
+
+test('cannot select duplicate side dish', async () => {
+  global.fetch = vi.fn((url) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve([
+            { id: 1, title: 'Main', course: 'main' },
+            { id: 2, title: 'Side', course: 'side' },
+            { id: 3, title: 'Other', course: 'side' },
+          ]),
+      })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'Main', sides: ['Side'] }] })
+  const btn = await screen.findByText('Add Side Dish')
+  fireEvent.click(btn)
+  const dialog = await screen.findByText('Choose Side Dish')
+  const list = dialog.parentElement.querySelector('ul')
+  expect(within(list).queryByText('Side')).toBeNull()
+  expect(within(list).getByText('Other')).toBeTruthy()
+})
+
 test('settings panel toggles and updates inputs', async () => {
   global.fetch = vi.fn((url) => {
     if (url.endsWith('/plan/settings')) {

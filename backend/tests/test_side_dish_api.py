@@ -76,6 +76,76 @@ def test_add_side_dish_endpoint(db_session):
     app.dependency_overrides.clear()
 
 
+def test_add_side_dish_fails_if_accepted(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.mark_meal_accepted(db_session, plan_date, 1, True)
+
+    os.makedirs("data", exist_ok=True)
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/meal-plans/side",
+        json={"plan_date": plan_date.isoformat(), "meal_number": 1, "side_id": side.id},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Meal already accepted"
+
+    app.dependency_overrides.clear()
+
+
+def test_add_duplicate_side_dish_fails(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.add_meal_side(db_session, plan_date, 1, side.id)
+
+    os.makedirs("data", exist_ok=True)
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/meal-plans/side",
+        json={"plan_date": plan_date.isoformat(), "meal_number": 1, "side_id": side.id},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Side dish already added"
+
+    app.dependency_overrides.clear()
+
+
+def test_replace_duplicate_side_dish_fails(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side")
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side")
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.add_meal_side(db_session, plan_date, 1, side1.id)
+    crud.add_meal_side(db_session, plan_date, 1, side2.id)
+
+    os.makedirs("data", exist_ok=True)
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/meal-plans/side",
+        json={
+            "plan_date": plan_date.isoformat(),
+            "meal_number": 1,
+            "side_id": side1.id,
+            "index": 1,
+        },
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Side dish already added"
+
+    app.dependency_overrides.clear()
+
+
 def test_replace_and_remove_side_dish_scores(db_session):
     main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
     side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
