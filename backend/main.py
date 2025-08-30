@@ -337,6 +337,28 @@ def generate_plan_endpoint(
     return result
 
 
+@app.post("/side-dishes/generate")
+def generate_side_dish_endpoint(
+    payload: schemas.SideDishGenerate, db: Session = Depends(get_db)
+) -> Dict[str, object]:
+    try:
+        recipe = planner.generate_side_dish(
+            db,
+            avoid_tags=payload.avoid_tags,
+            reduce_tags=payload.reduce_tags,
+            epsilon=payload.epsilon,
+            keep_days=payload.keep_days,
+            bulk_leftovers=payload.bulk_leftovers,
+            seasonality_weight=payload.seasonality_weight,
+            recency_weight=payload.recency_weight,
+            tag_penalty_weight=payload.tag_penalty_weight,
+            bulk_bonus_weight=payload.bulk_bonus_weight,
+        )
+    except ValueError as exc:  # pragma: no cover - error path
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"id": recipe.id, "title": recipe.title}
+
+
 @app.get("/data/export")
 def export_data_endpoint(db: Session = Depends(get_db)) -> Response:
     data = crud.export_data(db)
