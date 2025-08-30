@@ -36,6 +36,7 @@ __all__ = [
     "get_plan",
     "get_plan_settings",
     "mark_meal_accepted",
+    "set_meal_side",
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
@@ -372,6 +373,30 @@ def mark_meal_accepted(
     meal.accepted = accepted
     session.commit()
     session.refresh(meal)
+    return meal
+
+
+def set_meal_side(
+    session: Session, plan_date: date, meal_number: int, side_id: int | None
+) -> Optional[Meal]:
+    """Attach or replace a side dish for an existing meal."""
+
+    stmt = select(Meal).where(
+        Meal.plan_date == plan_date, Meal.meal_number == meal_number
+    )
+    meal = session.execute(stmt).scalar_one_or_none()
+    if meal is None:
+        return None
+    meal.side_recipe_id = side_id
+    session.commit()
+    session.refresh(meal)
+
+    key = plan_date.isoformat()
+    meals = _PLAN_CACHE.get(key)
+    if meals and 0 < meal_number <= len(meals):
+        meals[meal_number - 1]["side_recipe"] = (
+            meal.side_recipe.title if meal.side_recipe else None
+        )
     return meal
 
 

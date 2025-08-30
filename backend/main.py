@@ -255,6 +255,22 @@ def toggle_meal_acceptance(
     )
 
 
+@app.post("/meal-plans/side", response_model=schemas.MealOut)
+def set_side_dish(
+    payload: schemas.MealSideIn, db: Session = Depends(get_db)
+) -> schemas.MealOut:
+    """Attach or replace a side dish for a specific meal."""
+
+    meal = crud.set_meal_side(db, payload.plan_date, payload.meal_number, payload.side_id)
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(
+        recipe=meal.recipe.title,
+        side_recipe=meal.side_recipe.title if meal.side_recipe else None,
+        accepted=meal.accepted,
+    )
+
+
 @app.post("/feedback/accept")
 def feedback_accept(
     payload: schemas.FeedbackIn, db: Session = Depends(get_db)
