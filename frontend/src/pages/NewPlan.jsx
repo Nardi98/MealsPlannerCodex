@@ -51,8 +51,14 @@ export default function NewPlan() {
       const titlePlan = {}
       const idPlan = {}
       Object.entries(generated).forEach(([day, meals]) => {
-        titlePlan[day] = meals.map((m) => m.title)
-        idPlan[day] = meals.map((m) => m.id)
+        titlePlan[day] = meals.map((m) => ({
+          main: m.title,
+          ...(m.side_recipe ? { side: m.side_recipe } : {}),
+        }))
+        idPlan[day] = meals.map((m) => ({
+          main: m.id,
+          ...(m.side_id ? { side: m.side_id } : {}),
+        }))
       })
       setPlan(titlePlan)
       const payload = {

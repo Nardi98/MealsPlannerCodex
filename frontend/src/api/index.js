@@ -82,10 +82,24 @@ export const recipesApi = {
 export const mealPlansApi = {
   ...createCrud('meal-plans'),
   create: async (data, { force = false } = {}) => {
+    const serialisePlan = (plan) => {
+      const out = {}
+      Object.entries(plan).forEach(([day, meals]) => {
+        out[day] = meals.map((m) => {
+          if (typeof m === 'number' || typeof m === 'string') return m
+          if ('main_id' in m || 'side_id' in m) return m
+          const res = { main_id: m.main }
+          if (m.side !== undefined) res.side_id = m.side
+          return res
+        })
+      })
+      return out
+    }
+    const payload = data.plan ? { ...data, plan: serialisePlan(data.plan) } : data
     try {
       return await request(`/meal-plans${force ? '?force=true' : ''}`, {
         method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
     } catch (err) {
       if (err.data?.conflicts) {
@@ -106,6 +120,15 @@ export const mealPlansApi = {
         plan_date: planDate,
         meal_number: mealNumber,
         accepted,
+      }),
+    }),
+  addSide: (planDate, mealNumber, sideId) =>
+    request('/meal-plans/side', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        side_id: sideId,
       }),
     }),
 };
