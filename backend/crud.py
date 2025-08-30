@@ -387,6 +387,11 @@ def set_meal_side(
     meal = session.execute(stmt).scalar_one_or_none()
     if meal is None:
         return None
+    old_side_id = meal.side_recipe_id
+    if old_side_id and old_side_id != side_id:
+        old_side = session.get(Recipe, old_side_id)
+        if old_side is not None:
+            old_side.score = (old_side.score or 0) - 1
     meal.side_recipe_id = side_id
     session.commit()
     session.refresh(meal)

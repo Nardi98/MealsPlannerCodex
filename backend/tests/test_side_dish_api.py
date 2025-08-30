@@ -74,3 +74,15 @@ def test_set_side_dish_endpoint(db_session):
     }
 
     app.dependency_overrides.clear()
+
+
+def test_swap_side_dish_reduces_score(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0)
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_side(db_session, plan_date, 1, side1.id)
+    assert crud.get_recipe(db_session, side1.id).score == 0
+    crud.set_meal_side(db_session, plan_date, 1, side2.id)
+    assert crud.get_recipe(db_session, side1.id).score == -1
