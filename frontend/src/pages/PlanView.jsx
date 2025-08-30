@@ -38,9 +38,10 @@ export default function PlanView() {
         const acceptedInit = {}
         Object.entries(p).forEach(([day, meals]) => {
           titlePlan[day] = meals.map((m, idx) => {
-            const title = m.recipe || m.title || m
+            const main = m.recipe || m.title || m
+            const side = m.side_recipe || m.side_recipe_title || m.side
             if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-            return title
+            return side ? { main, side } : { main }
           })
         })
         setPlan(titlePlan)
@@ -106,7 +107,13 @@ export default function PlanView() {
       idPlan = {}
       Object.entries(titlePlan).forEach(([day, meals]) => {
         idPlan[day] = meals
-          .map((t) => map[t.endsWith(' (leftover)') ? t.slice(0, -11) : t])
+          .map((m) => {
+            const main = map[m.main.endsWith(' (leftover)') ? m.main.slice(0, -11) : m.main]
+            if (!main) return null
+            const sideTitle = m.side && m.side.endsWith(' (leftover)') ? m.side.slice(0, -11) : m.side
+            const side = sideTitle ? map[sideTitle] : undefined
+            return side ? { main, side } : { main }
+          })
           .filter(Boolean)
       })
       const planDate = Object.keys(titlePlan)[0]
@@ -159,12 +166,12 @@ export default function PlanView() {
   const planEntries = days.map((d) => [d, plan[d]])
 
   const getAge = (dayIdx, meal) => {
-    if (!meal.endsWith(' (leftover)')) return null
-    const base = meal.slice(0, -11)
+    if (!meal.main.endsWith(' (leftover)')) return null
+    const base = meal.main.slice(0, -11)
     const dayDate = new Date(planEntries[dayIdx][0])
     for (let i = dayIdx - 1; i >= 0; i -= 1) {
       const [prevDay, prevMeals] = planEntries[i]
-      if (prevMeals.includes(base)) {
+      if (prevMeals.some((m) => m.main === base)) {
         const prevDate = new Date(prevDay)
         return Math.round((dayDate.getTime() - prevDate.getTime()) / 86400000)
       }
@@ -183,11 +190,13 @@ export default function PlanView() {
 
   const handleReject = async (day, idx) => {
     const meal = plan[day][idx]
-    const base = meal.endsWith(' (leftover)') ? meal.slice(0, -11) : meal
+    const base = meal.main.endsWith(' (leftover)')
+      ? meal.main.slice(0, -11)
+      : meal.main
     const existing = new Set()
     Object.values(plan).forEach((meals) => {
       meals.forEach((m) => {
-        const t = m.endsWith(' (leftover)') ? m.slice(0, -11) : m
+        const t = m.main.endsWith(' (leftover)') ? m.main.slice(0, -11) : m.main
         existing.add(t)
       })
     })
@@ -210,7 +219,7 @@ export default function PlanView() {
     if (replacement) {
       const updated = {
         ...plan,
-        [day]: plan[day].map((m, i) => (i === idx ? replacement : m)),
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: replacement } : m)),
       }
       setPlan(updated)
       await persistPlan(updated)
@@ -230,7 +239,7 @@ export default function PlanView() {
     const { day, idx } = swapSlot
     const updated = {
       ...plan,
-      [day]: plan[day].map((m, i) => (i === idx ? title : m)),
+      [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
     }
     setPlan(updated)
     await persistPlan(updated)
@@ -291,10 +300,13 @@ export default function PlanView() {
                 const age = getAge(dayIdx, meal)
                 return (
                   <td key={idx}>
-                    <div>{meal}</div>
+                    <div>
+                      {meal.main}
+                      {meal.side ? ` + ${meal.side}` : ''}
+                    </div>
                     {age !== null && age >= keepDays && (
                       <div style={{ color: 'red' }}>
-                        {`${meal} is ${age} days old (max ${keepDays})`}
+                        {`${meal.main} is ${age} days old (max ${keepDays})`}
                       </div>
                     )}
                     {isAccepted(day, idx) ? (

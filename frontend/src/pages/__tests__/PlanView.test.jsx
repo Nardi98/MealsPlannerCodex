@@ -39,7 +39,7 @@ test('accept disables further actions', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': ['A'] })
+  renderWithPlan({ '2024-01-01': [{ main: 'A' }] })
   const btn = await screen.findByText('Accept')
   fireEvent.click(btn)
   await waitFor(() => expect(screen.getByText('Accepted')).toBeInTheDocument())
@@ -72,7 +72,7 @@ test('reject retries until unique suggestion', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
 
-  renderWithPlan({ '2024-01-01': ['A', 'C'] })
+  renderWithPlan({ '2024-01-01': [{ main: 'A' }, { main: 'C' }] })
   const [btn] = await screen.findAllByText('Reject')
   fireEvent.click(btn)
   await waitFor(() => expect(screen.getByText('B')).toBeInTheDocument())
@@ -89,8 +89,8 @@ test('leftover age warning respects keep_days', async () => {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
   })
   renderWithPlan({
-    '2024-01-01': ['A'],
-    '2024-01-03': ['A (leftover)'],
+    '2024-01-01': [{ main: 'A' }],
+    '2024-01-03': [{ main: 'A (leftover)' }],
   })
   await screen.findByText('A (leftover)')
   expect(

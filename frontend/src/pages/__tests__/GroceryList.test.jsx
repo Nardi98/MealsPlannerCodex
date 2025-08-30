@@ -16,8 +16,8 @@ function renderWithContext(plan, recipes) {
 describe('GroceryList', () => {
   test('aggregates ingredients and ignores leftovers', () => {
     const plan = {
-      '2024-01-01': ['A', 'B (leftover)'],
-      '2024-01-02': ['A'],
+      '2024-01-01': [{ main: 'A', side: 'B (leftover)' }],
+      '2024-01-02': [{ main: 'A', side: 'B' }],
     }
     const recipes = [
       {
@@ -35,7 +35,7 @@ describe('GroceryList', () => {
       },
     ]
     renderWithContext(plan, recipes)
-    expect(screen.getByText('Carrot: 2 kg')).toBeInTheDocument()
+    expect(screen.getByText('Carrot: 2.5 kg')).toBeInTheDocument()
     expect(screen.getByText('Onion: 4')).toBeInTheDocument()
   })
 })
