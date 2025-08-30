@@ -21,7 +21,7 @@ def test_post_plan_with_side_recipe(db_session):
     plan_date = date(2024, 1, 1)
     payload = {
         "plan_date": plan_date.isoformat(),
-        "plan": {plan_date.isoformat(): [{"main_id": main.id, "side_id": side.id}]},
+        "plan": {plan_date.isoformat(): [{"main_id": main.id, "side_ids": [side.id]}]},
     }
 
     os.makedirs("data", exist_ok=True)
@@ -55,7 +55,7 @@ def test_add_side_dish_endpoint(db_session):
     client = TestClient(app)
 
     resp = client.post(
-        "/meal-plans/side/add",
+        "/meal-plans/side",
         json={"plan_date": plan_date.isoformat(), "meal_number": 1, "side_id": side.id},
     )
     assert resp.status_code == 200

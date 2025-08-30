@@ -118,7 +118,7 @@ def test_meal_with_side_recipe(db_session):
     plan_date = date(2024, 9, 1)
     set_meal_plan(
         db_session,
-        {plan_date.isoformat(): [{"main_id": main.id, "side_id": side.id}]},
+        {plan_date.isoformat(): [{"main_id": main.id, "side_ids": [side.id]}]},
     )
     fetched = get_plan(db_session, plan_date)
     assert fetched == {
