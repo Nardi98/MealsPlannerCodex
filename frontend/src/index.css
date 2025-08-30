@@ -23,6 +23,10 @@ nav a {
   font-size: 0.8rem;
   margin-left: 0.25rem;
 }
+.course-label {
+  font-size: 0.8rem;
+  color: #555;
+}
 .ingredient-row {
   display: flex;
   gap: 0.5rem;
