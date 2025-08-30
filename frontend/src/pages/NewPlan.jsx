@@ -53,11 +53,11 @@ export default function NewPlan() {
       Object.entries(generated).forEach(([day, meals]) => {
         titlePlan[day] = meals.map((m) => ({
           main: m.title,
-          ...(m.side_recipes && m.side_recipes.length ? { side: m.side_recipes[0] } : {}),
+          sides: m.side_recipes || [],
         }))
         idPlan[day] = meals.map((m) => ({
           main: m.id,
-          ...(m.side_ids && m.side_ids.length ? { side: m.side_ids[0] } : {}),
+          sides: m.side_ids || [],
         }))
       })
       setPlan(titlePlan)

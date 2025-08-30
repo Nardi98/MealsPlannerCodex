@@ -44,13 +44,17 @@ export default function PlanView() {
         Object.entries(p).forEach(([day, meals]) => {
           titlePlan[day] = meals.map((m, idx) => {
             const main = m.recipe || m.title || m
-            const side =
-              (m.side_recipes && m.side_recipes[0]) ||
-              m.side_recipe ||
-              m.side_recipe_title ||
-              m.side
+            const sides =
+              m.side_recipes ||
+              (m.side_recipe
+                ? [m.side_recipe]
+                : m.side_recipe_title
+                ? [m.side_recipe_title]
+                : m.side
+                ? [m.side]
+                : [])
             if (m.accepted) acceptedInit[`${day}-${idx}`] = true
-            return side ? { main, side } : { main }
+            return { main, sides }
           })
         })
         setPlan(titlePlan)
@@ -135,9 +139,13 @@ export default function PlanView() {
           .map((m) => {
             const main = map[m.main.endsWith(' (leftover)') ? m.main.slice(0, -11) : m.main]
             if (!main) return null
-            const sideTitle = m.side && m.side.endsWith(' (leftover)') ? m.side.slice(0, -11) : m.side
-            const side = sideTitle ? map[sideTitle] : undefined
-            return side ? { main, side } : { main }
+            const sides = (m.sides || [])
+              .map((s) => {
+                const t = s.endsWith(' (leftover)') ? s.slice(0, -11) : s
+                return map[t]
+              })
+              .filter(Boolean)
+            return { main, sides }
           })
           .filter(Boolean)
       })
@@ -222,17 +230,17 @@ export default function PlanView() {
     } catch {
       // ignore
     }
-    if (meal.side) {
-      const sideTitle = meal.side.endsWith(' (leftover)')
-        ? meal.side.slice(0, -11)
-        : meal.side
-      try {
-        await request('/feedback/accept', {
-          method: 'POST',
-          body: JSON.stringify({ title: sideTitle }),
-        })
-      } catch {
-        // ignore
+    if (meal.sides && meal.sides.length) {
+      for (const s of meal.sides) {
+        const sideTitle = s.endsWith(' (leftover)') ? s.slice(0, -11) : s
+        try {
+          await request('/feedback/accept', {
+            method: 'POST',
+            body: JSON.stringify({ title: sideTitle }),
+          })
+        } catch {
+          // ignore
+        }
       }
     }
     setAccepted({ ...accepted, [`${day}-${idx}`]: true })
@@ -285,8 +293,36 @@ export default function PlanView() {
   }
 
   const handleAddSide = (day, idx) => {
-    setSwapSlot({ day, idx, type: 'side' })
+    const meal = plan[day][idx]
+    setSwapSlot({ day, idx, type: 'side', sideIdx: meal.sides.length })
     setQuery('')
+  }
+
+  const handleSwapSide = (day, idx, sideIdx) => {
+    setSwapSlot({ day, idx, type: 'side', sideIdx })
+    setQuery('')
+  }
+
+  const handleRemoveSide = async (day, idx, sideIdx) => {
+    const updated = {
+      ...plan,
+      [day]: plan[day].map((m, i) =>
+        i === idx ? { ...m, sides: m.sides.filter((_, s) => s !== sideIdx) } : m
+      ),
+    }
+    setPlan(updated)
+    try {
+      await mealPlansApi.removeSide(day, idx + 1, sideIdx)
+    } catch {
+      // ignore
+    }
+    if (isAccepted(day, idx)) {
+      try {
+        await mealPlansApi.accept(day, idx + 1, true)
+      } catch {
+        // ignore
+      }
+    }
   }
 
   const handleGenerateSide = async () => {
@@ -313,12 +349,18 @@ export default function PlanView() {
 
   const confirmSwap = async (choice) => {
     if (!swapSlot) return
-    const { day, idx, type } = swapSlot
+    const { day, idx, type, sideIdx } = swapSlot
     if (type === 'side') {
       const title = typeof choice === 'string' ? choice : choice.title
+      const meal = plan[day][idx]
+      const sideIndex = sideIdx ?? meal.sides.length
+      const newSides =
+        sideIndex < meal.sides.length
+          ? meal.sides.map((s, i) => (i === sideIndex ? title : s))
+          : [...meal.sides, title]
       const updated = {
         ...plan,
-        [day]: plan[day].map((m, i) => (i === idx ? { ...m, side: title } : m)),
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, sides: newSides } : m)),
       }
       setPlan(updated)
       let sideId = typeof choice === 'string' ? null : choice.id
@@ -333,7 +375,7 @@ export default function PlanView() {
       }
       if (sideId) {
         try {
-          await mealPlansApi.addSide(day, idx + 1, sideId)
+          await mealPlansApi.addSide(day, idx + 1, sideId, sideIndex)
         } catch {
           // ignore
         }
@@ -433,7 +475,17 @@ export default function PlanView() {
                   <td key={idx}>
                     <div>
                       <div>{meal.main}</div>
-                      {meal.side && <div>{meal.side}</div>}
+                      {meal.sides.map((s, sIdx) => (
+                        <div key={sIdx}>
+                          {s}{' '}
+                          <button type="button" onClick={() => handleSwapSide(day, idx, sIdx)}>
+                            Swap
+                          </button>{' '}
+                          <button type="button" onClick={() => handleRemoveSide(day, idx, sIdx)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
                     </div>
                     {age !== null && age >= keepDays && (
                       <div style={{ color: 'red' }}>
@@ -462,7 +514,7 @@ export default function PlanView() {
                       </div>
                     )}
                     <button type="button" onClick={() => handleAddSide(day, idx)}>
-                      {meal.side ? 'Swap Side' : 'Add Side Dish'}
+                      Add Side Dish
                     </button>
                   </td>
                 )
