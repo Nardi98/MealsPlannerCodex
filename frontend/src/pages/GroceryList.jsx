@@ -8,7 +8,9 @@ export default function GroceryList() {
     const acc = {}
     Object.values(plan).forEach((meals) => {
       meals.forEach(({ main, side }) => {
-        ;[main, side].forEach((title) => {
+        const titles = [main]
+        if (side) titles.push(side)
+        titles.forEach((title) => {
           if (!title || title.endsWith(' (leftover)')) return
           const recipe = recipes.find((r) => r.title === title)
           if (!recipe) return

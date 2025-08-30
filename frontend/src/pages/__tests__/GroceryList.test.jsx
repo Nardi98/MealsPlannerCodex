@@ -38,5 +38,26 @@ describe('GroceryList', () => {
     expect(screen.getByText('Carrot: 2.5 kg')).toBeInTheDocument()
     expect(screen.getByText('Onion: 4')).toBeInTheDocument()
   })
+
+  test('includes ingredients from side dishes', () => {
+    const plan = {
+      '2024-01-01': [{ main: 'A', side: 'B' }],
+    }
+    const recipes = [
+      {
+        id: 1,
+        title: 'A',
+        ingredients: [{ id: 1, name: 'Carrot', quantity: 1, unit: 'kg' }],
+      },
+      {
+        id: 2,
+        title: 'B',
+        ingredients: [{ id: 2, name: 'Potato', quantity: 3, unit: null }],
+      },
+    ]
+    renderWithContext(plan, recipes)
+    expect(screen.getByText('Carrot: 1 kg')).toBeInTheDocument()
+    expect(screen.getByText('Potato: 3')).toBeInTheDocument()
+  })
 })
 
