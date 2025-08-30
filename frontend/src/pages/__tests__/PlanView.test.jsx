@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import PlanView from '../PlanView'
 import { AppContext } from '../../App'
@@ -163,4 +163,39 @@ test('loads plan for date range', async () => {
   fireEvent.click(screen.getAllByText('Load Plan')[0])
   await waitFor(() => expect(screen.getAllByText('A').length).toBeGreaterThan(0))
   expect(screen.getAllByText('B').length).toBeGreaterThan(0)
+})
+
+test('add side dish persists via API', async () => {
+  let sidePayload = null
+  global.fetch = vi.fn((url, opts) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve([
+            { id: 1, title: 'Main', course: 'main' },
+            { id: 2, title: 'Side', course: 'side' },
+          ]),
+      })
+    }
+    if (url.endsWith('/meal-plans/side')) {
+      sidePayload = JSON.parse(opts.body)
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'Main' }] })
+  const btn = await screen.findByText('Add Side Dish')
+  fireEvent.click(btn)
+  const dialog = await screen.findByText('Choose Side Dish')
+  const list = dialog.parentElement.querySelector('ul')
+  expect(within(list).queryByText('Main')).toBeNull()
+  fireEvent.click(within(list).getByText('Side'))
+  await screen.findByText('Side')
+  expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 2 })
 })

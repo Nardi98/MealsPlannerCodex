@@ -11,6 +11,7 @@ export default function PlanView() {
   const [swapSlot, setSwapSlot] = useState(null)
   const [keepDays, setKeepDays] = useState(1)
   const [allTitles, setAllTitles] = useState([])
+  const [sideTitles, setSideTitles] = useState([])
   const [query, setQuery] = useState('')
   const getWeekRange = () => {
     const today = new Date()
@@ -71,12 +72,15 @@ export default function PlanView() {
           const data = await recipesApi.fetchAll()
           setRecipes(data)
           setAllTitles(data.map((r) => r.title))
+          setSideTitles(data.filter((r) => r.course === 'side').map((r) => r.title))
         } catch {
           setRecipes([])
           setAllTitles([])
+          setSideTitles([])
         }
       } else {
         setAllTitles(recipes.map((r) => r.title))
+        setSideTitles(recipes.filter((r) => r.course === 'side').map((r) => r.title))
       }
     }
     init()
@@ -230,30 +234,68 @@ export default function PlanView() {
   }
 
   const handleSwap = (day, idx) => {
-    setSwapSlot({ day, idx })
+    setSwapSlot({ day, idx, type: 'main' })
+    setQuery('')
+  }
+
+  const handleAddSide = (day, idx) => {
+    setSwapSlot({ day, idx, type: 'side' })
     setQuery('')
   }
 
   const confirmSwap = async (title) => {
     if (!swapSlot) return
-    const { day, idx } = swapSlot
-    const updated = {
-      ...plan,
-      [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
+    const { day, idx, type } = swapSlot
+    if (type === 'side') {
+      const updated = {
+        ...plan,
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, side: title } : m)),
+      }
+      setPlan(updated)
+      let list = recipes
+      if (list.length === 0) {
+        list = await recipesApi.fetchAll()
+        setRecipes(list)
+      }
+      const map = {}
+      list.forEach((r) => {
+        map[r.title] = r.id
+      })
+      const sideId = map[title]
+      if (sideId) {
+        try {
+          await mealPlansApi.addSide(day, idx + 1, sideId)
+        } catch {
+          // ignore
+        }
+      }
+      if (isAccepted(day, idx)) {
+        try {
+          await mealPlansApi.accept(day, idx + 1, true)
+        } catch {
+          // ignore
+        }
+        setAccepted({ ...accepted, [`${day}-${idx}`]: true })
+      }
+    } else {
+      const updated = {
+        ...plan,
+        [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
+      }
+      setPlan(updated)
+      await persistPlan(updated)
+      try {
+        await mealPlansApi.accept(day, idx + 1, true)
+      } catch {
+        // ignore
+      }
+      setAccepted({ ...accepted, [`${day}-${idx}`]: true })
     }
-    setPlan(updated)
-    await persistPlan(updated)
-    try {
-      await mealPlansApi.accept(day, idx + 1, true)
-    } catch {
-      // ignore
-    }
-    setAccepted({ ...accepted, [`${day}-${idx}`]: true })
     setSwapSlot(null)
   }
 
   const isAccepted = (day, idx) => accepted[`${day}-${idx}`]
-  const visibleTitles = allTitles.filter((t) =>
+  const visibleTitles = (swapSlot?.type === 'side' ? sideTitles : allTitles).filter((t) =>
     t.toLowerCase().includes(query.toLowerCase())
   )
 
@@ -301,8 +343,8 @@ export default function PlanView() {
                 return (
                   <td key={idx}>
                     <div>
-                      {meal.main}
-                      {meal.side ? ` + ${meal.side}` : ''}
+                      <div>{meal.main}</div>
+                      {meal.side && <div>{meal.side}</div>}
                     </div>
                     {age !== null && age >= keepDays && (
                       <div style={{ color: 'red' }}>
@@ -330,6 +372,9 @@ export default function PlanView() {
                         </button>
                       </div>
                     )}
+                    <button type="button" onClick={() => handleAddSide(day, idx)}>
+                      {meal.side ? 'Swap Side' : 'Add Side Dish'}
+                    </button>
                   </td>
                 )
               })}
@@ -342,7 +387,7 @@ export default function PlanView() {
           className="swap-dialog"
           style={{ border: '1px solid #ccc', padding: '1rem', marginTop: '1rem' }}
         >
-          <h3>Swap Recipe</h3>
+          <h3>{swapSlot.type === 'side' ? 'Choose Side Dish' : 'Swap Recipe'}</h3>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
