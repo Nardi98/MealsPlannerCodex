@@ -210,6 +210,7 @@ export default function Recipes() {
           <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
             <h3>
               {r.title}{' '}
+              {r.course && <span className="course-label">[{r.course}]</span>}{' '}
               <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
                 ({`Score: ${r.score.toFixed(2)}`})
               </span>
