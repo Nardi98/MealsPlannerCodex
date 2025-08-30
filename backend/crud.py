@@ -201,7 +201,7 @@ def get_recipes() -> List[str]:
 
 
 def set_meal_plan(
-    session: Session, plan: Dict[str, Iterable[int]]
+    session: Session, plan: Dict[str, Iterable[Any]]
 ) -> Dict[str, MealPlan]:
     """Create or replace meal plans for each day in ``plan``.
 
@@ -210,13 +210,15 @@ def set_meal_plan(
     session:
         Database session for persistence.
     plan:
-        Mapping of ISO formatted date strings to iterables of recipe IDs. The
-        order of recipe IDs within each iterable determines the
-        ``meal_number`` for the created :class:`Meal` rows.
+        Mapping of ISO formatted date strings to iterables describing meals.
+        Each meal may be an integer recipe ID (main dish only) or a mapping/
+        object with ``main_id`` and optional ``side_id`` attributes.
+        The order of meals within each iterable determines the ``meal_number``
+        for the created :class:`Meal` rows.
     """
 
     plans: Dict[str, MealPlan] = {}
-    for day, recipe_ids in plan.items():
+    for day, meals in plan.items():
         plan_date = day if isinstance(day, date) else date.fromisoformat(day)
         stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
         meal_plan = session.execute(stmt).scalar_one_or_none()
@@ -227,8 +229,19 @@ def set_meal_plan(
         else:
             meal_plan.meals = []
 
-        for index, rid in enumerate(recipe_ids, start=1):
-            meal_plan.meals.append(Meal(meal_number=index, recipe_id=rid))
+        for index, meal in enumerate(meals, start=1):
+            if isinstance(meal, int):
+                main_id = meal
+                side_id = None
+            elif isinstance(meal, dict):
+                main_id = meal.get("main_id")
+                side_id = meal.get("side_id")
+            else:
+                main_id = getattr(meal, "main_id")
+                side_id = getattr(meal, "side_id")
+            meal_plan.meals.append(
+                Meal(meal_number=index, recipe_id=main_id, side_recipe_id=side_id)
+            )
         plans[day] = meal_plan
 
     session.commit()
@@ -251,11 +264,12 @@ def save_plan(
         items: List[Dict[str, Any]] = []
         for meal in meals:
             if isinstance(meal, str):
-                items.append({"recipe": meal, "accepted": False})
+                items.append({"recipe": meal, "side_recipe": None, "accepted": False})
             else:
                 items.append(
                     {
                         "recipe": meal.get("recipe"),
+                        "side_recipe": meal.get("side_recipe"),
                         "accepted": bool(meal.get("accepted", False)),
                     }
                 )
@@ -298,7 +312,15 @@ def get_plan(
             for meal in meal_plan.meals:
                 if meal.recipe is None:
                     continue
-                items.append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+                items.append(
+                    {
+                        "recipe": meal.recipe.title,
+                        "side_recipe": meal.side_recipe.title
+                        if meal.side_recipe is not None
+                        else None,
+                        "accepted": meal.accepted,
+                    }
+                )
             result[key] = items
         return result
 
@@ -315,7 +337,13 @@ def get_plan(
     for meal in meal_plan.meals:
         if meal.recipe is None:
             continue
-        result[key].append({"recipe": meal.recipe.title, "accepted": meal.accepted})
+        result[key].append(
+            {
+                "recipe": meal.recipe.title,
+                "side_recipe": meal.side_recipe.title if meal.side_recipe else None,
+                "accepted": meal.accepted,
+            }
+        )
     return result
 
 

@@ -163,10 +163,12 @@ class Meal(Base):
     )
     meal_number = Column(Integer, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
+    side_recipe_id = Column(Integer, ForeignKey("recipes.id"))
     accepted = Column(Boolean, default=False)
 
     plan = relationship("MealPlan", back_populates="meals")
-    recipe = relationship("Recipe")
+    recipe = relationship("Recipe", foreign_keys=[recipe_id])
+    side_recipe = relationship("Recipe", foreign_keys=[side_recipe_id])
 
     __table_args__ = (
         PrimaryKeyConstraint("plan_date", "meal_number"),

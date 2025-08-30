@@ -45,7 +45,7 @@ def test_generate_and_persist_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "accepted": False} for title in meals]
+        day: [{"recipe": title, "side_recipe": None, "accepted": False} for title in meals]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -84,7 +84,7 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     set_meal_plan(db_session, id_plan)
     fetched = get_plan(db_session, plan_date)
     expected = {
-        day: [{"recipe": title, "accepted": False} for title in meals]
+        day: [{"recipe": title, "side_recipe": None, "accepted": False} for title in meals]
         for day, meals in plan_titles.items()
     }
     assert fetched == expected
@@ -103,9 +103,36 @@ def test_mark_meal_accepted(db_session):
     meal = mark_meal_accepted(db_session, plan_date, 1, True)
     assert meal is not None and meal.accepted is True
     fetched = get_plan(db_session, plan_date)
-    assert fetched == {plan_date.isoformat(): [{"recipe": r.title, "accepted": True}]}
+    assert fetched == {
+        plan_date.isoformat(): [
+            {"recipe": r.title, "side_recipe": None, "accepted": True}
+        ]
+    }
     stored = db_session.get(Meal, (plan_date, 1))
     assert stored is not None and stored.accepted is True
+
+
+def test_meal_with_side_recipe(db_session):
+    main = create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side = create_recipe(db_session, title="Side", servings_default=1, course="main")
+    plan_date = date(2024, 9, 1)
+    set_meal_plan(
+        db_session,
+        {plan_date.isoformat(): [{"main_id": main.id, "side_id": side.id}]},
+    )
+    fetched = get_plan(db_session, plan_date)
+    assert fetched == {
+        plan_date.isoformat(): [
+            {"recipe": main.title, "side_recipe": side.title, "accepted": False}
+        ]
+    }
+    meal = db_session.get(Meal, (plan_date, 1))
+    assert (
+        meal is not None
+        and meal.recipe_id == main.id
+        and meal.side_recipe_id == side.id
+        and meal.side_recipe is not None
+    )
 
 
 def test_delete_plan_cascades_meals(db_session):
