@@ -206,6 +206,31 @@ export default function PlanView() {
     } catch {
       // ignore
     }
+    const meal = plan[day][idx]
+    const mainTitle = meal.main.endsWith(' (leftover)')
+      ? meal.main.slice(0, -11)
+      : meal.main
+    try {
+      await request('/feedback/accept', {
+        method: 'POST',
+        body: JSON.stringify({ title: mainTitle }),
+      })
+    } catch {
+      // ignore
+    }
+    if (meal.side) {
+      const sideTitle = meal.side.endsWith(' (leftover)')
+        ? meal.side.slice(0, -11)
+        : meal.side
+      try {
+        await request('/feedback/accept', {
+          method: 'POST',
+          body: JSON.stringify({ title: sideTitle }),
+        })
+      } catch {
+        // ignore
+      }
+    }
     setAccepted({ ...accepted, [`${day}-${idx}`]: true })
   }
 
@@ -315,6 +340,14 @@ export default function PlanView() {
         } catch {
           // ignore
         }
+        try {
+          await request('/feedback/accept', {
+            method: 'POST',
+            body: JSON.stringify({ title }),
+          })
+        } catch {
+          // ignore
+        }
         setAccepted({ ...accepted, [`${day}-${idx}`]: true })
       }
     } else {
@@ -327,6 +360,14 @@ export default function PlanView() {
       await persistPlan(updated)
       try {
         await mealPlansApi.accept(day, idx + 1, true)
+      } catch {
+        // ignore
+      }
+      try {
+        await request('/feedback/accept', {
+          method: 'POST',
+          body: JSON.stringify({ title }),
+        })
       } catch {
         // ignore
       }
