@@ -216,8 +216,7 @@ def set_meal_plan(
     plan:
         Mapping of ISO formatted date strings to iterables describing meals.
         Each meal may be an integer recipe ID (main dish only) or a mapping/
-        object with ``main_id`` and optional ``side_id`` or ``side_ids``
-        attributes.
+        object with ``main_id`` and optional ``side_ids`` attribute.
         The order of meals within each iterable determines the ``meal_number``
         for the created :class:`Meal` rows.
     """
@@ -240,17 +239,10 @@ def set_meal_plan(
                 side_ids: List[int] = []
             elif isinstance(meal, dict):
                 main_id = meal.get("main_id")
-                if "side_ids" in meal and meal["side_ids"]:
-                    side_ids = list(meal["side_ids"])
-                elif meal.get("side_id"):
-                    side_ids = [meal.get("side_id")]  # type: ignore[list-item]
-                else:
-                    side_ids = []
+                side_ids = list(meal.get("side_ids", []) or [])
             else:
                 main_id = getattr(meal, "main_id")
                 side_ids = list(getattr(meal, "side_ids", []) or [])
-                if not side_ids and getattr(meal, "side_id", None):
-                    side_ids = [getattr(meal, "side_id")]  # type: ignore[list-item]
 
             meal_plan.meals.append(
                 Meal(

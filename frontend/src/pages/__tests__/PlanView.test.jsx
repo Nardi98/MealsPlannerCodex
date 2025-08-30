@@ -185,7 +185,7 @@ test('add side dish persists via API', async () => {
           ]),
       })
     }
-    if (url.endsWith('/meal-plans/side/add')) {
+    if (url.endsWith('/meal-plans/side')) {
       sidePayload = JSON.parse(opts.body)
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
     }
@@ -229,7 +229,7 @@ test('generate side dish persists via API', async () => {
         json: () => Promise.resolve({ id: 3, title: 'Generated' }),
       })
     }
-    if (url.endsWith('/meal-plans/side/add')) {
+    if (url.endsWith('/meal-plans/side')) {
       sidePayload = JSON.parse(opts.body)
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
     }

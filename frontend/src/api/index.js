@@ -87,9 +87,9 @@ export const mealPlansApi = {
       Object.entries(plan).forEach(([day, meals]) => {
         out[day] = meals.map((m) => {
           if (typeof m === 'number' || typeof m === 'string') return m
-          if ('main_id' in m || 'side_id' in m) return m
+          if ('main_id' in m || 'side_ids' in m) return m
           const res = { main_id: m.main }
-          if (m.side !== undefined) res.side_id = m.side
+          if (m.side !== undefined) res.side_ids = [m.side]
           return res
         })
       })
@@ -123,7 +123,7 @@ export const mealPlansApi = {
       }),
     }),
   addSide: (planDate, mealNumber, sideId) =>
-    request('/meal-plans/side/add', {
+    request('/meal-plans/side', {
       method: 'POST',
       body: JSON.stringify({
         plan_date: planDate,
@@ -132,7 +132,7 @@ export const mealPlansApi = {
       }),
     }),
   replaceSide: (planDate, mealNumber, index, sideId) =>
-    request('/meal-plans/side/replace', {
+    request('/meal-plans/side', {
       method: 'POST',
       body: JSON.stringify({
         plan_date: planDate,
@@ -142,8 +142,8 @@ export const mealPlansApi = {
       }),
     }),
   removeSide: (planDate, mealNumber, index) =>
-    request('/meal-plans/side/remove', {
-      method: 'POST',
+    request('/meal-plans/side', {
+      method: 'DELETE',
       body: JSON.stringify({
         plan_date: planDate,
         meal_number: mealNumber,

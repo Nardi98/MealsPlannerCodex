@@ -81,7 +81,7 @@ class RecipeOut(BaseModel):
 
 class MealAssignment(BaseModel):
     main_id: int
-    side_id: int | None = None
+    side_ids: List[int] = Field(default_factory=list)
 
 
 class MealPlanCreate(BaseModel):
@@ -142,21 +142,13 @@ class MealAcceptanceIn(BaseModel):
     accepted: bool
 
 
-class MealSideAddIn(BaseModel):
-    """Payload for attaching a new side dish to a meal."""
+class MealSideIn(BaseModel):
+    """Payload for adding or replacing a side dish."""
 
     plan_date: date
     meal_number: int
     side_id: int
-
-
-class MealSideReplaceIn(BaseModel):
-    """Payload for replacing an existing side dish."""
-
-    plan_date: date
-    meal_number: int
-    index: int
-    side_id: int
+    index: int | None = None
 
 
 class MealSideRemoveIn(BaseModel):
