@@ -131,6 +131,11 @@ export const mealPlansApi = {
         side_id: sideId,
       }),
     }),
+  generateSide: (payload) =>
+    request('/side-dishes/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };
 export const tagsApi = createCrud('tags');
 export const feedbackApi = createCrud('feedback');

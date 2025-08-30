@@ -118,8 +118,73 @@ def generate_plan(
             idx = day_offset * meals_per_day + meal_idx
             recipe, leftover = selections[idx]
             title = recipe.title + (" (leftover)" if leftover else "")
-            schedule[key].append(title)
+        schedule[key].append(title)
     return schedule
+
+
+def generate_side_dish(
+    session: Session,
+    tags: Iterable[str] | None = None,
+    avoid_tags: Iterable[str] | None = None,
+    reduce_tags: Iterable[str] | None = None,
+    epsilon: float = 0.0,
+    keep_days: int = 7,
+    bulk_leftovers: bool = True,
+    seasonality_weight: float = 1.0,
+    recency_weight: float = 1.0,
+    tag_penalty_weight: float = 1.0,
+    bulk_bonus_weight: float = 1.0,
+) -> Recipe:
+    """Select a single side dish using the planner's scoring logic.
+
+    Recipes with ``course == 'side'`` are filtered and scored in the same
+    fashion as :func:`generate_plan`. The highest ranked recipe (respecting the
+    ``epsilon`` exploration parameter) is returned.  The function reuses
+    :func:`generate_weekly_plan` to honour leftover logic but only requests a
+    single day.
+    """
+
+    recipes = session.query(Recipe).filter(Recipe.course == "side").all()
+    today = date.today()
+    available = filter_recipes(
+        recipes,
+        season=today.month,
+        tags=tags,
+        avoid_tags=avoid_tags,
+        reduce_tags=reduce_tags,
+    )
+
+    scored = sorted(
+        available,
+        key=lambda r: score_recipe(
+            _recipe_to_dict(r),
+            today=today,
+            seasonality_weight=seasonality_weight,
+            recency_weight=recency_weight,
+            tag_penalty_weight=tag_penalty_weight,
+            bulk_bonus_weight=bulk_bonus_weight,
+            reduce_tags=reduce_tags or [],
+        ),
+        reverse=True,
+    )
+
+    ordered: List[Recipe] = []
+    candidates = scored[:]
+    while candidates:
+        if epsilon and random.random() < epsilon:
+            idx = random.randrange(len(candidates))
+            ordered.append(candidates.pop(idx))
+        else:
+            ordered.append(candidates.pop(0))
+
+    weekly = generate_weekly_plan(
+        ordered,
+        avoid_tags=avoid_tags,
+        reduce_tags=reduce_tags,
+        keep_days=keep_days if bulk_leftovers else 1,
+        days=1,
+    )
+    return weekly[0][0]
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
@@ -247,5 +312,10 @@ def generate_weekly_plan(
     return plan
 
 
-__all__ = ["generate_plan", "filter_recipes", "generate_weekly_plan"]
+__all__ = [
+    "generate_plan",
+    "generate_side_dish",
+    "filter_recipes",
+    "generate_weekly_plan",
+]
 

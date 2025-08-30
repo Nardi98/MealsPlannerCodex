@@ -106,6 +106,20 @@ class MealPlanGenerate(BaseModel):
     keep_days: int = 7
 
 
+class SideDishGenerate(BaseModel):
+    """Parameters for generating a side dish recommendation."""
+
+    epsilon: float = 0.0
+    avoid_tags: List[str] = []
+    reduce_tags: List[str] = []
+    seasonality_weight: float = 1.0
+    recency_weight: float = 1.0
+    tag_penalty_weight: float = 1.0
+    bulk_bonus_weight: float = 1.0
+    bulk_leftovers: bool = True
+    keep_days: int = 7
+
+
 class FeedbackIn(BaseModel):
     """Payload for feedback endpoints."""
 

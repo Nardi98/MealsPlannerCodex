@@ -33,3 +33,12 @@ test('addSide posts payload', async () => {
     }),
   })
 })
+
+test('generateSide posts payload', async () => {
+  const payload = { main_id: 1 }
+  await mealPlansApi.generateSide(payload)
+  expect(request).toHaveBeenCalledWith('/side-dishes/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+})

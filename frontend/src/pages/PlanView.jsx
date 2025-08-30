@@ -13,6 +13,10 @@ export default function PlanView() {
   const [allTitles, setAllTitles] = useState([])
   const [sideTitles, setSideTitles] = useState([])
   const [query, setQuery] = useState('')
+  const [epsilon, setEpsilon] = useState(0)
+  const [avoidTags, setAvoidTags] = useState('')
+  const [reduceTags, setReduceTags] = useState('')
+  const [showSideSettings, setShowSideSettings] = useState(false)
   const getWeekRange = () => {
     const today = new Date()
     const day = today.getDay()
@@ -61,8 +65,21 @@ export default function PlanView() {
       }
       try {
         const settings = await request('/plan/settings')
-        if (settings && settings.keep_days !== undefined) {
-          setKeepDays(settings.keep_days)
+        if (settings) {
+          if (settings.keep_days !== undefined) setKeepDays(settings.keep_days)
+          if (settings.epsilon !== undefined) setEpsilon(settings.epsilon)
+          if (settings.avoid_tags)
+            setAvoidTags(
+              Array.isArray(settings.avoid_tags)
+                ? settings.avoid_tags.join(', ')
+                : settings.avoid_tags
+            )
+          if (settings.reduce_tags)
+            setReduceTags(
+              Array.isArray(settings.reduce_tags)
+                ? settings.reduce_tags.join(', ')
+                : settings.reduce_tags
+            )
         }
       } catch {
         // ignore errors
@@ -243,25 +260,48 @@ export default function PlanView() {
     setQuery('')
   }
 
-  const confirmSwap = async (title) => {
+  const handleGenerateSide = async () => {
+    if (!swapSlot) return
+    const params = {
+      epsilon: Number(epsilon),
+      avoid_tags: avoidTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      reduce_tags: reduceTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      keep_days: Number(keepDays),
+    }
+    try {
+      const res = await mealPlansApi.generateSide(params)
+      await confirmSwap(res)
+    } catch {
+      // ignore errors
+    }
+  }
+
+  const confirmSwap = async (choice) => {
     if (!swapSlot) return
     const { day, idx, type } = swapSlot
     if (type === 'side') {
+      const title = typeof choice === 'string' ? choice : choice.title
       const updated = {
         ...plan,
         [day]: plan[day].map((m, i) => (i === idx ? { ...m, side: title } : m)),
       }
       setPlan(updated)
-      let list = recipes
-      if (list.length === 0) {
-        list = await recipesApi.fetchAll()
-        setRecipes(list)
+      let sideId = typeof choice === 'string' ? null : choice.id
+      if (!sideId) {
+        let list = recipes
+        if (list.length === 0) {
+          list = await recipesApi.fetchAll()
+          setRecipes(list)
+        }
+        const found = list.find((r) => r.title === title)
+        sideId = found ? found.id : null
       }
-      const map = {}
-      list.forEach((r) => {
-        map[r.title] = r.id
-      })
-      const sideId = map[title]
       if (sideId) {
         try {
           await mealPlansApi.addSide(day, idx + 1, sideId)
@@ -278,6 +318,7 @@ export default function PlanView() {
         setAccepted({ ...accepted, [`${day}-${idx}`]: true })
       }
     } else {
+      const title = choice
       const updated = {
         ...plan,
         [day]: plan[day].map((m, i) => (i === idx ? { ...m, main: title } : m)),
@@ -321,6 +362,9 @@ export default function PlanView() {
         </button>
         <button type="button" onClick={() => navigate('/grocery-list')}>
           Grocery List
+        </button>
+        <button type="button" onClick={() => setShowSideSettings((s) => !s)}>
+          {showSideSettings ? 'Hide Settings' : 'Show Settings'}
         </button>
       </div>
       <table>
@@ -382,6 +426,62 @@ export default function PlanView() {
           ))}
         </tbody>
       </table>
+      {showSideSettings && (
+        <div
+          className="side-settings"
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            width: '250px',
+            height: '100%',
+            backgroundColor: '#f7f7f7',
+            borderLeft: '1px solid #ccc',
+            padding: '1rem',
+            overflowY: 'auto',
+          }}
+        >
+          <h3>Advanced Options</h3>
+          <div>
+            <label htmlFor="epsilon-input">ε </label>
+            <input
+              id="epsilon-input"
+              type="number"
+              step="0.1"
+              value={epsilon}
+              onChange={(e) => setEpsilon(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="keep-days-input">Keep Days </label>
+            <input
+              id="keep-days-input"
+              type="number"
+              min="1"
+              value={keepDays}
+              onChange={(e) => setKeepDays(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="avoid-tags-input">Avoid Tags </label>
+            <input
+              id="avoid-tags-input"
+              value={avoidTags}
+              onChange={(e) => setAvoidTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+          <div>
+            <label htmlFor="reduce-tags-input">Reduce Tags </label>
+            <input
+              id="reduce-tags-input"
+              value={reduceTags}
+              onChange={(e) => setReduceTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+        </div>
+      )}
       {swapSlot && (
         <div
           className="swap-dialog"
@@ -393,6 +493,11 @@ export default function PlanView() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search Recipe"
           />
+          {swapSlot.type === 'side' && (
+            <button type="button" onClick={handleGenerateSide}>
+              Generate Side
+            </button>
+          )}
           <ul>
             {visibleTitles.map((t) => (
               <li key={t}>
