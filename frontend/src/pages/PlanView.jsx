@@ -13,6 +13,10 @@ export default function PlanView() {
   const [allTitles, setAllTitles] = useState([])
   const [sideTitles, setSideTitles] = useState([])
   const [query, setQuery] = useState('')
+  const [epsilon, setEpsilon] = useState(0)
+  const [avoidTags, setAvoidTags] = useState('')
+  const [reduceTags, setReduceTags] = useState('')
+  const [showSideSettings, setShowSideSettings] = useState(false)
   const getWeekRange = () => {
     const today = new Date()
     const day = today.getDay()
@@ -61,8 +65,21 @@ export default function PlanView() {
       }
       try {
         const settings = await request('/plan/settings')
-        if (settings && settings.keep_days !== undefined) {
-          setKeepDays(settings.keep_days)
+        if (settings) {
+          if (settings.keep_days !== undefined) setKeepDays(settings.keep_days)
+          if (settings.epsilon !== undefined) setEpsilon(settings.epsilon)
+          if (settings.avoid_tags)
+            setAvoidTags(
+              Array.isArray(settings.avoid_tags)
+                ? settings.avoid_tags.join(', ')
+                : settings.avoid_tags
+            )
+          if (settings.reduce_tags)
+            setReduceTags(
+              Array.isArray(settings.reduce_tags)
+                ? settings.reduce_tags.join(', ')
+                : settings.reduce_tags
+            )
         }
       } catch {
         // ignore errors
@@ -322,6 +339,9 @@ export default function PlanView() {
         <button type="button" onClick={() => navigate('/grocery-list')}>
           Grocery List
         </button>
+        <button type="button" onClick={() => setShowSideSettings((s) => !s)}>
+          {showSideSettings ? 'Hide Settings' : 'Show Settings'}
+        </button>
       </div>
       <table>
         <thead>
@@ -382,6 +402,62 @@ export default function PlanView() {
           ))}
         </tbody>
       </table>
+      {showSideSettings && (
+        <div
+          className="side-settings"
+          style={{
+            position: 'fixed',
+            top: 0,
+            right: 0,
+            width: '250px',
+            height: '100%',
+            backgroundColor: '#f7f7f7',
+            borderLeft: '1px solid #ccc',
+            padding: '1rem',
+            overflowY: 'auto',
+          }}
+        >
+          <h3>Advanced Options</h3>
+          <div>
+            <label htmlFor="epsilon-input">ε </label>
+            <input
+              id="epsilon-input"
+              type="number"
+              step="0.1"
+              value={epsilon}
+              onChange={(e) => setEpsilon(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="keep-days-input">Keep Days </label>
+            <input
+              id="keep-days-input"
+              type="number"
+              min="1"
+              value={keepDays}
+              onChange={(e) => setKeepDays(e.target.value)}
+            />
+          </div>
+          <div>
+            <label htmlFor="avoid-tags-input">Avoid Tags </label>
+            <input
+              id="avoid-tags-input"
+              value={avoidTags}
+              onChange={(e) => setAvoidTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+          <div>
+            <label htmlFor="reduce-tags-input">Reduce Tags </label>
+            <input
+              id="reduce-tags-input"
+              value={reduceTags}
+              onChange={(e) => setReduceTags(e.target.value)}
+              placeholder="comma separated"
+            />
+          </div>
+        </div>
+      )}
       {swapSlot && (
         <div
           className="swap-dialog"

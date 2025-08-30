@@ -199,3 +199,28 @@ test('add side dish persists via API', async () => {
   await screen.findByText('Side')
   expect(sidePayload).toEqual({ plan_date: '2024-01-01', meal_number: 1, side_id: 2 })
 })
+
+test('settings panel toggles and updates inputs', async () => {
+  global.fetch = vi.fn((url) => {
+    if (url.endsWith('/plan/settings')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ keep_days: 1 }) })
+    }
+    if (url.endsWith('/recipes')) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+    }
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) })
+  })
+
+  renderWithPlan({ '2024-01-01': [{ main: 'A' }] })
+  expect(screen.queryByText('Advanced Options')).toBeNull()
+  fireEvent.click(screen.getByText('Show Settings'))
+  await screen.findByText('Advanced Options')
+  const eps = screen.getByLabelText('ε')
+  fireEvent.change(eps, { target: { value: '0.5' } })
+  expect(eps.value).toBe('0.5')
+  const keep = screen.getByLabelText('Keep Days')
+  fireEvent.change(keep, { target: { value: '5' } })
+  expect(keep.value).toBe('5')
+  fireEvent.click(screen.getByText('Hide Settings'))
+  await waitFor(() => expect(screen.queryByText('Advanced Options')).toBeNull())
+})
