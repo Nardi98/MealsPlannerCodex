@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { recipesApi } from '../api';
+import { useEffect, useState } from 'react'
+import { recipesApi } from '../api'
+import { Card, Badge } from '../ui'
 
 export default function RecipeList() {
   const [recipes, setRecipes] = useState([]);
@@ -22,14 +23,21 @@ export default function RecipeList() {
   }
 
   return (
-    <ul>
-      {recipes.map((r) => (
-        <li key={r.id}>
-          {r.title}{' '}
-          {r.score !== undefined && `(${r.score.toFixed(2)})`}{' '}
-          {r.course && <span className="course-label">[{r.course}]</span>}
-        </li>
-      ))}
-    </ul>
-  );
+    <Card>
+      <ul className="space-y-1">
+        {recipes.map((r) => (
+          <li key={r.id}>
+            {r.title}{' '}
+            {r.score !== undefined && `(${r.score.toFixed(2)})`}{' '}
+            {r.course && <Badge tone="a1">[{r.course}]</Badge>}{' '}
+            {(r.tags || []).map((name) => (
+              <Badge key={name} className="ml-1">
+                {name}
+              </Badge>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
 }

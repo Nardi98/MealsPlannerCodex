@@ -3,6 +3,7 @@ import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
+import { Card, Button, Input, Badge } from '../ui'
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -141,93 +142,137 @@ export default function Recipes() {
   }
 
   return (
-    <div>
+    <div className="space-y-4">
       <h1>Recipes</h1>
-      <form onSubmit={submit}>
-        <div>
-          <label>Title </label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-        <div>
-          <label>Servings </label>
-          <input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} />
-        </div>
-        <div>
-          <label>Course </label>
-          <select value={course} onChange={(e) => setCourse(e.target.value)}>
-            <option value="main">main</option>
-            <option value="side">side</option>
-            <option value="first-course">first course</option>
-          </select>
-        </div>
-        <div>
-          <label>Procedure </label>
-          <textarea value={procedure} onChange={(e) => setProcedure(e.target.value)} />
-        </div>
-        <div>
-          <label>
-            <input type="checkbox" checked={bulkPrep} onChange={(e) => setBulkPrep(e.target.checked)} /> Bulk prep
-          </label>
-        </div>
-        <div>
-          <label>Tags </label>
-          <TagSelector
-            tags={availableTags}
-            selected={selectedTags}
-            onChange={setSelectedTags}
-            onCreate={handleCreateTag}
-          />
-        </div>
-        <div>
-          <h3>Ingredients</h3>
-          {ingredients.map((ing, idx) => (
-            <IngredientRow
-              key={idx}
-              index={idx}
-              ingredient={ing}
-              onChange={updateIngredient}
-              onRemove={removeIngredient}
-              fetchOptions={fetchIngredientOptions}
-            />
-          ))}
-          <button type="button" onClick={addIngredient}>Add Ingredient</button>
-        </div>
-        <button type="submit">{editingId !== null ? 'Save Recipe' : 'Add Recipe'}</button>
-      </form>
-      <hr />
-      <div>
-        <label>Filter by tags </label>
-        <TagSelector tags={availableTags} selected={filterTags} onChange={setFilterTags} />
-      </div>
-      {(() => {
-        const filtered = filterTags.length
-          ? recipes.filter((r) => filterTags.every((t) => (r.tags || []).includes(t)))
-          : recipes
-        if (filtered.length === 0) {
-          return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
-        }
-        return filtered.map((r) => (
-          <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-            <h3>
-              {r.title}{' '}
-              {r.course && <span className="course-label">[{r.course}]</span>}{' '}
-              <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
-              </span>
-            </h3>
-            {(r.tags || []).map((name) => (
-              <span key={name} className="recipe-tag">{name}</span>
-            ))}
-            <ul>
-              {(r.ingredients || []).map((ing, i) => (
-                <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
-              ))}
-            </ul>
-            <button type="button" onClick={() => editRecipe(r)}>Edit</button>
-            <button type="button" onClick={() => deleteRecipe(r.id)}>Delete</button>
+      <Card>
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block">Title</label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} required className="mt-1 w-full" />
           </div>
-        ))
-      })()}
+          <div>
+            <label className="block">Servings</label>
+            <Input
+              type="number"
+              min="1"
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+              className="mt-1 w-full"
+            />
+          </div>
+          <div>
+            <label className="block">Course</label>
+            <select
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <option value="main">main</option>
+              <option value="side">side</option>
+              <option value="first-course">first course</option>
+            </select>
+          </div>
+          <div>
+            <label className="block">Procedure</label>
+            <textarea
+              value={procedure}
+              onChange={(e) => setProcedure(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+              style={{ borderColor: 'var(--border)' }}
+            />
+          </div>
+          <div>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={bulkPrep}
+                onChange={(e) => setBulkPrep(e.target.checked)}
+                className="h-4 w-4"
+                style={{ accentColor: 'var(--c-a1)' }}
+              />
+              Bulk prep
+            </label>
+          </div>
+          <div>
+            <label className="block mb-1">Tags</label>
+            <TagSelector
+              tags={availableTags}
+              selected={selectedTags}
+              onChange={setSelectedTags}
+              onCreate={handleCreateTag}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2">Ingredients</h3>
+            {ingredients.map((ing, idx) => (
+              <IngredientRow
+                key={idx}
+                index={idx}
+                ingredient={ing}
+                onChange={updateIngredient}
+                onRemove={removeIngredient}
+                fetchOptions={fetchIngredientOptions}
+              />
+            ))}
+            <Button type="button" variant="a1" onClick={addIngredient} className="mt-2">
+              Add Ingredient
+            </Button>
+          </div>
+          <Button type="submit" variant="primary">
+            {editingId !== null ? 'Save Recipe' : 'Add Recipe'}
+          </Button>
+        </form>
+      </Card>
+      <Card>
+        <div className="mb-4">
+          <label className="block mb-1">Filter by tags</label>
+          <TagSelector tags={availableTags} selected={filterTags} onChange={setFilterTags} />
+        </div>
+        {(() => {
+          const filtered = filterTags.length
+            ? recipes.filter((r) => filterTags.every((t) => (r.tags || []).includes(t)))
+            : recipes
+          if (filtered.length === 0) {
+            return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
+          }
+          return filtered.map((r) => (
+            <div
+              key={r.id}
+              className="mb-2 border-b pb-2 last:mb-0 last:border-b-0 last:pb-0"
+              style={{ borderColor: 'var(--border)' }}
+            >
+              <h3>
+                {r.title}{' '}
+                {r.course && <Badge tone="a1">[{r.course}]</Badge>}{' '}
+                <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
+                  ({`Score: ${r.score.toFixed(2)}`})
+                </span>
+              </h3>
+              {(r.tags || []).map((name) => (
+                <Badge key={name} className="mr-1">
+                  {name}
+                </Badge>
+              ))}
+              <ul className="ml-4 list-disc">
+                {(r.ingredients || []).map((ing, i) => (
+                  <li key={i}>
+                    {ing.quantity} {ing.unit} {ing.name}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-2 flex gap-2">
+                <Button variant="a1" onClick={() => editRecipe(r)}>
+                  Edit
+                </Button>
+                <Button variant="danger" onClick={() => deleteRecipe(r.id)}>
+                  Delete
+                </Button>
+              </div>
+            </div>
+          ))
+        })()}
+      </Card>
     </div>
   )
 }

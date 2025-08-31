@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Input, Button } from '../ui'
 
 const MONTHS = [
   'January',
@@ -35,28 +36,32 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
   const season = ingredient.season ?? []
 
   return (
-    <div className="ingredient-row">
-      <input
+    <div className="flex flex-wrap items-center gap-2">
+      <Input
         type="text"
         list={`ingredient-options-${index}`}
         placeholder={`Ingredient ${index + 1}`}
         value={name}
         onChange={handleNameChange}
+        className="flex-1"
       />
       <datalist id={`ingredient-options-${index}`}>
         {options.map((opt) => (
           <option key={opt.id || opt} value={opt.name || opt} />
         ))}
       </datalist>
-      <input
+      <Input
         type="number"
         placeholder="Qty"
         value={ingredient.quantity ?? ''}
         onChange={(e) => onChange(index, { ...ingredient, quantity: e.target.value })}
+        className="w-24"
       />
       <select
         value={ingredient.unit}
         onChange={(e) => onChange(index, { ...ingredient, unit: e.target.value })}
+        className="rounded-lg border px-2 py-2 text-sm"
+        style={{ borderColor: 'var(--border)' }}
       >
         <option value="g">g</option>
         <option value="kg">kg</option>
@@ -73,6 +78,8 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
             season: Array.from(e.target.selectedOptions).map((o) => Number(o.value)),
           })
         }
+        className="rounded-lg border px-2 py-2 text-sm"
+        style={{ borderColor: 'var(--border)' }}
       >
         {MONTHS.map((m, i) => (
           <option key={i + 1} value={i + 1}>
@@ -80,7 +87,9 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
           </option>
         ))}
       </select>
-      <button type="button" onClick={() => onRemove(index)}>✖</button>
+      <Button variant="danger" onClick={() => onRemove(index)} className="px-2 py-1">
+        ✖
+      </Button>
     </div>
   )
 }
