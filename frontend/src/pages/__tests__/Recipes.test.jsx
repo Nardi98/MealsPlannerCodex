@@ -35,5 +35,5 @@ test('shows course next to recipe title', async () => {
   ])
   renderWithContext()
   await waitFor(() => screen.getByText('Soup'))
-  expect(screen.getByText('[main]')).toBeInTheDocument()
+  expect(screen.getByText('main', { selector: 'span' })).toBeInTheDocument()
 })

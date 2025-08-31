@@ -3,6 +3,7 @@ import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
 import AddRecipeModal from '../components/AddRecipeModal'
+import RecipeCard from '../components/RecipeCard'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -208,27 +209,13 @@ export default function Recipes() {
         if (filtered.length === 0) {
           return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
         }
-        return filtered.map((r) => (
-          <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-            <h3>
-              {r.title}{' '}
-              {r.course && <span className="course-label">[{r.course}]</span>}{' '}
-              <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
-              </span>
-            </h3>
-            {(r.tags || []).map((name) => (
-              <span key={name} className="recipe-tag">{name}</span>
+        return (
+          <div className="space-y-4">
+            {filtered.map((r) => (
+              <RecipeCard key={r.id} recipe={r} onEdit={editRecipe} onDelete={deleteRecipe} />
             ))}
-            <ul>
-              {(r.ingredients || []).map((ing, i) => (
-                <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
-              ))}
-            </ul>
-            <button type="button" onClick={() => editRecipe(r)}>Edit</button>
-            <button type="button" onClick={() => deleteRecipe(r.id)}>Delete</button>
           </div>
-        ))
+        )
       })()}
     </div>
   )
