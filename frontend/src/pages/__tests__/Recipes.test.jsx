@@ -1,39 +1,21 @@
-import React, { useState } from 'react'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { vi, afterEach, test, expect } from 'vitest'
-import Recipes from '../Recipes'
-import { AppContext } from '../../App'
-import { tagsApi, recipesApi } from '../../api'
+import React from 'react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { describe, it, expect, afterEach } from 'vitest';
+import Recipes from '../Recipes';
 
-function renderWithContext() {
-  function Wrapper({ children }) {
-    const [recipes, setRecipes] = useState([])
-    const value = { recipes, setRecipes, plan: {}, setPlan: () => {} }
-    return (
-      <AppContext.Provider value={value}>
-        <MemoryRouter>{children}</MemoryRouter>
-      </AppContext.Provider>
-    )
-  }
-  return render(
-    <Wrapper>
-      <Recipes />
-    </Wrapper>
-  )
-}
+afterEach(() => cleanup());
 
-afterEach(() => {
-  vi.restoreAllMocks()
-  cleanup()
-})
+describe('Recipes page', () => {
+  it('displays course and score for a recipe', () => {
+    render(<Recipes />);
+    expect(screen.getByText('Lemon Herb Chicken')).toBeInTheDocument();
+    expect(screen.getAllByText('main').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Score: 4.5/)).toBeInTheDocument();
+  });
 
-test('shows course next to recipe title', async () => {
-  vi.spyOn(tagsApi, 'fetchAll').mockResolvedValue([])
-  vi.spyOn(recipesApi, 'fetchAll').mockResolvedValue([
-    { id: 1, title: 'Soup', course: 'main', tags: [], ingredients: [] },
-  ])
-  renderWithContext()
-  await waitFor(() => screen.getByText('Soup'))
-  expect(screen.getByText('[main]')).toBeInTheDocument()
-})
+  it('opens modal to add a recipe', () => {
+    render(<Recipes />);
+    fireEvent.click(screen.getByText('+ New recipe'));
+    expect(screen.getByText('New recipe')).toBeInTheDocument();
+  });
+});

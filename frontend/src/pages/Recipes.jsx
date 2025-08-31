@@ -1,233 +1,220 @@
-import React, { useContext, useState, useEffect } from 'react'
-import { AppContext } from '../App'
-import IngredientRow from '../components/IngredientRow'
-import TagSelector from '../components/TagSelector'
-import { tagsApi, recipesApi, ingredientsApi } from '../api'
+import React, { useState } from 'react';
+import Card from '../components/Card';
+import Badge from '../components/Badge';
+import Button from '../components/Button';
+import Input from '../components/Input';
+import Modal from '../components/Modal';
 
-const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+const initialRecipes = [
+  {
+    id: 1,
+    title: 'Lemon Herb Chicken',
+    course: 'main',
+    score: 4.5,
+    time: '40 min',
+    kcal: 610,
+    tags: ['hot', 'protein', 'quick'],
+    ingredients: ['Chicken breasts', 'Lemon', 'Mixed herbs'],
+    procedure: 'Marinate chicken with herbs and lemon then bake until cooked through.',
+  },
+  {
+    id: 2,
+    title: 'Mushroom Risotto',
+    course: 'main',
+    score: 4.2,
+    time: '40 min',
+    kcal: 620,
+    tags: ['vegetarian'],
+    ingredients: ['Rice', 'Mushrooms', 'Parmesan'],
+    procedure: 'Cook rice slowly adding stock and mushrooms until creamy.',
+  },
+];
 
 export default function Recipes() {
-  const { recipes, setRecipes } = useContext(AppContext)
-  const [title, setTitle] = useState('')
-  const [servings, setServings] = useState(1)
-  const [procedure, setProcedure] = useState('')
-  const [bulkPrep, setBulkPrep] = useState(false)
-  const [course, setCourse] = useState('main')
-  const [availableTags, setAvailableTags] = useState([])
-  const [selectedTags, setSelectedTags] = useState([])
-  const [filterTags, setFilterTags] = useState([])
-  const [ingredients, setIngredients] = useState([])
-  const [editingId, setEditingId] = useState(null)
+  const [recipes, setRecipes] = useState(initialRecipes);
+  const [expanded, setExpanded] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ title: '', course: 'main', score: '', tags: '', ingredients: '', procedure: '' });
+  const [search, setSearch] = useState('');
 
-  const fetchIngredientOptions = async (query) => {
-    if (!query) return []
-    try {
-      return await ingredientsApi.search(query)
-    } catch {
-      return []
-    }
-  }
+  const openNew = () => {
+    setForm({ title: '', course: 'main', score: '', tags: '', ingredients: '', procedure: '' });
+    setEditingId(null);
+    setShowModal(true);
+  };
 
-  const normalizeRecipe = (r) => ({
-    id: r.id,
-    title: r.title,
-    score: r.score ?? 0,
-    servings: r.servings ?? r.servings_default ?? 1,
-    procedure: r.procedure || '',
-    course: r.course ?? 'main',
-    bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
-    tags: (r.tags || []).map((t) => t.name || t),
-    ingredients: (r.ingredients || []).map((ing) => ({
-      name: ing.name,
-      quantity: ing.quantity ?? '',
-      unit: ing.unit || 'g',
-      season: ing.season_months || [],
-    })),
-  })
+  const openEdit = (recipe) => {
+    setForm({
+      title: recipe.title,
+      course: recipe.course,
+      score: recipe.score,
+      tags: recipe.tags.join(', '),
+      ingredients: recipe.ingredients.join('\n'),
+      procedure: recipe.procedure,
+    });
+    setEditingId(recipe.id);
+    setShowModal(true);
+  };
 
-  const refreshRecipes = () =>
-    recipesApi
-      .fetchAll()
-      .then((data) => setRecipes(data.map(normalizeRecipe)))
-      .catch(() => setRecipes([]))
+  const saveRecipe = (e) => {
+    e.preventDefault();
+    const newRecipe = {
+      id: editingId || Date.now(),
+      title: form.title,
+      course: form.course,
+      score: parseFloat(form.score) || 0,
+      time: '',
+      kcal: 0,
+      tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      ingredients: form.ingredients.split('\n').map((l) => l.trim()).filter(Boolean),
+      procedure: form.procedure,
+    };
+    setRecipes((prev) => {
+      const others = prev.filter((r) => r.id !== editingId);
+      return [...others, newRecipe];
+    });
+    setShowModal(false);
+  };
 
-  useEffect(() => {
-    tagsApi
-      .fetchAll()
-      .then(setAvailableTags)
-      .catch(() => setAvailableTags([]))
-    refreshRecipes()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const deleteRecipe = (id) => {
+    setRecipes((prev) => prev.filter((r) => r.id !== id));
+  };
 
-  const addIngredient = () => {
-    setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
-  }
-
-  const updateIngredient = (index, ing) => {
-    const copy = [...ingredients]
-    copy[index] = ing
-    setIngredients(copy)
-  }
-
-  const removeIngredient = (index) => {
-    const copy = ingredients.filter((_, i) => i !== index)
-    setIngredients(copy)
-  }
-
-  const handleCreateTag = (name) => {
-    tagsApi
-      .create({ name })
-      .then((tag) => setAvailableTags([...availableTags, tag]))
-      .catch(() => setAvailableTags([...availableTags, { name }]))
-  }
-
-  const submit = async (e) => {
-    e.preventDefault()
-    const payload = {
-      title,
-      course,
-      servings_default: Number(servings),
-      procedure,
-      bulk_prep: bulkPrep,
-      tags: selectedTags,
-      ingredients: ingredients.map((ing) => ({
-        name: ing.name,
-        quantity: ing.quantity === '' ? null : Number(ing.quantity),
-        unit: ing.unit,
-        season_months: ing.season.length ? ing.season : ALL_MONTHS,
-      })),
-    }
-    try {
-      if (editingId !== null) {
-        await recipesApi.update(editingId, payload)
-      } else {
-        await recipesApi.create(payload)
-      }
-      await refreshRecipes()
-      setEditingId(null)
-      setTitle('')
-      setServings(1)
-      setProcedure('')
-      setBulkPrep(false)
-      setCourse('main')
-      setSelectedTags([])
-      setIngredients([])
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err)
-    }
-  }
-
-  const deleteRecipe = async (id) => {
-    try {
-      await recipesApi.delete(id)
-      await refreshRecipes()
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err)
-    }
-  }
-
-  const editRecipe = (r) => {
-    setTitle(r.title)
-    setServings(r.servings)
-    setProcedure(r.procedure)
-    setCourse(r.course)
-    setBulkPrep(r.bulkPrep)
-    setSelectedTags(r.tags)
-    setIngredients(r.ingredients)
-    setEditingId(r.id)
-  }
+  const filteredRecipes = recipes.filter((r) => r.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div>
-      <h1>Recipes</h1>
-      <form onSubmit={submit}>
-        <div>
-          <label>Title </label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-        <div>
-          <label>Servings </label>
-          <input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} />
-        </div>
-        <div>
-          <label>Course </label>
-          <select value={course} onChange={(e) => setCourse(e.target.value)}>
-            <option value="main">main</option>
-            <option value="side">side</option>
-            <option value="first-course">first course</option>
-          </select>
-        </div>
-        <div>
-          <label>Procedure </label>
-          <textarea value={procedure} onChange={(e) => setProcedure(e.target.value)} />
-        </div>
-        <div>
-          <label>
-            <input type="checkbox" checked={bulkPrep} onChange={(e) => setBulkPrep(e.target.checked)} /> Bulk prep
-          </label>
-        </div>
-        <div>
-          <label>Tags </label>
-          <TagSelector
-            tags={availableTags}
-            selected={selectedTags}
-            onChange={setSelectedTags}
-            onCreate={handleCreateTag}
+    <div className="container">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-lg font-semibold">Recipes</h1>
+        <div className="flex gap-2 items-center">
+          <Input
+            placeholder="Search recipes..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
+          <Button onClick={openNew}>+ New recipe</Button>
         </div>
-        <div>
-          <h3>Ingredients</h3>
-          {ingredients.map((ing, idx) => (
-            <IngredientRow
-              key={idx}
-              index={idx}
-              ingredient={ing}
-              onChange={updateIngredient}
-              onRemove={removeIngredient}
-              fetchOptions={fetchIngredientOptions}
-            />
-          ))}
-          <button type="button" onClick={addIngredient}>Add Ingredient</button>
-        </div>
-        <button type="submit">{editingId !== null ? 'Save Recipe' : 'Add Recipe'}</button>
-      </form>
-      <hr />
-      <div>
-        <label>Filter by tags </label>
-        <TagSelector tags={availableTags} selected={filterTags} onChange={setFilterTags} />
       </div>
-      {(() => {
-        const filtered = filterTags.length
-          ? recipes.filter((r) => filterTags.every((t) => (r.tags || []).includes(t)))
-          : recipes
-        if (filtered.length === 0) {
-          return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
-        }
-        return filtered.map((r) => (
-          <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-            <h3>
-              {r.title}{' '}
-              {r.course && <span className="course-label">[{r.course}]</span>}{' '}
-              <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
-              </span>
-            </h3>
-            {(r.tags || []).map((name) => (
-              <span key={name} className="recipe-tag">{name}</span>
-            ))}
-            <ul>
-              {(r.ingredients || []).map((ing, i) => (
-                <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
+
+      <div className="flex flex-col gap-3">
+        {filteredRecipes.map((r) => (
+          <Card key={r.id} className="cursor-pointer" onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="font-medium">{r.title}</div>
+                <div className="text-xs text-[color:var(--text-muted)]">Score: {r.score}</div>
+              </div>
+              <span className="text-sm text-[color:var(--text-subtle)]">{r.course}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {r.tags.map((tag) => (
+                <Badge key={tag}>{tag}</Badge>
               ))}
-            </ul>
-            <button type="button" onClick={() => editRecipe(r)}>Edit</button>
-            <button type="button" onClick={() => deleteRecipe(r.id)}>Delete</button>
-          </div>
-        ))
-      })()}
+            </div>
+
+            {expanded === r.id && (
+              <div className="mt-3">
+                <div className="text-sm font-medium mb-1">Ingredients</div>
+                <ul className="list-disc list-inside text-sm mb-2">
+                  {r.ingredients.map((ing, i) => (
+                    <li key={i}>{ing}</li>
+                  ))}
+                </ul>
+                <div className="text-sm font-medium mb-1">Procedure</div>
+                <p className="text-sm mb-3">{r.procedure}</p>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="a2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEdit(r);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteRecipe(r.id);
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        ))}
+      </div>
+
+      {showModal && (
+        <Modal title={editingId ? 'Edit recipe' : 'New recipe'} onClose={() => setShowModal(false)}>
+          <form onSubmit={saveRecipe} className="flex flex-col gap-3">
+            <div>
+              <label className="block text-sm mb-1">Title</label>
+              <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Course</label>
+              <select
+                className="w-full border rounded-2xl px-2 py-1"
+                style={{ borderColor: 'var(--border)' }}
+                value={form.course}
+                onChange={(e) => setForm({ ...form, course: e.target.value })}
+              >
+                <option value="main">main</option>
+                <option value="side">side</option>
+                <option value="dessert">dessert</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Score</label>
+              <Input
+                type="number"
+                step="0.1"
+                value={form.score}
+                onChange={(e) => setForm({ ...form, score: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Tags (comma separated)</label>
+              <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Ingredients (one per line)</label>
+              <textarea
+                className="w-full border rounded-2xl px-2 py-1"
+                style={{ borderColor: 'var(--border)' }}
+                rows={3}
+                value={form.ingredients}
+                onChange={(e) => setForm({ ...form, ingredients: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Procedure</label>
+              <textarea
+                className="w-full border rounded-2xl px-2 py-1"
+                style={{ borderColor: 'var(--border)' }}
+                rows={3}
+                value={form.procedure}
+                onChange={(e) => setForm({ ...form, procedure: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2 mt-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm">
+                Save
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
-  )
+  );
 }
