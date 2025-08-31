@@ -6,6 +6,7 @@ import NewPlan from './pages/NewPlan'
 import PlanView from './pages/PlanView'
 import ImportExport from './pages/ImportExport'
 import GroceryList from './pages/GroceryList'
+import UiPreview from './pages/UiPreview'
 
 export const AppContext = React.createContext()
 
@@ -24,6 +25,7 @@ export default function App() {
           <Link to="/plan-view">Plan View</Link>
           <Link to="/grocery-list">Grocery List</Link>
           <Link to="/import-export">Import / Export</Link>
+          <Link to="/ui-preview">UI Preview</Link>
         </nav>
         <Routes>
           <Route path="/" element={<Recipes />} />
@@ -32,6 +34,7 @@ export default function App() {
           <Route path="/plan-view" element={<PlanView />} />
           <Route path="/grocery-list" element={<GroceryList />} />
           <Route path="/import-export" element={<ImportExport />} />
+          <Route path="/ui-preview" element={<UiPreview />} />
         </Routes>
       </Router>
     </AppContext.Provider>

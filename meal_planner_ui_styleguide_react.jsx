@@ -10,6 +10,7 @@ import {
   SwatchIcon,
   AdjustmentsHorizontalIcon,
 } from "@heroicons/react/24/outline";
+import { Button, Badge, Card, NavItem, Input } from "./frontend/src/ui";
 
 /**
  * Meal Planner Style Guide — Editable (React)
@@ -70,7 +71,7 @@ function ColorInput({ label, value, onChange }) {
 
 function Section({ title, children, icon: Icon }) {
   return (
-    <section className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: DEFAULT_TOKENS.border }}>
+    <section className="rounded-lg border bg-white p-4 shadow-sm" style={{ borderColor: DEFAULT_TOKENS.border }}>
       <div className="mb-3 flex items-center gap-2">
         {Icon && <Icon className="h-5 w-5 text-slate-600" />}
         <h2 className="text-lg font-semibold text-slate-800">{title}</h2>
@@ -81,69 +82,6 @@ function Section({ title, children, icon: Icon }) {
 }
 
 // ---------- Component recipes (preview uses current tokens via inline styles) ----------
-function Button({ variant = "primary", children, Icon, onClick }) {
-  const map = {
-    primary: { bg: "var(--c-pos)", fg: "#fff" },
-    danger: { bg: "var(--c-neg)", fg: "#fff" },
-    a1: { bg: "var(--c-a1)", fg: "#fff" },
-    a2: { bg: "var(--c-a2)", fg: "#fff" },
-    ghost: { bg: "transparent", fg: "var(--text-strong)" },
-  }[variant] || { bg: "var(--c-pos)", fg: "#fff" };
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm shadow-sm hover:opacity-95"
-      style={{ backgroundColor: map.bg, color: map.fg }}
-      type="button"
-    >
-      {Icon && <Icon className="h-5 w-5" />} {children}
-    </button>
-  );
-}
-
-function Badge({ tone = "a3", children }) {
-  const fg = `var(--c-${tone})`;
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-      style={{ backgroundColor: `color-mix(in srgb, ${fg} 14%, transparent)`, color: fg }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Card({ children }) {
-  return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: "var(--border)" }}>{children}</div>
-  );
-}
-
-function NavItem({ active, Icon, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-95 ${
-        active ? "text-white" : "text-[var(--text-strong)]"
-      }`}
-      style={{ backgroundColor: active ? "var(--c-a1)" : "transparent" }}
-      type="button"
-    >
-      {Icon && <Icon className="h-5 w-5" />} <span className="text-sm font-medium">{label}</span>
-    </button>
-  );
-}
-
-function Input(props) {
-  return (
-    <input
-      {...props}
-      className="rounded-xl border px-3 py-2 text-sm focus:outline-none"
-      style={{ borderColor: "var(--border)", color: "var(--text-strong)" }}
-    />
-  );
-}
-
 // ---------- CSS generator ----------
 function toCssVariables(tokens) {
   return `:root{\n  --c-white:${tokens.white};\n  --c-pos:${tokens.pos};\n  --c-neg:${tokens.neg};\n  --c-a1:${tokens.a1};\n  --c-a2:${tokens.a2};\n  --c-a3:${tokens.a3};\n  --border:${tokens.border};\n  --text-strong:${tokens.textStrong};\n  --text-muted:${tokens.textMuted};\n  --text-subtle:${tokens.textSubtle};\n}`;
