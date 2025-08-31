@@ -4,6 +4,7 @@ import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
 import { Card, Button, Input, Badge } from '../ui'
+import { BookOpenIcon } from '@heroicons/react/24/outline'
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -143,7 +144,10 @@ export default function Recipes() {
 
   return (
     <div className="space-y-4">
-      <h1>Recipes</h1>
+      <div className="flex items-center gap-2">
+        <BookOpenIcon className="h-6 w-6 text-[var(--c-a3)]" />
+        <h1 className="text-2xl font-semibold">Recipes</h1>
+      </div>
       <Card>
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -165,7 +169,7 @@ export default function Recipes() {
             <select
               value={course}
               onChange={(e) => setCourse(e.target.value)}
-              className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border px-2 py-2 text-sm"
               style={{ borderColor: 'var(--border)' }}
             >
               <option value="main">main</option>
@@ -178,7 +182,7 @@ export default function Recipes() {
             <textarea
               value={procedure}
               onChange={(e) => setProcedure(e.target.value)}
-              className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+              className="mt-1 w-full rounded-xl border px-2 py-2 text-sm"
               style={{ borderColor: 'var(--border)' }}
             />
           </div>

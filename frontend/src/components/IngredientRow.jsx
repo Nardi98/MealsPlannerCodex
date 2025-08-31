@@ -60,7 +60,7 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
       <select
         value={ingredient.unit}
         onChange={(e) => onChange(index, { ...ingredient, unit: e.target.value })}
-        className="rounded-lg border px-2 py-2 text-sm"
+        className="rounded-xl border px-2 py-2 text-sm"
         style={{ borderColor: 'var(--border)' }}
       >
         <option value="g">g</option>
@@ -78,7 +78,7 @@ export default function IngredientRow({ index, ingredient, onChange, onRemove, f
             season: Array.from(e.target.selectedOptions).map((o) => Number(o.value)),
           })
         }
-        className="rounded-lg border px-2 py-2 text-sm"
+        className="rounded-xl border px-2 py-2 text-sm"
         style={{ borderColor: 'var(--border)' }}
       >
         {MONTHS.map((m, i) => (

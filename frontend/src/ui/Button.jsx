@@ -11,7 +11,7 @@ export default function Button({ variant = 'primary', children, Icon, className 
   return (
     <button
       {...props}
-      className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm shadow-sm hover:opacity-95 ${className}`}
+      className={`inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-sm shadow-sm hover:opacity-95 ${className}`}
       style={{ backgroundColor: map.bg, color: map.fg }}
     >
       {Icon && <Icon className="h-5 w-5" />} {children}

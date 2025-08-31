@@ -5,7 +5,7 @@ export default function NavItem({ active, Icon, label, onClick, className = '' }
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-left hover:opacity-95 ${
+      className={`w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-95 ${
         active ? 'text-white' : 'text-[var(--text-strong)]'
       } ${className}`}
       style={{ backgroundColor: active ? 'var(--c-a1)' : 'transparent' }}

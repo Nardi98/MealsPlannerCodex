@@ -82,7 +82,7 @@ export default function RecipeForm({ onCreated }) {
           <select
             value={course}
             onChange={(e) => setCourse(e.target.value)}
-            className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+            className="mt-1 w-full rounded-xl border px-2 py-2 text-sm"
             style={{ borderColor: 'var(--border)' }}
           >
             <option value="main">main</option>
