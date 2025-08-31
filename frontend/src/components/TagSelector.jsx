@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Badge, Button, Input } from '../ui'
 
 export default function TagSelector({ tags, selected, onChange, onCreate }) {
   const [newTag, setNewTag] = useState('')
@@ -21,28 +22,29 @@ export default function TagSelector({ tags, selected, onChange, onCreate }) {
 
   return (
     <div>
-      <div>
+      <div className="flex flex-wrap gap-2">
         {tags.map((t) => (
-          <label key={t.id || t.name} style={{ marginRight: '0.5rem' }}>
+          <label key={t.id || t.name} className="cursor-pointer">
             <input
               type="checkbox"
               checked={selected.includes(t.name)}
               onChange={() => toggle(t.name)}
+              className="sr-only"
             />
-            {t.name}
+            <Badge className={selected.includes(t.name) ? '' : 'opacity-50'}>{t.name}</Badge>
           </label>
         ))}
       </div>
       {onCreate && (
-        <div>
-          <input
+        <div className="mt-2 flex items-center gap-2">
+          <Input
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
             placeholder="New tag"
           />
-          <button type="button" onClick={addTag}>
+          <Button type="button" variant="a1" onClick={addTag}>
             Add
-          </button>
+          </Button>
         </div>
       )}
     </div>

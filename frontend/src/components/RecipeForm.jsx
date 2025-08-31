@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import IngredientRow from './IngredientRow'
 import { recipesApi, ingredientsApi } from '../api'
+import { Card, Button, Input } from '../ui'
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -65,43 +66,50 @@ export default function RecipeForm({ onCreated }) {
   }
 
   return (
-    <form onSubmit={submit}>
-      {error && <p>Error: {error}</p>}
-      <label>
-        Title:
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
-      </label>
-      <label>
-        Servings:
-        <input value={servings} onChange={(e) => setServings(e.target.value)} />
-      </label>
-      <label>
-        Course:
-        <select value={course} onChange={(e) => setCourse(e.target.value)}>
-          <option value="main">main</option>
-          <option value="side">side</option>
-          <option value="dessert">dessert</option>
-        </select>
-      </label>
-      <div>
-        <h3>Ingredients</h3>
-        {ingredients.map((ing, idx) => (
-          <IngredientRow
-            key={idx}
-            index={idx}
-            ingredient={ing}
-            onChange={updateIngredient}
-            onRemove={removeIngredient}
-            fetchOptions={fetchIngredientOptions}
-          />
-        ))}
-        <button type="button" onClick={addIngredient}>
-          Add Ingredient
-        </button>
-      </div>
-      <button type="submit" disabled={loading}>
-        {loading ? 'Saving...' : 'Save'}
-      </button>
-    </form>
+    <Card>
+      <form onSubmit={submit} className="space-y-4">
+        {error && <p>Error: {error}</p>}
+        <label className="block">
+          Title:
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full" />
+        </label>
+        <label className="block">
+          Servings:
+          <Input value={servings} onChange={(e) => setServings(e.target.value)} className="mt-1 w-full" />
+        </label>
+        <label className="block">
+          Course:
+          <select
+            value={course}
+            onChange={(e) => setCourse(e.target.value)}
+            className="mt-1 w-full rounded-lg border px-2 py-2 text-sm"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <option value="main">main</option>
+            <option value="side">side</option>
+            <option value="dessert">dessert</option>
+          </select>
+        </label>
+        <div>
+          <h3 className="mb-2">Ingredients</h3>
+          {ingredients.map((ing, idx) => (
+            <IngredientRow
+              key={idx}
+              index={idx}
+              ingredient={ing}
+              onChange={updateIngredient}
+              onRemove={removeIngredient}
+              fetchOptions={fetchIngredientOptions}
+            />
+          ))}
+          <Button variant="a1" type="button" onClick={addIngredient} className="mt-2">
+            Add Ingredient
+          </Button>
+        </div>
+        <Button type="submit" variant="primary" disabled={loading}>
+          {loading ? 'Saving...' : 'Save'}
+        </Button>
+      </form>
+    </Card>
   )
 }

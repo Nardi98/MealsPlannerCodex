@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function Button({ variant = 'primary', children, Icon, onClick, className = '' }) {
+export default function Button({ variant = 'primary', children, Icon, className = '', ...props }) {
   const map = {
     primary: { bg: 'var(--c-pos)', fg: '#fff' },
     danger: { bg: 'var(--c-neg)', fg: '#fff' },
@@ -10,8 +10,7 @@ export default function Button({ variant = 'primary', children, Icon, onClick, c
   }[variant] || { bg: 'var(--c-pos)', fg: '#fff' }
   return (
     <button
-      type="button"
-      onClick={onClick}
+      {...props}
       className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm shadow-sm hover:opacity-95 ${className}`}
       style={{ backgroundColor: map.bg, color: map.fg }}
     >
