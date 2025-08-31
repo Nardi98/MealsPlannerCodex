@@ -1,35 +1,32 @@
-import { useEffect, useState } from 'react';
-import { recipesApi } from '../api';
+import { useEffect, useState } from 'react'
+import { recipesApi } from '../api'
+import RecipeCard from './RecipeCard'
 
 export default function RecipeList() {
-  const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [recipes, setRecipes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     recipesApi
       .fetchAll()
       .then(setRecipes)
       .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => setLoading(false))
+  }, [])
 
   if (loading) {
-    return <p>Loading...</p>;
+    return <p>Loading...</p>
   }
   if (error) {
-    return <p>Error: {error}</p>;
+    return <p>Error: {error}</p>
   }
 
   return (
-    <ul>
+    <div className="space-y-4">
       {recipes.map((r) => (
-        <li key={r.id}>
-          {r.title}{' '}
-          {r.score !== undefined && `(${r.score.toFixed(2)})`}{' '}
-          {r.course && <span className="course-label">[{r.course}]</span>}
-        </li>
+        <RecipeCard key={r.id} recipe={r} />
       ))}
-    </ul>
-  );
+    </div>
+  )
 }

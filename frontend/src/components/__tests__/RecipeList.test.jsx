@@ -15,5 +15,5 @@ test('displays course label', async () => {
   ])
   render(<RecipeList />)
   await waitFor(() => screen.getByText('Soup'))
-  expect(screen.getByText('[main]')).toBeInTheDocument()
+  expect(screen.getByText('main')).toBeInTheDocument()
 })
