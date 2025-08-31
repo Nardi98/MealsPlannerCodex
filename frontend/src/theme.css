@@ -1,0 +1,17 @@
+:root {
+  --c-white: #F8FAF9;
+  --c-pos: #0C3A2D;
+  --c-neg: #BD210F;
+  --c-a1: #6D9773;
+  --c-a2: #FFB902;
+  --c-a3: #BB8A52;
+  --border: #e2e8f0;
+  --text-strong: #0C3A2D;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+}
+
+body {
+  background-color: var(--c-white);
+  color: var(--text-strong);
+}
