@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { Input } from './Input'
+import { Button } from './Button'
 
 export default function TagSelector({ tags, selected, onChange, onCreate }) {
   const [newTag, setNewTag] = useState('')
@@ -20,12 +22,17 @@ export default function TagSelector({ tags, selected, onChange, onCreate }) {
   }
 
   return (
-    <div>
-      <div>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
         {tags.map((t) => (
-          <label key={t.id || t.name} style={{ marginRight: '0.5rem' }}>
+          <label
+            key={t.id || t.name}
+            className="flex items-center gap-1 text-sm"
+          >
             <input
               type="checkbox"
+              className="rounded border"
+              style={{ borderColor: 'var(--border)' }}
               checked={selected.includes(t.name)}
               onChange={() => toggle(t.name)}
             />
@@ -34,15 +41,17 @@ export default function TagSelector({ tags, selected, onChange, onCreate }) {
         ))}
       </div>
       {onCreate && (
-        <div>
-          <input
+        <div className="flex items-center gap-2">
+          <Input
+            size="sm"
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
             placeholder="New tag"
+            className="flex-1"
           />
-          <button type="button" onClick={addTag}>
+          <Button type="button" size="sm" variant="a2" onClick={addTag}>
             Add
-          </button>
+          </Button>
         </div>
       )}
     </div>

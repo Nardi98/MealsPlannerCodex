@@ -1,5 +1,8 @@
-import React, { useContext, useState, useEffect } from 'react'
+import React, { useContext, useEffect, useState } from 'react'
 import { AppContext } from '../App'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
+import { Input } from '../components/Input'
 import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
@@ -8,47 +11,21 @@ const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
 export default function Recipes() {
   const { recipes, setRecipes } = useContext(AppContext)
+  const [availableTags, setAvailableTags] = useState([])
+  const [showModal, setShowModal] = useState(false)
+
   const [title, setTitle] = useState('')
+  const [course, setCourse] = useState('main')
   const [servings, setServings] = useState(1)
   const [procedure, setProcedure] = useState('')
   const [bulkPrep, setBulkPrep] = useState(false)
-  const [course, setCourse] = useState('main')
-  const [availableTags, setAvailableTags] = useState([])
   const [selectedTags, setSelectedTags] = useState([])
-  const [filterTags, setFilterTags] = useState([])
   const [ingredients, setIngredients] = useState([])
-  const [editingId, setEditingId] = useState(null)
-
-  const fetchIngredientOptions = async (query) => {
-    if (!query) return []
-    try {
-      return await ingredientsApi.search(query)
-    } catch {
-      return []
-    }
-  }
-
-  const normalizeRecipe = (r) => ({
-    id: r.id,
-    title: r.title,
-    score: r.score ?? 0,
-    servings: r.servings ?? r.servings_default ?? 1,
-    procedure: r.procedure || '',
-    course: r.course ?? 'main',
-    bulkPrep: r.bulkPrep ?? r.bulk_prep ?? false,
-    tags: (r.tags || []).map((t) => t.name || t),
-    ingredients: (r.ingredients || []).map((ing) => ({
-      name: ing.name,
-      quantity: ing.quantity ?? '',
-      unit: ing.unit || 'g',
-      season: ing.season_months || [],
-    })),
-  })
 
   const refreshRecipes = () =>
     recipesApi
       .fetchAll()
-      .then((data) => setRecipes(data.map(normalizeRecipe)))
+      .then(setRecipes)
       .catch(() => setRecipes([]))
 
   useEffect(() => {
@@ -59,6 +36,15 @@ export default function Recipes() {
     refreshRecipes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const fetchIngredientOptions = async (query) => {
+    if (!query) return []
+    try {
+      return await ingredientsApi.search(query)
+    } catch {
+      return []
+    }
+  }
 
   const addIngredient = () => {
     setIngredients([...ingredients, { name: '', quantity: '', unit: 'g', season: [] }])
@@ -71,8 +57,7 @@ export default function Recipes() {
   }
 
   const removeIngredient = (index) => {
-    const copy = ingredients.filter((_, i) => i !== index)
-    setIngredients(copy)
+    setIngredients(ingredients.filter((_, i) => i !== index))
   }
 
   const handleCreateTag = (name) => {
@@ -80,6 +65,16 @@ export default function Recipes() {
       .create({ name })
       .then((tag) => setAvailableTags([...availableTags, tag]))
       .catch(() => setAvailableTags([...availableTags, { name }]))
+  }
+
+  const resetForm = () => {
+    setTitle('')
+    setCourse('main')
+    setServings(1)
+    setProcedure('')
+    setBulkPrep(false)
+    setSelectedTags([])
+    setIngredients([])
   }
 
   const submit = async (e) => {
@@ -99,135 +94,128 @@ export default function Recipes() {
       })),
     }
     try {
-      if (editingId !== null) {
-        await recipesApi.update(editingId, payload)
-      } else {
-        await recipesApi.create(payload)
-      }
+      await recipesApi.create(payload)
       await refreshRecipes()
-      setEditingId(null)
-      setTitle('')
-      setServings(1)
-      setProcedure('')
-      setBulkPrep(false)
-      setCourse('main')
-      setSelectedTags([])
-      setIngredients([])
+      setShowModal(false)
+      resetForm()
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(err)
     }
-  }
-
-  const deleteRecipe = async (id) => {
-    try {
-      await recipesApi.delete(id)
-      await refreshRecipes()
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(err)
-    }
-  }
-
-  const editRecipe = (r) => {
-    setTitle(r.title)
-    setServings(r.servings)
-    setProcedure(r.procedure)
-    setCourse(r.course)
-    setBulkPrep(r.bulkPrep)
-    setSelectedTags(r.tags)
-    setIngredients(r.ingredients)
-    setEditingId(r.id)
   }
 
   return (
     <div>
-      <h1>Recipes</h1>
-      <form onSubmit={submit}>
-        <div>
-          <label>Title </label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required />
-        </div>
-        <div>
-          <label>Servings </label>
-          <input type="number" min="1" value={servings} onChange={(e) => setServings(e.target.value)} />
-        </div>
-        <div>
-          <label>Course </label>
-          <select value={course} onChange={(e) => setCourse(e.target.value)}>
-            <option value="main">main</option>
-            <option value="side">side</option>
-            <option value="first-course">first course</option>
-          </select>
-        </div>
-        <div>
-          <label>Procedure </label>
-          <textarea value={procedure} onChange={(e) => setProcedure(e.target.value)} />
-        </div>
-        <div>
-          <label>
-            <input type="checkbox" checked={bulkPrep} onChange={(e) => setBulkPrep(e.target.checked)} /> Bulk prep
-          </label>
-        </div>
-        <div>
-          <label>Tags </label>
-          <TagSelector
-            tags={availableTags}
-            selected={selectedTags}
-            onChange={setSelectedTags}
-            onCreate={handleCreateTag}
-          />
-        </div>
-        <div>
-          <h3>Ingredients</h3>
-          {ingredients.map((ing, idx) => (
-            <IngredientRow
-              key={idx}
-              index={idx}
-              ingredient={ing}
-              onChange={updateIngredient}
-              onRemove={removeIngredient}
-              fetchOptions={fetchIngredientOptions}
-            />
-          ))}
-          <button type="button" onClick={addIngredient}>Add Ingredient</button>
-        </div>
-        <button type="submit">{editingId !== null ? 'Save Recipe' : 'Add Recipe'}</button>
-      </form>
-      <hr />
-      <div>
-        <label>Filter by tags </label>
-        <TagSelector tags={availableTags} selected={filterTags} onChange={setFilterTags} />
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-medium">Recipes</h1>
+        <Button variant="a1" onClick={() => setShowModal(true)}>
+          + New recipe
+        </Button>
       </div>
-      {(() => {
-        const filtered = filterTags.length
-          ? recipes.filter((r) => filterTags.every((t) => (r.tags || []).includes(t)))
-          : recipes
-        if (filtered.length === 0) {
-          return <p>{recipes.length === 0 ? 'No recipes yet.' : 'No recipes match selected tags.'}</p>
-        }
-        return filtered.map((r) => (
-          <div key={r.id} style={{ borderBottom: '1px solid #ccc', padding: '0.5rem 0' }}>
-            <h3>
-              {r.title}{' '}
-              {r.course && <span className="course-label">[{r.course}]</span>}{' '}
-              <span style={{ fontSize: '0.9rem', fontWeight: 'normal' }}>
-                ({`Score: ${r.score.toFixed(2)}`})
-              </span>
-            </h3>
-            {(r.tags || []).map((name) => (
-              <span key={name} className="recipe-tag">{name}</span>
-            ))}
-            <ul>
-              {(r.ingredients || []).map((ing, i) => (
-                <li key={i}>{ing.quantity} {ing.unit} {ing.name}</li>
-              ))}
-            </ul>
-            <button type="button" onClick={() => editRecipe(r)}>Edit</button>
-            <button type="button" onClick={() => deleteRecipe(r.id)}>Delete</button>
-          </div>
-        ))
-      })()}
+      <div className="flex flex-col gap-2">
+        {recipes.map((r) => (
+          <Card key={r.id} size="sm" className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">{r.title}</div>
+              {r.course && (
+                <div className="text-xs text-[color:var(--text-muted)]">[{r.course}]</div>
+              )}
+            </div>
+          </Card>
+        ))}
+        {recipes.length === 0 && <p>No recipes yet.</p>}
+      </div>
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card size="lg" className="w-full max-w-2xl">
+            <form onSubmit={submit} className="flex flex-col gap-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  className="flex-1"
+                />
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="Servings"
+                  value={servings}
+                  onChange={(e) => setServings(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={course}
+                  onChange={(e) => setCourse(e.target.value)}
+                  className="rounded-xl border px-3 py-2 text-sm flex-1"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+                >
+                  <option value="main">main</option>
+                  <option value="side">side</option>
+                  <option value="dessert">dessert</option>
+                </select>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border"
+                    style={{ borderColor: 'var(--border)' }}
+                    checked={bulkPrep}
+                    onChange={(e) => setBulkPrep(e.target.checked)}
+                  />
+                  Bulk prep
+                </label>
+              </div>
+              <textarea
+                className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+                placeholder="Procedure"
+                value={procedure}
+                onChange={(e) => setProcedure(e.target.value)}
+              />
+              <TagSelector
+                tags={availableTags}
+                selected={selectedTags}
+                onChange={setSelectedTags}
+                onCreate={handleCreateTag}
+              />
+              <div>
+                {ingredients.map((ing, idx) => (
+                  <IngredientRow
+                    key={idx}
+                    index={idx}
+                    ingredient={ing}
+                    onChange={updateIngredient}
+                    onRemove={removeIngredient}
+                    fetchOptions={fetchIngredientOptions}
+                  />
+                ))}
+                <Button type="button" size="sm" variant="ghost" onClick={addIngredient}>
+                  Add Ingredient
+                </Button>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowModal(false)
+                    resetForm()
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" variant="a1">
+                  Save
+                </Button>
+              </div>
+            </form>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
+
