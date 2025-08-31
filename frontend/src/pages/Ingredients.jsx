@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ingredientsApi } from '../api'
+import { Button, Card, Input } from '../ui'
+import { PencilSquareIcon } from '@heroicons/react/24/outline'
 
 export default function Ingredients() {
   const [ingredients, setIngredients] = useState([])
@@ -52,78 +54,102 @@ export default function Ingredients() {
 
   return (
     <div>
-      <h1>Ingredients</h1>
+      <h1 style={{ color: 'var(--text-strong)' }}>Ingredients</h1>
       {ingredients.length === 0 ? (
-        <p>No ingredients found.</p>
+        <p style={{ color: 'var(--text-muted)' }}>No ingredients found.</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Season Months</th>
-              <th>Unit</th>
-              <th>Recipes</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {ingredients.map((ing) => (
-              <tr key={ing.id}>
-                <td>{ing.name}</td>
-                <td>{ing.season_months.join(', ')}</td>
-                <td>{ing.unit}</td>
-                <td>{ing.recipe_count}</td>
-                <td>
-                  <button type="button" onClick={() => openEdit(ing)}>
-                    ✎
-                  </button>
-                </td>
+        <Card className="mt-4">
+          <table
+            className="table-auto w-full border text-sm"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+          >
+            <thead>
+              <tr>
+                {['Name', 'Season Months', 'Unit', 'Recipes', ''].map((h) => (
+                  <th
+                    key={h}
+                    className="border p-2 text-left"
+                    style={{ borderColor: 'var(--border)' }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {ingredients.map((ing) => (
+                <tr key={ing.id} className="odd:bg-[var(--c-white)]">
+                  <td className="border p-2" style={{ borderColor: 'var(--border)' }}>
+                    {ing.name}
+                  </td>
+                  <td className="border p-2" style={{ borderColor: 'var(--border)' }}>
+                    {ing.season_months.join(', ')}
+                  </td>
+                  <td className="border p-2" style={{ borderColor: 'var(--border)' }}>
+                    {ing.unit}
+                  </td>
+                  <td className="border p-2" style={{ borderColor: 'var(--border)' }}>
+                    {ing.recipe_count}
+                  </td>
+                  <td className="border p-2 text-right" style={{ borderColor: 'var(--border)' }}>
+                    <Button
+                      variant="a1"
+                      type="button"
+                      Icon={PencilSquareIcon}
+                      onClick={() => openEdit(ing)}
+                      className="px-2 py-1"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
       )}
-      <dialog ref={dialogRef}>
+      <dialog ref={dialogRef} className="rounded-lg p-4">
         {editing && (
-          <form onSubmit={saveEdit}>
-            <div>
-              <label>
+          <form onSubmit={saveEdit} className="space-y-3">
+            <div className="flex flex-col">
+              <label className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Name:
-                <input
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
               </label>
+              <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
             </div>
-            <div>
-              <label>
+            <div className="flex flex-col">
+              <label className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Season months (comma separated):
-                <input
-                  value={formSeason}
-                  onChange={(e) => setFormSeason(e.target.value)}
-                />
               </label>
+              <Input
+                value={formSeason}
+                onChange={(e) => setFormSeason(e.target.value)}
+              />
             </div>
-            <div>
-              <label>
+            <div className="flex flex-col">
+              <label className="text-sm" style={{ color: 'var(--text-muted)' }}>
                 Unit:
-                <select
-                  value={formUnit}
-                  onChange={(e) => setFormUnit(e.target.value)}
-                >
-                  <option value="">--</option>
-                  <option value="g">g</option>
-                  <option value="kg">kg</option>
-                  <option value="l">l</option>
-                  <option value="ml">ml</option>
-                  <option value="piece">piece</option>
-                </select>
               </label>
+              <select
+                value={formUnit}
+                onChange={(e) => setFormUnit(e.target.value)}
+                className="rounded-lg border px-4 py-2 text-sm"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+              >
+                <option value="">--</option>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="l">l</option>
+                <option value="ml">ml</option>
+                <option value="piece">piece</option>
+              </select>
             </div>
-            <button type="submit">Save</button>
-            <button type="button" onClick={closeEdit}>
-              Cancel
-            </button>
+            <div className="flex gap-2 justify-end">
+              <Button type="submit" variant="primary">
+                Save
+              </Button>
+              <Button type="button" variant="ghost" onClick={closeEdit}>
+                Cancel
+              </Button>
+            </div>
           </form>
         )}
       </dialog>
