@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect } from 'react'
 import { AppContext } from '../App'
 import IngredientRow from '../components/IngredientRow'
 import TagSelector from '../components/TagSelector'
+import AddRecipeModal from '../components/AddRecipeModal'
 import { tagsApi, recipesApi, ingredientsApi } from '../api'
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
@@ -142,6 +143,7 @@ export default function Recipes() {
 
   return (
     <div>
+      <AddRecipeModal onRecipeAdded={refreshRecipes} />
       <h1>Recipes</h1>
       <form onSubmit={submit}>
         <div>
