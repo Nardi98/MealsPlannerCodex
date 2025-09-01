@@ -2,14 +2,20 @@ import { useState } from 'react'
 import { Input } from './Input'
 import { Button } from './Button'
 
-export default function RecipeForm({ onSave, onCancel }) {
-  const [title, setTitle] = useState('')
-  const [course, setCourse] = useState('main')
-  const [ingredients, setIngredients] = useState([''])
-  const [tags, setTags] = useState('')
-  const [procedure, setProcedure] = useState('')
-  const [servings, setServings] = useState('')
-  const [bulkPrep, setBulkPrep] = useState(false)
+export default function RecipeForm({ onSave, onCancel, initial = {} }) {
+  const [title, setTitle] = useState(initial.title || '')
+  const [course, setCourse] = useState(initial.course || 'main')
+  const [ingredients, setIngredients] = useState(
+    initial.ingredients && initial.ingredients.length ? initial.ingredients : ['']
+  )
+  const [tags, setTags] = useState(
+    Array.isArray(initial.tags) ? initial.tags.join(', ') : initial.tags || ''
+  )
+  const [procedure, setProcedure] = useState(initial.procedure || '')
+  const [servings, setServings] = useState(
+    initial.servings === undefined || initial.servings === null ? '' : initial.servings
+  )
+  const [bulkPrep, setBulkPrep] = useState(initial.bulkPrep || false)
 
   const addIngredient = () => setIngredients([...ingredients, ''])
   const updateIngredient = (i, value) => {
