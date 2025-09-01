@@ -21,7 +21,7 @@ export default function AppShell({ children }) {
       <header className="border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2 whitespace-nowrap">
-            <SwatchIcon className="h-5 w-5 text-[color:var(--c-a3)]" />
+            <SwatchIcon className="h-5 w-5 shrink-0 text-[color:var(--c-a3)]" />
             <span className="font-semibold">Meal Planner</span>
           </div>
           <div className="flex items-center gap-2">
