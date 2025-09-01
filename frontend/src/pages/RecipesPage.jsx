@@ -133,13 +133,20 @@ export default function RecipesPage() {
                     <div>
                       <div className="font-medium">
                         {r.title}{' '}
-                        <span className="text-xs font-normal text-[color:var(--text-subtle)]">[{r.course}]</span>
+                        <span className="text-xs font-normal text-[color:var(--text-subtle)]">
+                          [{r.course}] {Number(r.score ?? 0).toFixed(2)}
+                        </span>
                       </div>
-                      <div className="mt-0.5 text-xs text-[color:var(--text-subtle)]">
-                        Score {Number(r.score ?? 0).toFixed(2)}
-                      </div>
+                      {(r.time || r.kcal) && (
+                        <div className="mt-0.5 text-xs text-[color:var(--text-subtle)]">
+                          {r.time}
+                          {r.time && r.kcal ? ' • ' : ''}
+                          {r.kcal ? `${r.kcal} kcal` : ''}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
+                      {r.hot && <Badge tone="a2">hot</Badge>}
                       {r.tags.map((t) => (
                         <Badge key={t} tone="a3" className="flex items-center gap-1">
                           <TagIcon className="h-3 w-3" />

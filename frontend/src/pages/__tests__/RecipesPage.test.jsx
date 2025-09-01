@@ -29,14 +29,19 @@ test('displays course and score', () => {
       title: 'Soup',
       course: 'main',
       score: 4.5,
-      tags: [],
+      tags: ['quick'],
       ingredients: [],
       procedure: '',
+      hot: true,
+      time: '10m',
+      kcal: 200,
     },
   ];
   renderWithContext(data);
   expect(screen.getByText('Soup')).toBeInTheDocument();
-  expect(screen.getByText('[main]')).toBeInTheDocument();
-  expect(screen.getByText(/Score 4.50/)).toBeInTheDocument();
+  expect(screen.getByText('[main] 4.50')).toBeInTheDocument();
+  expect(screen.getByText('10m • 200 kcal')).toBeInTheDocument();
+  expect(screen.getByText('hot')).toBeInTheDocument();
+  expect(screen.getByText('quick')).toBeInTheDocument();
 });
 
