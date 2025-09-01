@@ -6,6 +6,7 @@ import NewPlan from './pages/NewPlan'
 import PlanView from './pages/PlanView'
 import ImportExport from './pages/ImportExport'
 import GroceryList from './pages/GroceryList'
+import { useCssVars } from './tokens'
 
 export const AppContext = React.createContext()
 
@@ -13,27 +14,37 @@ export default function App() {
   const [recipes, setRecipes] = useState([])
   const [plan, setPlan] = useState({}) // { [date]: Array<{ main: string, sides: string[] }> }
   const value = { recipes, setRecipes, plan, setPlan }
+  const cssVars = useCssVars()
 
   return (
-    <AppContext.Provider value={value}>
-      <Router>
-        <nav>
-          <Link to="/">Recipes</Link>
-          <Link to="/ingredients">Ingredients</Link>
-          <Link to="/new-plan">New Plan</Link>
-          <Link to="/plan-view">Plan View</Link>
-          <Link to="/grocery-list">Grocery List</Link>
-          <Link to="/import-export">Import / Export</Link>
-        </nav>
-        <Routes>
-          <Route path="/" element={<Recipes />} />
-          <Route path="/ingredients" element={<Ingredients />} />
-          <Route path="/new-plan" element={<NewPlan />} />
-          <Route path="/plan-view" element={<PlanView />} />
-          <Route path="/grocery-list" element={<GroceryList />} />
-          <Route path="/import-export" element={<ImportExport />} />
-        </Routes>
-      </Router>
-    </AppContext.Provider>
+    <div
+      className="min-h-screen p-4 rounded-2xl shadow-sm"
+      style={{
+        ...cssVars,
+        background: 'var(--c-white)',
+        color: 'var(--text-strong)'
+      }}
+    >
+      <AppContext.Provider value={value}>
+        <Router>
+          <nav>
+            <Link to="/">Recipes</Link>
+            <Link to="/ingredients">Ingredients</Link>
+            <Link to="/new-plan">New Plan</Link>
+            <Link to="/plan-view">Plan View</Link>
+            <Link to="/grocery-list">Grocery List</Link>
+            <Link to="/import-export">Import / Export</Link>
+          </nav>
+          <Routes>
+            <Route path="/" element={<Recipes />} />
+            <Route path="/ingredients" element={<Ingredients />} />
+            <Route path="/new-plan" element={<NewPlan />} />
+            <Route path="/plan-view" element={<PlanView />} />
+            <Route path="/grocery-list" element={<GroceryList />} />
+            <Route path="/import-export" element={<ImportExport />} />
+          </Routes>
+        </Router>
+      </AppContext.Provider>
+    </div>
   )
 }
