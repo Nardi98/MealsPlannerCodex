@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Recipes from './pages/Recipes'
+import RecipesPage from './pages/RecipesPage'
 import Ingredients from './pages/Ingredients'
 import NewPlan from './pages/NewPlan'
 import PlanView from './pages/PlanView'
@@ -20,7 +20,7 @@ export default function App() {
       <Router>
         <AppShell>
           <Routes>
-            <Route path="/" element={<Recipes />} />
+            <Route path="/" element={<RecipesPage />} />
             <Route path="/ingredients" element={<Ingredients />} />
             <Route path="/new-plan" element={<NewPlan />} />
             <Route path="/plan-view" element={<PlanView />} />
