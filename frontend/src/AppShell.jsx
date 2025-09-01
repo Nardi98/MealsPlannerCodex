@@ -19,11 +19,10 @@ export default function AppShell({ children }) {
   return (
     <div className="min-h-screen flex flex-col" style={{ ...vars, background: 'var(--c-white)', color: 'var(--text-strong)' }}>
       <header className="border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
-            <SwatchIcon className="h-6 w-6 text-[color:var(--c-a3)]" />
+            <SwatchIcon className="h-5 w-5 text-[color:var(--c-a3)]" />
             <span className="font-semibold">Meal Planner</span>
-            <span className="text-xs text-[color:var(--text-subtle)] ml-2">Demo UI — Updated Style</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
