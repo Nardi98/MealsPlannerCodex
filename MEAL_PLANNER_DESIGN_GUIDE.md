@@ -79,7 +79,7 @@ export function useCssVars(tokens = DEFAULT_TOKENS) {
   - Shopping list
 - **Content area:** Cards with soft borders and 2xl rounding. White backgrounds.
 
-Minimal shell (copy/paste):
+Minimal shell:
 
 ```jsx
 import { SwatchIcon, CalendarDaysIcon, BookmarkIcon, ShoppingCartIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
@@ -139,7 +139,7 @@ export default function AppShell({ children }) {
 ---
 
 ## 3) UI Primitives
-Use these EXACT props/variants so downstream code can copy/paste and be consistent.
+Use these props/variants so downstream code can be consistent.
 
 ```jsx
 // Button.jsx
@@ -248,7 +248,7 @@ export default function RecipesPage() {
   - **Procedure**: paragraph text with comfortable line height.
   - **Actions (right aligned):** **Edit** (yellow, `variant="a2"`) and **Delete** (red, `variant="danger"`).
 
-### 4.5 Reference Implementation (copy/paste)
+### 4.5 Reference Implementation
 This is the canonical implementation used in the demo. Use it as-is.
 
 ```jsx
@@ -382,7 +382,7 @@ Create files/routes with the following titles and **no content** (blank body):
 
 ---
 
-## 9) Done Checklist (copy this into PRs)
+## 9) Done Checklist
 - [ ] Tokens: container has all `--c-*` and `--text-*` CSS variables.
 - [ ] Header & Sidebar match spec; Recipes is default active.
 - [ ] Recipes page grid is single-column across breakpoints.
@@ -393,7 +393,7 @@ Create files/routes with the following titles and **no content** (blank body):
 
 ---
 
-## 10) Copy/Paste Mini Snippets
+## 10) Mini Snippets
 ```jsx
 // Right-aligned actions in a card footer
 <div className="flex justify-end gap-2">
