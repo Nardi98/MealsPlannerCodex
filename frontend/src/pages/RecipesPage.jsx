@@ -1,16 +1,29 @@
 import React, { useContext, useState } from 'react';
-import { BookmarkIcon, TagIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { BookmarkIcon, TagIcon } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { AppContext } from '../App';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
+import RecipeForm from '../components/RecipeForm';
 
 export default function RecipesPage() {
-  const { recipes } = useContext(AppContext);
+  const { recipes, setRecipes } = useContext(AppContext);
   const [expanded, setExpanded] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const toggle = (id) => setExpanded(expanded === id ? null : id);
+
+  const handleSave = (recipe) => {
+    const newRecipe = {
+      id: Date.now(),
+      score: 0,
+      tags: [],
+      ...recipe,
+    };
+    setRecipes([...recipes, newRecipe]);
+    setShowModal(false);
+  };
 
   return (
     <Card>
@@ -20,7 +33,9 @@ export default function RecipesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Input placeholder="Search recipes…" className="w-56" />
-          <Button variant="a1" Icon={PlusIcon}>New recipe</Button>
+          <Button variant="a1" onClick={() => setShowModal(true)}>
+            + New recipe
+          </Button>
         </div>
       </div>
 
@@ -62,8 +77,12 @@ export default function RecipesPage() {
                   <div className="text-sm font-medium mb-1">Procedure</div>
                   <p className="text-sm mb-3">{r.procedure}</p>
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="a2" onClick={(e) => e.stopPropagation()}>Edit</Button>
-                    <Button size="sm" variant="danger" onClick={(e) => e.stopPropagation()}>Delete</Button>
+                    <Button size="sm" variant="a2" onClick={(e) => e.stopPropagation()}>
+                      Edit
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={(e) => e.stopPropagation()}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
               )}
@@ -71,6 +90,25 @@ export default function RecipesPage() {
           </motion.div>
         ))}
       </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-medium">New Recipe</h2>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                aria-label="Close"
+                className="text-sm"
+              >
+                ✕
+              </button>
+            </div>
+            <RecipeForm onSave={handleSave} onCancel={() => setShowModal(false)} />
+          </Card>
+        </div>
+      )}
     </Card>
   );
 }
