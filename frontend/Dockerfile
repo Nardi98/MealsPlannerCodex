@@ -1,13 +1,7 @@
-FROM node:20-alpine
-
+FROM node:18-alpine
 WORKDIR /app
-
-COPY package*.json ./
-# Ensure development dependencies like Vite are installed
-ENV NODE_ENV=development
+COPY package.json package-lock.json* ./
 RUN npm install
-
 COPY . .
-
-CMD ["npm", "run", "dev"]
-
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host"]

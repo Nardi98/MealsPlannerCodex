@@ -97,15 +97,14 @@ This applies schema changes such as the new `course` column on recipes.
 ```bash
 cd frontend
 npm install
-npm start
+npm run dev
 ```
 
-The React app communicates with the backend over HTTP. By default it
-expects the API to be reachable at `http://localhost:8000` and sends
-requests such as:
+The app is scaffolded with Vite and communicates with the backend over HTTP.
+By default it expects the API at `http://localhost:8000` and sends requests such as:
 
 ```javascript
-fetch('http://localhost:8000/api/recipes')
+fetch('http://localhost:8000/recipes')
   .then(res => res.json())
   .then(data => console.log(data))
 ```
@@ -161,13 +160,13 @@ docker-compose up --build
 Set the necessary environment variables before starting:
 
 - `DATABASE_URL` – connection string for the database
-- `API_BASE_URL` – URL used by the frontend to reach the backend
+- `VITE_API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 
 Build steps:
 
 - Backend: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
-- Frontend: `npm run build` and serve the contents of the `build/` directory
+- Frontend: `npm run build` and serve the contents of the `dist/` directory
 
 ## Database Schema
 
