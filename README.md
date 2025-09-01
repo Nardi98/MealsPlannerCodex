@@ -110,6 +110,8 @@ fetch('http://localhost:8000/api/recipes')
   .then(data => console.log(data))
 ```
 
+An experimental Vite-based UI lives under `frontend-v2/` and is served at [http://localhost:5174](http://localhost:5174).
+
 
 ## 📂 Project Structure
 
