@@ -94,16 +94,30 @@ export default function MealPlanPage() {
         bulk_leftovers: Boolean(form.bulk_leftovers),
         keep_days: Number(form.keep_days),
       }
-      await mealPlansApi.create(payload)
+      try {
+        await mealPlansApi.create(payload)
+      } catch (err) {
+        if (err.data?.conflicts) {
+          const days = err.data.conflicts.join(', ')
+          const overwrite = window.confirm(
+            `Conflicts on: ${days}. Overwrite existing plans?`
+          )
+          if (overwrite) {
+            await mealPlansApi.create(payload, { force: true })
+          } else {
+            setError(`Conflicts on: ${days}`)
+            return
+          }
+        } else {
+          throw err
+        }
+      }
       const updated = await mealPlansApi.fetchRange(form.start, form.end)
       setPlan(updated || {})
       setStart(new Date(form.start))
       setMessage('Plan generated successfully.')
     } catch (err) {
-      const msg = err.data?.conflicts
-        ? `Conflicts on: ${err.data.conflicts.join(', ')}`
-        : err.message
-      setError(msg)
+      setError(err.message)
     }
   }
 
