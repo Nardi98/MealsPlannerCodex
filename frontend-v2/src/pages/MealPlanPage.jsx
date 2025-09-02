@@ -45,7 +45,7 @@ export default function MealPlanPage() {
     recency_weight: 1,
     tag_penalty_weight: 1,
     bulk_bonus_weight: 1,
-    keep_days: 7,
+    keep_days: 3,
     bulk_leftovers: true,
   })
   const [message, setMessage] = React.useState('')
@@ -53,7 +53,12 @@ export default function MealPlanPage() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
-    setForm((f) => ({ ...f, [name]: type === 'checkbox' ? checked : value }))
+    let val = type === 'checkbox' ? checked : value
+    if (name === 'meals_per_day') {
+      const num = Number(value)
+      val = Math.min(2, Math.max(1, isNaN(num) ? 1 : num))
+    }
+    setForm((f) => ({ ...f, [name]: val }))
   }
 
   React.useEffect(() => {
@@ -68,7 +73,7 @@ export default function MealPlanPage() {
       const params = {
         start: form.start,
         days: Number(form.days),
-        meals_per_day: Number(form.meals_per_day),
+        meals_per_day: Math.min(2, Math.max(1, Number(form.meals_per_day))),
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
         recency_weight: Number(form.recency_weight),
@@ -214,11 +219,27 @@ export default function MealPlanPage() {
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">Meals per day</span>
-              <Input type="number" name="meals_per_day" min="1" value={form.meals_per_day} onChange={handleChange} />
+              <Input
+                type="number"
+                name="meals_per_day"
+                min="1"
+                max="2"
+                step="1"
+                value={form.meals_per_day}
+                onChange={handleChange}
+              />
             </label>
             <label className="flex flex-col text-sm">
-              <span className="mb-1">ε</span>
-              <Input type="number" step="0.1" name="epsilon" value={form.epsilon} onChange={handleChange} />
+              <span className="mb-1">ε ({form.epsilon})</span>
+              <Input
+                type="range"
+                name="epsilon"
+                min="0"
+                max="1"
+                step="0.01"
+                value={form.epsilon}
+                onChange={handleChange}
+              />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">Seasonality weight</span>

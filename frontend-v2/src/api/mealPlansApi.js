@@ -4,7 +4,7 @@ export const mealPlansApi = {
   fetchRange: (startDate, endDate) =>
     request(`/plan?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`),
   generate: (params) =>
-    request('/plan/generate', {
+    request('/meal-plans/generate', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
