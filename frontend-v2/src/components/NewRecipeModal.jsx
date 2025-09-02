@@ -187,7 +187,7 @@ export default function NewRecipeModal({ onClose, onSave }) {
           </div>
           <div className="space-y-1">
             <label className="text-sm">Tags</label>
-            <div className="flex items-center gap-5 flex-wrap">
+            <div className="flex items-start gap-6 flex-wrap">
               <TagDropdown
                 value={tagInput}
                 options={tagOptions}
