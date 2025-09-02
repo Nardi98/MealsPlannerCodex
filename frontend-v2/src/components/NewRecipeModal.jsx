@@ -1,4 +1,5 @@
 import React from 'react'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button } from './'
 
 export default function NewRecipeModal({ onClose, onSave }) {
@@ -15,6 +16,9 @@ export default function NewRecipeModal({ onClose, onSave }) {
   }
 
   const addIngredient = () => setIngredients((ings) => [...ings, ''])
+  const removeIngredient = (idx) => {
+    setIngredients((ings) => ings.filter((_, i) => i !== idx))
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -42,7 +46,18 @@ export default function NewRecipeModal({ onClose, onSave }) {
           </div>
           <div className="space-y-1">
             <label className="text-sm">Course</label>
-            <Input value={course} onChange={(e) => setCourse(e.target.value)} />
+            <select
+              value={course}
+              onChange={(e) => setCourse(e.target.value)}
+              required
+              className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+            >
+              <option value="">Select course</option>
+              <option value="main">Main dish</option>
+              <option value="side">Side dish</option>
+              <option value="first-course">First course</option>
+            </select>
           </div>
           <div className="space-y-1">
             <label className="text-sm">Score</label>
@@ -55,7 +70,21 @@ export default function NewRecipeModal({ onClose, onSave }) {
           <div className="space-y-2">
             <label className="text-sm">Ingredients</label>
             {ingredients.map((ing, idx) => (
-              <Input key={idx} value={ing} onChange={(e) => updateIngredient(idx, e.target.value)} className="block w-full" />
+              <div key={idx} className="flex items-center gap-2">
+                <Input
+                  value={ing}
+                  onChange={(e) => updateIngredient(idx, e.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  Icon={XMarkIcon}
+                  aria-label="Remove ingredient"
+                  onClick={() => removeIngredient(idx)}
+                />
+              </div>
             ))}
             <Button type="button" variant="ghost" size="sm" onClick={addIngredient}>+ Add ingredient</Button>
           </div>
