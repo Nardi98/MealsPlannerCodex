@@ -53,6 +53,14 @@ class IngredientUpdate(BaseModel):
     unit: Optional[UnitEnum] = None
 
 
+class RecipeSummary(BaseModel):
+    id: int
+    title: str
+
+    class Config:
+        orm_mode = True
+
+
 class RecipeIn(BaseModel):
     title: str
     servings_default: int

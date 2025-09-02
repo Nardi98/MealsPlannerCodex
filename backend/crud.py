@@ -6,7 +6,7 @@ from datetime import date
 import json
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
@@ -30,8 +30,11 @@ __all__ = [
     "get_or_create_tag",
     "get_or_create_ingredient",
     "get_recipe",
+    "get_ingredient",
+    "get_recipes_by_ingredient",
     "update_recipe",
     "delete_recipe",
+    "delete_ingredient",
     "set_meal_plan",
     "save_plan",
     "get_plan",
@@ -188,6 +191,65 @@ def get_or_create_ingredient(
     elif ingredient.unit is None and unit is not None:
         ingredient.unit = unit
     return ingredient
+
+
+def get_ingredient(session: Session, ingredient_id: int) -> Ingredient | None:
+    """Return an ingredient by primary key or ``None`` if not found."""
+
+    return session.get(Ingredient, ingredient_id)
+
+
+def get_recipes_by_ingredient(session: Session, ingredient_id: int) -> List[Recipe]:
+    """Return all recipes that reference ``ingredient_id``."""
+
+    stmt = (
+        select(Recipe)
+        .join(RecipeIngredient)
+        .where(RecipeIngredient.ingredient_id == ingredient_id)
+        .order_by(Recipe.title)
+    )
+    return session.execute(stmt).scalars().all()
+
+
+def delete_ingredient(
+    session: Session, ingredient_id: int, *, force: bool = False
+) -> bool | None:
+    """Delete an ingredient by id.
+
+    Parameters
+    ----------
+    session:
+        Database session used for the operation.
+    ingredient_id:
+        Primary key of the ingredient to remove.
+    force:
+        When ``True`` the ingredient and any associations are removed even if
+        recipes reference it. When ``False`` (the default) the deletion will be
+        aborted if the ingredient is still referenced.
+
+    Returns
+    -------
+    bool | None
+        ``True`` if the ingredient was deleted, ``False`` if references prevent
+        deletion, or ``None`` if the ingredient was not found.
+    """
+
+    ingredient = session.get(Ingredient, ingredient_id)
+    if ingredient is None:
+        return None
+
+    if not force:
+        count = session.scalar(
+            select(func.count(RecipeIngredient.recipe_id)).where(
+                RecipeIngredient.ingredient_id == ingredient_id
+            )
+        )
+        if count:
+            return False
+
+    session.delete(ingredient)
+    session.commit()
+    return True
 
 
 def get_recipes() -> List[str]:
