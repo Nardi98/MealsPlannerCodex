@@ -1,59 +1,12 @@
 import React from 'react'
-import { XMarkIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button } from './'
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function SeasonalitySelect({ value = [], onChange }) {
-  const [open, setOpen] = React.useState(false)
-
-  const toggleMonth = (m) => {
-    const next = value.includes(m)
-      ? value.filter((v) => v !== m)
-      : [...value, m]
-    onChange(next)
-  }
-
-  return (
-    <div className="relative">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() => setOpen((o) => !o)}
-        className="whitespace-nowrap"
-      >
-        {value.length ? value.join(', ') : 'Seasonality'}
-      </Button>
-      {open && (
-        <div
-          className="absolute right-0 z-10 mt-1 w-36 rounded-xl border bg-white p-1 shadow"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          {MONTHS.map((m) => (
-            <button
-              type="button"
-              key={m}
-              onClick={() => toggleMonth(m)}
-              className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-sm hover:bg-[color:var(--c-a2)]/20"
-            >
-              <span>{m}</span>
-              {value.includes(m) && <CheckIcon className="h-4 w-4" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 export default function NewRecipeModal({ onClose, onSave }) {
   const [title, setTitle] = React.useState('')
   const [course, setCourse] = React.useState('')
   const [tags, setTags] = React.useState('')
-  const [ingredients, setIngredients] = React.useState([
-    { name: '', amount: '', unit: '', seasonality: [] },
-  ])
+  const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
   const [procedure, setProcedure] = React.useState('')
   const [bulkPrep, setBulkPrep] = React.useState(false)
 
@@ -64,10 +17,7 @@ export default function NewRecipeModal({ onClose, onSave }) {
   }
 
   const addIngredient = () =>
-    setIngredients((ings) => [
-      ...ings,
-      { name: '', amount: '', unit: '', seasonality: [] },
-    ])
+    setIngredients((ings) => [...ings, { name: '', amount: '', unit: '' }])
   const removeIngredient = (idx) => {
     setIngredients((ings) => ings.filter((_, i) => i !== idx))
   }
@@ -85,7 +35,6 @@ export default function NewRecipeModal({ onClose, onSave }) {
           name: ing.name,
           amount: parseFloat(ing.amount) || 0,
           unit: ing.unit,
-          seasonality: ing.seasonality,
         })),
       procedure,
       bulkPrep,
@@ -151,10 +100,6 @@ export default function NewRecipeModal({ onClose, onSave }) {
                   <option value="kg">kg</option>
                   <option value="pieces">pieces</option>
                 </select>
-                <SeasonalitySelect
-                  value={ing.seasonality}
-                  onChange={(val) => updateIngredient(idx, 'seasonality', val)}
-                />
                 <Button
                   type="button"
                   variant="ghost"
