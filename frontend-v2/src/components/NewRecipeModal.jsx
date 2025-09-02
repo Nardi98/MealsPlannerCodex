@@ -112,7 +112,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const [tagInput, setTagInput] = React.useState('')
   const [tagOptions, setTagOptions] = React.useState([])
   const [ingredients, setIngredients] = React.useState(
-    initialRecipe?.ingredients || [{ name: '', amount: '', unit: '' }]
+    initialRecipe?.ingredients || [{ id: undefined, name: '', amount: '', unit: '' }]
   )
   const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
   const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
@@ -126,7 +126,10 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   }
 
   const addIngredient = () =>
-    setIngredients((ings) => [...ings, { name: '', amount: '', unit: '' }])
+    setIngredients((ings) => [
+      ...ings,
+      { id: undefined, name: '', amount: '', unit: '' },
+    ])
   const removeIngredient = (idx) => {
     setIngredients((ings) => ings.filter((_, i) => i !== idx))
   }
@@ -162,8 +165,8 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
       tags,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((ing, id) => ({
-          id,
+        .map((ing) => ({
+          id: ing.id,
           name: ing.name,
           amount: parseFloat(ing.amount) || 0,
           unit: ing.unit,
@@ -175,29 +178,20 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
     onClose?.()
   }
 
-  const handleNewIngredient = async (ing) => {
-    try {
-      const res = await ingredientsApi.create({
-        name: ing.name,
-        unit: ing.unit,
-        season_months: ing.season,
-      })
-      const newIng = {
-        id: res.id,
-        name: res.name,
-        unit: res.unit,
-        season_months: res.season_months || [],
-      }
-      setIngredientOptions((opts) => [...opts, newIng])
-      if (addingIdx != null) {
-        updateIngredient(addingIdx, 'name', newIng.name)
-        updateIngredient(addingIdx, 'unit', newIng.unit)
-      }
-    } catch (err) {
-      console.error('Failed to add ingredient', err)
-    } finally {
-      setAddingIdx(null)
+  const handleNewIngredient = (ing) => {
+    const newIng = {
+      id: undefined,
+      name: ing.name,
+      unit: ing.unit,
+      season_months: ing.season,
     }
+    setIngredientOptions((opts) => [...opts, newIng])
+    if (addingIdx != null) {
+      updateIngredient(addingIdx, 'id', undefined)
+      updateIngredient(addingIdx, 'name', newIng.name)
+      updateIngredient(addingIdx, 'unit', newIng.unit)
+    }
+    setAddingIdx(null)
   }
 
   return (
@@ -236,22 +230,15 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
                   if (!tags.includes(tag)) setTags((t) => [...t, tag])
                   setTagInput('')
                 }}
-                onAddNew={async (tag) => {
+                onAddNew={(tag) => {
                   const newTag = tag.trim()
                   if (!newTag) return
-                  try {
-                    const res = await tagsApi.create({ name: newTag })
-                    const tagName = res.name || newTag
-                    setTagOptions((opts) =>
-                      opts.includes(tagName) ? opts : [...opts, tagName]
-                    )
-                    if (!tags.includes(tagName))
-                      setTags((t) => [...t, tagName])
-                  } catch (err) {
-                    console.error('Failed to create tag', err)
-                  } finally {
-                    setTagInput('')
-                  }
+                  setTagOptions((opts) =>
+                    opts.includes(newTag) ? opts : [...opts, newTag]
+                  )
+                  if (!tags.includes(newTag))
+                    setTags((t) => [...t, newTag])
+                  setTagInput('')
                 }}
              />
               {tags.map((t) => (
@@ -278,9 +265,11 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
                   options={ingredientOptions}
                   onChange={(val) => {
                     updateIngredient(idx, 'name', val)
+                    updateIngredient(idx, 'id', undefined)
                     updateIngredient(idx, 'unit', '')
                   }}
                   onSelect={(opt) => {
+                    updateIngredient(idx, 'id', opt.id)
                     updateIngredient(idx, 'name', opt.name)
                     updateIngredient(idx, 'unit', opt.unit)
                   }}
