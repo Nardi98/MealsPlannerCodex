@@ -60,7 +60,7 @@ export default function MealPlanPage() {
     let val = type === 'checkbox' ? checked : value
     if (name === 'meals_per_day') {
       const num = Number(value)
-      val = Math.min(2, Math.max(1, isNaN(num) ? 1 : num))
+      val = isNaN(num) ? 1 : Math.max(1, num)
     }
     setForm((f) => ({ ...f, [name]: val }))
   }
@@ -94,7 +94,7 @@ export default function MealPlanPage() {
       const params = {
         start: form.start,
         days: Number(form.days),
-        meals_per_day: Math.min(2, Math.max(1, Number(form.meals_per_day))),
+        meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
         recency_weight: Number(form.recency_weight),

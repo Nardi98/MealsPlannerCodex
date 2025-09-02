@@ -3,6 +3,8 @@ import { CheckIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 export default function TagSelector({ label, tags = [], selected = [], onChange }) {
   const [open, setOpen] = React.useState(false)
+  const [query, setQuery] = React.useState('')
+  const ref = React.useRef(null)
 
   const toggle = (tag) => {
     const exists = selected.includes(tag)
@@ -12,8 +14,25 @@ export default function TagSelector({ label, tags = [], selected = [], onChange 
 
   const display = selected.length > 0 ? selected.join(', ') : 'Select tags'
 
+  const filtered = React.useMemo(
+    () => tags.filter((t) => t.toLowerCase().includes(query.toLowerCase())),
+    [tags, query]
+  )
+
+  React.useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    if (open) {
+      document.addEventListener('mousedown', handleClick)
+    }
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
   return (
-    <div className="flex flex-col text-sm col-span-2 relative">
+    <div className="flex flex-col text-sm col-span-2 relative" ref={ref}>
       {label && <span className="mb-1">{label}</span>}
       <button
         type="button"
@@ -26,10 +45,18 @@ export default function TagSelector({ label, tags = [], selected = [], onChange 
       </button>
       {open && (
         <div
-          className="absolute z-10 mt-1 w-full bg-white border rounded shadow max-h-60 overflow-y-auto"
+          className="absolute top-full left-0 z-10 mt-1 w-full bg-white border rounded shadow max-h-60 overflow-y-auto"
           style={{ borderColor: 'var(--border)' }}
         >
-          {tags.map((tag) => {
+          <input
+            type="text"
+            placeholder="Search tags..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full px-2 py-1 text-sm border-b outline-none"
+            style={{ borderColor: 'var(--border)' }}
+          />
+          {filtered.map((tag) => {
             const isSelected = selected.includes(tag)
             return (
               <div
