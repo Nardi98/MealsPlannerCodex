@@ -17,6 +17,7 @@ services:
       - backend
 
   frontend-v2:
+    # Vite-based frontend served on port 5174
     build: ./frontend-v2
     ports:
       - "5174:5174"
