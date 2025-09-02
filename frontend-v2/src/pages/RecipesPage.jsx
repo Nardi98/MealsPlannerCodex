@@ -8,8 +8,22 @@ import { Badge } from '../components/Badge'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
+const exampleRecipe = {
+  id: 'example',
+  title: 'Example',
+  course: 'Demo',
+  score: 4.5,
+  hot: true,
+  tags: [{ name: 'demo' }],
+  ingredients: [
+    { id: 1, name: '1 c. placeholder ingredient' },
+    { id: 2, name: '2 tbsp sample spice' },
+  ],
+  procedure: 'This is an example recipe. Connect the backend to view real recipes.',
+}
+
 export default function RecipesPage() {
-  const [recipes, setRecipes] = React.useState([])
+  const [recipes, setRecipes] = React.useState([exampleRecipe])
   const [expanded, setExpanded] = React.useState(null)
 
   React.useEffect(() => {
@@ -17,7 +31,9 @@ export default function RecipesPage() {
       try {
         const res = await fetch(`${API_BASE_URL}/recipes`)
         const data = await res.json()
-        setRecipes(data)
+        if (Array.isArray(data) && data.length) {
+          setRecipes(data)
+        }
       } catch (err) {
         console.error('Failed to load recipes', err)
       }
