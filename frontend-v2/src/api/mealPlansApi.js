@@ -13,4 +13,13 @@ export const mealPlansApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  accept: (planDate, mealNumber, accepted) =>
+    request('/meal-plans/accept', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        accepted,
+      }),
+    }),
 };
