@@ -34,10 +34,11 @@ export default function AddIngredientModal({ onClose, onSave }) {
               style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
             >
               <option value="">Select unit</option>
-              <option value="l">l</option>
               <option value="g">g</option>
               <option value="kg">kg</option>
-              <option value="pieces">pieces</option>
+              <option value="l">l</option>
+              <option value="ml">ml</option>
+              <option value="piece">piece</option>
             </select>
           </div>
           <div className="space-y-1">

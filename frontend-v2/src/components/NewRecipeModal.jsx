@@ -2,6 +2,8 @@ import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button, Badge } from './'
 import AddIngredientModal from './AddIngredientModal'
+import { ingredientsApi } from '../api/ingredientsApi'
+import { tagsApi } from '../api/tagsApi'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
@@ -103,20 +105,18 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
   )
 }
 
-export default function NewRecipeModal({ onClose, onSave }) {
-  const [title, setTitle] = React.useState('')
-  const [course, setCourse] = React.useState('')
-  const [tags, setTags] = React.useState([])
+export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
+  const [title, setTitle] = React.useState(initialRecipe?.title || '')
+  const [course, setCourse] = React.useState(initialRecipe?.course || '')
+  const [tags, setTags] = React.useState(initialRecipe?.tags || [])
   const [tagInput, setTagInput] = React.useState('')
-  const [tagOptions, setTagOptions] = React.useState(['quick', 'vegan', 'protein'])
-  const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
-  const [procedure, setProcedure] = React.useState('')
-  const [bulkPrep, setBulkPrep] = React.useState(false)
-  const [ingredientOptions, setIngredientOptions] = React.useState([
-    { name: 'Carrot', unit: 'g', season: [] },
-    { name: 'Potato', unit: 'kg', season: [] },
-    { name: 'Onion', unit: 'pieces', season: [] },
-  ])
+  const [tagOptions, setTagOptions] = React.useState([])
+  const [ingredients, setIngredients] = React.useState(
+    initialRecipe?.ingredients || [{ id: undefined, name: '', amount: '', unit: '' }]
+  )
+  const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
+  const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
+  const [ingredientOptions, setIngredientOptions] = React.useState([])
   const [addingIdx, setAddingIdx] = React.useState(null)
 
   const updateIngredient = (idx, field, val) => {
@@ -126,10 +126,36 @@ export default function NewRecipeModal({ onClose, onSave }) {
   }
 
   const addIngredient = () =>
-    setIngredients((ings) => [...ings, { name: '', amount: '', unit: '' }])
+    setIngredients((ings) => [
+      ...ings,
+      { id: undefined, name: '', amount: '', unit: '' },
+    ])
   const removeIngredient = (idx) => {
     setIngredients((ings) => ings.filter((_, i) => i !== idx))
   }
+
+  React.useEffect(() => {
+    async function loadOptions() {
+      try {
+        const [tagsRes, ingRes] = await Promise.all([
+          tagsApi.fetchAll(),
+          ingredientsApi.fetchAll(),
+        ])
+        setTagOptions(tagsRes.map((t) => t.name))
+        setIngredientOptions(
+          ingRes.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            season_months: i.season_months || [],
+          }))
+        )
+      } catch (err) {
+        console.error('Failed to load options', err)
+      }
+    }
+    loadOptions()
+  }, [])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -139,24 +165,31 @@ export default function NewRecipeModal({ onClose, onSave }) {
       tags,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((ing, id) => ({
-          id,
+        .map((ing) => ({
+          id: ing.id,
           name: ing.name,
           amount: parseFloat(ing.amount) || 0,
           unit: ing.unit,
         })),
       procedure,
-      bulkPrep,
+      hot: bulkPrep,
     }
     onSave?.(recipe)
     onClose?.()
   }
 
   const handleNewIngredient = (ing) => {
-    setIngredientOptions((opts) => [...opts, ing])
+    const newIng = {
+      id: undefined,
+      name: ing.name,
+      unit: ing.unit,
+      season_months: ing.season,
+    }
+    setIngredientOptions((opts) => [...opts, newIng])
     if (addingIdx != null) {
-      updateIngredient(addingIdx, 'name', ing.name)
-      updateIngredient(addingIdx, 'unit', ing.unit)
+      updateIngredient(addingIdx, 'id', undefined)
+      updateIngredient(addingIdx, 'name', newIng.name)
+      updateIngredient(addingIdx, 'unit', newIng.unit)
     }
     setAddingIdx(null)
   }
@@ -200,11 +233,14 @@ export default function NewRecipeModal({ onClose, onSave }) {
                 onAddNew={(tag) => {
                   const newTag = tag.trim()
                   if (!newTag) return
-                  setTagOptions((opts) => (opts.includes(newTag) ? opts : [...opts, newTag]))
-                  if (!tags.includes(newTag)) setTags((t) => [...t, newTag])
+                  setTagOptions((opts) =>
+                    opts.includes(newTag) ? opts : [...opts, newTag]
+                  )
+                  if (!tags.includes(newTag))
+                    setTags((t) => [...t, newTag])
                   setTagInput('')
                 }}
-              />
+             />
               {tags.map((t) => (
                 <Badge tone="a3" key={t}>
                   {t}
@@ -229,9 +265,11 @@ export default function NewRecipeModal({ onClose, onSave }) {
                   options={ingredientOptions}
                   onChange={(val) => {
                     updateIngredient(idx, 'name', val)
+                    updateIngredient(idx, 'id', undefined)
                     updateIngredient(idx, 'unit', '')
                   }}
                   onSelect={(opt) => {
+                    updateIngredient(idx, 'id', opt.id)
                     updateIngredient(idx, 'name', opt.name)
                     updateIngredient(idx, 'unit', opt.unit)
                   }}
