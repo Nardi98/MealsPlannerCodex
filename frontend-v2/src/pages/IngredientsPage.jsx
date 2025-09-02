@@ -1,5 +1,11 @@
 import React from 'react'
-import { Input, MonthFilter, IngredientCard, EditIngredientModal } from '../components'
+import {
+  Input,
+  MonthFilter,
+  IngredientCard,
+  EditIngredientModal,
+  ConfirmIngredientChangeModal,
+} from '../components'
 import { ingredientsApi } from '../api/ingredientsApi'
 
 export default function IngredientsPage() {
@@ -9,6 +15,7 @@ export default function IngredientsPage() {
   const [ingredients, setIngredients] = React.useState([])
   const [expanded, setExpanded] = React.useState(null)
   const [editing, setEditing] = React.useState(null)
+  const [confirm, setConfirm] = React.useState(null)
 
   React.useEffect(() => {
     async function load() {
@@ -37,28 +44,55 @@ export default function IngredientsPage() {
 
   const handleDelete = async (id) => {
     try {
-      await ingredientsApi.remove(id)
-      setIngredients((ings) => ings.filter((i) => i.id !== id))
+      const recipes = await ingredientsApi.recipes(id)
+      setConfirm({
+        action: 'delete',
+        recipes,
+        onConfirm: async () => {
+          try {
+            await ingredientsApi.remove(id)
+            setIngredients((ings) => ings.filter((i) => i.id !== id))
+          } catch (err) {
+            console.error('Failed to delete ingredient', err)
+          } finally {
+            setConfirm(null)
+          }
+        },
+      })
     } catch (err) {
-      console.error('Failed to delete ingredient', err)
+      console.error('Failed to load recipes', err)
     }
   }
 
   const handleEdit = (ing) => setEditing(ing)
   const handleSaveEdit = async (updates) => {
     try {
-      const updated = await ingredientsApi.update(editing.id, {
-        name: updates.name,
-        unit: updates.unit,
-        season_months: updates.season,
+      const recipes = await ingredientsApi.recipes(editing.id)
+      setConfirm({
+        action: 'edit',
+        recipes,
+        onConfirm: async () => {
+          try {
+            const updated = await ingredientsApi.update(editing.id, {
+              name: updates.name,
+              unit: updates.unit,
+              season_months: updates.season,
+            })
+            setIngredients((ings) =>
+              ings.map((i) =>
+                i.id === editing.id ? { ...i, ...updated } : i
+              )
+            )
+            setEditing(null)
+          } catch (err) {
+            console.error('Failed to update ingredient', err)
+          } finally {
+            setConfirm(null)
+          }
+        },
       })
-      setIngredients((ings) =>
-        ings.map((i) => (i.id === editing.id ? { ...i, ...updated } : i))
-      )
     } catch (err) {
-      console.error('Failed to update ingredient', err)
-    } finally {
-      setEditing(null)
+      console.error('Failed to load recipes', err)
     }
   }
 
@@ -100,6 +134,14 @@ export default function IngredientsPage() {
           ingredient={editing}
           onClose={() => setEditing(null)}
           onSave={handleSaveEdit}
+        />
+      )}
+      {confirm && (
+        <ConfirmIngredientChangeModal
+          action={confirm.action}
+          recipes={confirm.recipes}
+          onConfirm={confirm.onConfirm}
+          onCancel={() => setConfirm(null)}
         />
       )}
     </div>
