@@ -1,6 +1,6 @@
 import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { Input, Button } from './'
+import { Input, Button, Badge } from './'
 import AddIngredientModal from './AddIngredientModal'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
@@ -52,10 +52,63 @@ function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   )
 }
 
+function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew }) {
+  const [open, setOpen] = React.useState(false)
+  const filtered = options.filter(
+    (o) => o.toLowerCase().includes(value.toLowerCase()) && !selected.includes(o)
+  )
+  return (
+    <div className="relative w-40">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 100)}
+        placeholder="tag"
+      />
+      {open && (
+        <div
+          className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-white"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+        >
+          {value && (
+            <div
+              className="px-2 py-1 cursor-pointer hover:bg-gray-100"
+              onMouseDown={() => {
+                onAddNew(value)
+                setOpen(false)
+              }}
+            >
+              {`Add "${value}"`}
+            </div>
+          )}
+          {filtered.map((opt) => (
+            <div
+              key={opt}
+              className="px-2 py-1 cursor-pointer hover:bg-gray-100"
+              onMouseDown={() => {
+                onSelect(opt)
+                setOpen(false)
+              }}
+            >
+              {opt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function NewRecipeModal({ onClose, onSave }) {
   const [title, setTitle] = React.useState('')
   const [course, setCourse] = React.useState('')
-  const [tags, setTags] = React.useState('')
+  const [tags, setTags] = React.useState([])
+  const [tagInput, setTagInput] = React.useState('')
+  const [tagOptions, setTagOptions] = React.useState(['quick', 'vegan', 'protein'])
   const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
   const [procedure, setProcedure] = React.useState('')
   const [bulkPrep, setBulkPrep] = React.useState(false)
@@ -83,7 +136,7 @@ export default function NewRecipeModal({ onClose, onSave }) {
     const recipe = {
       title,
       course,
-      tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      tags,
       ingredients: ingredients
         .filter((i) => i.name.trim())
         .map((ing, id) => ({
@@ -110,7 +163,7 @@ export default function NewRecipeModal({ onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-lg" style={{ color: 'var(--text-strong)' }}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <h2 className="text-lg font-medium">New Recipe</h2>
           <div className="space-y-1">
@@ -134,7 +187,38 @@ export default function NewRecipeModal({ onClose, onSave }) {
           </div>
           <div className="space-y-1">
             <label className="text-sm">Tags</label>
-            <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="comma separated" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <TagDropdown
+                value={tagInput}
+                options={tagOptions}
+                selected={tags}
+                onChange={setTagInput}
+                onSelect={(tag) => {
+                  if (!tags.includes(tag)) setTags((t) => [...t, tag])
+                  setTagInput('')
+                }}
+                onAddNew={(tag) => {
+                  const newTag = tag.trim()
+                  if (!newTag) return
+                  setTagOptions((opts) => (opts.includes(newTag) ? opts : [...opts, newTag]))
+                  if (!tags.includes(newTag)) setTags((t) => [...t, newTag])
+                  setTagInput('')
+                }}
+              />
+              {tags.map((t) => (
+                <Badge tone="a3" key={t}>
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTags((tags) => tags.filter((tag) => tag !== t))
+                    }
+                  >
+                    <XMarkIcon className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-sm">Ingredients</label>

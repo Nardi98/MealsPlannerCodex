@@ -2,10 +2,12 @@ import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
 
+const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
+
 export default function AddIngredientModal({ onClose, onSave }) {
   const [name, setName] = React.useState('')
   const [unit, setUnit] = React.useState('')
-  const [season, setSeason] = React.useState([])
+  const [season, setSeason] = React.useState(ALL_MONTHS)
 
   const handleSubmit = (e) => {
     e.preventDefault()
