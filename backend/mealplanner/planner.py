@@ -118,7 +118,7 @@ def generate_plan(
             idx = day_offset * meals_per_day + meal_idx
             recipe, leftover = selections[idx]
             title = recipe.title + (" (leftover)" if leftover else "")
-        schedule[key].append(title)
+            schedule[key].append(title)
     return schedule
 
 
