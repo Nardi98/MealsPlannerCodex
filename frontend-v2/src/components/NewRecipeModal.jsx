@@ -1,6 +1,56 @@
 import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button } from './'
+import AddIngredientModal from './AddIngredientModal'
+
+function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
+  const [open, setOpen] = React.useState(false)
+  const filtered = options.filter((o) =>
+    o.name.toLowerCase().includes(value.toLowerCase())
+  )
+  return (
+    <div className="relative flex-1">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 100)}
+        placeholder="ingredient"
+      />
+      {open && (
+        <div
+          className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-white"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+        >
+          {filtered.map((opt) => (
+            <div
+              key={opt.name}
+              className="px-2 py-1 cursor-pointer hover:bg-gray-100"
+              onMouseDown={() => {
+                onSelect(opt)
+                setOpen(false)
+              }}
+            >
+              {opt.name}
+            </div>
+          ))}
+          <div
+            className="px-2 py-1 cursor-pointer hover:bg-gray-100"
+            onMouseDown={() => {
+              setOpen(false)
+              onAddNew()
+            }}
+          >
+            + Add new ingredient
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function NewRecipeModal({ onClose, onSave }) {
   const [title, setTitle] = React.useState('')
@@ -9,6 +59,12 @@ export default function NewRecipeModal({ onClose, onSave }) {
   const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
   const [procedure, setProcedure] = React.useState('')
   const [bulkPrep, setBulkPrep] = React.useState(false)
+  const [ingredientOptions, setIngredientOptions] = React.useState([
+    { name: 'Carrot', unit: 'g', season: [] },
+    { name: 'Potato', unit: 'kg', season: [] },
+    { name: 'Onion', unit: 'pieces', season: [] },
+  ])
+  const [addingIdx, setAddingIdx] = React.useState(null)
 
   const updateIngredient = (idx, field, val) => {
     setIngredients((ings) =>
@@ -43,6 +99,15 @@ export default function NewRecipeModal({ onClose, onSave }) {
     onClose?.()
   }
 
+  const handleNewIngredient = (ing) => {
+    setIngredientOptions((opts) => [...opts, ing])
+    if (addingIdx != null) {
+      updateIngredient(addingIdx, 'name', ing.name)
+      updateIngredient(addingIdx, 'unit', ing.unit)
+    }
+    setAddingIdx(null)
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg" style={{ color: 'var(--text-strong)' }}>
@@ -75,11 +140,15 @@ export default function NewRecipeModal({ onClose, onSave }) {
             <label className="text-sm">Ingredients</label>
             {ingredients.map((ing, idx) => (
               <div key={idx} className="flex items-center gap-2">
-                <Input
+                <IngredientDropdown
                   value={ing.name}
-                  onChange={(e) => updateIngredient(idx, 'name', e.target.value)}
-                  className="flex-1"
-                  placeholder="name"
+                  options={ingredientOptions}
+                  onChange={(val) => updateIngredient(idx, 'name', val)}
+                  onSelect={(opt) => {
+                    updateIngredient(idx, 'name', opt.name)
+                    if (!ing.unit) updateIngredient(idx, 'unit', opt.unit)
+                  }}
+                  onAddNew={() => setAddingIdx(idx)}
                 />
                 <Input
                   type="number"
@@ -114,10 +183,22 @@ export default function NewRecipeModal({ onClose, onSave }) {
           </div>
           <div className="space-y-1">
             <label className="text-sm">Procedure</label>
-            <textarea value={procedure} onChange={(e) => setProcedure(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]" style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }} rows={3} />
+            <textarea
+              value={procedure}
+              onChange={(e) => setProcedure(e.target.value)}
+              className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+              rows={3}
+            />
           </div>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={bulkPrep} onChange={(e) => setBulkPrep(e.target.checked)} className="h-4 w-4 rounded accent-[color:var(--c-a1)] border" style={{ borderColor: 'var(--border)' }} />
+            <input
+              type="checkbox"
+              checked={bulkPrep}
+              onChange={(e) => setBulkPrep(e.target.checked)}
+              className="h-4 w-4 rounded accent-[color:var(--c-a1)] border"
+              style={{ borderColor: 'var(--border)' }}
+            />
             Bulk prep
           </label>
           <div className="flex justify-end gap-2 pt-2">
@@ -126,6 +207,12 @@ export default function NewRecipeModal({ onClose, onSave }) {
           </div>
         </form>
       </div>
+      {addingIdx != null && (
+        <AddIngredientModal
+          onClose={() => setAddingIdx(null)}
+          onSave={handleNewIngredient}
+        />
+      )}
     </div>
   )
 }
