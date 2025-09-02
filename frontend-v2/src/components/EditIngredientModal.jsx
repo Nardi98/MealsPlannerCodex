@@ -2,22 +2,21 @@ import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
 
-export default function AddIngredientModal({ onClose, onSave }) {
-  const [name, setName] = React.useState('')
-  const [unit, setUnit] = React.useState('')
-  const [season, setSeason] = React.useState([])
+export default function EditIngredientModal({ ingredient, onClose, onSave }) {
+  const [name, setName] = React.useState(ingredient?.name || '')
+  const [unit, setUnit] = React.useState(ingredient?.unit || '')
+  const [season, setSeason] = React.useState(ingredient?.season_months || [])
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
-    await onSave?.({ name, unit, season })
-    onClose?.()
+    onSave?.({ name, unit, season })
   }
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
       <div className="bg-white rounded-2xl p-6 w-full max-w-md" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <h3 className="text-lg font-medium">New Ingredient</h3>
+          <h3 className="text-lg font-medium">Edit Ingredient</h3>
           <div className="space-y-1">
             <label className="text-sm">Name</label>
             <Input value={name} onChange={(e) => setName(e.target.value)} required />
@@ -52,4 +51,3 @@ export default function AddIngredientModal({ onClose, onSave }) {
     </div>
   )
 }
-
