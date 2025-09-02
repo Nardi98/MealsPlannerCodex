@@ -50,7 +50,7 @@ export default function IngredientsPage() {
         recipes,
         onConfirm: async () => {
           try {
-            await ingredientsApi.remove(id)
+            await ingredientsApi.remove(id, true)
             setIngredients((ings) => ings.filter((i) => i.id !== id))
           } catch (err) {
             console.error('Failed to delete ingredient', err)
