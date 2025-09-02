@@ -172,3 +172,36 @@ def test_ingredient_recipe_lookup_and_delete() -> None:
     # Subsequent lookups should 404
     res = client.get(f"/ingredients/{ingredient_id}/recipes")
     assert res.status_code == 404
+
+
+def test_force_delete_removes_references() -> None:
+    _reset_db()
+    client = TestClient(app)
+
+    payload = {
+        "title": "Soup",
+        "servings_default": 1,
+        "procedure": "",
+        "bulk_prep": False,
+        "course": "main",
+        "tags": [],
+        "ingredients": [
+            {"name": "Tomato", "quantity": 1, "unit": "piece"},
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+
+    res = client.get("/ingredients", params={"search": "Tom"})
+    assert res.status_code == 200
+    ingredient_id = res.json()[0]["id"]
+
+    res = client.delete(f"/ingredients/{ingredient_id}?force=true")
+    assert res.status_code == 204
+
+    res = client.get("/recipes")
+    assert res.status_code == 200
+    recipes = res.json()
+    assert recipes[0]["ingredients"] == []
+    res = client.get(f"/ingredients/{ingredient_id}/recipes")
+    assert res.status_code == 404

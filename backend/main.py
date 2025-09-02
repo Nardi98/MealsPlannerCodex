@@ -191,8 +191,10 @@ def ingredient_recipes(
 
 
 @app.delete("/ingredients/{ingredient_id}", status_code=204)
-def delete_ingredient(ingredient_id: int, db: Session = Depends(get_db)) -> Response:
-    deleted = crud.delete_ingredient(db, ingredient_id)
+def delete_ingredient(
+    ingredient_id: int, force: bool = False, db: Session = Depends(get_db)
+) -> Response:
+    deleted = crud.delete_ingredient(db, ingredient_id, force=force)
     if deleted is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     if deleted is False:
