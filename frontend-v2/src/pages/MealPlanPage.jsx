@@ -36,6 +36,7 @@ export default function MealPlanPage() {
 
   const [tags, setTags] = React.useState([])
   const [plan, setPlan] = React.useState({})
+  const [activeCell, setActiveCell] = React.useState(null)
 
   const [form, setForm] = React.useState({
     start: startIso,
@@ -164,19 +165,42 @@ export default function MealPlanPage() {
     })
   }
 
+  const handleAccept = async () => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    try {
+      await mealPlansApi.accept(date, mealIndex + 1, true)
+      setPlan((p) => ({
+        ...p,
+        [date]: p[date].map((m, i) =>
+          i === mealIndex ? { ...m, accepted: true } : m
+        ),
+      }))
+    } catch (err) {
+      console.error('Failed to accept meal', err)
+    } finally {
+      setActiveCell(null)
+    }
+  }
+
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
     return (
       <div
         key={`${idx}-${iso}`}
-        className="border p-2 h-24"
+        className={`border p-2 h-24 cursor-pointer ${
+          meal?.accepted ? 'bg-[var(--c-pos)/20]' : ''
+        }`}
+        onClick={() => setActiveCell({ date: iso, mealIndex: idx })}
         style={
           isToday(d)
             ? {
                 borderColor: 'var(--border)',
-                backgroundColor: 'rgba(187, 138, 82, 0.15)',
                 color: 'var(--text-strong)',
+                ...(meal?.accepted
+                  ? {}
+                  : { backgroundColor: 'rgba(187, 138, 82, 0.15)' }),
               }
             : { borderColor: 'var(--border)' }
         }
@@ -335,6 +359,22 @@ export default function MealPlanPage() {
           <Button type="submit">Generate plan</Button>
         </form>
       </Card>
+      {activeCell && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div
+            className="bg-white rounded-2xl p-6 w-full max-w-sm"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            <h2 className="text-lg font-medium mb-4">Accept this meal?</h2>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setActiveCell(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleAccept}>Accept</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
