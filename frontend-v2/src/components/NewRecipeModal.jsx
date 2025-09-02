@@ -178,20 +178,24 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
     onClose?.()
   }
 
-  const handleNewIngredient = (ing) => {
-    const newIng = {
-      id: undefined,
-      name: ing.name,
-      unit: ing.unit,
-      season_months: ing.season,
+  const handleNewIngredient = async (ing) => {
+    try {
+      const created = await ingredientsApi.create({
+        name: ing.name,
+        unit: ing.unit,
+        season_months: ing.season,
+      })
+      setIngredientOptions((opts) => [...opts, created])
+      if (addingIdx != null) {
+        updateIngredient(addingIdx, 'id', created.id)
+        updateIngredient(addingIdx, 'name', created.name)
+        updateIngredient(addingIdx, 'unit', created.unit)
+      }
+    } catch (err) {
+      console.error('Failed to add ingredient', err)
+    } finally {
+      setAddingIdx(null)
     }
-    setIngredientOptions((opts) => [...opts, newIng])
-    if (addingIdx != null) {
-      updateIngredient(addingIdx, 'id', undefined)
-      updateIngredient(addingIdx, 'name', newIng.name)
-      updateIngredient(addingIdx, 'unit', newIng.unit)
-    }
-    setAddingIdx(null)
   }
 
   return (

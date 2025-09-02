@@ -40,7 +40,7 @@ export default function IngredientCard({
   }
 
   return (
-    <Card className="h-full cursor-pointer" onClick={toggle}>
+    <Card className="cursor-pointer" onClick={toggle}>
       <div className="text-sm font-medium" style={{ color: 'var(--text-strong)' }}>
         {name}
       </div>

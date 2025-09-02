@@ -1,5 +1,5 @@
 import React from 'react'
-import { Input, MonthFilter, IngredientCard } from '../components'
+import { Input, MonthFilter, IngredientCard, EditIngredientModal } from '../components'
 import { ingredientsApi } from '../api/ingredientsApi'
 
 export default function IngredientsPage() {
@@ -8,6 +8,7 @@ export default function IngredientsPage() {
   const [mode, setMode] = React.useState('any')
   const [ingredients, setIngredients] = React.useState([])
   const [expanded, setExpanded] = React.useState(null)
+  const [editing, setEditing] = React.useState(null)
 
   React.useEffect(() => {
     async function load() {
@@ -43,6 +44,24 @@ export default function IngredientsPage() {
     }
   }
 
+  const handleEdit = (ing) => setEditing(ing)
+  const handleSaveEdit = async (updates) => {
+    try {
+      const updated = await ingredientsApi.update(editing.id, {
+        name: updates.name,
+        unit: updates.unit,
+        season_months: updates.season,
+      })
+      setIngredients((ings) =>
+        ings.map((i) => (i.id === editing.id ? { ...i, ...updated } : i))
+      )
+    } catch (err) {
+      console.error('Failed to update ingredient', err)
+    } finally {
+      setEditing(null)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -62,7 +81,7 @@ export default function IngredientsPage() {
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Ingredients
       </h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
         {filtered.map((ing) => (
           <IngredientCard
             key={ing.id}
@@ -71,11 +90,18 @@ export default function IngredientsPage() {
             season={ing.season_months || []}
             expanded={expanded === ing.id}
             onToggle={() => setExpanded(expanded === ing.id ? null : ing.id)}
-            onEdit={() => console.log('edit ingredient', ing.id)}
+            onEdit={() => handleEdit(ing)}
             onDelete={() => handleDelete(ing.id)}
           />
         ))}
       </div>
+      {editing && (
+        <EditIngredientModal
+          ingredient={editing}
+          onClose={() => setEditing(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   )
 }
