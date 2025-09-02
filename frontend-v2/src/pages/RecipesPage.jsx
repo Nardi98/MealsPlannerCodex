@@ -1,10 +1,11 @@
 import React from 'react'
-import { BookmarkIcon, TagIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { BookmarkIcon, TagIcon } from '@heroicons/react/24/outline'
 import { motion as Motion } from 'framer-motion'
 import { Card } from '../components/Card'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
+import { NewRecipeModal } from '../components'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -25,6 +26,7 @@ const exampleRecipe = {
 export default function RecipesPage() {
   const [recipes, setRecipes] = React.useState([exampleRecipe])
   const [expanded, setExpanded] = React.useState(null)
+  const [showModal, setShowModal] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -43,6 +45,10 @@ export default function RecipesPage() {
 
   const toggle = (id) => setExpanded(expanded === id ? null : id)
 
+  const handleSave = (recipe) => {
+    setRecipes((r) => [...r, { ...recipe, id: Date.now() }])
+  }
+
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
@@ -51,7 +57,7 @@ export default function RecipesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Input placeholder="Search recipes…" className="w-56" />
-          <Button variant="a1" Icon={PlusIcon}>New recipe</Button>
+          <Button variant="a1" onClick={() => setShowModal(true)}>+ New recipe</Button>
         </div>
       </div>
 
@@ -105,6 +111,9 @@ export default function RecipesPage() {
           </Motion.div>
         ))}
       </div>
+      {showModal && (
+        <NewRecipeModal onClose={() => setShowModal(false)} onSave={handleSave} />
+      )}
     </Card>
   )
 }
