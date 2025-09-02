@@ -143,10 +143,13 @@ export default function NewRecipeModal({ onClose, onSave }) {
                 <IngredientDropdown
                   value={ing.name}
                   options={ingredientOptions}
-                  onChange={(val) => updateIngredient(idx, 'name', val)}
+                  onChange={(val) => {
+                    updateIngredient(idx, 'name', val)
+                    updateIngredient(idx, 'unit', '')
+                  }}
                   onSelect={(opt) => {
                     updateIngredient(idx, 'name', opt.name)
-                    if (!ing.unit) updateIngredient(idx, 'unit', opt.unit)
+                    updateIngredient(idx, 'unit', opt.unit)
                   }}
                   onAddNew={() => setAddingIdx(idx)}
                 />
@@ -157,18 +160,9 @@ export default function NewRecipeModal({ onClose, onSave }) {
                   className="w-24"
                   placeholder="amt"
                 />
-                <select
-                  value={ing.unit}
-                  onChange={(e) => updateIngredient(idx, 'unit', e.target.value)}
-                  className="rounded-xl border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
-                >
-                  <option value="">unit</option>
-                  <option value="l">l</option>
-                  <option value="g">g</option>
-                  <option value="kg">kg</option>
-                  <option value="pieces">pieces</option>
-                </select>
+                <span className="w-12 text-sm" style={{ color: 'var(--text-strong)' }}>
+                  {ing.unit}
+                </span>
                 <Button
                   type="button"
                   variant="ghost"
