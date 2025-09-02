@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Button } from '../components'
+import { Card, Button, Input } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 
 export default function MealPlanPage() {
@@ -34,6 +34,92 @@ export default function MealPlanPage() {
   const endIso = fmt(end)
 
   const [plan, setPlan] = React.useState({})
+
+  const [form, setForm] = React.useState({
+    start: startIso,
+    end: endIso,
+    days: 7,
+    meals_per_day: 2,
+    epsilon: 0,
+    seasonality_weight: 1,
+    recency_weight: 1,
+    tag_penalty_weight: 1,
+    bulk_bonus_weight: 1,
+    keep_days: 3,
+    bulk_leftovers: true,
+  })
+  const [message, setMessage] = React.useState('')
+  const [error, setError] = React.useState('')
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target
+    let val = type === 'checkbox' ? checked : value
+    if (name === 'meals_per_day') {
+      const num = Number(value)
+      val = Math.min(2, Math.max(1, isNaN(num) ? 1 : num))
+    }
+    setForm((f) => ({ ...f, [name]: val }))
+  }
+
+  React.useEffect(() => {
+    setForm((f) => ({ ...f, start: startIso, end: endIso }))
+  }, [startIso, endIso])
+
+  const handleGenerate = async (e) => {
+    e.preventDefault()
+    setError('')
+    setMessage('')
+    try {
+      const params = {
+        start: form.start,
+        days: Number(form.days),
+        meals_per_day: Math.min(2, Math.max(1, Number(form.meals_per_day))),
+        epsilon: Number(form.epsilon),
+        seasonality_weight: Number(form.seasonality_weight),
+        recency_weight: Number(form.recency_weight),
+        tag_penalty_weight: Number(form.tag_penalty_weight),
+        bulk_bonus_weight: Number(form.bulk_bonus_weight),
+        bulk_leftovers: Boolean(form.bulk_leftovers),
+        keep_days: Number(form.keep_days),
+      }
+      const generated = await mealPlansApi.generate(params)
+      const payload = {
+        plan_date: form.start,
+        plan: Object.fromEntries(
+          Object.entries(generated).map(([day, meals]) => [
+            day,
+            meals.map((m) => ({ main_id: m.id, side_ids: [] })),
+          ]),
+        ),
+        bulk_leftovers: Boolean(form.bulk_leftovers),
+        keep_days: Number(form.keep_days),
+      }
+      try {
+        await mealPlansApi.create(payload)
+      } catch (err) {
+        if (err.data?.conflicts) {
+          const days = err.data.conflicts.join(', ')
+          const overwrite = window.confirm(
+            `Conflicts on: ${days}. Overwrite existing plans?`
+          )
+          if (overwrite) {
+            await mealPlansApi.create(payload, { force: true })
+          } else {
+            setError(`Conflicts on: ${days}`)
+            return
+          }
+        } else {
+          throw err
+        }
+      }
+      const updated = await mealPlansApi.fetchRange(form.start, form.end)
+      setPlan(updated || {})
+      setStart(new Date(form.start))
+      setMessage('Plan generated successfully.')
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   React.useEffect(() => {
     async function load() {
@@ -129,6 +215,90 @@ export default function MealPlanPage() {
           <div className="p-2 text-left font-medium">Dinner</div>
           {days.map((d) => renderCell(d, 1))}
         </div>
+      </Card>
+      <Card>
+        <form onSubmit={handleGenerate} className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Start date</span>
+              <Input type="date" name="start" value={form.start} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">End date</span>
+              <Input type="date" name="end" value={form.end} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Days</span>
+              <Input type="number" name="days" min="1" value={form.days} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Meals per day</span>
+              <Input
+                type="number"
+                name="meals_per_day"
+                min="1"
+                max="2"
+                step="1"
+                value={form.meals_per_day}
+                onChange={handleChange}
+              />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">ε ({form.epsilon})</span>
+              <Input
+                type="range"
+                name="epsilon"
+                min="0"
+                max="1"
+                step="0.01"
+                value={form.epsilon}
+                onChange={handleChange}
+              />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Seasonality weight</span>
+              <Input type="number" step="0.1" name="seasonality_weight" value={form.seasonality_weight} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Recency weight</span>
+              <Input type="number" step="0.1" name="recency_weight" value={form.recency_weight} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Tag penalty weight</span>
+              <Input type="number" step="0.1" name="tag_penalty_weight" value={form.tag_penalty_weight} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Bulk bonus weight</span>
+              <Input type="number" step="0.1" name="bulk_bonus_weight" value={form.bulk_bonus_weight} onChange={handleChange} />
+            </label>
+            <label className="flex flex-col text-sm">
+              <span className="mb-1">Keep days</span>
+              <Input type="number" name="keep_days" min="0" value={form.keep_days} onChange={handleChange} />
+            </label>
+            <label className="flex items-center gap-2 col-span-2 text-sm">
+              <input
+                type="checkbox"
+                name="bulk_leftovers"
+                checked={form.bulk_leftovers}
+                onChange={handleChange}
+                className="h-4 w-4 rounded border"
+                style={{ borderColor: 'var(--border)' }}
+              />
+              <span style={{ color: 'var(--text-strong)' }}>Bulk leftovers</span>
+            </label>
+          </div>
+          {message && (
+            <div className="text-sm" style={{ color: 'var(--c-pos)' }}>
+              {message}
+            </div>
+          )}
+          {error && (
+            <div className="text-sm" style={{ color: 'var(--c-neg)' }}>
+              {error}
+            </div>
+          )}
+          <Button type="submit">Generate plan</Button>
+        </form>
       </Card>
     </div>
   )
