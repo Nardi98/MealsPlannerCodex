@@ -1,10 +1,35 @@
 import React from 'react'
 import { Card, Button, SeasonalityGrid } from './'
 
-export default function IngredientCard({ name, unit, season = [], onEdit, onDelete }) {
-  const [expanded, setExpanded] = React.useState(false)
+/**
+ * Displays an ingredient and optionally shows its details when expanded.
+ *
+ * The component can operate in a controlled or uncontrolled mode. When the
+ * `expanded` prop is provided, the parent component controls the expanded
+ * state and should also supply an `onToggle` handler. If `expanded` is omitted
+ * the card manages its own state internally.
+ */
+export default function IngredientCard({
+  name,
+  unit,
+  season = [],
+  expanded: expandedProp,
+  onToggle,
+  onEdit,
+  onDelete,
+}) {
+  const [internalExpanded, setInternalExpanded] = React.useState(false)
+  const isControlled = expandedProp !== undefined
+  const expanded = isControlled ? expandedProp : internalExpanded
 
-  const toggle = () => setExpanded((e) => !e)
+  const toggle = () => {
+    if (isControlled) {
+      onToggle?.()
+    } else {
+      setInternalExpanded((e) => !e)
+    }
+  }
+
   const handleEdit = (e) => {
     e.stopPropagation()
     onEdit?.()
