@@ -105,7 +105,11 @@ export default function RecipesPage() {
                   <div className="text-sm font-medium mb-1">Ingredients</div>
                   <ul className="list-disc list-inside text-sm mb-2">
                     {(r.ingredients || []).map((ing, idx) => (
-                      <li key={ing.id || idx}>{ing.name || ing}</li>
+                      <li key={ing.id || idx}>
+                        {[ing.amount, ing.unit, ing.name || ing]
+                          .filter(Boolean)
+                          .join(' ')}
+                      </li>
                     ))}
                   </ul>
                   {r.procedure && (
