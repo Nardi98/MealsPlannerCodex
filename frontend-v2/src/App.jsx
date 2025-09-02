@@ -46,10 +46,10 @@ function Shell() {
                 label="Recipes"
               />
               <NavItem
+                active={location.pathname === '/meal-plan'}
+                onClick={() => navigate('/meal-plan')}
                 Icon={CalendarDaysIcon}
                 label="Meal Plan"
-                className="text-[color:var(--text-subtle)] cursor-not-allowed"
-                aria-disabled="true"
               />
               <NavItem
                 active={location.pathname === '/ingredients'}
