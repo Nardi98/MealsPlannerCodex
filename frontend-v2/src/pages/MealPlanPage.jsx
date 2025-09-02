@@ -1,6 +1,7 @@
 import React from 'react'
-import { Card, Button, Input } from '../components'
+import { Card, Button, Input, TagSelector } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
+import { tagsApi } from '../api/tagsApi'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -33,6 +34,7 @@ export default function MealPlanPage() {
   end.setDate(start.getDate() + 6)
   const endIso = fmt(end)
 
+  const [tags, setTags] = React.useState([])
   const [plan, setPlan] = React.useState({})
 
   const [form, setForm] = React.useState({
@@ -47,6 +49,8 @@ export default function MealPlanPage() {
     bulk_bonus_weight: 1,
     keep_days: 3,
     bulk_leftovers: true,
+    avoid_tags: [],
+    reduce_tags: [],
   })
   const [message, setMessage] = React.useState('')
   const [error, setError] = React.useState('')
@@ -65,6 +69,23 @@ export default function MealPlanPage() {
     setForm((f) => ({ ...f, start: startIso, end: endIso }))
   }, [startIso, endIso])
 
+  React.useEffect(() => {
+    async function loadTags() {
+      try {
+        const data = await tagsApi.fetchAll()
+        setTags(data.map((t) => t.name))
+      } catch (err) {
+        console.error('Failed to load tags', err)
+      }
+    }
+    loadTags()
+  }, [])
+
+  const handleAvoidChange = (selected) =>
+    setForm((f) => ({ ...f, avoid_tags: selected }))
+  const handleReduceChange = (selected) =>
+    setForm((f) => ({ ...f, reduce_tags: selected }))
+
   const handleGenerate = async (e) => {
     e.preventDefault()
     setError('')
@@ -80,6 +101,8 @@ export default function MealPlanPage() {
         tag_penalty_weight: Number(form.tag_penalty_weight),
         bulk_bonus_weight: Number(form.bulk_bonus_weight),
         bulk_leftovers: Boolean(form.bulk_leftovers),
+        avoid_tags: form.avoid_tags,
+        reduce_tags: form.reduce_tags,
         keep_days: Number(form.keep_days),
       }
       const generated = await mealPlansApi.generate(params)
@@ -286,6 +309,18 @@ export default function MealPlanPage() {
               />
               <span style={{ color: 'var(--text-strong)' }}>Bulk leftovers</span>
             </label>
+            <TagSelector
+              label="Avoid tags"
+              tags={tags}
+              selected={form.avoid_tags}
+              onChange={handleAvoidChange}
+            />
+            <TagSelector
+              label="Reduce tags"
+              tags={tags}
+              selected={form.reduce_tags}
+              onChange={handleReduceChange}
+            />
           </div>
           {message && (
             <div className="text-sm" style={{ color: 'var(--c-pos)' }}>
