@@ -103,15 +103,17 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
   )
 }
 
-export default function NewRecipeModal({ onClose, onSave }) {
-  const [title, setTitle] = React.useState('')
-  const [course, setCourse] = React.useState('')
-  const [tags, setTags] = React.useState([])
+export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
+  const [title, setTitle] = React.useState(initialRecipe?.title || '')
+  const [course, setCourse] = React.useState(initialRecipe?.course || '')
+  const [tags, setTags] = React.useState(initialRecipe?.tags || [])
   const [tagInput, setTagInput] = React.useState('')
   const [tagOptions, setTagOptions] = React.useState(['quick', 'vegan', 'protein'])
-  const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
-  const [procedure, setProcedure] = React.useState('')
-  const [bulkPrep, setBulkPrep] = React.useState(false)
+  const [ingredients, setIngredients] = React.useState(
+    initialRecipe?.ingredients || [{ name: '', amount: '', unit: '' }]
+  )
+  const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
+  const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
   const [ingredientOptions, setIngredientOptions] = React.useState([
     { name: 'Carrot', unit: 'g', season: [] },
     { name: 'Potato', unit: 'kg', season: [] },
@@ -146,7 +148,7 @@ export default function NewRecipeModal({ onClose, onSave }) {
           unit: ing.unit,
         })),
       procedure,
-      bulkPrep,
+      hot: bulkPrep,
     }
     onSave?.(recipe)
     onClose?.()

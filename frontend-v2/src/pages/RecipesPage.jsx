@@ -6,36 +6,19 @@ import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
 import { NewRecipeModal } from '../components'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
-
-const exampleRecipe = {
-  id: 'example',
-  title: 'Example',
-  course: 'Demo',
-  score: 4.5,
-  hot: true,
-  tags: [{ name: 'demo' }],
-  ingredients: [
-    { id: 1, name: '1 c. placeholder ingredient' },
-    { id: 2, name: '2 tbsp sample spice' },
-  ],
-  procedure: 'This is an example recipe. Connect the backend to view real recipes.',
-}
+import { recipesApi } from '../api/recipesApi'
 
 export default function RecipesPage() {
-  const [recipes, setRecipes] = React.useState([exampleRecipe])
+  const [recipes, setRecipes] = React.useState([])
   const [expanded, setExpanded] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
+  const [editing, setEditing] = React.useState(null)
 
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API_BASE_URL}/recipes`)
-        const data = await res.json()
-        if (Array.isArray(data) && data.length) {
-          setRecipes(data)
-        }
+        const data = await recipesApi.fetchAll()
+        setRecipes(data)
       } catch (err) {
         console.error('Failed to load recipes', err)
       }
@@ -45,8 +28,30 @@ export default function RecipesPage() {
 
   const toggle = (id) => setExpanded(expanded === id ? null : id)
 
-  const handleSave = (recipe) => {
-    setRecipes((r) => [...r, { ...recipe, id: Date.now() }])
+  const handleSave = async (recipe) => {
+    try {
+      if (editing) {
+        const updated = await recipesApi.update(editing.id, recipe)
+        setRecipes((r) => r.map((rec) => (rec.id === editing.id ? updated : rec)))
+      } else {
+        const created = await recipesApi.create(recipe)
+        setRecipes((r) => [...r, created])
+      }
+    } catch (err) {
+      console.error('Failed to save recipe', err)
+    } finally {
+      setShowModal(false)
+      setEditing(null)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    try {
+      await recipesApi.delete(id)
+      setRecipes((r) => r.filter((rec) => rec.id !== id))
+    } catch (err) {
+      console.error('Failed to delete recipe', err)
+    }
   }
 
   return (
@@ -57,7 +62,15 @@ export default function RecipesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Input placeholder="Search recipes…" className="w-56" />
-          <Button variant="a1" onClick={() => setShowModal(true)}>+ New recipe</Button>
+          <Button
+            variant="a1"
+            onClick={() => {
+              setEditing(null)
+              setShowModal(true)
+            }}
+          >
+            + New recipe
+          </Button>
         </div>
       </div>
 
@@ -80,8 +93,8 @@ export default function RecipesPage() {
                 <div className="flex items-center gap-1">
                   {r.hot && <Badge tone="a2">hot</Badge>}
                   {(r.tags || []).map((t) => (
-                    <Badge key={t.id || t.name || t} tone="a3">
-                      <TagIcon className="h-3 w-3" />{t.name || t}
+                    <Badge key={t} tone="a3">
+                      <TagIcon className="h-3 w-3" />{t}
                     </Badge>
                   ))}
                 </div>
@@ -91,8 +104,8 @@ export default function RecipesPage() {
                 <div className="mt-3">
                   <div className="text-sm font-medium mb-1">Ingredients</div>
                   <ul className="list-disc list-inside text-sm mb-2">
-                    {(r.ingredients || []).map((ing) => (
-                      <li key={ing.id}>{ing.name}</li>
+                    {(r.ingredients || []).map((ing, idx) => (
+                      <li key={ing.id || idx}>{ing.name || ing}</li>
                     ))}
                   </ul>
                   {r.procedure && (
@@ -102,8 +115,27 @@ export default function RecipesPage() {
                     </>
                   )}
                   <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="a2" onClick={(e) => e.stopPropagation()}>Edit</Button>
-                    <Button size="sm" variant="danger" onClick={(e) => e.stopPropagation()}>Delete</Button>
+                    <Button
+                      size="sm"
+                      variant="a2"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditing(r)
+                        setShowModal(true)
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDelete(r.id)
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
               )}
@@ -112,7 +144,14 @@ export default function RecipesPage() {
         ))}
       </div>
       {showModal && (
-        <NewRecipeModal onClose={() => setShowModal(false)} onSave={handleSave} />
+        <NewRecipeModal
+          onClose={() => {
+            setShowModal(false)
+            setEditing(null)
+          }}
+          onSave={handleSave}
+          initialRecipe={editing}
+        />
       )}
     </Card>
   )
