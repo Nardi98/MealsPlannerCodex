@@ -9,6 +9,10 @@ import {
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline';
 import { useCssVars } from './tokens';
+import MealPlanPage from './pages/MealPlanPage';
+import IngredientsPage from './pages/IngredientsPage';
+import ShoppingListPage from './pages/ShoppingListPage';
+import ImportExportPage from './pages/ImportExportPage';
 
 function NavItem({ active, disabled, Icon, label, onClick }) {
   return (
@@ -105,9 +109,15 @@ export default function App() {
           </div>
         </aside>
         <section className="space-y-4">
-          <div className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-sm text-[color:var(--text-muted)]">Active page: {active}</p>
-          </div>
+          {active === 'planner' && <MealPlanPage />}
+          {active === 'recipes' && (
+            <div className="px-4 py-6">
+              <h1 className="text-xl font-medium">Recipes</h1>
+            </div>
+          )}
+          {active === 'ingredients' && <IngredientsPage />}
+          {active === 'list' && <ShoppingListPage />}
+          {active === 'import' && <ImportExportPage />}
         </section>
       </main>
     </div>
