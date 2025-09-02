@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
-import { SwatchIcon, CalendarDaysIcon, BookmarkIcon, ShoppingCartIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import {
+  SwatchIcon,
+  CalendarDaysIcon,
+  BookmarkIcon,
+  ShoppingCartIcon,
+  MagnifyingGlassIcon,
+  ClipboardDocumentListIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline';
 import { useCssVars } from './tokens';
 
-function NavItem({ active, Icon, label, onClick }) {
+function NavItem({ active, disabled, Icon, label, onClick }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className={`w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-95 ${active ? 'text-white' : 'text-[color:var(--text-strong)]'}`}
+      disabled={disabled}
+      onClick={disabled ? undefined : onClick}
+      className={`w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 ${
+        active
+          ? 'text-white hover:opacity-95'
+          : disabled
+          ? 'text-[color:var(--text-muted)] cursor-default'
+          : 'text-[color:var(--text-strong)] hover:opacity-95'
+      }`}
       style={{ backgroundColor: active ? 'var(--c-a1)' : 'transparent' }}
     >
       <Icon className="h-5 w-5" />
@@ -52,9 +67,40 @@ export default function App() {
         <aside className="space-y-2">
           <div className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: 'var(--border)' }}>
             <div className="grid grid-cols-1 gap-1">
-              <NavItem active={active === 'planner'} onClick={() => setActive('planner')} Icon={CalendarDaysIcon} label="Week planner" />
-              <NavItem active={active === 'recipes'} onClick={() => setActive('recipes')} Icon={BookmarkIcon} label="Recipes" />
-              <NavItem active={active === 'list'} onClick={() => setActive('list')} Icon={ShoppingCartIcon} label="Shopping list" />
+              <NavItem
+                active={active === 'planner'}
+                disabled
+                onClick={() => setActive('planner')}
+                Icon={CalendarDaysIcon}
+                label="Meal Plan"
+              />
+              <NavItem
+                active={active === 'recipes'}
+                onClick={() => setActive('recipes')}
+                Icon={BookmarkIcon}
+                label="Recipes"
+              />
+              <NavItem
+                active={active === 'ingredients'}
+                disabled
+                onClick={() => setActive('ingredients')}
+                Icon={ClipboardDocumentListIcon}
+                label="Ingredients"
+              />
+              <NavItem
+                active={active === 'list'}
+                disabled
+                onClick={() => setActive('list')}
+                Icon={ShoppingCartIcon}
+                label="Shopping List"
+              />
+              <NavItem
+                active={active === 'import'}
+                disabled
+                onClick={() => setActive('import')}
+                Icon={ArrowsRightLeftIcon}
+                label="Import/Export"
+              />
             </div>
           </div>
         </aside>
