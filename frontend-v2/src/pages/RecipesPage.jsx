@@ -1,4 +1,4 @@
 export default function RecipesPage() {
-  return <h1 className="text-xl font-semibold">Recipes</h1>
+  return <h1 className="text-xl font-medium">Recipes</h1>
 }
 
