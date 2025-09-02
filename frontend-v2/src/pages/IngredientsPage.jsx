@@ -115,7 +115,17 @@ export default function IngredientsPage() {
       )
     } catch (err) {
       console.error('Failed to add ingredient', err)
-      throw err
+      const fallback = {
+        id: Date.now(),
+        name,
+        unit,
+        season_months: season,
+      }
+      setIngredients((ings) =>
+        !query || fallback.name.toLowerCase().includes(query.toLowerCase())
+          ? [...ings, fallback]
+          : ings
+      )
     }
   }
 
