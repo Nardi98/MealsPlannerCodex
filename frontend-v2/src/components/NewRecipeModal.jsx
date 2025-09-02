@@ -5,17 +5,19 @@ import { Input, Button } from './'
 export default function NewRecipeModal({ onClose, onSave }) {
   const [title, setTitle] = React.useState('')
   const [course, setCourse] = React.useState('')
-  const [score, setScore] = React.useState('')
   const [tags, setTags] = React.useState('')
-  const [ingredients, setIngredients] = React.useState([''])
+  const [ingredients, setIngredients] = React.useState([{ name: '', amount: '', unit: '' }])
   const [procedure, setProcedure] = React.useState('')
   const [bulkPrep, setBulkPrep] = React.useState(false)
 
-  const updateIngredient = (idx, val) => {
-    setIngredients((ings) => ings.map((ing, i) => (i === idx ? val : ing)))
+  const updateIngredient = (idx, field, val) => {
+    setIngredients((ings) =>
+      ings.map((ing, i) => (i === idx ? { ...ing, [field]: val } : ing))
+    )
   }
 
-  const addIngredient = () => setIngredients((ings) => [...ings, ''])
+  const addIngredient = () =>
+    setIngredients((ings) => [...ings, { name: '', amount: '', unit: '' }])
   const removeIngredient = (idx) => {
     setIngredients((ings) => ings.filter((_, i) => i !== idx))
   }
@@ -25,9 +27,15 @@ export default function NewRecipeModal({ onClose, onSave }) {
     const recipe = {
       title,
       course,
-      score: parseFloat(score) || 0,
       tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-      ingredients: ingredients.filter((i) => i.trim()).map((name, id) => ({ id, name })),
+      ingredients: ingredients
+        .filter((i) => i.name.trim())
+        .map((ing, id) => ({
+          id,
+          name: ing.name,
+          amount: parseFloat(ing.amount) || 0,
+          unit: ing.unit,
+        })),
       procedure,
       bulkPrep,
     }
@@ -60,10 +68,6 @@ export default function NewRecipeModal({ onClose, onSave }) {
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-sm">Score</label>
-            <Input type="number" step="0.1" value={score} onChange={(e) => setScore(e.target.value)} />
-          </div>
-          <div className="space-y-1">
             <label className="text-sm">Tags</label>
             <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="comma separated" />
           </div>
@@ -72,10 +76,30 @@ export default function NewRecipeModal({ onClose, onSave }) {
             {ingredients.map((ing, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <Input
-                  value={ing}
-                  onChange={(e) => updateIngredient(idx, e.target.value)}
+                  value={ing.name}
+                  onChange={(e) => updateIngredient(idx, 'name', e.target.value)}
                   className="flex-1"
+                  placeholder="name"
                 />
+                <Input
+                  type="number"
+                  value={ing.amount}
+                  onChange={(e) => updateIngredient(idx, 'amount', e.target.value)}
+                  className="w-24"
+                  placeholder="amt"
+                />
+                <select
+                  value={ing.unit}
+                  onChange={(e) => updateIngredient(idx, 'unit', e.target.value)}
+                  className="rounded-xl border px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+                >
+                  <option value="">unit</option>
+                  <option value="l">l</option>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="pieces">pieces</option>
+                </select>
                 <Button
                   type="button"
                   variant="ghost"
