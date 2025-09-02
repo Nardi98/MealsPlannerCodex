@@ -13,7 +13,7 @@ export default function SeasonalityGrid({ months = [] }) {
             style={{
               backgroundColor: months.includes(m)
                 ? 'var(--c-a1)'
-                : 'var(--text-subtle)',
+                : 'var(--c-white)',
             }}
           />
           <span className="text-[10px] text-gray-400">{LABELS[i]}</span>

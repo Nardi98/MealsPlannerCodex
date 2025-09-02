@@ -2,8 +2,8 @@ import React from 'react'
 import SeasonalitySelect from './SeasonalitySelect'
 
 const MODES = [
-  { value: 'any', label: 'At least one' },
-  { value: 'all', label: 'All selected' },
+  { value: 'any', label: 'At least one month' },
+  { value: 'all', label: 'All selected months' },
 ]
 
 export default function MonthFilter({
