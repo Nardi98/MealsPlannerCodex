@@ -52,10 +52,10 @@ function Shell() {
                 aria-disabled="true"
               />
               <NavItem
+                active={location.pathname === '/ingredients'}
+                onClick={() => navigate('/ingredients')}
                 Icon={BeakerIcon}
                 label="Ingredients"
-                className="text-[color:var(--text-subtle)] cursor-not-allowed"
-                aria-disabled="true"
               />
               <NavItem
                 Icon={ShoppingCartIcon}
