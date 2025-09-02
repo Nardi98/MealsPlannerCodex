@@ -175,8 +175,8 @@ export default function MealPlanPage() {
           isToday(d)
             ? {
                 borderColor: 'var(--border)',
-                backgroundColor: 'var(--c-a1)',
-                opacity: 0.1,
+                backgroundColor: 'var(--c-a3)',
+                color: 'var(--text-strong)',
               }
             : { borderColor: 'var(--border)' }
         }
@@ -224,7 +224,7 @@ export default function MealPlanPage() {
                 }`}
                 style={
                   isToday(d)
-                    ? { backgroundColor: 'var(--c-a1)' }
+                    ? { backgroundColor: 'var(--c-a3)' }
                     : undefined
                 }
               >
