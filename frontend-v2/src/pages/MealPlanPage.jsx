@@ -1,18 +1,30 @@
 import React from 'react'
-import { Card } from '../components'
+import { Card, Button } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 
 export default function MealPlanPage() {
   const today = new Date()
-  const start = new Date(today)
-  const day = start.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  start.setDate(start.getDate() + diff)
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    return d
-  })
+
+  const startOfWeek = (base) => {
+    const start = new Date(base)
+    const day = start.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    start.setDate(start.getDate() + diff)
+    return start
+  }
+
+  const [start, setStart] = React.useState(() => startOfWeek(today))
+
+  const days = React.useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(start)
+        d.setDate(start.getDate() + i)
+        return d
+      }),
+    [start]
+  )
+
   const isToday = (d) => d.toDateString() === today.toDateString()
 
   const fmt = (d) => d.toISOString().split('T')[0]
@@ -34,6 +46,14 @@ export default function MealPlanPage() {
     }
     load()
   }, [startIso, endIso])
+
+  const changeWeek = (delta) => {
+    setStart((s) => {
+      const d = new Date(s)
+      d.setDate(d.getDate() + delta)
+      return d
+    })
+  }
 
   const renderCell = (d, idx) => {
     const iso = fmt(d)
@@ -73,6 +93,14 @@ export default function MealPlanPage() {
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Meal Plan
       </h1>
+      <div className="flex justify-between">
+        <Button variant="ghost" onClick={() => changeWeek(-7)}>
+          Previous week
+        </Button>
+        <Button variant="ghost" onClick={() => changeWeek(7)}>
+          Next week
+        </Button>
+      </div>
       <Card>
         <div className="grid grid-cols-8">
           <div />
