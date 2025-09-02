@@ -2,6 +2,8 @@ import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button, Badge } from './'
 import AddIngredientModal from './AddIngredientModal'
+import { ingredientsApi } from '../api/ingredientsApi'
+import { tagsApi } from '../api/tagsApi'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
@@ -108,17 +110,13 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const [course, setCourse] = React.useState(initialRecipe?.course || '')
   const [tags, setTags] = React.useState(initialRecipe?.tags || [])
   const [tagInput, setTagInput] = React.useState('')
-  const [tagOptions, setTagOptions] = React.useState(['quick', 'vegan', 'protein'])
+  const [tagOptions, setTagOptions] = React.useState([])
   const [ingredients, setIngredients] = React.useState(
     initialRecipe?.ingredients || [{ name: '', amount: '', unit: '' }]
   )
   const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
   const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
-  const [ingredientOptions, setIngredientOptions] = React.useState([
-    { name: 'Carrot', unit: 'g', season: [] },
-    { name: 'Potato', unit: 'kg', season: [] },
-    { name: 'Onion', unit: 'pieces', season: [] },
-  ])
+  const [ingredientOptions, setIngredientOptions] = React.useState([])
   const [addingIdx, setAddingIdx] = React.useState(null)
 
   const updateIngredient = (idx, field, val) => {
@@ -132,6 +130,29 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const removeIngredient = (idx) => {
     setIngredients((ings) => ings.filter((_, i) => i !== idx))
   }
+
+  React.useEffect(() => {
+    async function loadOptions() {
+      try {
+        const [tagsRes, ingRes] = await Promise.all([
+          tagsApi.fetchAll(),
+          ingredientsApi.fetchAll(),
+        ])
+        setTagOptions(tagsRes.map((t) => t.name))
+        setIngredientOptions(
+          ingRes.map((i) => ({
+            id: i.id,
+            name: i.name,
+            unit: i.unit,
+            season_months: i.season_months || [],
+          }))
+        )
+      } catch (err) {
+        console.error('Failed to load options', err)
+      }
+    }
+    loadOptions()
+  }, [])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -154,13 +175,29 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
     onClose?.()
   }
 
-  const handleNewIngredient = (ing) => {
-    setIngredientOptions((opts) => [...opts, ing])
-    if (addingIdx != null) {
-      updateIngredient(addingIdx, 'name', ing.name)
-      updateIngredient(addingIdx, 'unit', ing.unit)
+  const handleNewIngredient = async (ing) => {
+    try {
+      const res = await ingredientsApi.create({
+        name: ing.name,
+        unit: ing.unit,
+        season_months: ing.season,
+      })
+      const newIng = {
+        id: res.id,
+        name: res.name,
+        unit: res.unit,
+        season_months: res.season_months || [],
+      }
+      setIngredientOptions((opts) => [...opts, newIng])
+      if (addingIdx != null) {
+        updateIngredient(addingIdx, 'name', newIng.name)
+        updateIngredient(addingIdx, 'unit', newIng.unit)
+      }
+    } catch (err) {
+      console.error('Failed to add ingredient', err)
+    } finally {
+      setAddingIdx(null)
     }
-    setAddingIdx(null)
   }
 
   return (
@@ -199,14 +236,24 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
                   if (!tags.includes(tag)) setTags((t) => [...t, tag])
                   setTagInput('')
                 }}
-                onAddNew={(tag) => {
+                onAddNew={async (tag) => {
                   const newTag = tag.trim()
                   if (!newTag) return
-                  setTagOptions((opts) => (opts.includes(newTag) ? opts : [...opts, newTag]))
-                  if (!tags.includes(newTag)) setTags((t) => [...t, newTag])
-                  setTagInput('')
+                  try {
+                    const res = await tagsApi.create({ name: newTag })
+                    const tagName = res.name || newTag
+                    setTagOptions((opts) =>
+                      opts.includes(tagName) ? opts : [...opts, tagName]
+                    )
+                    if (!tags.includes(tagName))
+                      setTags((t) => [...t, tagName])
+                  } catch (err) {
+                    console.error('Failed to create tag', err)
+                  } finally {
+                    setTagInput('')
+                  }
                 }}
-              />
+             />
               {tags.map((t) => (
                 <Badge tone="a3" key={t}>
                   {t}
