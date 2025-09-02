@@ -5,6 +5,8 @@ import {
   IngredientCard,
   EditIngredientModal,
   ConfirmIngredientChangeModal,
+  AddIngredientModal,
+  Button,
 } from '../components'
 import { ingredientsApi } from '../api/ingredientsApi'
 
@@ -16,6 +18,7 @@ export default function IngredientsPage() {
   const [expanded, setExpanded] = React.useState(null)
   const [editing, setEditing] = React.useState(null)
   const [confirm, setConfirm] = React.useState(null)
+  const [adding, setAdding] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -96,6 +99,36 @@ export default function IngredientsPage() {
     }
   }
 
+  const handleAdd = async ({ name, unit, season }) => {
+    try {
+      const created = ingredientsApi.create
+        ? await ingredientsApi.create({
+            name,
+            unit,
+            season_months: season,
+          })
+        : { id: Date.now(), name, unit, season_months: season }
+      setIngredients((ings) =>
+        !query || created.name.toLowerCase().includes(query.toLowerCase())
+          ? [...ings, created]
+          : ings
+      )
+    } catch (err) {
+      console.error('Failed to add ingredient', err)
+      const fallback = {
+        id: Date.now(),
+        name,
+        unit,
+        season_months: season,
+      }
+      setIngredients((ings) =>
+        !query || fallback.name.toLowerCase().includes(query.toLowerCase())
+          ? [...ings, fallback]
+          : ings
+      )
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -111,6 +144,9 @@ export default function IngredientsPage() {
           mode={mode}
           onModeChange={setMode}
         />
+        <Button variant="a1" onClick={() => setAdding(true)}>
+          + New ingredient
+        </Button>
       </div>
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Ingredients
@@ -134,6 +170,12 @@ export default function IngredientsPage() {
           ingredient={editing}
           onClose={() => setEditing(null)}
           onSave={handleSaveEdit}
+        />
+      )}
+      {adding && (
+        <AddIngredientModal
+          onClose={() => setAdding(false)}
+          onSave={handleAdd}
         />
       )}
       {confirm && (
