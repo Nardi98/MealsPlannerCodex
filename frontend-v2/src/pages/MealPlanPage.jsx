@@ -175,7 +175,7 @@ export default function MealPlanPage() {
           isToday(d)
             ? {
                 borderColor: 'var(--border)',
-                backgroundColor: 'var(--c-a3)',
+                backgroundColor: 'rgba(187, 138, 82, 0.15)',
                 color: 'var(--text-strong)',
               }
             : { borderColor: 'var(--border)' }
