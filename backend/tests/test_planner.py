@@ -284,3 +284,13 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
         "2024-01-01": ["Bulk"],
         "2024-01-02": ["Bulk"],
     }
+
+
+def test_generate_plan_respects_meals_per_day(db_session):
+    first = Recipe(title="MealA", servings_default=1, score=1.0, course="main")
+    second = Recipe(title="MealB", servings_default=1, score=1.0, course="main")
+    db_session.add_all([first, second])
+    db_session.commit()
+    start = date(2024, 1, 1)
+    plan = generate_plan(db_session, start, days=1, meals_per_day=2, epsilon=0.0)
+    assert len(plan["2024-01-01"]) == 2

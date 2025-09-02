@@ -1,6 +1,7 @@
 import React from 'react'
-import { Card, Button, Input } from '../components'
+import { Card, Button, Input, TagSelector } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
+import { tagsApi } from '../api/tagsApi'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -33,6 +34,7 @@ export default function MealPlanPage() {
   end.setDate(start.getDate() + 6)
   const endIso = fmt(end)
 
+  const [tags, setTags] = React.useState([])
   const [plan, setPlan] = React.useState({})
 
   const [form, setForm] = React.useState({
@@ -47,6 +49,8 @@ export default function MealPlanPage() {
     bulk_bonus_weight: 1,
     keep_days: 3,
     bulk_leftovers: true,
+    avoid_tags: [],
+    reduce_tags: [],
   })
   const [message, setMessage] = React.useState('')
   const [error, setError] = React.useState('')
@@ -56,7 +60,7 @@ export default function MealPlanPage() {
     let val = type === 'checkbox' ? checked : value
     if (name === 'meals_per_day') {
       const num = Number(value)
-      val = Math.min(2, Math.max(1, isNaN(num) ? 1 : num))
+      val = isNaN(num) ? 1 : Math.max(1, num)
     }
     setForm((f) => ({ ...f, [name]: val }))
   }
@@ -64,6 +68,23 @@ export default function MealPlanPage() {
   React.useEffect(() => {
     setForm((f) => ({ ...f, start: startIso, end: endIso }))
   }, [startIso, endIso])
+
+  React.useEffect(() => {
+    async function loadTags() {
+      try {
+        const data = await tagsApi.fetchAll()
+        setTags(data.map((t) => t.name))
+      } catch (err) {
+        console.error('Failed to load tags', err)
+      }
+    }
+    loadTags()
+  }, [])
+
+  const handleAvoidChange = (selected) =>
+    setForm((f) => ({ ...f, avoid_tags: selected }))
+  const handleReduceChange = (selected) =>
+    setForm((f) => ({ ...f, reduce_tags: selected }))
 
   const handleGenerate = async (e) => {
     e.preventDefault()
@@ -73,13 +94,15 @@ export default function MealPlanPage() {
       const params = {
         start: form.start,
         days: Number(form.days),
-        meals_per_day: Math.min(2, Math.max(1, Number(form.meals_per_day))),
+        meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
         recency_weight: Number(form.recency_weight),
         tag_penalty_weight: Number(form.tag_penalty_weight),
         bulk_bonus_weight: Number(form.bulk_bonus_weight),
         bulk_leftovers: Boolean(form.bulk_leftovers),
+        avoid_tags: form.avoid_tags,
+        reduce_tags: form.reduce_tags,
         keep_days: Number(form.keep_days),
       }
       const generated = await mealPlansApi.generate(params)
@@ -152,8 +175,8 @@ export default function MealPlanPage() {
           isToday(d)
             ? {
                 borderColor: 'var(--border)',
-                backgroundColor: 'var(--c-a1)',
-                opacity: 0.1,
+                backgroundColor: 'rgba(187, 138, 82, 0.15)',
+                color: 'var(--text-strong)',
               }
             : { borderColor: 'var(--border)' }
         }
@@ -201,7 +224,7 @@ export default function MealPlanPage() {
                 }`}
                 style={
                   isToday(d)
-                    ? { backgroundColor: 'var(--c-a1)' }
+                    ? { backgroundColor: 'var(--c-a3)' }
                     : undefined
                 }
               >
@@ -286,6 +309,18 @@ export default function MealPlanPage() {
               />
               <span style={{ color: 'var(--text-strong)' }}>Bulk leftovers</span>
             </label>
+            <TagSelector
+              label="Avoid tags"
+              tags={tags}
+              selected={form.avoid_tags}
+              onChange={handleAvoidChange}
+            />
+            <TagSelector
+              label="Reduce tags"
+              tags={tags}
+              selected={form.reduce_tags}
+              onChange={handleReduceChange}
+            />
           </div>
           {message && (
             <div className="text-sm" style={{ color: 'var(--c-pos)' }}>
