@@ -14,6 +14,23 @@ export default function ShoppingListPage() {
     setIngredients(all)
   }, [recipes])
 
+  const months = React.useMemo(() => {
+    if (!startDate) return []
+    const start = new Date(startDate)
+    return Array.from({ length: 3 }, (_, i) => {
+      const firstDay = new Date(start.getFullYear(), start.getMonth() + i, 1)
+      const days = new Date(
+        firstDay.getFullYear(),
+        firstDay.getMonth() + 1,
+        0,
+      ).getDate()
+      return { firstDay, days }
+    })
+  }, [startDate])
+
+  const start = startDate ? new Date(startDate) : null
+  const end = endDate ? new Date(endDate) : null
+
   return (
     <div className="space-y-4">
       <h1
@@ -37,6 +54,37 @@ export default function ShoppingListPage() {
           Load
         </Button>
       </div>
+      {months.length > 0 && (
+        <div className="flex gap-4 text-xs">
+          {months.map((m) => (
+            <div key={m.firstDay.toISOString()} className="flex flex-col items-center">
+              <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: m.days }, (_, idx) => {
+                  const day = idx + 1
+                  const current = new Date(
+                    m.firstDay.getFullYear(),
+                    m.firstDay.getMonth(),
+                    day,
+                  )
+                  const highlight =
+                    start && end && current >= start && current <= end
+                  return (
+                    <div key={day} className="flex flex-col items-center">
+                      {day}
+                      {highlight && (
+                        <div className="h-1.5 w-1.5 bg-[color:var(--c-a1)] rounded-full mt-0.5" />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-1 text-center">
+                {m.firstDay.toLocaleString('default', { month: 'long' })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       <Card>
         {ingredients.map((ing) => (
           <div key={ing.id}>{ing.name}</div>
