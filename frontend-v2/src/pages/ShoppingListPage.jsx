@@ -42,7 +42,7 @@ export default function ShoppingListPage() {
         Shopping List
       </h1>
       <Card className="space-y-8">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center gap-2">
           <Input
             type="date"
             value={startDate}
@@ -57,13 +57,13 @@ export default function ShoppingListPage() {
             Load
           </Button>
         </div>
-        <div className="flex w-full justify-between text-xs">
+        <div className="flex w-full justify-center gap-2 px-8 text-xs">
           {months.map((m) => (
             <div
               key={m.firstDay.toISOString()}
-              className="flex w-1/4 flex-col items-center"
+              className="flex flex-1 flex-col items-center"
             >
-              <div className="grid w-full grid-cols-7 gap-1">
+              <div className="grid w-full grid-cols-7 gap-x-1 gap-y-2">
                 {Array.from({ length: m.days }, (_, idx) => {
                   const day = idx + 1
                   const current = new Date(
