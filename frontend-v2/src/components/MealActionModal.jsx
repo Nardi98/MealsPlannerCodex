@@ -1,12 +1,18 @@
 import React from 'react'
 import { Button, Input, TagSelector } from './'
-import { FunnelIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import {
+  FunnelIcon,
+  ChevronDownIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 
 export default function MealActionModal({
   date,
   meal = 'lunch',
+  recipe,
+  sides = [],
   onAccept,
   onReject,
   onSwap,
@@ -60,17 +66,32 @@ export default function MealActionModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
       <div
-        className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
+        className="relative bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
         style={{ color: 'var(--text-strong)' }}
       >
-        <h3 className="text-lg font-medium">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
-        <div className="flex justify-end gap-2">
-          <Button variant="danger" onClick={onReject}>
-            Reject
-          </Button>
-          <Button variant="a1" onClick={onAccept}>
-            Accept
-          </Button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 left-4"
+        >
+          <XMarkIcon className="h-5 w-5" />
+        </button>
+        <h3 className="text-lg font-medium pl-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium">{recipe}</div>
+            {sides.length > 0 && (
+              <div className="text-sm">{sides.join(', ')}</div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="danger" onClick={onReject}>
+              Reject
+            </Button>
+            <Button variant="a1" onClick={onAccept}>
+              Accept
+            </Button>
+          </div>
         </div>
         <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
           <button
