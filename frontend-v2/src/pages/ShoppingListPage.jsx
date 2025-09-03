@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Input, Button } from '../components'
+import { Card, Input, Button, MonthGrid } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 
@@ -25,14 +25,11 @@ export default function ShoppingListPage() {
   const months = React.useMemo(() => {
     if (!startDate) return []
     const start = new Date(startDate)
+    const base = new Date(start.getFullYear(), start.getMonth(), 1)
     return Array.from({ length: 3 }, (_, i) => {
-      const firstDay = new Date(start.getFullYear(), start.getMonth() + i, 1)
-      const days = new Date(
-        firstDay.getFullYear(),
-        firstDay.getMonth() + 1,
-        0,
-      ).getDate()
-      return { firstDay, days }
+      const d = new Date(base)
+      d.setMonth(base.getMonth() + i)
+      return d
     })
   }, [startDate])
 
@@ -102,37 +99,8 @@ export default function ShoppingListPage() {
         </div>
         <div className="flex justify-between px-8 text-xs">
           {months.map((m) => (
-            <div
-              key={m.firstDay.toISOString()}
-              className="flex basis-[30%] flex-col items-center"
-            >
-              <div className="grid w-full grid-cols-7 gap-x-1 gap-y-2">
-                {Array.from({ length: m.days }, (_, idx) => {
-                  const day = idx + 1
-                  const current = new Date(
-                    m.firstDay.getFullYear(),
-                    m.firstDay.getMonth(),
-                    day,
-                  )
-                  const highlight =
-                    start && end && current >= start && current <= end
-                  return (
-                    <div key={day} className="flex flex-col items-center">
-                      {day}
-                      <div
-                        className={`mt-0.5 h-1.5 w-3 rounded-full ${
-                          highlight
-                            ? 'bg-[color:var(--c-a1)]'
-                            : 'bg-white border border-[color:var(--border)] opacity-40'
-                        }`}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-              <div className="mt-1 text-center">
-                {m.firstDay.toLocaleString('default', { month: 'long' })}
-              </div>
+            <div key={m.toISOString()} className="flex basis-[30%] justify-center">
+              <MonthGrid baseDate={m} startDate={start} endDate={end} />
             </div>
           ))}
         </div>
