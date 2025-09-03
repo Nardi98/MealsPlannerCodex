@@ -4,10 +4,14 @@ import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 
 export default function ShoppingListPage() {
-  const [startDate, setStartDate] = React.useState(
-    () => new Date().toISOString().slice(0, 10),
+  const [startDate, setStartDate] = React.useState(() =>
+    new Date().toISOString().slice(0, 10),
   )
-  const [endDate, setEndDate] = React.useState('')
+  const [endDate, setEndDate] = React.useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + ((7 - d.getDay()) % 7))
+    return d.toISOString().slice(0, 10)
+  })
   const [recipes, setRecipes] = React.useState([])
   const [ingredients, setIngredients] = React.useState([])
 
@@ -115,13 +119,27 @@ export default function ShoppingListPage() {
           ))}
         </div>
       </Card>
-      <Card>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 space-y-2">
+          <h2
+            className="text-lg font-medium"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            Recipes
+          </h2>
           <ul className="space-y-2">
             {recipes.map((r) => (
               <li key={r.id}>{r.title}</li>
             ))}
           </ul>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <h2
+            className="text-lg font-medium"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            Ingredients
+          </h2>
           <ul className="space-y-2">
             {ingredients.map((ing) => (
               <li key={ing.id}>
@@ -143,8 +161,8 @@ export default function ShoppingListPage() {
               </li>
             ))}
           </ul>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }
