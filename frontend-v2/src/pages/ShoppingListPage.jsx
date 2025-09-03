@@ -14,25 +14,16 @@ export default function ShoppingListPage() {
     return d.toISOString().slice(0, 10)
   })
   const [recipes, setRecipes] = React.useState([])
-  const [crossed, setCrossed] = React.useState(() => new Set())
 
   const ingredients = React.useMemo(() => buildShoppingList(recipes), [recipes])
-
-  const toggle = (key) => {
-    setCrossed((prev) => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
 
   const start = startDate ? new Date(startDate) : null
   const end = endDate ? new Date(endDate) : null
 
   const handleExport = () => {
     if (!start) return
-    const items = ingredients.map(({ key, name }) => ({ id: key, label: name }))
-    const text = formatExportText(items, crossed, start, end || start)
+    const items = ingredients.map(({ name }) => ({ label: name }))
+    const text = formatExportText(items, start, end || start)
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -55,7 +46,7 @@ export default function ShoppingListPage() {
     })
   }, [startDate])
 
-  const handleLoad = async () => {
+  const handleLoad = React.useCallback(async () => {
     try {
       const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
       const titles = new Set()
@@ -72,7 +63,13 @@ export default function ShoppingListPage() {
     } catch (err) {
       console.error('Failed to load shopping list', err)
     }
-  }
+  }, [startDate, endDate])
+
+  React.useEffect(() => {
+    if (startDate && endDate) {
+      handleLoad()
+    }
+  }, [startDate, endDate, handleLoad])
 
   return (
     <div className="space-y-4">
@@ -112,9 +109,6 @@ export default function ShoppingListPage() {
               }}
             />
           </label>
-          <Button variant="a1" onClick={handleLoad}>
-            Load
-          </Button>
         </div>
         <div className="flex justify-between px-8 text-xs">
           {months.map((m) => (
@@ -134,11 +128,15 @@ export default function ShoppingListPage() {
           </h2>
           <ul className="space-y-2">
             {recipes.map((r) => (
-              <li key={r.id}>
-                {r.title}
-                <span className="ml-1 text-xs text-[color:var(--text-subtle)]">
-                  {(r.ingredients || []).length}
-                </span>
+              <li
+                key={r.id}
+                className="border rounded-xl p-3"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <div>{r.title}</div>
+                <div className="text-xs text-[color:var(--text-subtle)]">
+                  {(r.ingredients || []).length} ingredients
+                </div>
               </li>
             ))}
           </ul>
@@ -152,29 +150,21 @@ export default function ShoppingListPage() {
               Ingredients
             </h2>
             <Button variant="a2" onClick={handleExport}>
-              Export
+              Export open items
             </Button>
           </div>
           <ul className="space-y-2">
             {ingredients.map((ing) => (
-              <li key={ing.key}>
-                <button
-                  type="button"
-                  onClick={() => toggle(ing.key)}
-                  className="flex items-center gap-2 text-left w-full cursor-pointer"
-                >
-                  <span
-                    className="w-3 h-3 border border-[color:var(--c-a1)] flex-shrink-0"
-                    style={{
-                      background: crossed.has(ing.key)
-                        ? 'var(--c-a1)'
-                        : 'transparent',
-                    }}
-                  />
-                  <span className={crossed.has(ing.key) ? 'line-through' : ''}>
-                    {ing.name}
-                  </span>
-                </button>
+              <li
+                key={ing.key}
+                className="border rounded-xl p-3 flex items-center gap-2"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <span
+                  className="w-3 h-3 rounded-full border flex-shrink-0"
+                  style={{ borderColor: 'var(--c-a1)' }}
+                />
+                <span>{ing.name}</span>
               </li>
             ))}
           </ul>

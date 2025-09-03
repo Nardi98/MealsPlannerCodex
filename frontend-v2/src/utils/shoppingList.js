@@ -14,10 +14,8 @@ export function buildShoppingList(recipes = []) {
   return Array.from(map.values());
 }
 
-export function formatExportText(shoppingItems, crossed, startDate, endDate) {
-  const openItems = shoppingItems
-    .filter((i) => !crossed.has(i.id))
-    .map((i) => `• ${i.label}`)
+export function formatExportText(shoppingItems, startDate, endDate) {
+  const lines = shoppingItems.map((i) => `• ${i.label}`)
 
   return [
     `Shopping List (${format(startDate, 'yyyy-MM-dd')} → ${format(
@@ -25,6 +23,6 @@ export function formatExportText(shoppingItems, crossed, startDate, endDate) {
       'yyyy-MM-dd',
     )})`,
     '',
-    ...openItems,
+    ...lines,
   ].join('\n')
 }
