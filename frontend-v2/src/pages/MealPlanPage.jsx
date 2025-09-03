@@ -169,8 +169,15 @@ export default function MealPlanPage() {
   const handleAccept = async () => {
     if (!activeCell) return
     const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    if (!meal) return
+    const { recipe: mainTitle, side_recipes: sides = [] } = meal
     try {
       await mealPlansApi.accept(date, mealIndex + 1, true)
+      await Promise.all([
+        feedbackApi.acceptRecipe(mainTitle),
+        ...sides.map((s) => feedbackApi.acceptRecipe(s)),
+      ])
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
