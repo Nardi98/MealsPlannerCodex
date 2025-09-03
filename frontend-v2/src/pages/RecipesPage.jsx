@@ -85,7 +85,12 @@ export default function RecipesPage() {
               {/* Header */}
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="font-medium">{r.title}</div>
+                  <div className="font-medium">
+                    {r.title}
+                    <span className="ml-1 text-xs text-[color:var(--text-subtle)]">
+                      {(r.ingredients || []).length}
+                    </span>
+                  </div>
                   <div className="mt-0.5 text-xs text-[color:var(--text-subtle)]">
                     {r.course} • {r.score != null ? r.score.toFixed(2) : '0'}
                   </div>

@@ -115,7 +115,12 @@ export default function ShoppingListPage() {
           </h2>
           <ul className="space-y-2">
             {recipes.map((r) => (
-              <li key={r.id}>{r.title}</li>
+              <li key={r.id}>
+                {r.title}
+                <span className="ml-1 text-xs text-[color:var(--text-subtle)]">
+                  {(r.ingredients || []).length}
+                </span>
+              </li>
             ))}
           </ul>
         </Card>

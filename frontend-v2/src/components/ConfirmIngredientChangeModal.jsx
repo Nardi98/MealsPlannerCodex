@@ -13,7 +13,12 @@ export default function ConfirmIngredientChangeModal({ recipes = [], action = 'c
             <p className="text-sm">This ingredient is used in the following recipes:</p>
             <ul className="list-disc pl-5 text-sm">
               {recipes.map((r) => (
-                <li key={r.id}>{r.title}</li>
+                <li key={r.id}>
+                  {r.title}
+                  <span className="ml-1 text-xs text-[color:var(--text-subtle)]">
+                    {(r.ingredients || []).length}
+                  </span>
+                </li>
               ))}
             </ul>
           </div>
