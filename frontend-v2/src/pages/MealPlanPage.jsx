@@ -312,22 +312,10 @@ export default function MealPlanPage() {
     if (!meal) return
     try {
       const existing = meal.side_recipes || []
-      let generated
-      let attempts = 0
-      do {
-        const candidate = await sideDishesApi.generate({})
-        attempts += 1
-        if (
-          candidate &&
-          candidate.title !== meal.recipe &&
-          !existing.includes(candidate.title)
-        ) {
-          const info = await recipesApi.fetch(candidate.id)
-          if (info.course === 'side') {
-            generated = candidate
-          }
-        }
-      } while (!generated && attempts < 5)
+      const avoid = [meal.recipe, ...existing]
+      const generated = await sideDishesApi.generate({
+        avoid_titles: avoid,
+      })
       if (!generated) {
         setError('No unique side dish available.')
         return
@@ -344,6 +332,7 @@ export default function MealPlanPage() {
       }))
     } catch (err) {
       console.error('Failed to add side dish', err)
+      setError('No unique side dish available.')
     }
   }
 
@@ -356,22 +345,10 @@ export default function MealPlanPage() {
     const existing = meal.side_recipes.filter((_, idx) => idx !== sideIndex)
     try {
       await feedbackApi.rejectRecipe(current)
-      let replacement
-      let attempts = 0
-      do {
-        const candidate = await sideDishesApi.generate({})
-        attempts += 1
-        if (
-          candidate &&
-          candidate.title !== meal.recipe &&
-          !existing.includes(candidate.title)
-        ) {
-          const info = await recipesApi.fetch(candidate.id)
-          if (info.course === 'side') {
-            replacement = candidate
-          }
-        }
-      } while (!replacement && attempts < 5)
+      const avoid = [meal.recipe, ...existing]
+      const replacement = await sideDishesApi.generate({
+        avoid_titles: avoid,
+      })
       if (!replacement) {
         setError('No replacement recipe available.')
         return
@@ -397,6 +374,7 @@ export default function MealPlanPage() {
       }))
     } catch (err) {
       console.error('Failed to reject side dish', err)
+      setError('No replacement recipe available.')
     }
   }
 

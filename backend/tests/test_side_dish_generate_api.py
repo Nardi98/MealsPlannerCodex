@@ -78,3 +78,31 @@ def test_generate_side_dish_respects_tag_weight(db_session):
     assert resp2.status_code == 200
     assert resp2.json()["title"] == "Good"
 
+
+def test_generate_side_dish_avoids_titles(db_session):
+    crud.create_recipe(
+        db_session,
+        title="Keep",
+        servings_default=1,
+        course="side",
+        score=1.0,
+    )
+    crud.create_recipe(
+        db_session,
+        title="Skip",
+        servings_default=1,
+        course="side",
+        score=10.0,
+    )
+    os.makedirs("data", exist_ok=True)
+    from main import app, get_db  # imported after data dir exists
+
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+    resp = client.post(
+        "/side-dishes/generate", json={"avoid_titles": ["Skip"]}
+    )
+    app.dependency_overrides.clear()
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "Keep"
+
