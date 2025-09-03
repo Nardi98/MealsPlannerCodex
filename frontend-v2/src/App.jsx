@@ -26,7 +26,7 @@ function Shell() {
             <img
               src="/assets/Logo_mealplanner.png"
               alt="Meal Planner logo"
-              className="h-6 w-auto"
+              className="h-10 w-auto"
             />
           </div>
           <div className="hidden md:flex items-center gap-2">
