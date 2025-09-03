@@ -310,6 +310,7 @@ def set_meal_plan(
                 Meal(
                     meal_number=index,
                     recipe_id=main_id,
+                    accepted=False,
                     sides=[
                         MealSide(position=i + 1, side_recipe_id=sid)
                         for i, sid in enumerate(side_ids)
