@@ -2,6 +2,7 @@ import React from 'react'
 import { Card, Input, Button, MonthGrid } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
+import { buildShoppingList } from '../utils/shoppingList'
 
 export default function ShoppingListPage() {
   const [startDate, setStartDate] = React.useState(() =>
@@ -13,14 +14,22 @@ export default function ShoppingListPage() {
     return d.toISOString().slice(0, 10)
   })
   const [recipes, setRecipes] = React.useState([])
-  const [ingredients, setIngredients] = React.useState([])
+  const [crossed, setCrossed] = React.useState(() => new Set())
 
-  React.useEffect(() => {
-    const all = recipes
-      .flatMap((r) => r.ingredients || [])
-      .map((ing) => ({ id: ing.id, name: ing.name, done: false }))
-    setIngredients(all)
-  }, [recipes])
+  const ingredients = React.useMemo(() => buildShoppingList(recipes), [recipes])
+
+  const toggle = (key) => {
+    setCrossed((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  const handleExport = () => {
+    const text = ingredients.map((i) => i.name).join('\n')
+    navigator.clipboard?.writeText(text)
+  }
 
   const months = React.useMemo(() => {
     if (!startDate) return []
@@ -125,29 +134,36 @@ export default function ShoppingListPage() {
           </ul>
         </Card>
         <Card className="p-4 space-y-2">
-          <h2
-            className="text-lg font-medium"
-            style={{ color: 'var(--text-strong)' }}
-          >
-            Ingredients
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2
+              className="text-lg font-medium"
+              style={{ color: 'var(--text-strong)' }}
+            >
+              Ingredients
+            </h2>
+            <Button variant="a2" onClick={handleExport}>
+              Export
+            </Button>
+          </div>
           <ul className="space-y-2">
             {ingredients.map((ing) => (
-              <li key={ing.id}>
+              <li key={ing.key}>
                 <button
                   type="button"
-                  onClick={() =>
-                    setIngredients((prev) =>
-                      prev.map((i) =>
-                        i.id === ing.id ? { ...i, done: !i.done } : i,
-                      ),
-                    )
-                  }
-                  className={`text-left w-full cursor-pointer ${
-                    ing.done ? 'line-through' : ''
-                  }`}
+                  onClick={() => toggle(ing.key)}
+                  className="flex items-center gap-2 text-left w-full cursor-pointer"
                 >
-                  {ing.name}
+                  <span
+                    className="w-3 h-3 border border-[color:var(--c-a1)] flex-shrink-0"
+                    style={{
+                      background: crossed.has(ing.key)
+                        ? 'var(--c-a1)'
+                        : 'transparent',
+                    }}
+                  />
+                  <span className={crossed.has(ing.key) ? 'line-through' : ''}>
+                    {ing.name}
+                  </span>
                 </button>
               </li>
             ))}
