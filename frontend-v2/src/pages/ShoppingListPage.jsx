@@ -25,7 +25,7 @@ export default function ShoppingListPage() {
     if (!start) return
     const items = ingredients
       .filter((ing) => !crossed.has(ing.key))
-      .map(({ name }) => ({ label: name }))
+      .map(({ name, amount, unit }) => ({ name, amount, unit }))
     const text = formatExportText(items, start, end || start)
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -175,6 +175,10 @@ export default function ShoppingListPage() {
           <ul className="space-y-2">
             {ingredients.map((ing) => {
               const isCrossed = crossed.has(ing.key)
+              const label =
+                ing.amount !== null
+                  ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
+                  : ing.name
               return (
                 <li
                   key={ing.key}
@@ -191,7 +195,7 @@ export default function ShoppingListPage() {
                   }`}
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  {ing.name}
+                  {label}
                 </li>
               )
             })}

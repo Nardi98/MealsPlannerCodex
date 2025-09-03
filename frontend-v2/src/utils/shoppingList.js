@@ -27,7 +27,12 @@ export function buildShoppingList(recipes = []) {
 }
 
 export function formatExportText(shoppingItems, startDate, endDate) {
-  const lines = shoppingItems.map((i) => `• ${i.label}`)
+  const lines = shoppingItems.map(
+    ({ name, amount, unit }) =>
+      `• ${name}${
+        amount !== null ? `: ${amount}${unit ? ` ${unit}` : ''}` : ''
+      }`,
+  )
 
   return [
     `Shopping List (${format(startDate, 'yyyy-MM-dd')} → ${format(
