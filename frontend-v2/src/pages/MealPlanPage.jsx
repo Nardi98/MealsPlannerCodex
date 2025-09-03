@@ -235,8 +235,40 @@ export default function MealPlanPage() {
     }
   }
 
-  const handleSwap = () => {
-    setActiveCell(null)
+  const handleSwap = async (newTitle) => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    if (!meal) return
+    try {
+      await feedbackApi.rejectRecipe(meal.recipe)
+      await feedbackApi.acceptRecipe(newTitle)
+      const updatedDay = plan[date].map((m, i) =>
+        i === mealIndex ? { ...m, recipe: newTitle, accepted: true } : m
+      )
+      setPlan((p) => ({ ...p, [date]: updatedDay }))
+      try {
+        const recipes = await recipesApi.fetchAll()
+        const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+        const serialised = updatedDay.map((m) => ({
+          main_id: titleToId[m.recipe],
+          side_ids: (m.side_recipes || [])
+            .map((s) => titleToId[s])
+            .filter(Boolean),
+        }))
+        await mealPlansApi.create({
+          plan_date: date,
+          plan: { [date]: serialised },
+        })
+        await mealPlansApi.accept(date, mealIndex + 1, true)
+      } catch (apiErr) {
+        console.error('Failed to persist swapped meal', apiErr)
+      }
+    } catch (err) {
+      console.error('Failed to swap meal', err)
+    } finally {
+      setActiveCell(null)
+    }
   }
 
   const activeMeal = activeCell
