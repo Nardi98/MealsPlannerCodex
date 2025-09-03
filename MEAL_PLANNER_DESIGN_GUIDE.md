@@ -373,11 +373,204 @@ type Recipe = {
 
 ---
 
+
+# Shopping List Page — Exact Spec
+
+> Purpose: let users pick a date range, see covered days on compact calendars, select recipes, and export a deduplicated, checkable shopping list as `.txt`.
+
+---
+
+## Layout Overview
+
+```
+[ Page Header ]  — Title: “Shopping List” · Date inputs: Begin | End
+
+[ Calendars Row ] — 3 mini month grids (month of Begin date + next two)
+                    • Show day numbers only (no weekday headers)
+                    • Month name appears UNDER each grid (e.g., “September 2025”)
+                    • Days in the selected range show a green capsule under the number
+
+[ Two Columns ]
+  Left:  Recipes (title + ingredient count)
+  Right: Ingredients (deduped) + Export (only unchecked items)
+```
+
+---
+
+## Tokens & Colors (reuse existing variables)
+
+- Background: `--c-white`  
+- Text: `--text-strong` (main), `--text-muted` / `--text-subtle` (secondary)  
+- Accents: `--c-a1` (green), `--c-a2` (yellow), `--c-a3` (brown)  
+- Positive/Negative: `--c-pos` (dark green), `--c-neg` (red)
+
+**Range indicator color:** `--c-a1`.
+
+---
+
+## Page Header
+
+- Title: **Shopping List** (same style as other page titles).
+- Two native date inputs: **Begin date** and **End date**.
+- Behavior:
+  - Range is **inclusive** of both start and end.
+  - If a user sets `start > end`, automatically adjust the other end so `start <= end`.
+  - Selected range drives the calendar highlights below.
+
+---
+
+## Calendars Row (Mini Calendars)
+
+- Render **three months**: month of Begin date, then +1 and +2 months.
+- Grid starts on **Monday** (`weekStartsOn: 1`).
+- Show **day numbers only** for in-month days; leave out-of-month cells blank.
+- **Month label under the grid**: `MMMM yyyy`.
+- **Range indicator**: green **capsule** under the day number when within range.  
+  Tailwind sizes: `h-1 w-6 rounded-full`; color: `background-color: var(--c-a1)`.
+
+---
+
+## Two Columns
+
+### Left: Recipes
+- Card titled **Recipes**.
+- Each row: **recipe title** (bold) + **ingredient count** (`text-xs`, subtle color).
+- Source is the set of recipes the user is including for this shopping list.
+
+### Right: Ingredients
+- Card titled **Ingredients** with an **Export** button (variant `a2` — yellow) in the header.
+- Build the list by **deduplicating** ingredients across selected recipes (case-insensitive, trimmed).
+- Each row is **clickable**:
+  - Toggle **line-through** on label.
+  - Small square indicator at left fills with `--c-a1` when crossed.
+- **Export** downloads `shopping-list_YYYYMMDD_YYYYMMDD.txt` containing **only unchecked** items.
+
+**Export file layout:**
+```
+Shopping List (YYYY-MM-DD → YYYY-MM-DD)
+
+• Ingredient 1
+• Ingredient 2
+...
+```
+
+---
+
+## Reference Snippets
+
+**Deduplicate ingredients**
+```jsx
+const buildShoppingList = (recipes) => {
+  const seen = new Set();
+  const list = [];
+  recipes.forEach((r) => {
+    r.ingredients.forEach((ing) => {
+      const key = ing.trim().toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({ id: key.replace(/[^a-z0-9]+/g, '-'), label: ing });
+      }
+    });
+  });
+  return list;
+};
+```
+
+**Export text (newline-safe join)**
+```jsx
+import { format } from 'date-fns';
+
+const formatExportText = (shoppingItems, crossed, startDate, endDate) => {
+  const openItems = shoppingItems
+    .filter((i) => !crossed.has(i.id))
+    .map((i) => `• ${i.label}`);
+
+  return [
+    `Shopping List (${format(startDate, 'yyyy-MM-dd')} → ${format(endDate, 'yyyy-MM-dd')})`,
+    '',
+    ...openItems,
+  ].join('\n');
+};
+```
+
+**Mini month grid with green capsule under in-range days**
+```jsx
+import {
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  addDays, isWithinInterval, isBefore
+} from 'date-fns';
+
+function MonthGrid({ baseDate, startDate, endDate }) {
+  const monthStart = startOfMonth(baseDate);
+  const monthEnd = endOfMonth(baseDate);
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const days = [];
+
+  for (let d = gridStart; !isBefore(gridEnd, d); d = addDays(d, 1)) {
+    const inCurrentMonth = d.getMonth() === baseDate.getMonth();
+    const inRange = startDate && endDate && isWithinInterval(d, { start: startDate, end: endDate });
+    days.push(
+      <div key={d.toISOString()} className="h-8 flex flex-col items-center justify-center text-sm">
+        <div className={`w-7 h-7 flex items-center justify-center rounded-full ${inCurrentMonth ? 'text-[color:var(--text-strong)]' : 'text-[color:var(--text-subtle)] opacity-60'}`}>
+          {inCurrentMonth ? d.getDate() : ''}
+        </div>
+        <div className="h-1 w-6 mt-0.5 rounded-full" style={{ backgroundColor: inRange ? 'var(--c-a1)' : 'transparent' }} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="grid grid-cols-7 gap-x-1 gap-y-2">{days}</div>
+      <div className="mt-2 text-sm font-medium text-[color:var(--text-strong)]">{format(baseDate, 'MMMM yyyy')}</div>
+    </div>
+  );
+}
+```
+
+---
+
+## Accessibility & Interaction
+
+- Ingredient rows should be keyboard-reachable. If not using `<button>`, add `role="button"`, `tabIndex={0}`, and handle **Enter/Space** to toggle; expose `aria-pressed`.
+- Date inputs have visible labels and native semantics.
+
+---
+
+## Dev Tests (console assertions)
+
+```js
+// Export excludes crossed items & uses newline join correctly
+const items = [{ id: 'milk', label: 'Milk' }, { id: 'bread', label: 'Bread' }];
+const crossed = new Set(['milk']);
+const text = formatExportText(items, crossed, new Date('2025-01-01'), new Date('2025-01-02'));
+console.assert(!text.includes('Milk'), 'Crossed-off items must not be exported');
+console.assert(text.split('\n')[2] === '• Bread', 'Open items should follow a blank line');
+
+// Deduping is case-insensitive
+const dedup = buildShoppingList([{ ingredients: ['Milk', 'milk ', 'MILK'] }]);
+console.assert(dedup.length === 1, 'Ingredients should be deduped case-insensitively');
+```
+
+---
+
+## Done Checklist (Shopping List)
+
+- [ ] Title + two labeled date inputs.
+- [ ] Three mini calendars; **month names under** the grids.
+- [ ] **Green capsule** under in-range days (`h-1 w-6`, color `--c-a1`).
+- [ ] Left: recipes list; Right: **deduped** ingredients.
+- [ ] Clicking an ingredient toggles line-through and filled square.
+- [ ] Export `.txt` contains **only unchecked** items; filename includes `YYYYMMDD` dates.
+- [ ] All colors from tokens; borders use `--border`.
+
+
+
 ## 8) Pages (titles only)
 Create files/routes with the following titles and **no content** (blank body):
 
 ### Week Planner
-### Shopping List
 ### Import/Export Database
 
 ---
