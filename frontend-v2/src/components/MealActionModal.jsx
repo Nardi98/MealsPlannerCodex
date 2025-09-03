@@ -81,12 +81,10 @@ export default function MealActionModal({
 
   const handleSwapClick = (title) => {
     if (onSwap) onSwap(title)
-    if (onClose) onClose()
   }
 
   const handleSwapSideClick = (title) => {
     if (onSwapSide) onSwapSide(selectedSideIndex, title)
-    if (onClose) onClose()
   }
 
   const dt = new Date(date)

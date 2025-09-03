@@ -128,6 +128,7 @@ export default function MealPlanPage() {
         bulk_leftovers: Boolean(form.bulk_leftovers),
         keep_days: Number(form.keep_days),
       }
+      let force = false
       try {
         await mealPlansApi.create(payload)
       } catch (err) {
@@ -136,15 +137,17 @@ export default function MealPlanPage() {
           const overwrite = window.confirm(
             `Conflicts on: ${days}. Overwrite existing plans?`
           )
-          if (overwrite) {
-            await mealPlansApi.create(payload, { force: true })
-          } else {
+          if (!overwrite) {
             setError(`Conflicts on: ${days}`)
             return
           }
+          force = true
         } else {
           throw err
         }
+      }
+      if (force) {
+        await mealPlansApi.create(payload, { force: true })
       }
       const updated = await mealPlansApi.fetchRange(form.start, form.end)
       const resetAccepted = Object.fromEntries(
@@ -266,7 +269,7 @@ export default function MealPlanPage() {
       await feedbackApi.rejectRecipe(meal.recipe)
       await feedbackApi.acceptRecipe(newTitle)
       const updatedDay = plan[date].map((m, i) =>
-        i === mealIndex ? { ...m, recipe: newTitle, accepted: true } : m
+        i === mealIndex ? { ...m, recipe: newTitle, accepted: false } : m
       )
       setPlan((p) => ({ ...p, [date]: updatedDay }))
       try {
@@ -290,14 +293,11 @@ export default function MealPlanPage() {
             throw apiErr
           }
         }
-        await mealPlansApi.accept(date, mealIndex + 1, true)
       } catch (apiErr) {
         console.error('Failed to persist swapped meal', apiErr)
       }
     } catch (err) {
       console.error('Failed to swap meal', err)
-    } finally {
-      setActiveCell(null)
     }
   }
 
