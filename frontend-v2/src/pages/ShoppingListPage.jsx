@@ -25,7 +25,7 @@ export default function ShoppingListPage() {
     if (!start) return
     const items = ingredients
       .filter((ing) => !crossed.has(ing.key))
-      .map(({ name }) => ({ label: name }))
+      .map(({ name, amount, unit }) => ({ name, amount, unit }))
     const text = formatExportText(items, start, end || start)
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -52,17 +52,28 @@ export default function ShoppingListPage() {
   const handleLoad = React.useCallback(async () => {
     try {
       const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
-      const titles = new Set()
+      const counts = new Map()
       Object.values(data || {}).forEach((meals) => {
         meals.forEach((m) => {
-          titles.add(m.recipe.replace(' (leftover)', ''))
+          const raw = m.recipe
+          const title = raw.replace(' (leftover)', '')
+          if (!raw.endsWith(' (leftover)')) {
+            counts.set(title, (counts.get(title) || 0) + 1)
+          }
           for (const t of m.side_recipes || []) {
-            titles.add(t)
+            counts.set(t, (counts.get(t) || 0) + 1)
           }
         })
       })
       const all = await recipesApi.fetchAll()
-      setRecipes(all.filter((r) => titles.has(r.title)))
+      const list = []
+      all.forEach((r) => {
+        const count = counts.get(r.title) || 0
+        for (let i = 0; i < count; i++) {
+          list.push(r)
+        }
+      })
+      setRecipes(list)
       setCrossed(new Set())
     } catch (err) {
       console.error('Failed to load shopping list', err)
@@ -143,9 +154,9 @@ export default function ShoppingListPage() {
             </h2>
           </div>
           <ul className="space-y-2">
-            {recipes.map((r) => (
+            {recipes.map((r, i) => (
               <li
-                key={r.id}
+                key={`${r.id}-${i}`}
                 className="border rounded-xl p-3"
                 style={{ borderColor: 'var(--border)' }}
               >
@@ -175,6 +186,10 @@ export default function ShoppingListPage() {
           <ul className="space-y-2">
             {ingredients.map((ing) => {
               const isCrossed = crossed.has(ing.key)
+              const label =
+                ing.amount !== null
+                  ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
+                  : ing.name
               return (
                 <li
                   key={ing.key}
@@ -191,7 +206,7 @@ export default function ShoppingListPage() {
                   }`}
                   style={{ borderColor: 'var(--border)' }}
                 >
-                  {ing.name}
+                  {label}
                 </li>
               )
             })}
