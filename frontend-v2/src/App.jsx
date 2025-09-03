@@ -58,10 +58,10 @@ function Shell() {
                 label="Ingredients"
               />
               <NavItem
+                active={location.pathname === '/shopping-list'}
+                onClick={() => navigate('/shopping-list')}
                 Icon={ShoppingCartIcon}
                 label="Shopping List"
-                className="text-[color:var(--text-subtle)] cursor-not-allowed"
-                aria-disabled="true"
               />
               <NavItem
                 Icon={ArrowUpTrayIcon}
