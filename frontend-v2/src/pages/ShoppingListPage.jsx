@@ -95,9 +95,34 @@ export default function ShoppingListPage() {
         </div>
       </Card>
       <Card>
-        {ingredients.map((ing) => (
-          <div key={ing.id}>{ing.name}</div>
-        ))}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ul className="space-y-2">
+            {recipes.map((r) => (
+              <li key={r.id}>{r.title}</li>
+            ))}
+          </ul>
+          <ul className="space-y-2">
+            {ingredients.map((ing) => (
+              <li key={ing.id}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIngredients((prev) =>
+                      prev.map((i) =>
+                        i.id === ing.id ? { ...i, done: !i.done } : i,
+                      ),
+                    )
+                  }
+                  className={`text-left w-full cursor-pointer ${
+                    ing.done ? 'line-through' : ''
+                  }`}
+                >
+                  {ing.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </Card>
     </div>
   )
