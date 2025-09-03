@@ -1,7 +1,8 @@
 import React from 'react'
-import { Card, Button, Input, TagSelector } from '../components'
+import { Card, Button, Input, TagSelector, MealActionModal } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
+import { feedbackApi } from '../api/feedbackApi'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -183,6 +184,37 @@ export default function MealPlanPage() {
     }
   }
 
+  const handleReject = async () => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    if (!meal) return
+    try {
+      const replacement = await feedbackApi.rejectRecipe(meal.recipe)
+      if (replacement) {
+        setPlan((p) => ({
+          ...p,
+          [date]: p[date].map((m, i) =>
+            i === mealIndex ? { ...m, recipe: replacement, accepted: false } : m
+          ),
+        }))
+      }
+    } catch (err) {
+      console.error('Failed to reject meal', err)
+    } finally {
+      setActiveCell(null)
+    }
+  }
+
+  const handleSwap = () => {
+    setActiveCell(null)
+  }
+
+  const activeMeal = activeCell
+    ? plan[activeCell.date]?.[activeCell.mealIndex]
+    : null
+  const activeMealType = activeCell?.mealIndex === 1 ? 'dinner' : 'lunch'
+
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
@@ -360,20 +392,16 @@ export default function MealPlanPage() {
         </form>
       </Card>
       {activeCell && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div
-            className="bg-white rounded-2xl p-6 w-full max-w-sm"
-            style={{ color: 'var(--text-strong)' }}
-          >
-            <h2 className="text-lg font-medium mb-4">Accept this meal?</h2>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setActiveCell(null)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAccept}>Accept</Button>
-            </div>
-          </div>
-        </div>
+        <MealActionModal
+          date={activeCell.date}
+          meal={activeMealType}
+          recipe={activeMeal?.recipe}
+          sides={activeMeal?.side_recipes || []}
+          onAccept={handleAccept}
+          onReject={handleReject}
+          onSwap={handleSwap}
+          onClose={() => setActiveCell(null)}
+        />
       )}
     </div>
   )
