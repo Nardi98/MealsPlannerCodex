@@ -68,16 +68,34 @@ export default function ShoppingListPage() {
       </h1>
       <Card className="space-y-8">
         <div className="flex items-center gap-2 px-8">
-          <Input
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-          />
-          <Input
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-          />
+          <label className="flex flex-col text-sm">
+            <span className="mb-1">Begin date</span>
+            <Input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                const value = e.target.value
+                setStartDate(value)
+                if (endDate && new Date(value) > new Date(endDate)) {
+                  setEndDate(value)
+                }
+              }}
+            />
+          </label>
+          <label className="flex flex-col text-sm">
+            <span className="mb-1">End date</span>
+            <Input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                const value = e.target.value
+                setEndDate(value)
+                if (startDate && new Date(value) < new Date(startDate)) {
+                  setStartDate(value)
+                }
+              }}
+            />
+          </label>
           <Button variant="a1" onClick={handleLoad}>
             Load
           </Button>
