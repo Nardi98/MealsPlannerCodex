@@ -2,7 +2,7 @@ import React from 'react'
 import { Card, Input, Button, MonthGrid } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
-import { buildShoppingList } from '../utils/shoppingList'
+import { buildShoppingList, formatExportText } from '../utils/shoppingList'
 
 export default function ShoppingListPage() {
   const [startDate, setStartDate] = React.useState(() =>
@@ -26,9 +26,20 @@ export default function ShoppingListPage() {
     })
   }
 
+  const start = startDate ? new Date(startDate) : null
+  const end = endDate ? new Date(endDate) : null
+
   const handleExport = () => {
-    const text = ingredients.map((i) => i.name).join('\n')
-    navigator.clipboard?.writeText(text)
+    if (!start) return
+    const items = ingredients.map(({ key, name }) => ({ id: key, label: name }))
+    const text = formatExportText(items, crossed, start, end || start)
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `shopping-list_${startDate}_${endDate || startDate}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const months = React.useMemo(() => {
@@ -41,9 +52,6 @@ export default function ShoppingListPage() {
       return d
     })
   }, [startDate])
-
-  const start = startDate ? new Date(startDate) : null
-  const end = endDate ? new Date(endDate) : null
 
   const handleLoad = async () => {
     try {
