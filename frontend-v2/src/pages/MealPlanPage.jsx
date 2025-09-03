@@ -299,7 +299,9 @@ export default function MealPlanPage() {
       <div
         key={`${idx}-${iso}`}
         className={`border p-2 h-24 cursor-pointer ${
-          meal?.accepted ? 'bg-[var(--c-pos)/20]' : ''
+          meal?.accepted
+            ? 'bg-[var(--c-pos)/20] text-[color:var(--text-strong)]'
+            : ''
         }`}
         onClick={() => setActiveCell({ date: iso, mealIndex: idx })}
         style={
