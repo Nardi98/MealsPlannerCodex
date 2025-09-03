@@ -73,14 +73,19 @@ export default function ShoppingListPage() {
 
   return (
     <div className="space-y-4">
-      <h1
-        className="text-xl font-medium"
-        style={{ color: 'var(--text-strong)' }}
-      >
-        Shopping List
-      </h1>
-      <Card className="space-y-8">
-        <div className="flex items-end gap-2 px-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1
+            className="text-2xl font-medium"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            Shopping List
+          </h1>
+          <p className="text-sm text-[color:var(--text-subtle)]">
+            Select a date range to highlight days covered by this grocery list.
+          </p>
+        </div>
+        <div className="flex items-end gap-2">
           <label className="flex flex-col text-sm">
             <span className="mb-1">Begin date</span>
             <Input
@@ -110,7 +115,9 @@ export default function ShoppingListPage() {
             />
           </label>
         </div>
-        <div className="flex justify-between px-8 text-xs">
+      </div>
+      <Card className="px-8 py-6">
+        <div className="flex justify-between text-xs">
           {months.map((m) => (
             <div key={m.toISOString()} className="flex basis-[30%] justify-center">
               <MonthGrid baseDate={m} startDate={start} endDate={end} />
@@ -120,12 +127,17 @@ export default function ShoppingListPage() {
       </Card>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4 space-y-2">
-          <h2
-            className="text-lg font-medium"
-            style={{ color: 'var(--text-strong)' }}
+          <div
+            className="pb-2 border-b"
+            style={{ borderColor: 'var(--border)' }}
           >
-            Recipes
-          </h2>
+            <h2
+              className="text-lg font-medium"
+              style={{ color: 'var(--text-strong)' }}
+            >
+              Recipes
+            </h2>
+          </div>
           <ul className="space-y-2">
             {recipes.map((r) => (
               <li
@@ -142,7 +154,10 @@ export default function ShoppingListPage() {
           </ul>
         </Card>
         <Card className="p-4 space-y-2">
-          <div className="flex items-center justify-between">
+          <div
+            className="flex items-center justify-between pb-2 border-b"
+            style={{ borderColor: 'var(--border)' }}
+          >
             <h2
               className="text-lg font-medium"
               style={{ color: 'var(--text-strong)' }}
