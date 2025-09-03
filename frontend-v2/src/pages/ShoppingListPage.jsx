@@ -1,11 +1,17 @@
 import React from 'react'
 import { Card, Input, Button } from '../components'
+import { mealPlansApi } from '../api/mealPlansApi'
+import { recipesApi } from '../api/recipesApi'
 
 export default function ShoppingListPage() {
-  const [startDate, setStartDate] = React.useState(
-    () => new Date().toISOString().slice(0, 10),
+  const [startDate, setStartDate] = React.useState(() =>
+    new Date().toISOString().slice(0, 10),
   )
-  const [endDate, setEndDate] = React.useState('')
+  const [endDate, setEndDate] = React.useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + ((7 - d.getDay()) % 7))
+    return d.toISOString().slice(0, 10)
+  })
   const [recipes, setRecipes] = React.useState([])
   const [ingredients, setIngredients] = React.useState([])
 
@@ -33,6 +39,25 @@ export default function ShoppingListPage() {
   const start = startDate ? new Date(startDate) : null
   const end = endDate ? new Date(endDate) : null
 
+  const handleLoad = async () => {
+    try {
+      const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
+      const titles = new Set()
+      Object.values(data || {}).forEach((meals) => {
+        meals.forEach((m) => {
+          titles.add(m.recipe.replace(' (leftover)', ''))
+          for (const t of m.side_recipes || []) {
+            titles.add(t)
+          }
+        })
+      })
+      const all = await recipesApi.fetchAll()
+      setRecipes(all.filter((r) => titles.has(r.title)))
+    } catch (err) {
+      console.error('Failed to load shopping list', err)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <h1
@@ -53,7 +78,7 @@ export default function ShoppingListPage() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
-          <Button variant="a1" onClick={() => setRecipes([])}>
+          <Button variant="a1" onClick={handleLoad}>
             Load
           </Button>
         </div>
@@ -94,11 +119,50 @@ export default function ShoppingListPage() {
           ))}
         </div>
       </Card>
-      <Card>
-        {ingredients.map((ing) => (
-          <div key={ing.id}>{ing.name}</div>
-        ))}
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 space-y-2">
+          <h2
+            className="text-lg font-medium"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            Recipes
+          </h2>
+          <ul className="space-y-2">
+            {recipes.map((r) => (
+              <li key={r.id}>{r.title}</li>
+            ))}
+          </ul>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <h2
+            className="text-lg font-medium"
+            style={{ color: 'var(--text-strong)' }}
+          >
+            Ingredients
+          </h2>
+          <ul className="space-y-2">
+            {ingredients.map((ing) => (
+              <li key={ing.id}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setIngredients((prev) =>
+                      prev.map((i) =>
+                        i.id === ing.id ? { ...i, done: !i.done } : i,
+                      ),
+                    )
+                  }
+                  className={`text-left w-full cursor-pointer ${
+                    ing.done ? 'line-through' : ''
+                  }`}
+                >
+                  {ing.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      </div>
     </div>
   )
 }
