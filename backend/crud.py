@@ -27,6 +27,7 @@ _PLAN_SETTINGS: Dict[str, Any] = {}
 
 __all__ = [
     "create_recipe",
+    "create_ingredient",
     "get_or_create_tag",
     "get_or_create_ingredient",
     "get_recipe",
@@ -74,6 +75,21 @@ def create_recipe(session: Session, **data: Any) -> Recipe:
     session.commit()
     session.refresh(recipe)
     return recipe
+
+
+def create_ingredient(
+    session: Session,
+    name: str,
+    unit: UnitEnum | None,
+    season_months: List[int],
+) -> Ingredient:
+    """Create and persist a new :class:`Ingredient`."""
+
+    ingredient = Ingredient(name=name, unit=unit, season_months=season_months)
+    session.add(ingredient)
+    session.commit()
+    session.refresh(ingredient)
+    return ingredient
 
 
 def get_recipe(session: Session, recipe_id: int) -> Optional[Recipe]:

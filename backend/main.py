@@ -157,6 +157,26 @@ def search_ingredients(
     ]
 
 
+@app.post(
+    "/ingredients",
+    response_model=schemas.IngredientSummary,
+    status_code=201,
+)
+def create_ingredient(
+    payload: schemas.IngredientCreate, db: Session = Depends(get_db)
+) -> schemas.IngredientSummary:
+    ingredient = crud.create_ingredient(
+        db, payload.name, payload.unit, payload.season_months
+    )
+    return schemas.IngredientSummary(
+        id=ingredient.id,
+        name=ingredient.name,
+        season_months=ingredient.season_months or [],
+        unit=ingredient.unit,
+        recipe_count=0,
+    )
+
+
 @app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientSummary)
 def update_ingredient(
     ingredient_id: int,
