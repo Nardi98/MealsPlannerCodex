@@ -2,15 +2,27 @@ import { format } from 'date-fns'
 
 export function buildShoppingList(recipes = []) {
   const map = new Map();
+
   recipes.forEach((r) => {
     (r.ingredients || []).forEach((ing) => {
       const name = (ing.name || '').trim();
-      const key = name.toLowerCase();
-      if (!map.has(key)) {
-        map.set(key, { key, name });
+      const unit = ing.unit || '';
+      const key = name.toLowerCase() + '||' + unit;
+      const amount = typeof ing.amount === 'number' ? ing.amount : null;
+
+      if (map.has(key)) {
+        const existing = map.get(key);
+        if (existing.amount === null || amount === null) {
+          existing.amount = null;
+        } else {
+          existing.amount += amount;
+        }
+      } else {
+        map.set(key, { key, name, amount, unit });
       }
     });
   });
+
   return Array.from(map.values());
 }
 
