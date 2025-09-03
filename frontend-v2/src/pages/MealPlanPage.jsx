@@ -3,6 +3,7 @@ import { Card, Button, Input, TagSelector, MealActionModal } from '../components
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
 import { feedbackApi } from '../api/feedbackApi'
+import { recipesApi } from '../api/recipesApi'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -197,14 +198,35 @@ export default function MealPlanPage() {
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      const replacement = await feedbackApi.rejectRecipe(meal.recipe)
-      if (replacement) {
-        setPlan((p) => ({
-          ...p,
-          [date]: p[date].map((m, i) =>
-            i === mealIndex ? { ...m, recipe: replacement, accepted: false } : m
-          ),
+      let replacement = await feedbackApi.rejectRecipe(meal.recipe)
+      if (!replacement || replacement === meal.recipe) {
+        replacement = await feedbackApi.rejectRecipe(meal.recipe)
+        if (!replacement || replacement === meal.recipe) {
+          setError('No replacement recipe available.')
+          return
+        }
+      }
+
+      const updatedDay = plan[date].map((m, i) =>
+        i === mealIndex ? { ...m, recipe: replacement, accepted: false } : m
+      )
+      setPlan((p) => ({ ...p, [date]: updatedDay }))
+
+      try {
+        const recipes = await recipesApi.fetchAll()
+        const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+        const serialised = updatedDay.map((m) => ({
+          main_id: titleToId[m.recipe],
+          side_ids: (m.side_recipes || [])
+            .map((s) => titleToId[s])
+            .filter(Boolean),
         }))
+        await mealPlansApi.create({
+          plan_date: date,
+          plan: { [date]: serialised },
+        })
+      } catch (apiErr) {
+        console.error('Failed to persist rejected meal', apiErr)
       }
     } catch (err) {
       console.error('Failed to reject meal', err)
