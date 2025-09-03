@@ -108,7 +108,7 @@ export default function MealActionModal({
         <h3 className="text-lg font-medium pr-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
         <div className="flex items-center justify-between">
           <div className="font-medium">{recipe}</div>
-          <Button variant="danger" onClick={onReject}>
+          <Button variant="danger" onClick={() => onReject?.()}>
             Reject
           </Button>
         </div>
@@ -138,7 +138,11 @@ export default function MealActionModal({
           </div>
         )}
         {!accepted && (
-          <Button variant="a1" onClick={onAccept} className="mt-4">
+          <Button
+            variant="a1"
+            onClick={() => onAccept?.()}
+            className="mt-4"
+          >
             Accept
           </Button>
         )}

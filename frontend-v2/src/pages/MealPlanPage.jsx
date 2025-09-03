@@ -128,7 +128,6 @@ export default function MealPlanPage() {
         bulk_leftovers: Boolean(form.bulk_leftovers),
         keep_days: Number(form.keep_days),
       }
-      let force = false
       try {
         await mealPlansApi.create(payload)
       } catch (err) {
@@ -141,13 +140,10 @@ export default function MealPlanPage() {
             setError(`Conflicts on: ${days}`)
             return
           }
-          force = true
+          await mealPlansApi.create(payload, { force: true })
         } else {
           throw err
         }
-      }
-      if (force) {
-        await mealPlansApi.create(payload, { force: true })
       }
       const updated = await mealPlansApi.fetchRange(form.start, form.end)
       const resetAccepted = Object.fromEntries(
