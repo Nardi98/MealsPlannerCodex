@@ -185,3 +185,15 @@ def test_set_meal_plan_overwrites_existing(db_session):
     assert db_session.query(MealPlan).count() == 1
     meal = db_session.get(Meal, (plan_date, 1))
     assert meal is not None and meal.recipe_id == r2.id
+
+
+def test_overwriting_plan_resets_acceptance(db_session):
+    """Replacing an existing plan clears previous acceptance status."""
+    r1 = create_recipe(db_session, title="Old", servings_default=1, course="main")
+    r2 = create_recipe(db_session, title="New", servings_default=1, course="main")
+    plan_date = date(2024, 7, 2)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
+    mark_meal_accepted(db_session, plan_date, 1, True)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]})
+    meal = db_session.get(Meal, (plan_date, 1))
+    assert meal is not None and meal.recipe_id == r2.id and meal.accepted is False

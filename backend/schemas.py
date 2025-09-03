@@ -118,6 +118,7 @@ class SideDishGenerate(BaseModel):
     """Parameters for generating a side dish recommendation."""
 
     epsilon: float = 0.0
+    avoid_titles: List[str] = []
     avoid_tags: List[str] = []
     reduce_tags: List[str] = []
     seasonality_weight: float = 1.0

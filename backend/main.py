@@ -65,6 +65,14 @@ def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
     return db.execute(stmt).scalars().all()
 
 
+@app.get("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
+def read_recipe(recipe_id: int, db: Session = Depends(get_db)) -> schemas.RecipeOut:
+    recipe = crud.get_recipe(db, recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+
 def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
     ingredients: List[models.RecipeIngredient] = []
@@ -399,6 +407,7 @@ def generate_side_dish_endpoint(
             db,
             avoid_tags=payload.avoid_tags,
             reduce_tags=payload.reduce_tags,
+            avoid_titles=payload.avoid_titles,
             epsilon=payload.epsilon,
             keep_days=payload.keep_days,
             bulk_leftovers=payload.bulk_leftovers,
