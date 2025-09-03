@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import {
-  SwatchIcon,
   CalendarDaysIcon,
   BookmarkIcon,
   ShoppingCartIcon,
@@ -23,9 +22,12 @@ function Shell() {
     <div className="min-h-screen" style={{ background: 'var(--c-white)', color: 'var(--text-strong)' }}>
       <header className="border-b" style={{ borderColor: 'var(--border)' }}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <SwatchIcon className="h-6 w-6 text-[color:var(--c-a3)]" />
-            <span className="font-semibold">Meal Planner</span>
+          <div className="flex items-center">
+            <img
+              src="/assets/Logo_mealplanner.png"
+              alt="Meal Planner logo"
+              className="h-10 w-auto"
+            />
           </div>
           <div className="hidden md:flex items-center gap-2">
             <Input placeholder="Search…" className="w-64" />
