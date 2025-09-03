@@ -38,7 +38,9 @@ export default function ShoppingListPage() {
     const a = document.createElement('a')
     a.href = url
     a.download = `shopping-list_${startDate}_${endDate || startDate}.txt`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 
@@ -81,7 +83,7 @@ export default function ShoppingListPage() {
         Shopping List
       </h1>
       <Card className="space-y-8">
-        <div className="flex items-center gap-2 px-8">
+        <div className="flex items-end gap-2 px-8">
           <label className="flex flex-col text-sm">
             <span className="mb-1">Begin date</span>
             <Input
