@@ -1,5 +1,7 @@
 import React from 'react'
 import { Card, Input, Button } from '../components'
+import { mealPlansApi } from '../api/mealPlansApi'
+import { recipesApi } from '../api/recipesApi'
 
 export default function ShoppingListPage() {
   const [startDate, setStartDate] = React.useState(
@@ -33,6 +35,25 @@ export default function ShoppingListPage() {
   const start = startDate ? new Date(startDate) : null
   const end = endDate ? new Date(endDate) : null
 
+  const handleLoad = async () => {
+    try {
+      const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
+      const titles = new Set()
+      Object.values(data || {}).forEach((meals) => {
+        meals.forEach((m) => {
+          titles.add(m.recipe.replace(' (leftover)', ''))
+          for (const t of m.side_recipes || []) {
+            titles.add(t)
+          }
+        })
+      })
+      const all = await recipesApi.fetchAll()
+      setRecipes(all.filter((r) => titles.has(r.title)))
+    } catch (err) {
+      console.error('Failed to load shopping list', err)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <h1
@@ -53,7 +74,7 @@ export default function ShoppingListPage() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
-          <Button variant="a1" onClick={() => setRecipes([])}>
+          <Button variant="a1" onClick={handleLoad}>
             Load
           </Button>
         </div>
