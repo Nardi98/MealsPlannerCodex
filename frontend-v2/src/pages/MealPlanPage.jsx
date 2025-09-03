@@ -315,18 +315,20 @@ export default function MealPlanPage() {
       let generated
       let attempts = 0
       do {
-        generated = await sideDishesApi.generate({})
+        const candidate = await sideDishesApi.generate({})
         attempts += 1
-      } while (
-        generated &&
-        (generated.title === meal.recipe || existing.includes(generated.title)) &&
-        attempts < 5
-      )
-      if (
-        !generated ||
-        generated.title === meal.recipe ||
-        existing.includes(generated.title)
-      ) {
+        if (
+          candidate &&
+          candidate.title !== meal.recipe &&
+          !existing.includes(candidate.title)
+        ) {
+          const info = await recipesApi.fetch(candidate.id)
+          if (info.course === 'side') {
+            generated = candidate
+          }
+        }
+      } while (!generated && attempts < 5)
+      if (!generated) {
         setError('No unique side dish available.')
         return
       }
@@ -353,33 +355,33 @@ export default function MealPlanPage() {
     if (!meal || !current) return
     const existing = meal.side_recipes.filter((_, idx) => idx !== sideIndex)
     try {
+      await feedbackApi.rejectRecipe(current)
       let replacement
       let attempts = 0
       do {
-        replacement = await feedbackApi.rejectRecipe(current)
+        const candidate = await sideDishesApi.generate({})
         attempts += 1
-      } while (
-        replacement &&
-        (replacement === current || replacement === meal.recipe || existing.includes(replacement)) &&
-        attempts < 5
-      )
-      if (
-        !replacement ||
-        replacement === current ||
-        replacement === meal.recipe ||
-        existing.includes(replacement)
-      ) {
+        if (
+          candidate &&
+          candidate.title !== meal.recipe &&
+          !existing.includes(candidate.title)
+        ) {
+          const info = await recipesApi.fetch(candidate.id)
+          if (info.course === 'side') {
+            replacement = candidate
+          }
+        }
+      } while (!replacement && attempts < 5)
+      if (!replacement) {
         setError('No replacement recipe available.')
         return
       }
-      const recipes = await recipesApi.fetchAll()
-      const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
-      const repId = titleToId[replacement]
-      if (!repId) {
-        setError('Replacement recipe not found.')
-        return
-      }
-      await mealPlansApi.replaceSide(date, mealIndex + 1, sideIndex, repId)
+      await mealPlansApi.replaceSide(
+        date,
+        mealIndex + 1,
+        sideIndex,
+        replacement.id
+      )
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
@@ -387,7 +389,7 @@ export default function MealPlanPage() {
             ? {
                 ...m,
                 side_recipes: m.side_recipes.map((s, idx) =>
-                  idx === sideIndex ? replacement : s
+                  idx === sideIndex ? replacement.title : s
                 ),
               }
             : m
