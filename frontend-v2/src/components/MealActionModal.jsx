@@ -13,6 +13,7 @@ export default function MealActionModal({
   meal = 'lunch',
   recipe,
   sides = [],
+  accepted = false,
   onAccept,
   onReject,
   onSwap,
@@ -88,9 +89,11 @@ export default function MealActionModal({
             <Button variant="danger" onClick={onReject}>
               Reject
             </Button>
-            <Button variant="a1" onClick={onAccept}>
-              Accept
-            </Button>
+            {!accepted && (
+              <Button variant="a1" onClick={onAccept}>
+                Accept
+              </Button>
+            )}
           </div>
         </div>
         <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>

@@ -1,9 +1,16 @@
 import React from 'react'
-import { Card, Button, Input, TagSelector, MealActionModal } from '../components'
+import {
+  Card,
+  Button,
+  Input,
+  TagSelector,
+  MealActionModal,
+} from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
 import { feedbackApi } from '../api/feedbackApi'
 import { recipesApi } from '../api/recipesApi'
+import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -139,7 +146,13 @@ export default function MealPlanPage() {
         }
       }
       const updated = await mealPlansApi.fetchRange(form.start, form.end)
-      setPlan(updated || {})
+      const resetAccepted = Object.fromEntries(
+        Object.entries(updated || {}).map(([day, meals]) => [
+          day,
+          meals.map((m) => ({ ...m, accepted: false })),
+        ])
+      )
+      setPlan(resetAccepted)
       setStart(new Date(form.start))
       setMessage('Plan generated successfully.')
     } catch (err) {
@@ -167,9 +180,9 @@ export default function MealPlanPage() {
     })
   }
 
-  const handleAccept = async () => {
-    if (!activeCell) return
-    const { date, mealIndex } = activeCell
+  const handleAccept = async (cell = activeCell) => {
+    if (!cell) return
+    const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     const { recipe: mainTitle, side_recipes: sides = [] } = meal
@@ -192,9 +205,9 @@ export default function MealPlanPage() {
     }
   }
 
-  const handleReject = async () => {
-    if (!activeCell) return
-    const { date, mealIndex } = activeCell
+  const handleReject = async (cell = activeCell) => {
+    if (!cell) return
+    const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
@@ -295,12 +308,16 @@ export default function MealPlanPage() {
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
+    const acceptedStyle = meal?.accepted
+      ? {
+          backgroundColor: 'rgba(12, 58, 45, 0.15)',
+          color: 'var(--text-strong)',
+        }
+      : {}
     return (
       <div
         key={`${idx}-${iso}`}
-        className={`border p-2 h-24 cursor-pointer ${
-          meal?.accepted ? 'bg-[var(--c-pos)/20]' : ''
-        }`}
+        className="relative border p-2 h-24 cursor-pointer"
         onClick={() => setActiveCell({ date: iso, mealIndex: idx })}
         style={
           isToday(d)
@@ -308,10 +325,10 @@ export default function MealPlanPage() {
                 borderColor: 'var(--border)',
                 color: 'var(--text-strong)',
                 ...(meal?.accepted
-                  ? {}
+                  ? acceptedStyle
                   : { backgroundColor: 'rgba(187, 138, 82, 0.15)' }),
               }
-            : { borderColor: 'var(--border)' }
+            : { borderColor: 'var(--border)', ...acceptedStyle }
         }
       >
         {meal ? (
@@ -320,6 +337,24 @@ export default function MealPlanPage() {
             {meal.side_recipes && meal.side_recipes.length > 0 && (
               <div className="mt-1 text-xs">
                 {meal.side_recipes.join(', ')}
+              </div>
+            )}
+            {!meal.accepted && (
+              <div className="absolute bottom-1 right-1 flex space-x-1">
+                <XMarkIcon
+                  className="h-4 w-4 text-[color:var(--c-neg)] cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleReject({ date: iso, mealIndex: idx })
+                  }}
+                />
+                <CheckIcon
+                  className="h-4 w-4 text-[color:var(--c-pos)] cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleAccept({ date: iso, mealIndex: idx })
+                  }}
+                />
               </div>
             )}
           </>
@@ -474,6 +509,7 @@ export default function MealPlanPage() {
           meal={activeMealType}
           recipe={activeMeal?.recipe}
           sides={activeMeal?.side_recipes || []}
+          accepted={activeMeal?.accepted}
           onAccept={handleAccept}
           onReject={handleReject}
           onSwap={handleSwap}
