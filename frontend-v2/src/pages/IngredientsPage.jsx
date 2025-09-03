@@ -101,13 +101,11 @@ export default function IngredientsPage() {
 
   const handleAdd = async ({ name, unit, season }) => {
     try {
-      const created = ingredientsApi.create
-        ? await ingredientsApi.create({
-            name,
-            unit,
-            season_months: season,
-          })
-        : { id: Date.now(), name, unit, season_months: season }
+      const created = await ingredientsApi.create({
+        name,
+        unit,
+        season_months: season,
+      })
       setIngredients((ings) =>
         !query || created.name.toLowerCase().includes(query.toLowerCase())
           ? [...ings, created]
@@ -115,17 +113,8 @@ export default function IngredientsPage() {
       )
     } catch (err) {
       console.error('Failed to add ingredient', err)
-      const fallback = {
-        id: Date.now(),
-        name,
-        unit,
-        season_months: season,
-      }
-      setIngredients((ings) =>
-        !query || fallback.name.toLowerCase().includes(query.toLowerCase())
-          ? [...ings, fallback]
-          : ings
-      )
+      alert('Failed to add ingredient')
+      throw err
     }
   }
 

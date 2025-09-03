@@ -191,10 +191,10 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
         updateIngredient(addingIdx, 'name', created.name)
         updateIngredient(addingIdx, 'unit', created.unit)
       }
+      setAddingIdx(null)
     } catch (err) {
       console.error('Failed to add ingredient', err)
-    } finally {
-      setAddingIdx(null)
+      alert('Failed to add ingredient')
     }
   }
 
