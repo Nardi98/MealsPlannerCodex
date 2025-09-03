@@ -1,3 +1,5 @@
+import { format } from 'date-fns'
+
 export function buildShoppingList(recipes = []) {
   const map = new Map();
   recipes.forEach((r) => {
@@ -10,4 +12,17 @@ export function buildShoppingList(recipes = []) {
     });
   });
   return Array.from(map.values());
+}
+
+export function formatExportText(shoppingItems, startDate, endDate) {
+  const lines = shoppingItems.map((i) => `• ${i.label}`)
+
+  return [
+    `Shopping List (${format(startDate, 'yyyy-MM-dd')} → ${format(
+      endDate,
+      'yyyy-MM-dd',
+    )})`,
+    '',
+    ...lines,
+  ].join('\n')
 }
