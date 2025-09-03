@@ -57,10 +57,13 @@ export default function ShoppingListPage() {
             Load
           </Button>
         </div>
-        <div className="flex gap-4 text-xs">
+        <div className="flex w-full gap-4 text-xs">
           {months.map((m) => (
-            <div key={m.firstDay.toISOString()} className="flex flex-col items-center">
-              <div className="grid grid-cols-7 gap-1">
+            <div
+              key={m.firstDay.toISOString()}
+              className="flex flex-1 flex-col items-center"
+            >
+              <div className="grid w-full grid-cols-7 gap-1">
                 {Array.from({ length: m.days }, (_, idx) => {
                   const day = idx + 1
                   const current = new Date(
@@ -73,9 +76,13 @@ export default function ShoppingListPage() {
                   return (
                     <div key={day} className="flex flex-col items-center">
                       {day}
-                      {highlight && (
-                        <div className="h-1.5 w-1.5 bg-[color:var(--c-a1)] rounded-full mt-0.5" />
-                      )}
+                      <div
+                        className={`mt-0.5 h-1.5 w-4 rounded-full border ${
+                          highlight
+                            ? 'bg-[color:var(--c-a1)] border-[color:var(--c-a1)]'
+                            : 'bg-[color:var(--c-white)] border-[color:var(--border)]'
+                        }`}
+                      />
                     </div>
                   )
                 })}
