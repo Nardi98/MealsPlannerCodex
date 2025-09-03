@@ -42,7 +42,7 @@ export default function ShoppingListPage() {
         Shopping List
       </h1>
       <Card className="space-y-8">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 px-8">
           <Input
             type="date"
             value={startDate}
@@ -57,11 +57,11 @@ export default function ShoppingListPage() {
             Load
           </Button>
         </div>
-        <div className="flex w-full justify-center gap-2 px-8 text-xs">
+        <div className="flex justify-between px-8 text-xs">
           {months.map((m) => (
             <div
               key={m.firstDay.toISOString()}
-              className="flex flex-1 flex-col items-center"
+              className="flex basis-[30%] flex-col items-center"
             >
               <div className="grid w-full grid-cols-7 gap-x-1 gap-y-2">
                 {Array.from({ length: m.days }, (_, idx) => {
@@ -76,13 +76,9 @@ export default function ShoppingListPage() {
                   return (
                     <div key={day} className="flex flex-col items-center">
                       {day}
-                      <div
-                        className={`mt-0.5 h-1.5 w-4 rounded-full border ${
-                          highlight
-                            ? 'bg-[color:var(--c-a1)] border-[color:var(--c-a1)]'
-                            : 'bg-[color:var(--c-white)] border-[color:var(--border)]'
-                        }`}
-                      />
+                      {highlight && (
+                        <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-[color:var(--c-a1)]" />
+                      )}
                     </div>
                   )
                 })}
