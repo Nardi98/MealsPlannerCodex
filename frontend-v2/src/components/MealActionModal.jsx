@@ -70,13 +70,15 @@ export default function MealActionModal({
     () =>
       recipes.filter((r) => {
         if (r.course !== 'side') return false
+        if (r.title === recipe) return false
+        if (sides.includes(r.title)) return false
         const matchesQuery = r.title
           .toLowerCase()
           .includes(sideQuery.toLowerCase())
         const matchesTags = sideSelectedTags.every((t) => r.tags?.includes(t))
         return matchesQuery && matchesTags
       }),
-    [recipes, sideQuery, sideSelectedTags]
+    [recipes, sideQuery, sideSelectedTags, sides, recipe]
   )
 
   const handleSwapClick = (title) => {
