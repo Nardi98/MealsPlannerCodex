@@ -13,6 +13,19 @@ def _reset_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
+def test_create_ingredient() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {"name": "Cabbage", "unit": "kg", "season_months": [1, 2]}
+    res = client.post("/ingredients", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["name"] == "Cabbage"
+    assert data["unit"] == "kg"
+    assert data["season_months"] == [1, 2]
+    assert data["recipe_count"] == 0
+
+
 def test_search_ingredients() -> None:
     _reset_db()
     client = TestClient(app)

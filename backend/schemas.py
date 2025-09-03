@@ -36,6 +36,12 @@ class IngredientIn(BaseModel):
     season_months: List[int] = Field(default_factory=list)
 
 
+class IngredientCreate(BaseModel):
+    name: str
+    season_months: List[int] = Field(default_factory=list)
+    unit: Optional[UnitEnum] = None
+
+
 class IngredientSummary(BaseModel):
     id: int
     name: str
