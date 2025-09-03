@@ -4,6 +4,8 @@ import {
   FunnelIcon,
   ChevronDownIcon,
   XMarkIcon,
+  NoSymbolIcon,
+  TrashIcon,
 } from '@heroicons/react/24/outline'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -18,13 +20,22 @@ export default function MealActionModal({
   onReject,
   onSwap,
   onClose,
+  onAddSide,
+  onRejectSide,
+  onRemoveSide,
+  onSwapSide,
 }) {
   const [open, setOpen] = React.useState(false)
+  const [sideSwapOpen, setSideSwapOpen] = React.useState(false)
   const [recipes, setRecipes] = React.useState([])
   const [tags, setTags] = React.useState([])
   const [query, setQuery] = React.useState('')
   const [tagFilterOpen, setTagFilterOpen] = React.useState(false)
   const [selectedTags, setSelectedTags] = React.useState([])
+  const [sideQuery, setSideQuery] = React.useState('')
+  const [sideTagFilterOpen, setSideTagFilterOpen] = React.useState(false)
+  const [sideSelectedTags, setSideSelectedTags] = React.useState([])
+  const [selectedSideIndex, setSelectedSideIndex] = React.useState(0)
 
   React.useEffect(() => {
     async function load() {
@@ -45,6 +56,7 @@ export default function MealActionModal({
   const filtered = React.useMemo(
     () =>
       recipes.filter((r) => {
+        if (r.course === 'side') return false
         const matchesQuery = r.title
           .toLowerCase()
           .includes(query.toLowerCase())
@@ -54,8 +66,26 @@ export default function MealActionModal({
     [recipes, query, selectedTags]
   )
 
+  const sideFiltered = React.useMemo(
+    () =>
+      recipes.filter((r) => {
+        if (r.course !== 'side') return false
+        const matchesQuery = r.title
+          .toLowerCase()
+          .includes(sideQuery.toLowerCase())
+        const matchesTags = sideSelectedTags.every((t) => r.tags?.includes(t))
+        return matchesQuery && matchesTags
+      }),
+    [recipes, sideQuery, sideSelectedTags]
+  )
+
   const handleSwapClick = (title) => {
     if (onSwap) onSwap(title)
+    if (onClose) onClose()
+  }
+
+  const handleSwapSideClick = (title) => {
+    if (onSwapSide) onSwapSide(selectedSideIndex, title)
     if (onClose) onClose()
   }
 
@@ -79,23 +109,41 @@ export default function MealActionModal({
         </button>
         <h3 className="text-lg font-medium pr-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
         <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium">{recipe}</div>
-            {sides.length > 0 && (
-              <div className="text-sm">{sides.join(', ')}</div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="danger" onClick={onReject}>
-              Reject
-            </Button>
-            {!accepted && (
-              <Button variant="a1" onClick={onAccept}>
-                Accept
-              </Button>
-            )}
-          </div>
+          <div className="font-medium">{recipe}</div>
+          <Button variant="danger" onClick={onReject}>
+            Reject
+          </Button>
         </div>
+        <div className="mt-2">
+          <Button onClick={onAddSide}>Add side dish</Button>
+        </div>
+        {sides.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {sides.map((s, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between text-sm"
+              >
+                <span>{s}</span>
+                <div className="flex gap-1">
+                  <NoSymbolIcon
+                    className="h-4 w-4 cursor-pointer"
+                    onClick={() => onRejectSide?.(i)}
+                  />
+                  <TrashIcon
+                    className="h-4 w-4 cursor-pointer"
+                    onClick={() => onRemoveSide?.(i)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!accepted && (
+          <Button variant="a1" onClick={onAccept} className="mt-4">
+            Accept
+          </Button>
+        )}
         <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
           <button
             type="button"
@@ -137,6 +185,69 @@ export default function MealActionModal({
                     key={r.id}
                     className="p-1 cursor-pointer hover:bg-gray-100 rounded"
                     onClick={() => handleSwapClick(r.title)}
+                  >
+                    {r.title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="border-t pt-4" style={{ borderColor: 'var(--border)' }}>
+          <button
+            type="button"
+            onClick={() => setSideSwapOpen((o) => !o)}
+            className="w-full flex justify-between items-center"
+          >
+            <span className="font-medium">Swap side dish</span>
+            <ChevronDownIcon
+              className={`h-4 w-4 transition-transform ${sideSwapOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {sideSwapOpen && (
+            <div className="mt-4 space-y-2">
+              {sides.length > 0 && (
+                <select
+                  className="w-full border rounded px-2 py-1"
+                  style={{ borderColor: 'var(--border)' }}
+                  value={selectedSideIndex}
+                  onChange={(e) => setSelectedSideIndex(parseInt(e.target.value))}
+                >
+                  {sides.map((s, i) => (
+                    <option key={i} value={i}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search recipes..."
+                  className="flex-1"
+                  value={sideQuery}
+                  onChange={(e) => setSideQuery(e.target.value)}
+                />
+                <FunnelIcon
+                  className="h-5 w-5 cursor-pointer"
+                  onClick={() => setSideTagFilterOpen((o) => !o)}
+                />
+              </div>
+              {sideTagFilterOpen && (
+                <TagSelector
+                  tags={tags}
+                  selected={sideSelectedTags}
+                  onChange={setSideSelectedTags}
+                />
+              )}
+              <div
+                className="mt-2 max-h-40 overflow-y-auto border rounded-xl p-2"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                {sideFiltered.map((r) => (
+                  <div
+                    key={r.id}
+                    className="p-1 cursor-pointer hover:bg-gray-100 rounded"
+                    onClick={() => handleSwapSideClick(r.title)}
                   >
                     {r.title}
                   </div>
