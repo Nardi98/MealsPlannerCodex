@@ -72,11 +72,11 @@ export default function MealActionModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 left-4"
+          className="absolute top-4 right-4"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
-        <h3 className="text-lg font-medium pl-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
+        <h3 className="text-lg font-medium pr-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
         <div className="flex items-center justify-between">
           <div>
             <div className="font-medium">{recipe}</div>
