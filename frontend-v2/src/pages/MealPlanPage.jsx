@@ -309,7 +309,10 @@ export default function MealPlanPage() {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
     const acceptedStyle = meal?.accepted
-      ? { backgroundColor: 'var(--c-pos)', color: 'var(--c-white)' }
+      ? {
+          backgroundColor: 'rgba(12, 58, 45, 0.15)',
+          color: 'var(--text-strong)',
+        }
       : {}
     return (
       <div
