@@ -22,4 +22,32 @@ export const mealPlansApi = {
         accepted,
       }),
     }),
+  addSide: (planDate, mealNumber, sideId) =>
+    request('/meal-plans/side', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        side_id: sideId,
+      }),
+    }),
+  replaceSide: (planDate, mealNumber, index, sideId) =>
+    request('/meal-plans/side', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        index,
+        side_id: sideId,
+      }),
+    }),
+  removeSide: (planDate, mealNumber, index) =>
+    request('/meal-plans/side', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        index,
+      }),
+    }),
 };
