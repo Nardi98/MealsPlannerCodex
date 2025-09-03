@@ -14,6 +14,7 @@ export default function ShoppingListPage() {
     return d.toISOString().slice(0, 10)
   })
   const [recipes, setRecipes] = React.useState([])
+  const [crossed, setCrossed] = React.useState(new Set())
 
   const ingredients = React.useMemo(() => buildShoppingList(recipes), [recipes])
 
@@ -22,7 +23,9 @@ export default function ShoppingListPage() {
 
   const handleExport = () => {
     if (!start) return
-    const items = ingredients.map(({ name }) => ({ label: name }))
+    const items = ingredients
+      .filter((ing) => !crossed.has(ing.key))
+      .map(({ name }) => ({ label: name }))
     const text = formatExportText(items, start, end || start)
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
@@ -60,6 +63,7 @@ export default function ShoppingListPage() {
       })
       const all = await recipesApi.fetchAll()
       setRecipes(all.filter((r) => titles.has(r.title)))
+      setCrossed(new Set())
     } catch (err) {
       console.error('Failed to load shopping list', err)
     }
@@ -128,7 +132,7 @@ export default function ShoppingListPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="p-4 space-y-2">
           <div
-            className="pb-2 border-b"
+            className="pb-4 border-b"
             style={{ borderColor: 'var(--border)' }}
           >
             <h2
@@ -169,19 +173,28 @@ export default function ShoppingListPage() {
             </Button>
           </div>
           <ul className="space-y-2">
-            {ingredients.map((ing) => (
-              <li
-                key={ing.key}
-                className="border rounded-xl p-3 flex items-center gap-2"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <span
-                  className="w-3 h-3 rounded-full border flex-shrink-0"
-                  style={{ borderColor: 'var(--c-a1)' }}
-                />
-                <span>{ing.name}</span>
-              </li>
-            ))}
+            {ingredients.map((ing) => {
+              const isCrossed = crossed.has(ing.key)
+              return (
+                <li
+                  key={ing.key}
+                  onClick={() =>
+                    setCrossed((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(ing.key)) next.delete(ing.key)
+                      else next.add(ing.key)
+                      return next
+                    })
+                  }
+                  className={`border rounded-xl p-3 cursor-pointer${
+                    isCrossed ? ' line-through text-[color:var(--text-subtle)]' : ''
+                  }`}
+                  style={{ borderColor: 'var(--border)' }}
+                >
+                  {ing.name}
+                </li>
+              )
+            })}
           </ul>
         </Card>
       </div>
