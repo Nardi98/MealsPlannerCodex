@@ -2,7 +2,9 @@ import React from 'react'
 import { Card, Input, Button } from '../components'
 
 export default function ShoppingListPage() {
-  const [startDate, setStartDate] = React.useState('')
+  const [startDate, setStartDate] = React.useState(
+    () => new Date().toISOString().slice(0, 10),
+  )
   const [endDate, setEndDate] = React.useState('')
   const [recipes, setRecipes] = React.useState([])
   const [ingredients, setIngredients] = React.useState([])
@@ -39,22 +41,22 @@ export default function ShoppingListPage() {
       >
         Shopping List
       </h1>
-      <div className="flex items-center gap-2">
-        <Input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <Input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-        <Button variant="a1" onClick={() => setRecipes([])}>
-          Load
-        </Button>
-      </div>
-      {months.length > 0 && (
+      <Card className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+          />
+          <Input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+          <Button variant="a1" onClick={() => setRecipes([])}>
+            Load
+          </Button>
+        </div>
         <div className="flex gap-4 text-xs">
           {months.map((m) => (
             <div key={m.firstDay.toISOString()} className="flex flex-col items-center">
@@ -84,7 +86,7 @@ export default function ShoppingListPage() {
             </div>
           ))}
         </div>
-      )}
+      </Card>
       <Card>
         {ingredients.map((ing) => (
           <div key={ing.id}>{ing.name}</div>
