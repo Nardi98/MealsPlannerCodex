@@ -214,17 +214,25 @@ export default function MealPlanPage() {
 
       try {
         const recipes = await recipesApi.fetchAll()
-        const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+        const titleToId = Object.fromEntries(
+          recipes.map((r) => [r.title, r.id])
+        )
         const serialised = updatedDay.map((m) => ({
           main_id: titleToId[m.recipe],
           side_ids: (m.side_recipes || [])
             .map((s) => titleToId[s])
             .filter(Boolean),
         }))
-        await mealPlansApi.create({
-          plan_date: date,
-          plan: { [date]: serialised },
-        })
+        const payload = { plan_date: date, plan: { [date]: serialised } }
+        try {
+          await mealPlansApi.create(payload)
+        } catch (apiErr) {
+          if (apiErr.data?.conflicts) {
+            await mealPlansApi.create(payload, { force: true })
+          } else {
+            throw apiErr
+          }
+        }
       } catch (apiErr) {
         console.error('Failed to persist rejected meal', apiErr)
       }
@@ -249,17 +257,25 @@ export default function MealPlanPage() {
       setPlan((p) => ({ ...p, [date]: updatedDay }))
       try {
         const recipes = await recipesApi.fetchAll()
-        const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+        const titleToId = Object.fromEntries(
+          recipes.map((r) => [r.title, r.id])
+        )
         const serialised = updatedDay.map((m) => ({
           main_id: titleToId[m.recipe],
           side_ids: (m.side_recipes || [])
             .map((s) => titleToId[s])
             .filter(Boolean),
         }))
-        await mealPlansApi.create({
-          plan_date: date,
-          plan: { [date]: serialised },
-        })
+        const payload = { plan_date: date, plan: { [date]: serialised } }
+        try {
+          await mealPlansApi.create(payload)
+        } catch (apiErr) {
+          if (apiErr.data?.conflicts) {
+            await mealPlansApi.create(payload, { force: true })
+          } else {
+            throw apiErr
+          }
+        }
         await mealPlansApi.accept(date, mealIndex + 1, true)
       } catch (apiErr) {
         console.error('Failed to persist swapped meal', apiErr)
