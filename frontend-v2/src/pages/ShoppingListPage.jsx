@@ -76,9 +76,13 @@ export default function ShoppingListPage() {
                   return (
                     <div key={day} className="flex flex-col items-center">
                       {day}
-                      {highlight && (
-                        <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-[color:var(--c-a1)]" />
-                      )}
+                      <div
+                        className={`mt-0.5 h-1.5 w-3 rounded-full ${
+                          highlight
+                            ? 'bg-[color:var(--c-a1)]'
+                            : 'bg-white border border-[color:var(--border)] opacity-40'
+                        }`}
+                      />
                     </div>
                   )
                 })}
