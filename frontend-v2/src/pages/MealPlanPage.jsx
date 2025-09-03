@@ -146,7 +146,13 @@ export default function MealPlanPage() {
         }
       }
       const updated = await mealPlansApi.fetchRange(form.start, form.end)
-      setPlan(updated || {})
+      const resetAccepted = Object.fromEntries(
+        Object.entries(updated || {}).map(([day, meals]) => [
+          day,
+          meals.map((m) => ({ ...m, accepted: false })),
+        ])
+      )
+      setPlan(resetAccepted)
       setStart(new Date(form.start))
       setMessage('Plan generated successfully.')
     } catch (err) {
@@ -302,14 +308,13 @@ export default function MealPlanPage() {
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
+    const acceptedStyle = meal?.accepted
+      ? { backgroundColor: 'rgba(12, 58, 45, 0.15)', color: 'var(--text-strong)' }
+      : {}
     return (
       <div
         key={`${idx}-${iso}`}
-        className={`relative border p-2 h-24 cursor-pointer ${
-          meal?.accepted
-            ? 'bg-[var(--c-pos)]/20 text-[color:var(--text-strong)]'
-            : ''
-        }`}
+        className="relative border p-2 h-24 cursor-pointer"
         onClick={() => setActiveCell({ date: iso, mealIndex: idx })}
         style={
           isToday(d)
@@ -317,10 +322,10 @@ export default function MealPlanPage() {
                 borderColor: 'var(--border)',
                 color: 'var(--text-strong)',
                 ...(meal?.accepted
-                  ? {}
+                  ? acceptedStyle
                   : { backgroundColor: 'rgba(187, 138, 82, 0.15)' }),
               }
-            : { borderColor: 'var(--border)' }
+            : { borderColor: 'var(--border)', ...acceptedStyle }
         }
       >
         {meal ? (
