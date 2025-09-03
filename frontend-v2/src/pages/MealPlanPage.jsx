@@ -309,7 +309,7 @@ export default function MealPlanPage() {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
     const acceptedStyle = meal?.accepted
-      ? { backgroundColor: 'rgba(12, 58, 45, 0.15)', color: 'var(--text-strong)' }
+      ? { backgroundColor: 'var(--c-pos)', color: 'var(--c-white)' }
       : {}
     return (
       <div
@@ -506,6 +506,7 @@ export default function MealPlanPage() {
           meal={activeMealType}
           recipe={activeMeal?.recipe}
           sides={activeMeal?.side_recipes || []}
+          accepted={activeMeal?.accepted}
           onAccept={handleAccept}
           onReject={handleReject}
           onSwap={handleSwap}
