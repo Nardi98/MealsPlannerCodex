@@ -10,6 +10,7 @@ import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
 import { feedbackApi } from '../api/feedbackApi'
 import { recipesApi } from '../api/recipesApi'
+import { sideDishesApi } from '../api/sideDishesApi'
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 export default function MealPlanPage() {
@@ -300,6 +301,126 @@ export default function MealPlanPage() {
     }
   }
 
+  const handleAddSide = async () => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    if (!meal) return
+    try {
+      const { id, title } = await sideDishesApi.generate({})
+      await mealPlansApi.addSide(date, mealIndex + 1, id)
+      setPlan((p) => ({
+        ...p,
+        [date]: p[date].map((m, i) =>
+          i === mealIndex
+            ? { ...m, side_recipes: [...(m.side_recipes || []), title] }
+            : m
+        ),
+      }))
+    } catch (err) {
+      console.error('Failed to add side dish', err)
+    }
+  }
+
+  const handleRejectSide = async (sideIndex) => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    const current = meal?.side_recipes?.[sideIndex]
+    if (!meal || !current) return
+    try {
+      let replacement = await feedbackApi.rejectRecipe(current)
+      if (!replacement || replacement === current) {
+        replacement = await feedbackApi.rejectRecipe(current)
+        if (!replacement || replacement === current) {
+          setError('No replacement recipe available.')
+          return
+        }
+      }
+      const recipes = await recipesApi.fetchAll()
+      const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+      const repId = titleToId[replacement]
+      if (!repId) {
+        setError('Replacement recipe not found.')
+        return
+      }
+      await mealPlansApi.replaceSide(date, mealIndex + 1, sideIndex, repId)
+      setPlan((p) => ({
+        ...p,
+        [date]: p[date].map((m, i) =>
+          i === mealIndex
+            ? {
+                ...m,
+                side_recipes: m.side_recipes.map((s, idx) =>
+                  idx === sideIndex ? replacement : s
+                ),
+              }
+            : m
+        ),
+      }))
+    } catch (err) {
+      console.error('Failed to reject side dish', err)
+    }
+  }
+
+  const handleRemoveSide = async (sideIndex) => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    if (!meal) return
+    try {
+      await mealPlansApi.removeSide(date, mealIndex + 1, sideIndex)
+      setPlan((p) => ({
+        ...p,
+        [date]: p[date].map((m, i) =>
+          i === mealIndex
+            ? {
+                ...m,
+                side_recipes: m.side_recipes.filter((_, idx) => idx !== sideIndex),
+              }
+            : m
+        ),
+      }))
+    } catch (err) {
+      console.error('Failed to remove side dish', err)
+    }
+  }
+
+  const handleSwapSide = async (sideIndex, newTitle) => {
+    if (!activeCell) return
+    const { date, mealIndex } = activeCell
+    const meal = plan[date]?.[mealIndex]
+    const oldTitle = meal?.side_recipes?.[sideIndex]
+    if (!meal || !oldTitle) return
+    try {
+      await feedbackApi.rejectRecipe(oldTitle)
+      await feedbackApi.acceptRecipe(newTitle)
+      const recipes = await recipesApi.fetchAll()
+      const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+      const newId = titleToId[newTitle]
+      if (!newId) {
+        setError('Replacement recipe not found.')
+        return
+      }
+      await mealPlansApi.replaceSide(date, mealIndex + 1, sideIndex, newId)
+      setPlan((p) => ({
+        ...p,
+        [date]: p[date].map((m, i) =>
+          i === mealIndex
+            ? {
+                ...m,
+                side_recipes: m.side_recipes.map((s, idx) =>
+                  idx === sideIndex ? newTitle : s
+                ),
+              }
+            : m
+        ),
+      }))
+    } catch (err) {
+      console.error('Failed to swap side dish', err)
+    }
+  }
+
   const activeMeal = activeCell
     ? plan[activeCell.date]?.[activeCell.mealIndex]
     : null
@@ -513,6 +634,10 @@ export default function MealPlanPage() {
           onAccept={handleAccept}
           onReject={handleReject}
           onSwap={handleSwap}
+          onAddSide={handleAddSide}
+          onRejectSide={handleRejectSide}
+          onRemoveSide={handleRemoveSide}
+          onSwapSide={handleSwapSide}
           onClose={() => setActiveCell(null)}
         />
       )}
