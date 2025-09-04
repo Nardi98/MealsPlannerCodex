@@ -281,6 +281,7 @@ def set_plan(
                         "recipe": recipe.title,
                         "side_recipes": side_titles,
                         "accepted": False,
+                        "leftover": item.leftover,
                     }
                 )
         title_plan[day] = titles
@@ -312,6 +313,7 @@ def toggle_meal_acceptance(
         recipe=meal.recipe.title,
         side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
         accepted=meal.accepted,
+        leftover=meal.leftover,
     )
 
 
@@ -333,6 +335,7 @@ def upsert_side_dish(
         recipe=meal.recipe.title,
         side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
         accepted=meal.accepted,
+        leftover=meal.leftover,
     )
 
 
@@ -349,6 +352,7 @@ def delete_side_dish(
         recipe=meal.recipe.title,
         side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
         accepted=meal.accepted,
+        leftover=meal.leftover,
     )
 
 
@@ -371,11 +375,7 @@ def feedback_reject(
 
     if crud.reject_recipe(db, payload.title) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    existing = {
-        meal["recipe"][:-11] if meal["recipe"].endswith(" (leftover)") else meal["recipe"]
-        for meals in crud.get_plan().values()
-        for meal in meals
-    }
+    existing = {meal["recipe"] for meals in crud.get_plan().values() for meal in meals}
     existing.add(payload.title)
     available = list(
         set(crud.list_recipe_titles(db, courses=["main", "first-course"])) - existing
@@ -407,13 +407,14 @@ def generate_plan_endpoint(
     for day, titles in plan_titles.items():
         items: List[Dict[str, object]] = []
         for title in titles:
-            base = title.replace(" (leftover)", "")
+            leftover = title.endswith(" (leftover)")
+            base = title[:-11] if leftover else title
             recipe = db.execute(
                 select(models.Recipe).where(models.Recipe.title == base).limit(1)
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
-            items.append({"id": recipe.id, "title": title})
+            items.append({"id": recipe.id, "title": base, "leftover": leftover})
         result[day] = items
     return result
 

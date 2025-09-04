@@ -32,7 +32,12 @@ def test_post_plan_with_side_recipe(db_session):
     assert resp.status_code == 200
     expected = {
         plan_date.isoformat(): [
-            {"recipe": "Main", "side_recipes": ["Side"], "accepted": False}
+            {
+                "recipe": "Main",
+                "side_recipes": ["Side"],
+                "accepted": False,
+                "leftover": False,
+            }
         ]
     }
     assert resp.json() == expected
@@ -63,13 +68,19 @@ def test_add_side_dish_endpoint(db_session):
         "recipe": "Main",
         "side_recipes": ["Side"],
         "accepted": False,
+        "leftover": False,
     }
 
     resp2 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
     assert resp2.status_code == 200
     assert resp2.json() == {
         plan_date.isoformat(): [
-            {"recipe": "Main", "side_recipes": ["Side"], "accepted": False}
+            {
+                "recipe": "Main",
+                "side_recipes": ["Side"],
+                "accepted": False,
+                "leftover": False,
+            }
         ]
     }
 
@@ -120,6 +131,7 @@ def test_add_multiple_side_dishes(db_session):
                 "recipe": "Main",
                 "side_recipes": ["Side1", "Side2"],
                 "accepted": False,
+                "leftover": False,
             }
         ]
     }
@@ -155,6 +167,7 @@ def test_swap_specific_side_dish_endpoint(db_session):
         "recipe": "Main",
         "side_recipes": ["Side1", "Side3"],
         "accepted": False,
+        "leftover": False,
     }
     assert crud.get_recipe(db_session, side2.id).score == -1
 
@@ -188,6 +201,7 @@ def test_remove_side_dish_endpoint_no_score_change(db_session):
         "recipe": "Main",
         "side_recipes": ["Side1"],
         "accepted": False,
+        "leftover": False,
     }
     assert crud.get_recipe(db_session, side2.id).score == 0
 

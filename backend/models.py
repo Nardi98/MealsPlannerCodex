@@ -165,6 +165,7 @@ class Meal(Base):
     meal_number = Column(Integer, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
     accepted = Column(Boolean, default=False)
+    leftover = Column(Boolean, default=False)
 
     plan = relationship("MealPlan", back_populates="meals")
     recipe = relationship("Recipe", foreign_keys=[recipe_id])

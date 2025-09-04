@@ -122,7 +122,11 @@ export default function MealPlanPage() {
         plan: Object.fromEntries(
           Object.entries(generated).map(([day, meals]) => [
             day,
-            meals.map((m) => ({ main_id: m.id, side_ids: [] })),
+            meals.map((m) => ({
+              main_id: m.id,
+              side_ids: [],
+              leftover: m.leftover,
+            })),
           ]),
         ),
         bulk_leftovers: Boolean(form.bulk_leftovers),
@@ -245,6 +249,7 @@ export default function MealPlanPage() {
           side_ids: (m.side_recipes || [])
             .map((s) => titleToId[s])
             .filter(Boolean),
+          leftover: m.leftover,
         }))
         const payload = { plan_date: date, plan: { [date]: serialised } }
         try {
@@ -286,6 +291,7 @@ export default function MealPlanPage() {
           side_ids: (m.side_recipes || [])
             .map((s) => titleToId[s])
             .filter(Boolean),
+          leftover: m.leftover,
         }))
         const payload = { plan_date: date, plan: { [date]: serialised } }
         try {
@@ -321,7 +327,7 @@ export default function MealPlanPage() {
         return
       }
       const { id, title } = generated
-      await mealPlansApi.addSide(date, mealIndex + 1, id)
+      await mealPlansApi.addSide(date, mealIndex + 1, id, meal.leftover)
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
@@ -357,7 +363,8 @@ export default function MealPlanPage() {
         date,
         mealIndex + 1,
         sideIndex,
-        replacement.id
+        replacement.id,
+        meal.leftover,
       )
       setPlan((p) => ({
         ...p,
@@ -384,7 +391,7 @@ export default function MealPlanPage() {
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      await mealPlansApi.removeSide(date, mealIndex + 1, sideIndex)
+      await mealPlansApi.removeSide(date, mealIndex + 1, sideIndex, meal.leftover)
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
@@ -422,7 +429,13 @@ export default function MealPlanPage() {
         setError('Replacement recipe not found.')
         return
       }
-      await mealPlansApi.replaceSide(date, mealIndex + 1, sideIndex, newId)
+      await mealPlansApi.replaceSide(
+        date,
+        mealIndex + 1,
+        sideIndex,
+        newId,
+        meal.leftover,
+      )
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
@@ -474,7 +487,16 @@ export default function MealPlanPage() {
       >
         {meal ? (
           <>
-            <div className="text-sm font-medium">{meal.recipe}</div>
+            <div className="text-sm font-medium">
+              {meal.recipe}
+              {meal.leftover && (
+                <img
+                  src="/assets/icons/left_overs_icon.png"
+                  alt="Leftover"
+                  className="inline ml-1 h-4 w-4"
+                />
+              )}
+            </div>
             {meal.side_recipes && meal.side_recipes.length > 0 && (
               <div className="mt-1 text-xs">
                 {meal.side_recipes.join(', ')}
