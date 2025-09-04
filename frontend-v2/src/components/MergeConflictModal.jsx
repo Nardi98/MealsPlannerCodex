@@ -5,6 +5,15 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
   const [defaultAction, setDefaultAction] = React.useState('keep-old')
   const [selections, setSelections] = React.useState([])
 
+  const conflictsWithIdx = React.useMemo(
+    () => conflicts.map((c, idx) => ({ ...c, idx })),
+    [conflicts]
+  )
+  const recipeConflicts = conflictsWithIdx.filter((c) => c.type === 'recipe')
+  const ingredientConflicts = conflictsWithIdx.filter(
+    (c) => c.type === 'ingredient'
+  )
+
   React.useEffect(() => {
     setSelections(conflicts.map(() => defaultAction))
   }, [defaultAction, conflicts])
@@ -16,6 +25,32 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
       return copy
     })
   }
+
+  const renderConflict = (c) => (
+    <div
+      key={`${c.type}-${c.title}-${c.idx}`}
+      className="border-b pb-2 last:border-b-0"
+      style={{ borderColor: 'var(--border)' }}
+    >
+      <div className="text-sm font-medium mb-1">
+        {c.type === 'recipe' ? 'Recipe' : 'Ingredient'}: {c.title}
+      </div>
+      <div className="flex gap-4 text-sm">
+        {["keep-old", "use-new", "keep-both"].map((opt) => (
+          <label key={opt} className="flex items-center gap-1">
+            <input
+              type="radio"
+              name={`conflict-${c.idx}`}
+              value={opt}
+              checked={selections[c.idx] === opt}
+              onChange={() => handleChange(c.idx, opt)}
+            />
+            <span className="capitalize">{opt.replace('-', ' ')}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
 
   const handleConfirm = () => {
     const result = conflicts.map((c, i) => ({ ...c, action: selections[i] }))
@@ -40,31 +75,22 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
           </select>
         </div>
         <div className="max-h-60 overflow-y-auto space-y-4">
-          {conflicts.map((c, idx) => (
-            <div
-              key={`${c.type}-${c.title}-${idx}`}
-              className="border-b pb-2 last:border-b-0"
-              style={{ borderColor: 'var(--border)' }}
-            >
-              <div className="text-sm font-medium mb-1">
-                {c.type === 'recipe' ? 'Recipe' : 'Ingredient'}: {c.title}
-              </div>
-              <div className="flex gap-4 text-sm">
-                {["keep-old", "use-new", "keep-both"].map((opt) => (
-                  <label key={opt} className="flex items-center gap-1">
-                    <input
-                      type="radio"
-                      name={`conflict-${idx}`}
-                      value={opt}
-                      checked={selections[idx] === opt}
-                      onChange={() => handleChange(idx, opt)}
-                    />
-                    <span className="capitalize">{opt.replace('-', ' ')}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          ))}
+          {recipeConflicts.length > 0 && (
+            <details open className="space-y-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Recipes ({recipeConflicts.length})
+              </summary>
+              {recipeConflicts.map(renderConflict)}
+            </details>
+          )}
+          {ingredientConflicts.length > 0 && (
+            <details open className="space-y-4">
+              <summary className="cursor-pointer text-sm font-medium">
+                Ingredients ({ingredientConflicts.length})
+              </summary>
+              {ingredientConflicts.map(renderConflict)}
+            </details>
+          )}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onCancel}>Cancel</Button>
