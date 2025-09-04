@@ -55,9 +55,8 @@ export default function ShoppingListPage() {
       const counts = new Map()
       Object.values(data || {}).forEach((meals) => {
         meals.forEach((m) => {
-          const raw = m.recipe
-          const title = raw.replace(' (leftover)', '')
-          if (!raw.endsWith(' (leftover)')) {
+          const title = m.recipe
+          if (!m.leftover) {
             counts.set(title, (counts.get(title) || 0) + 1)
           }
           for (const t of m.side_recipes || []) {
