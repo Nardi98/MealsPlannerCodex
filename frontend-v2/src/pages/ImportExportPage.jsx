@@ -1,10 +1,14 @@
 import React from 'react'
 import { Card, Button, Input } from '../components'
 import { dataApi } from '../api/dataApi'
+import { recipesApi } from '../api/recipesApi'
+import { ingredientsApi } from '../api/ingredientsApi'
 
 export default function ImportExportPage() {
   const [file, setFile] = React.useState(null)
+  const [parsedData, setParsedData] = React.useState(null)
   const [mode, setMode] = React.useState('merge')
+  const fileInputRef = React.useRef(null)
 
   const handleExport = async () => {
     try {
@@ -26,9 +30,91 @@ export default function ImportExportPage() {
     }
   }
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const f = e.target.files && e.target.files[0]
     setFile(f || null)
+    setParsedData(null)
+    if (f) {
+      try {
+        const text = await f.text()
+        setParsedData(JSON.parse(text))
+      } catch (err) {
+        console.error('Failed to parse JSON', err)
+        alert('Selected file is not valid JSON')
+      }
+    }
+  }
+
+  const clearFile = () => {
+    setFile(null)
+    setParsedData(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleImport = async () => {
+    if (!file || !parsedData) return
+    if (mode === 'overwrite') {
+      const confirmed = window.confirm(
+        'This will overwrite existing data. Are you sure?'
+      )
+      if (!confirmed) return
+      try {
+        await dataApi.importDatabase(parsedData, 'overwrite')
+        alert('Import successful')
+      } catch (err) {
+        console.error('Failed to import database', err)
+        alert(`Failed to import database: ${err.message}`)
+      } finally {
+        clearFile()
+      }
+      return
+    }
+
+    try {
+      const [existingRecipes, existingIngredients] = await Promise.all([
+        recipesApi.fetchAll(),
+        ingredientsApi.fetchAll(),
+      ])
+      const recipeTitles = new Set(existingRecipes.map((r) => r.title.toLowerCase()))
+      const ingredientNames = new Set(
+        existingIngredients.map((i) => i.name.toLowerCase())
+      )
+
+      const conflictingRecipes = (parsedData.recipes || [])
+        .map((r) => r.title)
+        .filter((t) => recipeTitles.has(t.toLowerCase()))
+
+      const importedIngredientNames = new Set()
+      ;(parsedData.recipes || []).forEach((r) => {
+        (r.ingredients || []).forEach((ing) =>
+          importedIngredientNames.add(ing.name)
+        )
+      })
+      const conflictingIngredients = Array.from(importedIngredientNames).filter((n) =>
+        ingredientNames.has(n.toLowerCase())
+      )
+
+      if (conflictingRecipes.length || conflictingIngredients.length) {
+        alert(
+          `Title conflicts detected:\n` +
+            (conflictingRecipes.length
+              ? `Recipes: ${conflictingRecipes.join(', ')}\n`
+              : '') +
+            (conflictingIngredients.length
+              ? `Ingredients: ${conflictingIngredients.join(', ')}`
+              : '')
+        )
+        return
+      }
+
+      await dataApi.importDatabase(parsedData, 'merge')
+      alert('Import successful')
+    } catch (err) {
+      console.error('Failed to import database', err)
+      alert(`Failed to import database: ${err.message}`)
+    } finally {
+      clearFile()
+    }
   }
 
   return (
@@ -54,7 +140,7 @@ export default function ImportExportPage() {
             Choose a backup file to import.
           </p>
         </div>
-        <Input type="file" onChange={handleFileChange} />
+        <Input type="file" onChange={handleFileChange} ref={fileInputRef} />
         <select
           className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
           style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
@@ -64,7 +150,7 @@ export default function ImportExportPage() {
           <option value="merge">Merge</option>
           <option value="overwrite">Overwrite</option>
         </select>
-        {file && <Button>Import</Button>}
+        {parsedData && <Button onClick={handleImport}>Import</Button>}
       </Card>
     </div>
   )
