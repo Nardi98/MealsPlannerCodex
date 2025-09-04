@@ -41,8 +41,8 @@ afterEach(() => {
 test('export button triggers file download', async () => {
   dataApi.exportDatabase.mockResolvedValue({ foo: 'bar' })
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-  global.URL.createObjectURL = vi.fn(() => 'blob:url')
-  global.URL.revokeObjectURL = vi.fn()
+  globalThis.URL.createObjectURL = vi.fn(() => 'blob:url')
+  globalThis.URL.revokeObjectURL = vi.fn()
 
   render(<ImportExportPage />)
   fireEvent.click(screen.getByRole('button', { name: 'Export Database' }))
