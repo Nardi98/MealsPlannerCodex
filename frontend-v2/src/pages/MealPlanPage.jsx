@@ -189,8 +189,8 @@ export default function MealPlanPage() {
     try {
       await mealPlansApi.accept(date, mealIndex + 1, true)
       await Promise.all([
-        feedbackApi.acceptRecipe(mainTitle),
-        ...sides.map((s) => feedbackApi.acceptRecipe(s)),
+        feedbackApi.acceptRecipe(mainTitle, date),
+        ...sides.map((s) => feedbackApi.acceptRecipe(s, date)),
       ])
       setPlan((p) => ({
         ...p,
@@ -214,7 +214,7 @@ export default function MealPlanPage() {
       let replacement
       let attempts = 0
       do {
-        replacement = await feedbackApi.rejectRecipe(meal.recipe)
+        replacement = await feedbackApi.rejectRecipe(meal.recipe, date)
         attempts += 1
       } while (
         replacement &&
@@ -270,8 +270,8 @@ export default function MealPlanPage() {
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      await feedbackApi.rejectRecipe(meal.recipe)
-      await feedbackApi.acceptRecipe(newTitle)
+      await feedbackApi.rejectRecipe(meal.recipe, date)
+      await feedbackApi.acceptRecipe(newTitle, date)
       const updatedDay = plan[date].map((m, i) =>
         i === mealIndex ? { ...m, recipe: newTitle, accepted: false } : m
       )
@@ -344,7 +344,7 @@ export default function MealPlanPage() {
     if (!meal || !current) return
     const existing = meal.side_recipes.filter((_, idx) => idx !== sideIndex)
     try {
-      await feedbackApi.rejectRecipe(current)
+      await feedbackApi.rejectRecipe(current, date)
       const avoid = [meal.recipe, ...existing]
       const replacement = await sideDishesApi.generate({
         avoid_titles: avoid,
@@ -413,8 +413,8 @@ export default function MealPlanPage() {
       return
     }
     try {
-      await feedbackApi.rejectRecipe(oldTitle)
-      await feedbackApi.acceptRecipe(newTitle)
+      await feedbackApi.rejectRecipe(oldTitle, date)
+      await feedbackApi.acceptRecipe(newTitle, date)
       const recipes = await recipesApi.fetchAll()
       const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
       const newId = titleToId[newTitle]

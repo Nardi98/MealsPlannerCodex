@@ -557,7 +557,9 @@ def remove_meal_side(
     return meal
 
 
-def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
+def accept_recipe(
+    session: Session, title: str, consumed_date: date
+) -> Optional[Recipe]:
     """Increment ``title``'s score and update ``date_last_consumed``."""
 
     # ``scalar_one_or_none`` raises ``MultipleResultsFound`` if more than one
@@ -569,7 +571,7 @@ def accept_recipe(session: Session, title: str) -> Optional[Recipe]:
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) + 1
-    recipe.date_last_consumed = date.today()
+    recipe.date_last_consumed = consumed_date
     session.commit()
     session.refresh(recipe)
     return recipe

@@ -15,10 +15,11 @@ def test_accept_recipe_updates_score_and_date(db_session):
         course="main",
         score=0,
     )
-    crud.accept_recipe(db_session, "Test")
+    consumed = date(2024, 1, 1)
+    crud.accept_recipe(db_session, "Test", consumed)
     db_session.refresh(r)
     assert r.score == 1
-    assert r.date_last_consumed == date.today()
+    assert r.date_last_consumed == consumed
 
 
 def test_reject_recipe_updates_score(db_session):
@@ -42,7 +43,8 @@ def test_accept_recipe_handles_duplicates(db_session):
     r2 = crud.create_recipe(db_session, title="Dup", servings_default=1, course="main", score=0)
 
     # Should not raise MultipleResultsFound even with duplicate titles
-    crud.accept_recipe(db_session, "Dup")
+    consumed = date(2024, 2, 2)
+    crud.accept_recipe(db_session, "Dup", consumed)
 
     db_session.refresh(r1)
     db_session.refresh(r2)
@@ -50,5 +52,5 @@ def test_accept_recipe_handles_duplicates(db_session):
     scores = {r1.score, r2.score}
     dates = {r1.date_last_consumed, r2.date_last_consumed}
     assert scores == {0, 1}
-    assert dates == {None, date.today()}
+    assert dates == {None, consumed}
 

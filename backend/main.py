@@ -358,7 +358,7 @@ def feedback_accept(
 ) -> Dict[str, str]:
     """Record user acceptance of a recipe."""
 
-    if crud.accept_recipe(db, payload.title) is None:
+    if crud.accept_recipe(db, payload.title, payload.consumed_date) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"status": "ok"}
 
