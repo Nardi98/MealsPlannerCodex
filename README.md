@@ -256,7 +256,7 @@ The updated meal is returned in the response.
 To spin up the experimental Vite interface:
 
 ```bash
-cd frontend
+cd frontend-v2
 npm install
 npm run dev
 ```
