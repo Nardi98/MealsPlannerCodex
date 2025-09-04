@@ -96,7 +96,16 @@ export default function RecipesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  {r.hot && <Badge tone="a2">hot</Badge>}
+                  {r.hot && (
+                    <Badge tone="a1">
+                      <img
+                        src="/assets/icons/bulk_icon.png"
+                        alt="bulk prep"
+                        className="h-3 w-3"
+                      />
+                      bulk
+                    </Badge>
+                  )}
                   {(r.tags || []).map((t) => (
                     <Badge key={t} tone="a3">
                       <TagIcon className="h-3 w-3" />{t}
