@@ -8,7 +8,7 @@
 
 ---
 
-## 0) Repo & File Layout (frontend)
+## 0) Repo & File Layout (frontend-v2)
 ```
 /src/
   components/
