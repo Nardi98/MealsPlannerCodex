@@ -66,10 +66,10 @@ function Shell() {
                 label="Shopping List"
               />
               <NavItem
+                active={location.pathname === '/import-export'}
+                onClick={() => navigate('/import-export')}
                 Icon={ArrowUpTrayIcon}
                 label="Import/Export"
-                className="text-[color:var(--text-subtle)] cursor-not-allowed"
-                aria-disabled="true"
               />
             </nav>
           </div>
