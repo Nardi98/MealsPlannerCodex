@@ -91,6 +91,25 @@ def test_import_merge_existing_ids(db_session):
     assert db_session.query(Tag).count() == 1
 
 
+def test_import_merge_tag_id_collision(db_session):
+    """Tags imported in merge mode get new ids when ids clash."""
+    existing = Tag(name="vegan")
+    db_session.add(existing)
+    db_session.commit()
+
+    payload = {
+        "recipes": [],
+        "tags": [{"id": existing.id, "name": "vegetarian"}],
+        "meal_plans": [],
+    }
+
+    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="merge")
+
+    tags = db_session.query(Tag).order_by(Tag.name).all()
+    assert {t.name for t in tags} == {"vegan", "vegetarian"}
+    assert len({t.id for t in tags}) == 2
+
+
 def test_export_includes_related_objects(db_session):
     _create_sample_data(db_session)
     exported = crud.export_data(db_session)
