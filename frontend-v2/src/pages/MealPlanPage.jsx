@@ -12,6 +12,7 @@ import { feedbackApi } from '../api/feedbackApi'
 import { recipesApi } from '../api/recipesApi'
 import { sideDishesApi } from '../api/sideDishesApi'
 import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import leftoverIcon from '/assets/icons/left_overs_icon.png'
 
 export default function MealPlanPage() {
   const today = new Date()
@@ -449,6 +450,9 @@ export default function MealPlanPage() {
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
+    const leftoverMarker = /\s*\(leftover\)$/i
+    const isLeftover = meal ? leftoverMarker.test(meal.recipe) : false
+    const recipeText = meal ? meal.recipe.replace(leftoverMarker, '') : ''
     const acceptedStyle = meal?.accepted
       ? {
           backgroundColor: 'rgba(12, 58, 45, 0.15)',
@@ -474,7 +478,16 @@ export default function MealPlanPage() {
       >
         {meal ? (
           <>
-            <div className="text-sm font-medium">{meal.recipe}</div>
+            <div className="flex items-center">
+              <span className="text-sm font-medium">{recipeText}</span>
+              {isLeftover && (
+                <img
+                  src={leftoverIcon}
+                  alt="leftover"
+                  className="w-4 h-4 ml-1"
+                />
+              )}
+            </div>
             {meal.side_recipes && meal.side_recipes.length > 0 && (
               <div className="mt-1 text-xs">
                 {meal.side_recipes.join(', ')}
