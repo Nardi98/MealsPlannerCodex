@@ -1,4 +1,5 @@
 from datetime import date
+import math
 import pytest
 
 from mealplanner.scoring import score_recipe, tag_penalty
@@ -15,8 +16,8 @@ def test_all_in_season_old_recipe():
         "date_last_consumed": date(2024, 4, 1),
         "bulk_prep": False,
     }
-    # base 1 + seasonality 1 + recency 0 + bulk 0 = 2
-    assert score_recipe(recipe, today) == pytest.approx(2.0)
+    expected = 3 * math.tanh(1.0) + 1 + (-10 / 61)
+    assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
 def test_recent_offseason_bulk_recipe():
@@ -30,8 +31,8 @@ def test_recent_offseason_bulk_recipe():
         "date_last_consumed": date(2024, 5, 30),
         "bulk_prep": True,
     }
-    # base 0.5 + seasonality 0 + recency -1 + bulk 0.2 = -0.3
-    assert score_recipe(recipe, today) == pytest.approx(-0.3)
+    expected = 3 * math.tanh(0.5) + (-10 / 2) + 0.2
+    assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
 def test_missing_data_defaults():
@@ -47,8 +48,8 @@ def test_extreme_base_score():
         "date_last_consumed": date(2023, 12, 31),
         "ingredients": [],
     }
-    # base 1e6 + recency -1 = 999999
-    assert score_recipe(recipe, today) == pytest.approx(999_999.0)
+    expected = 3 * math.tanh(1_000_000) + (-10 / 1)
+    assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
 def test_weight_parameters():
@@ -60,7 +61,7 @@ def test_weight_parameters():
         "bulk_prep": True,
         "tags": ["spicy"],
     }
-    # Only base score when weights are zero
+    # Only bounded base score when weights are zero
     assert score_recipe(
         recipe,
         today,
@@ -69,7 +70,7 @@ def test_weight_parameters():
         tag_penalty_weight=0,
         bulk_bonus_weight=0,
         reduce_tags={"spicy"},
-    ) == pytest.approx(1.0)
+    ) == pytest.approx(3 * math.tanh(1.0))
     # Doubling all weights doubles magnitude of other components
     assert score_recipe(
         recipe,
@@ -79,7 +80,9 @@ def test_weight_parameters():
         tag_penalty_weight=2,
         bulk_bonus_weight=2,
         reduce_tags={"spicy"},
-    ) == pytest.approx(0.4)
+    ) == pytest.approx(
+        3 * math.tanh(1.0) + 2 * 1 + 2 * (-10 / 2) + 2 * 0.2 + 2 * (-0.5)
+    )
 
 
 def test_tag_penalty():
