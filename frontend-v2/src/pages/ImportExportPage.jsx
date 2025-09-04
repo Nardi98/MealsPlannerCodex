@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Button, Input } from '../components'
+import { Card, Button, Input, OverwriteConfirmModal } from '../components'
 import { dataApi } from '../api/dataApi'
 import { recipesApi } from '../api/recipesApi'
 import { ingredientsApi } from '../api/ingredientsApi'
@@ -8,6 +8,7 @@ export default function ImportExportPage() {
   const [file, setFile] = React.useState(null)
   const [parsedData, setParsedData] = React.useState(null)
   const [mode, setMode] = React.useState('merge')
+  const [showOverwriteModal, setShowOverwriteModal] = React.useState(false)
   const fileInputRef = React.useRef(null)
 
   const handleExport = async () => {
@@ -54,19 +55,7 @@ export default function ImportExportPage() {
   const handleImport = async () => {
     if (!file || !parsedData) return
     if (mode === 'overwrite') {
-      const confirmed = window.confirm(
-        'This will overwrite existing data. Are you sure?'
-      )
-      if (!confirmed) return
-      try {
-        await dataApi.importDatabase(parsedData, 'overwrite')
-        alert('Import successful')
-      } catch (err) {
-        console.error('Failed to import database', err)
-        alert(`Failed to import database: ${err.message}`)
-      } finally {
-        clearFile()
-      }
+      setShowOverwriteModal(true)
       return
     }
 
@@ -117,9 +106,23 @@ export default function ImportExportPage() {
     }
   }
 
+  const confirmOverwrite = async () => {
+    try {
+      await dataApi.importDatabase(parsedData, 'overwrite')
+      alert('Import successful')
+    } catch (err) {
+      console.error('Failed to import database', err)
+      alert(`Failed to import database: ${err.message}`)
+    } finally {
+      clearFile()
+      setShowOverwriteModal(false)
+    }
+  }
+
   return (
-    <div className="space-y-4">
-      <Card className="space-y-3">
+    <>
+      <div className="space-y-4">
+        <Card className="space-y-3">
         <div>
           <h2 className="text-lg font-medium" style={{ color: 'var(--text-strong)' }}>
             Export Database
@@ -152,7 +155,14 @@ export default function ImportExportPage() {
         </select>
         {parsedData && <Button onClick={handleImport}>Import</Button>}
       </Card>
-    </div>
+      </div>
+      {showOverwriteModal && (
+        <OverwriteConfirmModal
+          onCancel={() => setShowOverwriteModal(false)}
+          onConfirm={confirmOverwrite}
+        />
+      )}
+    </>
   )
 }
 
