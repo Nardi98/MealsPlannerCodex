@@ -96,6 +96,7 @@ class RecipeOut(BaseModel):
 class MealAssignment(BaseModel):
     main_id: int
     side_ids: List[int] = Field(default_factory=list)
+    leftover: bool = False
 
 
 class MealPlanCreate(BaseModel):
@@ -148,6 +149,7 @@ class MealOut(BaseModel):
     recipe: str
     side_recipes: List[str] = Field(default_factory=list)
     accepted: bool
+    leftover: bool = False
 
 
 class MealAcceptanceIn(BaseModel):

@@ -315,18 +315,22 @@ def set_meal_plan(
             if isinstance(meal, int):
                 main_id = meal
                 side_ids: List[int] = []
+                leftover = False
             elif isinstance(meal, dict):
                 main_id = meal.get("main_id")
                 side_ids = list(meal.get("side_ids", []) or [])
+                leftover = bool(meal.get("leftover", False))
             else:
                 main_id = getattr(meal, "main_id")
                 side_ids = list(getattr(meal, "side_ids", []) or [])
+                leftover = bool(getattr(meal, "leftover", False))
 
             meal_plan.meals.append(
                 Meal(
                     meal_number=index,
                     recipe_id=main_id,
                     accepted=False,
+                    leftover=leftover,
                     sides=[
                         MealSide(position=i + 1, side_recipe_id=sid)
                         for i, sid in enumerate(side_ids)
@@ -355,7 +359,12 @@ def save_plan(
         items: List[Dict[str, Any]] = []
         for meal in meals:
             if isinstance(meal, str):
-                items.append({"recipe": meal, "side_recipes": [], "accepted": False})
+                items.append({
+                    "recipe": meal,
+                    "side_recipes": [],
+                    "accepted": False,
+                    "leftover": False,
+                })
             else:
                 side_recipes = meal.get("side_recipes")
                 if side_recipes is None:
@@ -366,6 +375,7 @@ def save_plan(
                         "recipe": meal.get("recipe"),
                         "side_recipes": side_recipes,
                         "accepted": bool(meal.get("accepted", False)),
+                        "leftover": bool(meal.get("leftover", False)),
                     }
                 )
         normalised[day] = items
@@ -414,6 +424,7 @@ def get_plan(
                             ms.side_recipe.title for ms in meal.sides if ms.side_recipe
                         ],
                         "accepted": meal.accepted,
+                        "leftover": meal.leftover,
                     }
                 )
             result[key] = items
@@ -439,6 +450,7 @@ def get_plan(
                     ms.side_recipe.title for ms in meal.sides if ms.side_recipe
                 ],
                 "accepted": meal.accepted,
+                "leftover": meal.leftover,
             }
         )
     return result
@@ -776,6 +788,7 @@ def import_data(
                     meal_number=meal_info["meal_number"],
                     recipe_id=rid,
                     accepted=meal_info.get("accepted", False),
+                    leftover=meal_info.get("leftover", False),
                 )
                 meal_plan.meals.append(meal)
 
@@ -853,6 +866,7 @@ def export_data(session: Optional[Session] = None) -> str:
                             "meal_number": meal.meal_number,
                             "recipe_id": meal.recipe_id,
                             "accepted": meal.accepted,
+                            "leftover": meal.leftover,
                         }
                         for meal in plan.meals
                     ],

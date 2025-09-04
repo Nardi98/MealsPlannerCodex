@@ -39,10 +39,20 @@ def test_get_plan_range(db_session):
     assert resp.status_code == 200
     assert resp.json() == {
         start.isoformat(): [
-            {"recipe": "A", "side_recipes": [], "accepted": False}
+            {
+                "recipe": "A",
+                "side_recipes": [],
+                "accepted": False,
+                "leftover": False,
+            }
         ],
         second.isoformat(): [
-            {"recipe": "B", "side_recipes": [], "accepted": False}
+            {
+                "recipe": "B",
+                "side_recipes": [],
+                "accepted": False,
+                "leftover": False,
+            }
         ],
     }
 

@@ -32,13 +32,19 @@ def test_toggle_meal_acceptance(db_session):
         "recipe": "A",
         "side_recipes": [],
         "accepted": True,
+        "leftover": False,
     }
 
     resp2 = client.get("/plan", params={"plan_date": "2024-01-01"})
     assert resp2.status_code == 200
     assert resp2.json() == {
         "2024-01-01": [
-            {"recipe": "A", "side_recipes": [], "accepted": True}
+            {
+                "recipe": "A",
+                "side_recipes": [],
+                "accepted": True,
+                "leftover": False,
+            }
         ]
     }
 

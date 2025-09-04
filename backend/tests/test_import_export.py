@@ -18,7 +18,7 @@ def _create_sample_data(session):
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True))
+    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True, leftover=False))
     session.add_all([tag, recipe, plan])
     session.commit()
 
@@ -45,6 +45,7 @@ def test_round_trip_export_import(db_session):
     assert plan.plan_date == date(2024, 1, 1)
     assert plan.meals[0].recipe_id == recipe.id
     assert plan.meals[0].accepted is True
+    assert plan.meals[0].leftover is False
 
 
 def test_import_bad_data_raises(db_session):
@@ -127,6 +128,7 @@ def test_export_includes_related_objects(db_session):
     assert meal_info["meal_number"] == 1
     assert meal_info["recipe_id"] == data["recipes"][0]["id"]
     assert meal_info["accepted"] is True
+    assert meal_info["leftover"] is False
 
 
 def test_import_creates_tables_when_missing():

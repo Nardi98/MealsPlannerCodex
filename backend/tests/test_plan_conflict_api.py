@@ -40,7 +40,12 @@ def test_post_meal_plan_conflict_requires_force(db_session):
     assert resp3.status_code == 200
     assert resp3.json() == {
         plan_date.isoformat(): [
-            {"recipe": "B", "side_recipes": [], "accepted": False}
+            {
+                "recipe": "B",
+                "side_recipes": [],
+                "accepted": False,
+                "leftover": False,
+            }
         ]
     }
     assert db_session.query(MealPlan).count() == 1
