@@ -1,9 +1,30 @@
 import React from 'react'
 import { Card, Button, Input } from '../components'
+import { dataApi } from '../api/dataApi'
 
 export default function ImportExportPage() {
   const [file, setFile] = React.useState(null)
   const [mode, setMode] = React.useState('merge')
+
+  const handleExport = async () => {
+    try {
+      const data = await dataApi.exportDatabase()
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'meal-planner-export.json'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export database', err)
+      alert(`Failed to export database: ${err.message}`)
+    }
+  }
 
   const handleFileChange = (e) => {
     const f = e.target.files && e.target.files[0]
@@ -21,7 +42,7 @@ export default function ImportExportPage() {
             Download a JSON backup of your meal planner data.
           </p>
         </div>
-        <Button>Export Database</Button>
+        <Button onClick={handleExport}>Export Database</Button>
       </Card>
 
       <Card className="space-y-3">
