@@ -76,6 +76,7 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
+        base_scores = [r.score or 0.0 for r in available]
         scored = sorted(
             available,
             key=lambda r: score_recipe(
@@ -86,6 +87,7 @@ def generate_plan(
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
+                base_scores=base_scores,
             ),
             reverse=True,
         )
@@ -161,6 +163,7 @@ def generate_side_dish(
     if not available:
         raise ValueError("No side dishes available")
 
+    base_scores = [r.score or 0.0 for r in available]
     scored = sorted(
         available,
         key=lambda r: score_recipe(
@@ -171,6 +174,7 @@ def generate_side_dish(
             tag_penalty_weight=tag_penalty_weight,
             bulk_bonus_weight=bulk_bonus_weight,
             reduce_tags=reduce_tags or [],
+            base_scores=base_scores,
         ),
         reverse=True,
     )
