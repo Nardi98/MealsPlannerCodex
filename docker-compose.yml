@@ -9,13 +9,6 @@ services:
     volumes:
       - ./backend:/app
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-
   frontend-v2:
     # Vite-based frontend served on port 5174
     build: ./frontend-v2
