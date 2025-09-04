@@ -139,6 +139,7 @@ class FeedbackIn(BaseModel):
     """Payload for feedback endpoints."""
 
     title: str
+    consumed_date: date
 
 
 class MealOut(BaseModel):

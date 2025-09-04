@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi.testclient import TestClient
 from main import app, get_db
 from mealplanner import crud
@@ -27,12 +29,18 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     )
     client = TestClient(app)
 
-    resp = client.post("/feedback/accept", json={"title": "A"})
+    consumed = date(2024, 1, 1)
+    resp = client.post(
+        "/feedback/accept", json={"title": "A", "consumed_date": consumed.isoformat()}
+    )
     assert resp.status_code == 200
     db_session.refresh(a)
     assert a.score == 1
+    assert a.date_last_consumed == consumed
 
-    resp = client.post("/feedback/reject", json={"title": "A"})
+    resp = client.post(
+        "/feedback/reject", json={"title": "A", "consumed_date": consumed.isoformat()}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["replacement"] == "B"
@@ -54,7 +62,10 @@ def test_reject_replacement_limited_to_main_courses(db_session):
     )
     client = TestClient(app)
 
-    resp = client.post("/feedback/reject", json={"title": "A"})
+    consumed = date(2024, 1, 1)
+    resp = client.post(
+        "/feedback/reject", json={"title": "A", "consumed_date": consumed.isoformat()}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["replacement"] == "B"
