@@ -121,6 +121,9 @@ fetch('http://localhost:8000/api/recipes')
 An experimental Vite-based UI lives under `frontend-v2/`. Start it with
 `docker-compose up frontend-v2` and access it at
 [`http://localhost:5174`](http://localhost:5174).
+The meal plan form offers a temporary **Download debug log** checkbox that
+retrieves a `plan-debug-log.txt` file with the scoring details when a new plan
+is generated.
 
 
 ## 📂 Project Structure

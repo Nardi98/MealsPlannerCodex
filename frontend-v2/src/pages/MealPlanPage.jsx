@@ -62,6 +62,7 @@ export default function MealPlanPage() {
     bulk_leftovers: true,
     avoid_tags: [],
     reduce_tags: [],
+    debug_log: false,
   })
   const [message, setMessage] = React.useState('')
   const [error, setError] = React.useState('')
@@ -116,11 +117,14 @@ export default function MealPlanPage() {
         reduce_tags: form.reduce_tags,
         keep_days: Number(form.keep_days),
       }
-      const generated = await mealPlansApi.generate(params)
+      const generated = await mealPlansApi.generate(params, {
+        debug: form.debug_log,
+      })
+      const planData = form.debug_log ? generated.plan : generated
       const payload = {
         plan_date: form.start,
         plan: Object.fromEntries(
-          Object.entries(generated).map(([day, meals]) => [
+          Object.entries(planData).map(([day, meals]) => [
             day,
             meals.map((m) => ({ main_id: m.id, side_ids: [] })),
           ]),
@@ -155,6 +159,17 @@ export default function MealPlanPage() {
       setPlan(resetAccepted)
       setStart(new Date(form.start))
       setMessage('Plan generated successfully.')
+      if (form.debug_log && generated.debug) {
+        const blob = new Blob([
+          JSON.stringify(generated.debug, null, 2),
+        ], { type: 'text/plain' })
+        const link = document.createElement('a')
+        link.href = URL.createObjectURL(blob)
+        link.download = 'plan-debug-log.txt'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      }
     } catch (err) {
       setError(err.message)
     }
@@ -617,6 +632,17 @@ export default function MealPlanPage() {
                 style={{ borderColor: 'var(--border)' }}
               />
               <span style={{ color: 'var(--text-strong)' }}>Bulk leftovers</span>
+            </label>
+            <label className="flex items-center gap-2 col-span-2 text-sm">
+              <input
+                type="checkbox"
+                name="debug_log"
+                checked={form.debug_log}
+                onChange={handleChange}
+                className="h-4 w-4 rounded border"
+                style={{ borderColor: 'var(--border)' }}
+              />
+              <span style={{ color: 'var(--text-strong)' }}>Download debug log</span>
             </label>
             <TagSelector
               label="Avoid tags"
