@@ -92,11 +92,11 @@ alembic upgrade head
 
 This applies schema changes such as the new `course` column on recipes.
 
-### Frontend (`frontend-v2/`)
+### Frontend (`frontend/`)
 
-The repository includes a Vite-based UI located in `frontend-v2/`. Start it with
-`docker-compose up frontend-v2` and access it at
-[`http://localhost:5174`](http://localhost:5174).
+The repository includes a Vite-based UI located in `frontend/`. Start it with
+`docker-compose up frontend` and access it at
+[`http://localhost:5173`](http://localhost:5173).
 
 
 ## 📂 Project Structure
@@ -109,7 +109,7 @@ meal-planner/
 │   ├── app/                   # business logic and API routers
 │   ├── requirements.txt       # backend dependencies
 │   └── ...
-├── frontend-v2/               # Vite-based UI
+├── frontend/               # Vite-based UI
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
@@ -256,7 +256,7 @@ The updated meal is returned in the response.
 To spin up the experimental Vite interface:
 
 ```bash
-cd frontend-v2
+cd frontend
 npm install
 npm run dev
 ```
