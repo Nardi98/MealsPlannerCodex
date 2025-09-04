@@ -6,7 +6,7 @@ from datetime import date
 import json
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
@@ -27,11 +27,15 @@ _PLAN_SETTINGS: Dict[str, Any] = {}
 
 __all__ = [
     "create_recipe",
+    "create_ingredient",
     "get_or_create_tag",
     "get_or_create_ingredient",
     "get_recipe",
+    "get_ingredient",
+    "get_recipes_by_ingredient",
     "update_recipe",
     "delete_recipe",
+    "delete_ingredient",
     "set_meal_plan",
     "save_plan",
     "get_plan",
@@ -71,6 +75,21 @@ def create_recipe(session: Session, **data: Any) -> Recipe:
     session.commit()
     session.refresh(recipe)
     return recipe
+
+
+def create_ingredient(
+    session: Session,
+    name: str,
+    unit: UnitEnum | None,
+    season_months: List[int],
+) -> Ingredient:
+    """Create and persist a new :class:`Ingredient`."""
+
+    ingredient = Ingredient(name=name, unit=unit, season_months=season_months)
+    session.add(ingredient)
+    session.commit()
+    session.refresh(ingredient)
+    return ingredient
 
 
 def get_recipe(session: Session, recipe_id: int) -> Optional[Recipe]:
@@ -190,6 +209,65 @@ def get_or_create_ingredient(
     return ingredient
 
 
+def get_ingredient(session: Session, ingredient_id: int) -> Ingredient | None:
+    """Return an ingredient by primary key or ``None`` if not found."""
+
+    return session.get(Ingredient, ingredient_id)
+
+
+def get_recipes_by_ingredient(session: Session, ingredient_id: int) -> List[Recipe]:
+    """Return all recipes that reference ``ingredient_id``."""
+
+    stmt = (
+        select(Recipe)
+        .join(RecipeIngredient)
+        .where(RecipeIngredient.ingredient_id == ingredient_id)
+        .order_by(Recipe.title)
+    )
+    return session.execute(stmt).scalars().all()
+
+
+def delete_ingredient(
+    session: Session, ingredient_id: int, *, force: bool = False
+) -> bool | None:
+    """Delete an ingredient by id.
+
+    Parameters
+    ----------
+    session:
+        Database session used for the operation.
+    ingredient_id:
+        Primary key of the ingredient to remove.
+    force:
+        When ``True`` the ingredient and any associations are removed even if
+        recipes reference it. When ``False`` (the default) the deletion will be
+        aborted if the ingredient is still referenced.
+
+    Returns
+    -------
+    bool | None
+        ``True`` if the ingredient was deleted, ``False`` if references prevent
+        deletion, or ``None`` if the ingredient was not found.
+    """
+
+    ingredient = session.get(Ingredient, ingredient_id)
+    if ingredient is None:
+        return None
+
+    if not force:
+        count = session.scalar(
+            select(func.count(RecipeIngredient.recipe_id)).where(
+                RecipeIngredient.ingredient_id == ingredient_id
+            )
+        )
+        if count:
+            return False
+
+    session.delete(ingredient)
+    session.commit()
+    return True
+
+
 def get_recipes() -> List[str]:
     """Return a list of recipe names.
 
@@ -248,6 +326,7 @@ def set_meal_plan(
                 Meal(
                     meal_number=index,
                     recipe_id=main_id,
+                    accepted=False,
                     sides=[
                         MealSide(position=i + 1, side_recipe_id=sid)
                         for i, sid in enumerate(side_ids)
@@ -589,21 +668,22 @@ def import_data(
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):
             tag_id = tag_info.get("id")
-            tag = session.get(Tag, tag_id) if tag_id is not None else None
-            if tag is None:
-                tag = Tag(id=tag_id, name=tag_info["name"])
-                session.add(tag)
+            if mode == "merge":
+                tag = get_or_create_tag(session, tag_info["name"])
             else:
-                tag.name = tag_info["name"]
+                tag = session.get(Tag, tag_id) if tag_id is not None else None
+                if tag is None:
+                    tag = Tag(id=tag_id, name=tag_info["name"])
+                    session.add(tag)
+                else:
+                    tag.name = tag_info["name"]
             tag_map[tag_id] = tag
 
         recipe_id_map: Dict[int, int] = {}
         for rec_info in data.get("recipes", []):
             rec_id = rec_info.get("id")
-            existing = session.get(Recipe, rec_id) if rec_id is not None else None
-            if existing is None:
+            if mode == "merge":
                 recipe = Recipe(
-                    id=rec_id,
                     title=rec_info["title"],
                     servings_default=rec_info["servings_default"],
                     procedure=rec_info.get("procedure"),
@@ -617,19 +697,36 @@ def import_data(
                     ),
                 )
             else:
-                recipe = Recipe(
-                    title=rec_info["title"],
-                    servings_default=rec_info["servings_default"],
-                    procedure=rec_info.get("procedure"),
-                    bulk_prep=rec_info.get("bulk_prep", False),
-                    course=rec_info.get("course", "main"),
-                    score=rec_info.get("score"),
-                    date_last_consumed=(
-                        date.fromisoformat(rec_info["date_last_consumed"])
-                        if rec_info.get("date_last_consumed")
-                        else None
-                    ),
-                )
+                existing = session.get(Recipe, rec_id) if rec_id is not None else None
+                if existing is None:
+                    recipe = Recipe(
+                        id=rec_id,
+                        title=rec_info["title"],
+                        servings_default=rec_info["servings_default"],
+                        procedure=rec_info.get("procedure"),
+                        bulk_prep=rec_info.get("bulk_prep", False),
+                        course=rec_info.get("course", "main"),
+                        score=rec_info.get("score"),
+                        date_last_consumed=(
+                            date.fromisoformat(rec_info["date_last_consumed"])
+                            if rec_info.get("date_last_consumed")
+                            else None
+                        ),
+                    )
+                else:
+                    recipe = Recipe(
+                        title=rec_info["title"],
+                        servings_default=rec_info["servings_default"],
+                        procedure=rec_info.get("procedure"),
+                        bulk_prep=rec_info.get("bulk_prep", False),
+                        course=rec_info.get("course", "main"),
+                        score=rec_info.get("score"),
+                        date_last_consumed=(
+                            date.fromisoformat(rec_info["date_last_consumed"])
+                            if rec_info.get("date_last_consumed")
+                            else None
+                        ),
+                    )
             session.add(recipe)
             session.flush()
             if rec_id is not None:

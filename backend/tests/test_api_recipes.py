@@ -38,6 +38,10 @@ def test_recipe_crud() -> None:
     res = client.get("/recipes")
     assert any(r["id"] == recipe_id for r in res.json())
 
+    res = client.get(f"/recipes/{recipe_id}")
+    assert res.status_code == 200
+    assert res.json()["title"] == "Soup"
+
     update = dict(payload, title="Stew")
     res = client.put(f"/recipes/{recipe_id}", json=update)
     assert res.status_code == 200

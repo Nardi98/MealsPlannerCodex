@@ -118,7 +118,7 @@ def generate_plan(
             idx = day_offset * meals_per_day + meal_idx
             recipe, leftover = selections[idx]
             title = recipe.title + (" (leftover)" if leftover else "")
-        schedule[key].append(title)
+            schedule[key].append(title)
     return schedule
 
 
@@ -127,6 +127,7 @@ def generate_side_dish(
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
+    avoid_titles: Iterable[str] | None = None,
     epsilon: float = 0.0,
     keep_days: int = 7,
     bulk_leftovers: bool = True,
@@ -145,6 +146,9 @@ def generate_side_dish(
     """
 
     recipes = session.query(Recipe).filter(Recipe.course == "side").all()
+    if avoid_titles:
+        avoid_set = set(avoid_titles)
+        recipes = [r for r in recipes if r.title not in avoid_set]
     today = date.today()
     available = filter_recipes(
         recipes,
@@ -153,6 +157,9 @@ def generate_side_dish(
         avoid_tags=avoid_tags,
         reduce_tags=reduce_tags,
     )
+
+    if not available:
+        raise ValueError("No side dishes available")
 
     scored = sorted(
         available,

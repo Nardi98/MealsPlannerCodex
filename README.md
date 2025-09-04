@@ -110,6 +110,10 @@ fetch('http://localhost:8000/api/recipes')
   .then(data => console.log(data))
 ```
 
+An experimental Vite-based UI lives under `frontend-v2/`. Start it with
+`docker-compose up frontend-v2` and access it at
+[`http://localhost:5174`](http://localhost:5174).
+
 
 ## 📂 Project Structure
 
@@ -261,4 +265,17 @@ Use `POST /meal-plans/accept` to update the `accepted` flag for a meal:
 
 The updated meal is returned in the response.
 
+
+
+## Next-gen UI
+
+To spin up the experimental Vite interface:
+
+```bash
+cd frontend-v2
+npm install
+npm run dev
+```
+
+All UI updates must adhere to [MEAL_PLANNER_DESIGN_GUIDE.md](MEAL_PLANNER_DESIGN_GUIDE.md) and the project mock-up. Non-Recipe pages are currently placeholders, and their sidebar buttons are disabled until future tasks.
 

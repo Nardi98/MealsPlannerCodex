@@ -13,6 +13,19 @@ def _reset_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
+def test_create_ingredient() -> None:
+    _reset_db()
+    client = TestClient(app)
+    payload = {"name": "Cabbage", "unit": "kg", "season_months": [1, 2]}
+    res = client.post("/ingredients", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["name"] == "Cabbage"
+    assert data["unit"] == "kg"
+    assert data["season_months"] == [1, 2]
+    assert data["recipe_count"] == 0
+
+
 def test_search_ingredients() -> None:
     _reset_db()
     client = TestClient(app)
@@ -99,3 +112,109 @@ def test_update_ingredient() -> None:
     assert data["name"] == "H2O"
     assert set(data["season_months"]) == {1, 2}
     assert data["unit"] == "ml"
+
+
+def test_ingredient_recipe_lookup_and_delete() -> None:
+    _reset_db()
+    client = TestClient(app)
+
+    # Create two recipes sharing an ingredient and one unique recipe
+    payload1 = {
+        "title": "Pasta",
+        "servings_default": 2,
+        "procedure": "",
+        "bulk_prep": False,
+        "course": "main",
+        "tags": [],
+        "ingredients": [
+            {"name": "Tomato", "quantity": 2, "unit": "piece"},
+        ],
+    }
+    payload2 = {
+        "title": "Salad",
+        "servings_default": 1,
+        "procedure": "",
+        "bulk_prep": False,
+        "course": "main",
+        "tags": [],
+        "ingredients": [
+            {"name": "Tomato", "quantity": 1, "unit": "piece"},
+        ],
+    }
+    res = client.post("/recipes", json=payload1)
+    assert res.status_code == 201
+    recipe1 = res.json()
+    res = client.post("/recipes", json=payload2)
+    assert res.status_code == 201
+    recipe2 = res.json()
+
+    # Find ingredient id
+    res = client.get("/ingredients", params={"search": "Tom"})
+    assert res.status_code == 200
+    ingredient_id = res.json()[0]["id"]
+
+    # Lookup recipes using the ingredient
+    res = client.get(f"/ingredients/{ingredient_id}/recipes")
+    assert res.status_code == 200
+    titles = {r["title"] for r in res.json()}
+    assert titles == {recipe1["title"], recipe2["title"]}
+
+    # Attempt to delete while still referenced
+    res = client.delete(f"/ingredients/{ingredient_id}")
+    assert res.status_code == 400
+
+    # Delete one recipe and remove ingredient from the other
+    client.delete(f"/recipes/{recipe2['id']}")
+    client.put(
+        f"/recipes/{recipe1['id']}",
+        json={
+            "title": recipe1["title"],
+            "servings_default": recipe1["servings_default"],
+            "procedure": recipe1["procedure"],
+            "bulk_prep": recipe1["bulk_prep"],
+            "course": recipe1["course"],
+            "tags": [],
+            "ingredients": [],
+        },
+    )
+
+    # Ingredient now unreferenced should delete successfully
+    res = client.delete(f"/ingredients/{ingredient_id}")
+    assert res.status_code == 204
+
+    # Subsequent lookups should 404
+    res = client.get(f"/ingredients/{ingredient_id}/recipes")
+    assert res.status_code == 404
+
+
+def test_force_delete_removes_references() -> None:
+    _reset_db()
+    client = TestClient(app)
+
+    payload = {
+        "title": "Soup",
+        "servings_default": 1,
+        "procedure": "",
+        "bulk_prep": False,
+        "course": "main",
+        "tags": [],
+        "ingredients": [
+            {"name": "Tomato", "quantity": 1, "unit": "piece"},
+        ],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+
+    res = client.get("/ingredients", params={"search": "Tom"})
+    assert res.status_code == 200
+    ingredient_id = res.json()[0]["id"]
+
+    res = client.delete(f"/ingredients/{ingredient_id}?force=true")
+    assert res.status_code == 204
+
+    res = client.get("/recipes")
+    assert res.status_code == 200
+    recipes = res.json()
+    assert recipes[0]["ingredients"] == []
+    res = client.get(f"/ingredients/{ingredient_id}/recipes")
+    assert res.status_code == 404

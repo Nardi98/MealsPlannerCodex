@@ -65,6 +65,14 @@ def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
     return db.execute(stmt).scalars().all()
 
 
+@app.get("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
+def read_recipe(recipe_id: int, db: Session = Depends(get_db)) -> schemas.RecipeOut:
+    recipe = crud.get_recipe(db, recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+
 def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
     ingredients: List[models.RecipeIngredient] = []
@@ -149,6 +157,26 @@ def search_ingredients(
     ]
 
 
+@app.post(
+    "/ingredients",
+    response_model=schemas.IngredientSummary,
+    status_code=201,
+)
+def create_ingredient(
+    payload: schemas.IngredientCreate, db: Session = Depends(get_db)
+) -> schemas.IngredientSummary:
+    ingredient = crud.create_ingredient(
+        db, payload.name, payload.unit, payload.season_months
+    )
+    return schemas.IngredientSummary(
+        id=ingredient.id,
+        name=ingredient.name,
+        season_months=ingredient.season_months or [],
+        unit=ingredient.unit,
+        recipe_count=0,
+    )
+
+
 @app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientSummary)
 def update_ingredient(
     ingredient_id: int,
@@ -174,6 +202,34 @@ def update_ingredient(
         unit=ingredient.unit,
         recipe_count=count or 0,
     )
+
+
+@app.get(
+    "/ingredients/{ingredient_id}/recipes",
+    response_model=List[schemas.RecipeSummary],
+)
+def ingredient_recipes(
+    ingredient_id: int, db: Session = Depends(get_db)
+) -> List[schemas.RecipeSummary]:
+    ingredient = crud.get_ingredient(db, ingredient_id)
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    recipes = crud.get_recipes_by_ingredient(db, ingredient_id)
+    return [schemas.RecipeSummary(id=r.id, title=r.title) for r in recipes]
+
+
+@app.delete("/ingredients/{ingredient_id}", status_code=204)
+def delete_ingredient(
+    ingredient_id: int, force: bool = False, db: Session = Depends(get_db)
+) -> Response:
+    deleted = crud.delete_ingredient(db, ingredient_id, force=force)
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    if deleted is False:
+        raise HTTPException(
+            status_code=400, detail="Ingredient is referenced by recipes"
+        )
+    return Response(status_code=204)
 
 
 @app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
@@ -371,6 +427,7 @@ def generate_side_dish_endpoint(
             db,
             avoid_tags=payload.avoid_tags,
             reduce_tags=payload.reduce_tags,
+            avoid_titles=payload.avoid_titles,
             epsilon=payload.epsilon,
             keep_days=payload.keep_days,
             bulk_leftovers=payload.bulk_leftovers,

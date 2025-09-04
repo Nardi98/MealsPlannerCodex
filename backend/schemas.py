@@ -36,6 +36,12 @@ class IngredientIn(BaseModel):
     season_months: List[int] = Field(default_factory=list)
 
 
+class IngredientCreate(BaseModel):
+    name: str
+    season_months: List[int] = Field(default_factory=list)
+    unit: Optional[UnitEnum] = None
+
+
 class IngredientSummary(BaseModel):
     id: int
     name: str
@@ -51,6 +57,14 @@ class IngredientUpdate(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
     unit: Optional[UnitEnum] = None
+
+
+class RecipeSummary(BaseModel):
+    id: int
+    title: str
+
+    class Config:
+        orm_mode = True
 
 
 class RecipeIn(BaseModel):
@@ -110,6 +124,7 @@ class SideDishGenerate(BaseModel):
     """Parameters for generating a side dish recommendation."""
 
     epsilon: float = 0.0
+    avoid_titles: List[str] = []
     avoid_tags: List[str] = []
     reduce_tags: List[str] = []
     seasonality_weight: float = 1.0
