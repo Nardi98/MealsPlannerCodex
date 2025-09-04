@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import logging
 import random
 from typing import Dict, Iterable, List, Sequence, Set
 
 from sqlalchemy.orm import Session
 
 from .models import Ingredient, Recipe, RecipeIngredient
-from .scoring import score_recipe
+from .scoring import score_recipe, score_recipe_details
 
 
 def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
@@ -42,14 +43,17 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
-) -> Dict[str, List[str]]:
+    *,
+    debug: bool = False,
+) -> Dict[str, List[str]] | tuple[Dict[str, List[str]], List[Dict[str, object]]]:
     """Generate a meal plan mapping dates to recipe titles.
 
     Recipes are filtered and scored using :func:`filter_recipes` and
     :func:`scoring.score_recipe` before being passed to
     :func:`generate_weekly_plan`.  The resulting recipes populate the requested
     timeslots.  Weight parameters adjust the influence of individual scoring
-    components.
+    components.  When ``debug`` is ``True`` the function additionally returns a
+    list of score breakdowns for each candidate recipe.
 
     ``keep_days`` controls how many days leftover portions from a ``bulk_prep``
     recipe may appear after the initial preparation. Set ``bulk_leftovers`` to
@@ -65,6 +69,7 @@ def generate_plan(
     )
     total_slots = days * meals_per_day
     selections: List[tuple[Recipe, bool]] = []
+    debug_details: List[Dict[str, object]] = []
     week = 0
     while len(selections) < total_slots:
         week_start = start + timedelta(days=7 * week)
@@ -76,9 +81,9 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
-        scored = sorted(
-            available,
-            key=lambda r: score_recipe(
+        details_map: Dict[Recipe, Dict[str, float]] = {}
+        for r in available:
+            det = score_recipe_details(
                 _recipe_to_dict(r),
                 today=week_start,
                 seasonality_weight=seasonality_weight,
@@ -86,7 +91,16 @@ def generate_plan(
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
-            ),
+            )
+            logging.debug("Scoring %s: %s", r.title, det)
+            details_map[r] = det
+            if debug:
+                det_with_title = det.copy()
+                det_with_title["title"] = r.title
+                debug_details.append(det_with_title)
+        scored = sorted(
+            available,
+            key=lambda r: details_map[r]["total"],
             reverse=True,
         )
 
@@ -119,6 +133,8 @@ def generate_plan(
             recipe, leftover = selections[idx]
             title = recipe.title + (" (leftover)" if leftover else "")
             schedule[key].append(title)
+    if debug:
+        return schedule, debug_details
     return schedule
 
 
@@ -298,6 +314,7 @@ def generate_weekly_plan(
         if len(plan) >= days:
             break
         plan.append((recipe, False))
+        logging.debug("Weekly plan add: %s, leftover=%s", recipe.title, False)
 
     if len(plan) == days:
         return plan
@@ -309,9 +326,11 @@ def generate_weekly_plan(
     while len(plan) < days:
         recipe = bulk_recipes[idx % len(bulk_recipes)]
         plan.append((recipe, False))
+        logging.debug("Weekly plan add: %s, leftover=%s", recipe.title, False)
         leftover_slots = min(keep_days - 1, days - len(plan))
         for _ in range(leftover_slots):
             plan.append((recipe, True))
+            logging.debug("Weekly plan add: %s, leftover=%s", recipe.title, True)
             if len(plan) >= days:
                 break
         idx += 1

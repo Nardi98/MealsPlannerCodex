@@ -386,9 +386,11 @@ def feedback_reject(
 
 @app.post("/meal-plans/generate")
 def generate_plan_endpoint(
-    payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
-) -> Dict[str, List[Dict[str, object]]]:
-    plan_titles = planner.generate_plan(
+    payload: schemas.MealPlanGenerate,
+    debug: bool = False,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    plan_result = planner.generate_plan(
         db,
         start=payload.start,
         days=payload.days,
@@ -402,7 +404,13 @@ def generate_plan_endpoint(
         recency_weight=payload.recency_weight,
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
+        debug=debug,
     )
+    if debug:
+        plan_titles, debug_details = plan_result
+    else:
+        plan_titles = plan_result
+        debug_details = []
     result: Dict[str, List[Dict[str, object]]] = {}
     for day, titles in plan_titles.items():
         items: List[Dict[str, object]] = []
@@ -415,6 +423,8 @@ def generate_plan_endpoint(
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
             items.append({"id": recipe.id, "title": title})
         result[day] = items
+    if debug:
+        return {"plan": result, "debug": debug_details}
     return result
 
 

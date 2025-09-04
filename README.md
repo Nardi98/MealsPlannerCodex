@@ -92,6 +92,14 @@ alembic upgrade head
 
 This applies schema changes such as the new `course` column on recipes.
 
+#### Debug logging
+
+The planner exposes detailed scoring information through Python's logging
+system. Enable debug output by setting the log level to ``DEBUG`` and pass the
+``debug=true`` flag when calling the ``/meal-plans/generate`` endpoint. The
+response will include a ``debug`` field listing the weighted components for each
+candidate recipe. Without the flag the endpoint returns just the plan.
+
 ### Frontend (`frontend/`)
 
 ```bash

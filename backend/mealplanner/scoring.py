@@ -116,6 +116,40 @@ def tag_penalty(
     return 0.0
 
 
+def score_recipe_details(
+    recipe: RecipeDict,
+    today: Optional[date] = None,
+    *,
+    seasonality_weight: float = 1.0,
+    recency_weight: float = 1.0,
+    tag_penalty_weight: float = 1.0,
+    bulk_bonus_weight: float = 1.0,
+    reduce_tags: Iterable[str] | None = None,
+) -> Dict[str, float]:
+    """Return a breakdown of scoring components for ``recipe``.
+
+    The returned mapping contains the individual weighted components and the
+    overall ``total`` score. This helper mirrors :func:`score_recipe` but keeps
+    the intermediate values for logging or debugging.
+    """
+
+    today = today or date.today()
+    base = float(recipe.get("score") or 0.0)
+    seasonality = seasonality_weight * seasonality_bonus(recipe, today)
+    recency = recency_weight * recency_penalty(recipe, today)
+    bulk = bulk_bonus_weight * bulk_bonus(recipe)
+    tag = tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
+    total = base + seasonality + recency + bulk + tag
+    return {
+        "base": base,
+        "seasonality": seasonality,
+        "recency": recency,
+        "bulk_bonus": bulk,
+        "tag_penalty": tag,
+        "total": total,
+    }
+
+
 def score_recipe(
     recipe: RecipeDict,
     today: Optional[date] = None,
@@ -147,6 +181,7 @@ __all__ = [
     "recency_penalty",
     "bulk_bonus",
     "tag_penalty",
+    "score_recipe_details",
     "score_recipe",
 ]
 
