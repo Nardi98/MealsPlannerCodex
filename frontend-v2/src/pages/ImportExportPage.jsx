@@ -1,5 +1,11 @@
 import React from 'react'
-import { Card, Button, Input, OverwriteConfirmModal } from '../components'
+import {
+  Card,
+  Button,
+  Input,
+  OverwriteConfirmModal,
+  MergeConflictModal,
+} from '../components'
 import { dataApi } from '../api/dataApi'
 import { recipesApi } from '../api/recipesApi'
 import { ingredientsApi } from '../api/ingredientsApi'
@@ -9,6 +15,9 @@ export default function ImportExportPage() {
   const [parsedData, setParsedData] = React.useState(null)
   const [mode, setMode] = React.useState('merge')
   const [showOverwriteModal, setShowOverwriteModal] = React.useState(false)
+  const [mergeConflicts, setMergeConflicts] = React.useState(null)
+  const [existingRecipes, setExistingRecipes] = React.useState([])
+  const [existingIngredients, setExistingIngredients] = React.useState([])
   const fileInputRef = React.useRef(null)
 
   const handleExport = async () => {
@@ -60,39 +69,30 @@ export default function ImportExportPage() {
     }
 
     try {
-      const [existingRecipes, existingIngredients] = await Promise.all([
+      const [existingRecs, existingIngs] = await Promise.all([
         recipesApi.fetchAll(),
         ingredientsApi.fetchAll(),
       ])
-      const recipeTitles = new Set(existingRecipes.map((r) => r.title.toLowerCase()))
+      const recipeTitles = new Set(existingRecs.map((r) => r.title.toLowerCase()))
       const ingredientNames = new Set(
-        existingIngredients.map((i) => i.name.toLowerCase())
+        existingIngs.map((i) => i.name.toLowerCase())
       )
 
-      const conflictingRecipes = (parsedData.recipes || [])
-        .map((r) => r.title)
-        .filter((t) => recipeTitles.has(t.toLowerCase()))
+      const conflicts = []
 
-      const importedIngredientNames = new Set()
       ;(parsedData.recipes || []).forEach((r) => {
-        (r.ingredients || []).forEach((ing) =>
-          importedIngredientNames.add(ing.name)
-        )
+        if (recipeTitles.has(r.title.toLowerCase()))
+          conflicts.push({ type: 'recipe', title: r.title })
+        ;(r.ingredients || []).forEach((ing) => {
+          if (ingredientNames.has(ing.name.toLowerCase()))
+            conflicts.push({ type: 'ingredient', title: ing.name })
+        })
       })
-      const conflictingIngredients = Array.from(importedIngredientNames).filter((n) =>
-        ingredientNames.has(n.toLowerCase())
-      )
 
-      if (conflictingRecipes.length || conflictingIngredients.length) {
-        alert(
-          `Title conflicts detected:\n` +
-            (conflictingRecipes.length
-              ? `Recipes: ${conflictingRecipes.join(', ')}\n`
-              : '') +
-            (conflictingIngredients.length
-              ? `Ingredients: ${conflictingIngredients.join(', ')}`
-              : '')
-        )
+      if (conflicts.length) {
+        setExistingRecipes(existingRecs)
+        setExistingIngredients(existingIngs)
+        setMergeConflicts(conflicts)
         return
       }
 
@@ -101,8 +101,52 @@ export default function ImportExportPage() {
     } catch (err) {
       console.error('Failed to import database', err)
       alert(`Failed to import database: ${err.message}`)
+  } finally {
+      clearFile()
+    }
+  }
+
+  const confirmMerge = async (selections) => {
+    try {
+      const payload = JSON.parse(JSON.stringify(parsedData || {}))
+      for (const sel of selections) {
+        const title = sel.title.toLowerCase()
+        if (sel.type === 'recipe') {
+          if (sel.action === 'keep-old') {
+            payload.recipes = (payload.recipes || []).filter(
+              (r) => r.title.toLowerCase() !== title
+            )
+          } else if (sel.action === 'use-new') {
+            const existing = existingRecipes.find(
+              (r) => r.title.toLowerCase() === title
+            )
+            if (existing) await recipesApi.delete(existing.id)
+          }
+        } else if (sel.type === 'ingredient') {
+          if (sel.action === 'keep-old') {
+            payload.recipes = (payload.recipes || []).map((r) => ({
+              ...r,
+              ingredients: (r.ingredients || []).filter(
+                (ing) => ing.name.toLowerCase() !== title
+              ),
+            }))
+          } else if (sel.action === 'use-new') {
+            const existing = existingIngredients.find(
+              (i) => i.name.toLowerCase() === title
+            )
+            if (existing) await ingredientsApi.remove(existing.id, true)
+          }
+        }
+      }
+
+      await dataApi.importDatabase(payload, 'merge')
+      alert('Import successful')
+    } catch (err) {
+      console.error('Failed to import database', err)
+      alert(`Failed to import database: ${err.message}`)
     } finally {
       clearFile()
+      setMergeConflicts(null)
     }
   }
 
@@ -160,6 +204,13 @@ export default function ImportExportPage() {
         <OverwriteConfirmModal
           onCancel={() => setShowOverwriteModal(false)}
           onConfirm={confirmOverwrite}
+        />
+      )}
+      {mergeConflicts && (
+        <MergeConflictModal
+          conflicts={mergeConflicts}
+          onCancel={() => setMergeConflicts(null)}
+          onConfirm={confirmMerge}
         />
       )}
     </>
