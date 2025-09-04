@@ -92,25 +92,9 @@ alembic upgrade head
 
 This applies schema changes such as the new `course` column on recipes.
 
-### Frontend (`frontend/`)
+### Frontend (`frontend-v2/`)
 
-```bash
-cd frontend
-npm install
-npm start
-```
-
-The React app communicates with the backend over HTTP. By default it
-expects the API to be reachable at `http://localhost:8000` and sends
-requests such as:
-
-```javascript
-fetch('http://localhost:8000/api/recipes')
-  .then(res => res.json())
-  .then(data => console.log(data))
-```
-
-An experimental Vite-based UI lives under `frontend-v2/`. Start it with
+The repository includes a Vite-based UI located in `frontend-v2/`. Start it with
 `docker-compose up frontend-v2` and access it at
 [`http://localhost:5174`](http://localhost:5174).
 
@@ -125,7 +109,7 @@ meal-planner/
 │   ├── app/                   # business logic and API routers
 │   ├── requirements.txt       # backend dependencies
 │   └── ...
-├── frontend/                  # React application
+├── frontend-v2/               # Vite-based UI
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
