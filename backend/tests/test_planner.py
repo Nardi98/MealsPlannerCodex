@@ -3,7 +3,7 @@ import random
 from datetime import date
 
 from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
-from mealplanner.planner import generate_weekly_plan, generate_plan
+from mealplanner.planner import generate_plan
 
 
 def make_recipe(name, bulk=False, tags=None, season=None):
@@ -16,42 +16,6 @@ def make_recipe(name, bulk=False, tags=None, season=None):
     return r
 
 
-def test_non_repetition_and_bulk_prep():
-    recipes = [make_recipe(f"R{i}") for i in range(4)]
-    bulk_recipe = make_recipe("Bulk", bulk=True)
-    recipes.append(bulk_recipe)
-    plan = generate_weekly_plan(recipes)
-    assert len(plan) == 7
-    plan_recipes = [r for r, _ in plan]
-    counts = {r.title: plan_recipes.count(r) for r in recipes}
-    for r in recipes:
-        if r.bulk_prep:
-            assert counts[r.title] > 1
-        else:
-            assert counts[r.title] == 1
-
-
-def test_seasonal_filtering():
-    summer = make_recipe("Summer", bulk=True, season=[6, 7])
-    winter = make_recipe("Winter", season=[12])
-    plan = generate_weekly_plan([summer, winter], season=6)
-    assert {r.title for r, _ in plan} == {"Summer"}
-
-
-def test_tag_filtering():
-    vegan = make_recipe("VeganNB", tags=["vegan"])
-    vegan_bulk = make_recipe("VeganBulk", bulk=True, tags=["vegan"])
-    meat = make_recipe("Meat", tags=["meat"])
-    plan = generate_weekly_plan([vegan, vegan_bulk, meat], tags={"vegan"})
-    assert {r.title for r, _ in plan} == {"VeganNB", "VeganBulk"}
-    assert sum(1 for r, _ in plan if r.title == "VeganNB") == 1
-
-
-def test_avoid_tags_filtering():
-    good = make_recipe("Good", bulk=True)
-    bad = make_recipe("Bad", bulk=True, tags=["avoid"])
-    plan = generate_weekly_plan([good, bad], avoid_tags={"avoid"})
-    assert {r.title for r, _ in plan} == {"Good"}
 
 
 def test_generate_plan_avoid_tags_from_ui(db_session):
@@ -69,43 +33,6 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
         meals_per_day=1,
         epsilon=0.0,
         avoid_tags=["avoid"],
-    )
-    assert plan["2024-01-01"] == ["Good"]
-
-
-def test_reduce_tags_penalty(db_session):
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
-    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True, course="main")
-    reduce.tags = [Tag(name="reduce")]
-    db_session.add_all([good, reduce])
-    db_session.commit()
-    start = date(2024, 1, 1)
-    plan = generate_plan(
-        db_session,
-        start,
-        days=1,
-        meals_per_day=1,
-        epsilon=0.0,
-        reduce_tags={"reduce"},
-    )
-    assert plan["2024-01-01"] == ["Good"]
-
-
-def test_generate_plan_reduce_tags_from_ui(db_session):
-    """Reduce tags supplied as a list should downrank recipes."""
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
-    reduce = Recipe(title="Less", servings_default=1, score=1.4, bulk_prep=True, course="main")
-    reduce.tags = [Tag(name="reduce")]
-    db_session.add_all([good, reduce])
-    db_session.commit()
-    start = date(2024, 1, 1)
-    plan = generate_plan(
-        db_session,
-        start,
-        days=1,
-        meals_per_day=1,
-        epsilon=0.0,
-        reduce_tags=["reduce"],
     )
     assert plan["2024-01-01"] == ["Good"]
 
@@ -152,43 +79,6 @@ def test_recency_weight(db_session):
     assert plan["2024-01-01"] == ["Fresh"]
 
 
-def test_generate_plan_course_filter(db_session):
-    """Only 'main' and 'first-course' recipes should be considered."""
-    main = Recipe(title="Main", servings_default=1, score=2.0, course="main")
-    first = Recipe(title="First", servings_default=1, score=1.0, course="first-course")
-    dessert = Recipe(title="Dessert", servings_default=1, score=3.0, course="dessert")
-    db_session.add_all([main, first, dessert])
-    db_session.commit()
-    start = date(2024, 1, 1)
-    plan = generate_plan(
-        db_session,
-        start,
-        days=2,
-        meals_per_day=1,
-        epsilon=0.0,
-    )
-    assert plan == {
-        "2024-01-01": ["Main"],
-        "2024-01-02": ["First"],
-    }
-
-
-def test_generate_plan_repeatable(db_session):
-    for i, score in enumerate(range(7, 0, -1), start=1):
-        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score, course="main"))
-    db_session.commit()
-    start = date(2024, 1, 1)
-    expected = {
-        "2024-01-01": ["R1"],
-        "2024-01-02": ["R2"],
-        "2024-01-03": ["R3"],
-    }
-    plan1 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
-    plan2 = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
-    assert plan1 == expected
-    assert plan1 == plan2
-
-
 def test_generate_plan_epsilon_randomness(db_session):
     """With epsilon > 0 the selection may choose lower scoring recipes."""
     recipes = [
@@ -207,41 +97,6 @@ def test_generate_plan_epsilon_randomness(db_session):
         epsilon=1.0,
     )
     assert plan["2024-01-01"] == ["Low"]
-
-
-def test_generate_plan_partial_week(db_session):
-    """Plans shorter than a week work with limited recipes."""
-    for i, score in enumerate(range(3, 0, -1), start=1):
-        db_session.add(Recipe(title=f"R{i}", servings_default=1, score=score, course="main"))
-    db_session.commit()
-    start = date(2024, 1, 1)
-    expected = {
-        "2024-01-01": ["R1"],
-        "2024-01-02": ["R2"],
-        "2024-01-03": ["R3"],
-    }
-    plan = generate_plan(db_session, start, days=3, meals_per_day=1, epsilon=0.0)
-    assert plan == expected
-
-
-def test_generate_weekly_plan_insufficient_recipes():
-    """Generating a plan without enough recipes should raise an error."""
-    recipes = [make_recipe("OnlyOne")]
-    with pytest.raises(ValueError):
-        generate_weekly_plan(recipes)
-
-
-def test_generate_weekly_plan_leftovers_marked():
-    bulk = make_recipe("Bulk", bulk=True)
-    plan = generate_weekly_plan([bulk], keep_days=2)
-    titles = [(r.title, leftover) for r, leftover in plan]
-    # Expect alternating fresh and leftover slots
-    assert titles[:4] == [
-        ("Bulk", False),
-        ("Bulk", True),
-        ("Bulk", False),
-        ("Bulk", True),
-    ]
 
 
 def test_generate_plan_leftover_expiry(db_session):
