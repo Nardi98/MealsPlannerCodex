@@ -4,12 +4,28 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 import random
+from collections import Counter
+from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
 from sqlalchemy.orm import Session
 
 from .models import Ingredient, Recipe, RecipeIngredient
 from .scoring import score_recipe
+from .config import DEFAULT_PLAN_SETTINGS
+
+
+@dataclass
+class Slot:
+    """Representation of a single meal planning slot."""
+
+    date: date
+    meal_number: int
+    recipe: Recipe | None = None
+    leftover: bool = False
+    selection_mode: str | None = None
+    candidate_rank: int | None = None
+    soft_hold_recipe_id: int | None = None
 
 
 def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
@@ -42,86 +58,154 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
-) -> Dict[str, List[str]]:
-    """Generate a meal plan mapping dates to recipe titles.
+    plan_settings: Dict[str, object] | None = None,
+    return_slots: bool = False,
+) -> Dict[str, List[str]] | List[Slot]:
+    """Generate a meal plan.
 
-    Recipes are filtered and scored using :func:`filter_recipes` and
-    :func:`scoring.score_recipe` before being passed to
-    :func:`generate_weekly_plan`.  The resulting recipes populate the requested
-    timeslots.  Weight parameters adjust the influence of individual scoring
-    components.
-
-    ``keep_days`` controls how many days leftover portions from a ``bulk_prep``
-    recipe may appear after the initial preparation. Set ``bulk_leftovers`` to
-    ``False`` to disable leftover reuse entirely. Parameters are forwarded to
-    :func:`filter_recipes` allowing tag-based inclusion, exclusion and
-    down-weighting of recipes.
+    When ``return_slots`` is ``True`` a list of :class:`Slot` objects is
+    returned instead of a mapping for callers that require detailed metadata.
     """
+
+    settings = {**DEFAULT_PLAN_SETTINGS, **(plan_settings or {})}
 
     recipes = (
         session.query(Recipe)
         .filter(Recipe.course.in_(["main", "first-course"]))
         .all()
     )
-    total_slots = days * meals_per_day
-    selections: List[tuple[Recipe, bool]] = []
-    week = 0
-    while len(selections) < total_slots:
-        week_start = start + timedelta(days=7 * week)
-        season = week_start.month
+
+    slots: List[Slot] = []
+    for day_offset in range(days):
+        current = start + timedelta(days=day_offset)
+        for meal_number in range(1, meals_per_day + 1):
+            slots.append(Slot(date=current, meal_number=meal_number))
+
+    leftovers: List[Dict[str, object]] = []
+
+    for idx, slot in enumerate(slots):
+        _apply_soft_holds(slots, idx, leftovers, settings)
+
         available = filter_recipes(
             recipes,
-            season=season,
+            season=slot.date.month,
             tags=tags,
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
         base_scores = [r.score or 0.0 for r in available]
-        scored = sorted(
-            available,
-            key=lambda r: score_recipe(
+        scored: List[tuple[Recipe, float]] = []
+        for r in available:
+            score = score_recipe(
                 _recipe_to_dict(r),
-                today=week_start,
+                today=slot.date,
                 seasonality_weight=seasonality_weight,
                 recency_weight=recency_weight,
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
                 base_scores=base_scores,
-            ),
-            reverse=True,
-        )
+            )
+            if slot.soft_hold_recipe_id and r.id != slot.soft_hold_recipe_id:
+                score -= settings.get("SOFT_HOLD_PENALTY", 0.0)
+            scored.append((r, score))
 
-        ordered: List[Recipe] = []
-        candidates = scored[:]
-        while candidates:
-            if epsilon and random.random() < epsilon:
-                idx = random.randrange(len(candidates))
-                ordered.append(candidates.pop(idx))
-            else:
-                ordered.append(candidates.pop(0))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        if epsilon and random.random() < epsilon:
+            choice_idx = random.randrange(len(scored))
+            slot.selection_mode = "explore"
+        else:
+            choice_idx = 0
+            slot.selection_mode = "exploit"
+        slot.candidate_rank = choice_idx
 
-        weekly = generate_weekly_plan(
-            ordered,
-            avoid_tags=avoid_tags,
-            reduce_tags=reduce_tags,
-            keep_days=keep_days if bulk_leftovers else 1,
-            days=min(7, total_slots - len(selections)),
-        )
-        selections.extend(weekly)
-        week += 1
+        chosen = scored[choice_idx][0]
+        slot.recipe = chosen
+        slot.leftover = slot.soft_hold_recipe_id == getattr(chosen, "id", None)
+
+        if slot.leftover:
+            for record in leftovers[:]:
+                if record["recipe_id"] == chosen.id:
+                    record["repeats_remaining"] = int(record["repeats_remaining"]) - 1
+                    record["next_date"] = slot.date + timedelta(
+                        days=settings.get("LEFTOVER_SPACING_GAP", 1)
+                    )
+                    if (
+                        record["repeats_remaining"] <= 0
+                        or slot.date >= record["window_end"]
+                    ):
+                        leftovers.remove(record)
+                    break
+        else:
+            if chosen.bulk_prep and bulk_leftovers:
+                repeats = settings.get("LEFTOVER_REPEAT_BY_RECIPE", {}).get(
+                    chosen.id, settings.get("LEFTOVER_REPEAT_DEFAULT", 0)
+                )
+                if repeats:
+                    leftovers.append(
+                        {
+                            "recipe_id": chosen.id,
+                            "source_date": slot.date,
+                            "repeats_remaining": int(repeats),
+                            "window_end": slot.date + timedelta(days=keep_days - 1),
+                            "next_date": slot.date
+                            + timedelta(days=settings.get("LEFTOVER_SPACING_GAP", 1)),
+                        }
+                    )
+
+    if return_slots:
+        return slots
 
     schedule: Dict[str, List[str]] = {}
-    for day_offset in range(days):
-        current = start + timedelta(days=day_offset)
-        key = current.isoformat()
-        schedule[key] = []
-        for meal_idx in range(meals_per_day):
-            idx = day_offset * meals_per_day + meal_idx
-            recipe, leftover = selections[idx]
-            title = recipe.title + (" (leftover)" if leftover else "")
-            schedule[key].append(title)
+    for slot in slots:
+        key = slot.date.isoformat()
+        title = slot.recipe.title + (" (leftover)" if slot.leftover else "")
+        schedule.setdefault(key, []).append(title)
     return schedule
+
+
+def _apply_soft_holds(
+    slots: List[Slot],
+    start_idx: int,
+    leftovers: List[Dict[str, object]],
+    settings: Dict[str, object],
+) -> None:
+    """Assign soft holds for leftovers to future slots."""
+
+    # Clear existing soft holds for future slots
+    for s in slots[start_idx:]:
+        s.soft_hold_recipe_id = None
+
+    spacing = int(settings.get("LEFTOVER_SPACING_GAP", 1))
+    per_day_limit = int(settings.get("MAX_LEFTOVERS_PER_DAY", 1))
+    daypart_pref = settings.get("LEFTOVER_DAYPART_PREF", {})
+    daypart_map = settings.get("MEAL_NUMBER_TO_DAYPART", {})
+
+    counts = Counter()
+    for s in slots[:start_idx]:
+        if s.soft_hold_recipe_id:
+            counts[s.date] += 1
+
+    for record in leftovers:
+        repeats = int(record["repeats_remaining"])
+        next_date = record.get("next_date", record["source_date"])
+        for s in slots[start_idx:]:
+            if repeats <= 0:
+                break
+            if s.date < next_date:
+                continue
+            if s.date > record["window_end"]:
+                break
+            if counts[s.date] >= per_day_limit:
+                continue
+            pref = daypart_pref.get(record["recipe_id"])
+            if pref and daypart_map.get(s.meal_number) != pref:
+                continue
+            s.soft_hold_recipe_id = int(record["recipe_id"])
+            counts[s.date] += 1
+            repeats -= 1
+            next_date = s.date + timedelta(days=spacing)
+        record["next_date"] = next_date
 
 
 def generate_side_dish(
@@ -138,14 +222,7 @@ def generate_side_dish(
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
 ) -> Recipe:
-    """Select a single side dish using the planner's scoring logic.
-
-    Recipes with ``course == 'side'`` are filtered and scored in the same
-    fashion as :func:`generate_plan`. The highest ranked recipe (respecting the
-    ``epsilon`` exploration parameter) is returned.  The function reuses
-    :func:`generate_weekly_plan` to honour leftover logic but only requests a
-    single day.
-    """
+    """Select a single side dish using the planner's scoring logic."""
 
     recipes = session.query(Recipe).filter(Recipe.course == "side").all()
     if avoid_titles:
@@ -159,14 +236,13 @@ def generate_side_dish(
         avoid_tags=avoid_tags,
         reduce_tags=reduce_tags,
     )
-
     if not available:
         raise ValueError("No side dishes available")
 
     base_scores = [r.score or 0.0 for r in available]
-    scored = sorted(
-        available,
-        key=lambda r: score_recipe(
+    scored: List[tuple[Recipe, float]] = []
+    for r in available:
+        score = score_recipe(
             _recipe_to_dict(r),
             today=today,
             seasonality_weight=seasonality_weight,
@@ -175,27 +251,15 @@ def generate_side_dish(
             bulk_bonus_weight=bulk_bonus_weight,
             reduce_tags=reduce_tags or [],
             base_scores=base_scores,
-        ),
-        reverse=True,
-    )
+        )
+        scored.append((r, score))
 
-    ordered: List[Recipe] = []
-    candidates = scored[:]
-    while candidates:
-        if epsilon and random.random() < epsilon:
-            idx = random.randrange(len(candidates))
-            ordered.append(candidates.pop(idx))
-        else:
-            ordered.append(candidates.pop(0))
-
-    weekly = generate_weekly_plan(
-        ordered,
-        avoid_tags=avoid_tags,
-        reduce_tags=reduce_tags,
-        keep_days=keep_days if bulk_leftovers else 1,
-        days=1,
-    )
-    return weekly[0][0]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    if epsilon and random.random() < epsilon:
+        idx = random.randrange(len(scored))
+    else:
+        idx = 0
+    return scored[idx][0]
     
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
@@ -254,79 +318,10 @@ def filter_recipes(
     return primary + reduced
 
 
-def generate_weekly_plan(
-    recipes: Sequence[Recipe],
-    season: int | None = None,
-    tags: Iterable[str] | None = None,
-    avoid_tags: Iterable[str] | None = None,
-    reduce_tags: Iterable[str] | None = None,
-    keep_days: int = 7,
-    days: int = 7,
-) -> List[tuple[Recipe, bool]]:
-    """Generate a list of recipes for ``days`` days.
-
-    Recipes are filtered by ``season`` and tag parameters before planning. Non
-    bulk prep recipes appear at most once in the returned list while recipes
-    flagged with ``bulk_prep`` may be repeated. When ``keep_days`` is greater than
-    one, leftover slots for bulk recipes are inserted immediately after the
-    fresh preparation up to ``keep_days - 1`` days.
-
-    Args:
-        recipes: Candidate recipes.
-        season: Optional month number to filter by seasonal ingredients.
-        tags: Optional iterable of required tag names.
-        avoid_tags: Tags that must not appear in recipes.
-        reduce_tags: Tags that are de-prioritised.
-        keep_days: Number of days leftovers may persist.
-        days: Number of days to plan for. Defaults to a full week (``7``).
-
-    Raises:
-        ValueError: If there are insufficient recipes (including repeats of
-            ``bulk_prep`` recipes) to create a plan for ``days`` days.
-    """
-
-    available = filter_recipes(
-        recipes,
-        season=season,
-        tags=tags,
-        avoid_tags=avoid_tags,
-        reduce_tags=reduce_tags,
-    )
-
-    non_bulk = [r for r in available if not r.bulk_prep]
-    bulk_recipes = [r for r in available if r.bulk_prep]
-
-    plan: List[tuple[Recipe, bool]] = []
-
-    for recipe in non_bulk:
-        if len(plan) >= days:
-            break
-        plan.append((recipe, False))
-
-    if len(plan) == days:
-        return plan
-
-    if not bulk_recipes:
-        raise ValueError("Not enough recipes to generate a full weekly plan")
-
-    idx = 0
-    while len(plan) < days:
-        recipe = bulk_recipes[idx % len(bulk_recipes)]
-        plan.append((recipe, False))
-        leftover_slots = min(keep_days - 1, days - len(plan))
-        for _ in range(leftover_slots):
-            plan.append((recipe, True))
-            if len(plan) >= days:
-                break
-        idx += 1
-
-    return plan
-
-
 __all__ = [
+    "Slot",
     "generate_plan",
     "generate_side_dish",
     "filter_recipes",
-    "generate_weekly_plan",
 ]
 
