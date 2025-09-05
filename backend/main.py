@@ -403,6 +403,23 @@ def generate_plan_endpoint(
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
     )
+    crud.save_plan(
+        plan_titles,
+        bulk_leftovers=payload.bulk_leftovers,
+        keep_days=payload.keep_days,
+        leftover_repeat_default=payload.leftover_repeat_default,
+        leftover_repeat_by_recipe=payload.leftover_repeat_by_recipe,
+        leftover_spacing_gap=payload.leftover_spacing_gap,
+        max_leftovers_per_day=payload.max_leftovers_per_day,
+        max_leftovers_per_week=payload.max_leftovers_per_week,
+        leftover_accept_weight=payload.leftover_accept_weight,
+        leftover_daypart_pref=payload.leftover_daypart_pref,
+        leftover_daypart_weight=payload.leftover_daypart_weight,
+        protect_explore_slots=payload.protect_explore_slots,
+        soft_hold_penalty=payload.soft_hold_penalty,
+        explore_protection_cost=payload.explore_protection_cost,
+        meal_number_to_daypart=payload.meal_number_to_daypart,
+    )
     result: Dict[str, List[Dict[str, object]]] = {}
     for day, titles in plan_titles.items():
         items: List[Dict[str, object]] = []
