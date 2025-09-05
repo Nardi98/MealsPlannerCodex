@@ -78,13 +78,13 @@ def recency_penalty(recipe: RecipeDict, today: Optional[date] = None) -> float:
     """Return a negative penalty based on how recently the recipe was eaten.
 
     The penalty is computed as ``-10 / days`` where ``days`` is the number of
-    days since the recipe was last consumed.  A minimum of one day is enforced
+    days since the recipe was last planned.  A minimum of one day is enforced
     to avoid division by zero and to ensure future dates still incur the
     maximum penalty of ``-10``.
     """
 
     today = today or date.today()
-    last: Optional[date] = recipe.get("date_last_consumed")  # type: ignore[assignment]
+    last: Optional[date] = recipe.get("date_last_planned")  # type: ignore[assignment]
     if not last:
         return 0.0
     days = max((today - last).days, 1)

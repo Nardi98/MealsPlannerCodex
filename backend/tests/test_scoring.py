@@ -13,7 +13,7 @@ def test_all_in_season_old_recipe():
             {"season_months": [6]},
             {"season_months": [5, 6]},
         ],
-        "date_last_consumed": date(2024, 4, 1),
+        "date_last_planned": date(2024, 4, 1),
         "bulk_prep": False,
     }
     expected = 3 * math.tanh(1.0) + 1 + (-10 / 61)
@@ -28,7 +28,7 @@ def test_recent_offseason_bulk_recipe():
             {"season_months": [1]},
             {"season_months": []},
         ],
-        "date_last_consumed": date(2024, 5, 30),
+        "date_last_planned": date(2024, 5, 30),
         "bulk_prep": True,
     }
     expected = 3 * math.tanh(0.5) + (-10 / 2) + 0.2
@@ -45,7 +45,7 @@ def test_extreme_base_score():
     today = date(2024, 1, 1)
     recipe = {
         "score": 1_000_000,
-        "date_last_consumed": date(2023, 12, 31),
+        "date_last_planned": date(2023, 12, 31),
         "ingredients": [],
     }
     expected = 3 * math.tanh(1_000_000) + (-10 / 1)
@@ -57,7 +57,7 @@ def test_weight_parameters():
     recipe = {
         "score": 1.0,
         "ingredients": [{"season_months": [6]}],
-        "date_last_consumed": date(2024, 5, 30),
+        "date_last_planned": date(2024, 5, 30),
         "bulk_prep": True,
         "tags": ["spicy"],
     }

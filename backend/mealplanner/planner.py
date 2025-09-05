@@ -11,7 +11,7 @@ from typing import Dict, Iterable, List, Sequence, Set
 from sqlalchemy import func, false
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe, RecipeIngredient, Meal
+from .models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -29,13 +29,13 @@ class Slot:
     soft_hold_recipe_id: int | None = None
 
 
-def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
+def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
     """Return a mapping representation of ``recipe`` for scoring functions."""
 
     return {
         "score": recipe.score,
         "bulk_prep": recipe.bulk_prep,
-        "date_last_consumed": recipe.date_last_consumed,
+        "date_last_planned": last_planned,
         "ingredients": [
             {"season_months": ri.ingredient.season_months or []}
             for ri in getattr(recipe, "recipe_ingredients", [])
@@ -112,10 +112,12 @@ def generate_plan(
         scored: List[tuple[Recipe, float]] = []
         for r in available:
             score = score_recipe(
-                _recipe_to_dict(r),
+                _recipe_to_dict(r, last_planned.get(r.id)),
                 today=slot.date,
                 seasonality_weight=seasonality_weight,
-                recency_weight=recency_weight,
+                recency_weight=0.0
+                if slot.soft_hold_recipe_id == r.id
+                else recency_weight,
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
@@ -255,11 +257,17 @@ def generate_side_dish(
     if not available:
         raise ValueError("No side dishes available")
 
+    last_planned: Dict[int, date] = dict(
+        session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date)).group_by(
+            MealSide.side_recipe_id
+        )
+    )
+
     base_scores = [r.score or 0.0 for r in available]
     scored: List[tuple[Recipe, float]] = []
     for r in available:
         score = score_recipe(
-            _recipe_to_dict(r),
+            _recipe_to_dict(r, last_planned.get(r.id)),
             today=today,
             seasonality_weight=seasonality_weight,
             recency_weight=recency_weight,
