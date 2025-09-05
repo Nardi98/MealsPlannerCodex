@@ -119,6 +119,18 @@ class MealPlanGenerate(BaseModel):
     bulk_bonus_weight: float = 1.0
     bulk_leftovers: bool = True
     keep_days: int = 7
+    leftover_repeat_default: int | None = None
+    leftover_repeat_by_recipe: Dict[int, int] | None = None
+    leftover_spacing_gap: int | None = None
+    max_leftovers_per_day: int | None = None
+    max_leftovers_per_week: int | None = None
+    leftover_accept_weight: float | None = None
+    leftover_daypart_pref: Dict[str, float] | None = None
+    leftover_daypart_weight: float | None = None
+    protect_explore_slots: bool | None = None
+    soft_hold_penalty: float | None = None
+    explore_protection_cost: float | None = None
+    meal_number_to_daypart: Dict[int, str] | None = None
 
 
 class SideDishGenerate(BaseModel):
