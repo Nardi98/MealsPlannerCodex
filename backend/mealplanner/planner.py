@@ -8,9 +8,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
+from sqlalchemy import func, false
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe, RecipeIngredient
+from .models import Ingredient, Recipe, RecipeIngredient, Meal
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -58,6 +59,7 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
+    min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
 ) -> Dict[str, List[str]] | List[Slot]:
@@ -73,6 +75,12 @@ def generate_plan(
         session.query(Recipe)
         .filter(Recipe.course.in_(["main", "first-course"]))
         .all()
+    )
+
+    last_planned: Dict[int, date] = dict(
+        session.query(Meal.recipe_id, func.max(Meal.plan_date))
+        .filter(Meal.leftover == false())
+        .group_by(Meal.recipe_id)
     )
 
     slots: List[Slot] = []
@@ -93,6 +101,13 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
+        available = [
+            r
+            for r in available
+            if slot.soft_hold_recipe_id == r.id
+            or slot.date - last_planned.get(r.id, date.min)
+            >= timedelta(days=min_recipe_gap)
+        ]
         base_scores = [r.score or 0.0 for r in available]
         scored: List[tuple[Recipe, float]] = []
         for r in available:
@@ -137,6 +152,7 @@ def generate_plan(
                         leftovers.remove(record)
                     break
         else:
+            last_planned[chosen.id] = slot.date
             if chosen.bulk_prep and bulk_leftovers:
                 repeats = settings.get("LEFTOVER_REPEAT_BY_RECIPE", {}).get(
                     chosen.id, settings.get("LEFTOVER_REPEAT_DEFAULT", 0)

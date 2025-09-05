@@ -2,7 +2,7 @@ import pytest
 import random
 from datetime import date
 
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
+from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
 from mealplanner.planner import generate_plan
 
 
@@ -111,6 +111,7 @@ def test_generate_plan_leftover_expiry(db_session):
         meals_per_day=1,
         epsilon=0.0,
         keep_days=2,
+        min_recipe_gap=0,
     )
     expected = {
         "2024-01-01": ["Bulk"],
@@ -134,6 +135,7 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
         epsilon=0.0,
         keep_days=2,
         bulk_leftovers=False,
+        min_recipe_gap=0,
     )
     assert plan == {
         "2024-01-01": ["Bulk"],
@@ -149,3 +151,28 @@ def test_generate_plan_respects_meals_per_day(db_session):
     start = date(2024, 1, 1)
     plan = generate_plan(db_session, start, days=1, meals_per_day=2, epsilon=0.0)
     assert len(plan["2024-01-01"]) == 2
+
+
+def test_generate_plan_gap_filter(db_session):
+    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
+    r2 = Recipe(title="R2", servings_default=1, score=1.0, course="main")
+    db_session.add_all([r1, r2])
+    db_session.commit()
+
+    hist_date = date(2024, 1, 1)
+    plan = MealPlan(plan_date=hist_date)
+    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    plan.meals.append(meal)
+    db_session.add(plan)
+    db_session.commit()
+
+    start = date(2024, 1, 2)
+    schedule = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        min_recipe_gap=5,
+    )
+    assert schedule["2024-01-02"] == ["R2"]
