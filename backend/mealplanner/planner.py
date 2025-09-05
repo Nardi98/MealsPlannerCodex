@@ -153,6 +153,99 @@ def generate_plan(
                         }
                     )
 
+    # --- Post-processing: ensure leftover repeats are scheduled ---
+    recipe_map = {r.id: r for r in recipes}
+
+    day_counts: Counter = Counter()
+    week_counts: Counter = Counter()
+    recipe_counts: Counter = Counter()
+    for s in slots:
+        if s.recipe:
+            recipe_counts[s.recipe.id] += 1
+        if s.leftover:
+            day_counts[s.date] += 1
+            week_counts[s.date - timedelta(days=s.date.weekday())] += 1
+
+    leftovers.sort(key=lambda r: r["window_end"])
+
+    def _day_cap_cost(d: date) -> float:
+        cost = 0.0
+        if day_counts[d] + 1 > int(settings.get("MAX_LEFTOVERS_PER_DAY", 1)):
+            cost += 1.0
+        week = d - timedelta(days=d.weekday())
+        if week_counts[week] + 1 > int(settings.get("MAX_LEFTOVERS_PER_WEEK", 7)):
+            cost += 1.0
+        return cost
+
+    for record in leftovers:
+        recipe_id = int(record["recipe_id"])
+        repeats = int(record["repeats_remaining"])
+        while repeats > 0:
+            candidates = [
+                s
+                for s in slots
+                if record["source_date"] < s.date <= record["window_end"] and not s.leftover
+            ]
+            if not candidates:
+                break
+
+            def _cost(protect: bool) -> List[tuple[float, Slot]]:
+                items: List[tuple[float, Slot]] = []
+                for s in candidates:
+                    cost = 0.0
+                    if s.selection_mode == "exploit":
+                        cost += 1.0 / ((s.candidate_rank or 0) + 1)
+                    if (
+                        protect
+                        and settings.get("PROTECT_EXPLORE_SLOTS")
+                        and s.selection_mode == "explore"
+                    ):
+                        cost += float(settings.get("EXPLORE_PROTECTION_COST", 1.0))
+                    cost += 1.0 / max(1, recipe_counts[s.recipe.id])
+                    for other in slots:
+                        if (
+                            other is not s
+                            and other.recipe
+                            and other.recipe.id == recipe_id
+                            and abs((other.date - s.date).days) <= 1
+                        ):
+                            cost += 1.0
+                            break
+                    if s.soft_hold_recipe_id == recipe_id:
+                        cost -= float(settings.get("LEFTOVER_ACCEPT_WEIGHT", 1.0))
+                    cost += _day_cap_cost(s.date)
+                    pref = settings.get("LEFTOVER_DAYPART_PREF", {}).get(recipe_id)
+                    if pref:
+                        daypart = settings.get("MEAL_NUMBER_TO_DAYPART", {}).get(
+                            s.meal_number
+                        )
+                        if daypart != pref:
+                            cost += float(
+                                settings.get("LEFTOVER_DAYPART_WEIGHT", 1.0)
+                            )
+                    items.append((cost, s))
+                return items
+
+            costs = _cost(protect=True)
+            if (
+                settings.get("PROTECT_EXPLORE_SLOTS")
+                and all(s.selection_mode == "explore" for s in candidates)
+            ):
+                costs = _cost(protect=False)
+            if not costs:
+                break
+            _, chosen_slot = min(costs, key=lambda x: x[0])
+
+            old_recipe_id = chosen_slot.recipe.id if chosen_slot.recipe else None
+            if old_recipe_id is not None:
+                recipe_counts[old_recipe_id] -= 1
+            chosen_slot.recipe = recipe_map.get(recipe_id)
+            chosen_slot.leftover = True
+            recipe_counts[recipe_id] += 1
+            day_counts[chosen_slot.date] += 1
+            week_counts[chosen_slot.date - timedelta(days=chosen_slot.date.weekday())] += 1
+            repeats -= 1
+
     if return_slots:
         return slots
 
