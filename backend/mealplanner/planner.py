@@ -101,13 +101,17 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
-        available = [
+        filtered = [
             r
             for r in available
             if slot.soft_hold_recipe_id == r.id
             or slot.date - last_planned.get(r.id, date.min)
             >= timedelta(days=min_recipe_gap)
         ]
+        if filtered:
+            available = filtered
+        if not available:
+            raise ValueError("No recipes available")
         base_scores = [r.score or 0.0 for r in available]
         scored: List[tuple[Recipe, float]] = []
         for r in available:

@@ -218,3 +218,27 @@ def test_generate_plan_gap_filter(db_session):
         min_recipe_gap=5,
     )
     assert schedule["2024-01-02"] == ["R2"]
+
+
+def test_generate_plan_gap_filter_fallback(db_session):
+    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
+    db_session.add(r1)
+    db_session.commit()
+
+    hist_date = date(2024, 1, 1)
+    plan = MealPlan(plan_date=hist_date)
+    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    plan.meals.append(meal)
+    db_session.add(plan)
+    db_session.commit()
+
+    start = date(2024, 1, 2)
+    schedule = generate_plan(
+        db_session,
+        start,
+        days=1,
+        meals_per_day=1,
+        epsilon=0.0,
+        min_recipe_gap=5,
+    )
+    assert schedule["2024-01-02"] == ["R1"]
