@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from typing import Dict, Iterable, Optional
+from typing import Callable, Dict, Iterable, Optional
 
 RecipeDict = Dict[str, object]
 
@@ -135,6 +135,7 @@ def score_recipe(
     squash_mode: str = "zscore",
     B: float = 3.0,
     k: float = 1.0,
+    recency_penalty_fn: Callable[[RecipeDict, Optional[date]], float] = recency_penalty,
 ) -> float:
     """Compute the overall score for ``recipe``.
 
@@ -197,7 +198,7 @@ def score_recipe(
 
     total = base
     total += seasonality_weight * seasonality_bonus(recipe, today)
-    total += recency_weight * recency_penalty(recipe, today)
+    total += recency_weight * recency_penalty_fn(recipe, today)
     total += bulk_bonus_weight * bulk_bonus(recipe)
     total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
     return total
