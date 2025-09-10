@@ -135,7 +135,7 @@ def score_recipe(
     squash_mode: str = "zscore",
     B: float = 3.0,
     k: float = 1.0,
-    recency_penalty_fn: Callable[[RecipeDict, Optional[date]], float] = recency_penalty,
+    recency_penalty_fn: Callable[[RecipeDict, Optional[date]], float] | None = None,
 ) -> float:
     """Compute the overall score for ``recipe``.
 
@@ -167,6 +167,7 @@ def score_recipe(
     """
 
     today = today or date.today()
+    recency_penalty_fn = recency_penalty_fn or recency_penalty
 
     # Normalise the raw base score using per-user statistics then squash into a
     # bounded contribution so that extreme values cannot dominate the final
