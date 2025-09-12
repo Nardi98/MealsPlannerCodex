@@ -1,5 +1,10 @@
 import React from 'react'
-import { BookmarkIcon, TagIcon } from '@heroicons/react/24/outline'
+import {
+  BookmarkIcon,
+  TagIcon,
+  FunnelIcon,
+  ChevronDownIcon,
+} from '@heroicons/react/24/outline'
 import { motion as Motion } from 'framer-motion'
 import { Card } from '../components/Card'
 import { Input } from '../components/Input'
@@ -7,6 +12,8 @@ import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
 import { NewRecipeModal } from '../components'
 import { recipesApi } from '../api/recipesApi'
+import { tagsApi } from '../api/tagsApi'
+import { ingredientsApi } from '../api/ingredientsApi'
 
 export default function RecipesPage() {
   const [recipes, setRecipes] = React.useState([])
@@ -14,14 +21,27 @@ export default function RecipesPage() {
   const [showModal, setShowModal] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [search, setSearch] = React.useState('')
+  const [showFilters, setShowFilters] = React.useState(false)
+  const [tags, setTags] = React.useState([])
+  const [ingredients, setIngredients] = React.useState([])
+  const [selectedTags, setSelectedTags] = React.useState([])
+  const [selectedIngredients, setSelectedIngredients] = React.useState([])
+  const [tagsOpen, setTagsOpen] = React.useState(false)
+  const [ingredientsOpen, setIngredientsOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
       try {
-        const data = await recipesApi.fetchAll()
-        setRecipes(data)
+        const [recipesRes, tagsRes, ingRes] = await Promise.all([
+          recipesApi.fetchAll(),
+          tagsApi.fetchAll(),
+          ingredientsApi.fetchAll(),
+        ])
+        setRecipes(recipesRes)
+        setTags(tagsRes.map((t) => t.name))
+        setIngredients(ingRes.map((i) => i.name))
       } catch (err) {
-        console.error('Failed to load recipes', err)
+        console.error('Failed to load recipes, tags or ingredients', err)
       }
     }
     load()
@@ -31,11 +51,30 @@ export default function RecipesPage() {
 
   const filteredRecipes = React.useMemo(
     () =>
-      recipes.filter((r) =>
-        r.title?.toLowerCase().includes(search.toLowerCase())
-      ),
-    [recipes, search]
+      recipes.filter((r) => {
+        const matchesSearch = r.title
+          ?.toLowerCase()
+          .includes(search.toLowerCase())
+        const matchesTags = selectedTags.every((t) => r.tags?.includes(t))
+        const matchesIngredients = selectedIngredients.every((i) =>
+          r.ingredients?.some((ing) => (ing.name || ing) === i)
+        )
+        return matchesSearch && matchesTags && matchesIngredients
+      }),
+    [recipes, search, selectedTags, selectedIngredients]
   )
+
+  const toggleTag = (tag) =>
+    setSelectedTags((t) =>
+      t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]
+    )
+
+  const toggleIngredient = (ing) =>
+    setSelectedIngredients((ings) =>
+      ings.includes(ing)
+        ? ings.filter((x) => x !== ing)
+        : [...ings, ing]
+    )
 
   const handleSave = async (recipe) => {
     try {
@@ -70,6 +109,77 @@ export default function RecipesPage() {
           <BookmarkIcon className="h-5 w-5" /> Recipes
         </div>
         <div className="flex items-center gap-2">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              aria-label="Filter"
+              onClick={() => setShowFilters((s) => !s)}
+              Icon={FunnelIcon}
+            />
+            {showFilters && (
+              <div
+                className="absolute z-10 mt-2 w-56 rounded-2xl border bg-white p-2"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <div>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-sm"
+                    onClick={() => setTagsOpen((o) => !o)}
+                  >
+                    Tags
+                    <ChevronDownIcon
+                      className={`h-4 w-4 transition-transform ${
+                        tagsOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {tagsOpen && (
+                    <div className="mt-1 max-h-40 overflow-y-auto">
+                      {tags.map((t) => (
+                        <label key={t} className="flex items-center gap-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedTags.includes(t)}
+                            onChange={() => toggleTag(t)}
+                          />
+                          {t}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-sm"
+                    onClick={() => setIngredientsOpen((o) => !o)}
+                  >
+                    Ingredients
+                    <ChevronDownIcon
+                      className={`h-4 w-4 transition-transform ${
+                        ingredientsOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {ingredientsOpen && (
+                    <div className="mt-1 max-h-40 overflow-y-auto">
+                      {ingredients.map((i) => (
+                        <label key={i} className="flex items-center gap-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedIngredients.includes(i)}
+                            onChange={() => toggleIngredient(i)}
+                          />
+                          {i}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           <Input
             placeholder="Search recipes…"
             className="w-56"
