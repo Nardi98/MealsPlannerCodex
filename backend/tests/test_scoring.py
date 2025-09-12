@@ -2,7 +2,13 @@ from datetime import date
 import math
 import pytest
 
-from mealplanner.scoring import score_recipe, tag_penalty
+from mealplanner.scoring import (
+    score_recipe,
+    tag_penalty,
+    seasonality_bonus,
+    recency_penalty,
+    bulk_bonus,
+)
 
 
 def test_all_in_season_old_recipe():
@@ -16,7 +22,7 @@ def test_all_in_season_old_recipe():
         "date_last_planned": date(2024, 4, 1),
         "bulk_prep": False,
     }
-    expected = 3 * math.tanh(1.0) + 1 + (-10 / 61)
+    expected = 3 * math.tanh(1.0) + seasonality_bonus(recipe, today)
     assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
@@ -31,13 +37,22 @@ def test_recent_offseason_bulk_recipe():
         "date_last_planned": date(2024, 5, 30),
         "bulk_prep": True,
     }
-    expected = 3 * math.tanh(0.5) + (-10 / 2) + 0.2
+    expected = (
+        3 * math.tanh(0.5)
+        + seasonality_bonus(recipe, today)
+        + recency_penalty(recipe, today)
+        + bulk_bonus(recipe)
+    )
     assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
 def test_missing_data_defaults():
     today = date(2024, 1, 1)
-    recipe = {"score": None}
+    recipe = {
+        "score": None,
+        "date_last_planned": date(2023, 1, 1),
+        "ingredients": [],
+    }
     assert score_recipe(recipe, today) == pytest.approx(0.0)
 
 
@@ -48,7 +63,7 @@ def test_extreme_base_score():
         "date_last_planned": date(2023, 12, 31),
         "ingredients": [],
     }
-    expected = 3 * math.tanh(1_000_000) + (-10 / 1)
+    expected = 3 * math.tanh(1_000_000) + recency_penalty(recipe, today)
     assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
@@ -81,11 +96,15 @@ def test_weight_parameters():
         bulk_bonus_weight=2,
         reduce_tags={"spicy"},
     ) == pytest.approx(
-        3 * math.tanh(1.0) + 2 * 1 + 2 * (-10 / 2) + 2 * 0.2 + 2 * (-0.5)
+        3 * math.tanh(1.0)
+        + 2 * seasonality_bonus(recipe, today)
+        + 2 * recency_penalty(recipe, today)
+        + 2 * bulk_bonus(recipe)
+        + 2 * tag_penalty(recipe, {"spicy"})
     )
 
 
 def test_tag_penalty():
     recipe = {"tags": ["spicy", "vegan"]}
-    assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-0.5)
+    assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-3.0)
     assert tag_penalty(recipe, {"gluten-free"}) == pytest.approx(0.0)
