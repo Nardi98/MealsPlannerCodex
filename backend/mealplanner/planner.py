@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
 from sqlalchemy import func, false
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
 from .scoring import score_recipe
@@ -30,16 +30,20 @@ class Slot:
 
 
 def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
-    """Return a mapping representation of ``recipe`` for scoring functions."""
+    if last_planned is None:
+        last_planned = date.today() - timedelta(days=10_000)
+
+    # Your ORM exposes Recipe.ingredients -> List[RecipeIngredient]
+    ingredients = [
+        {"season_months": (ri.ingredient.season_months or [])}
+        for ri in getattr(recipe, "ingredients", [])  # <- fixed
+    ]
 
     return {
         "score": recipe.score,
         "bulk_prep": recipe.bulk_prep,
         "date_last_planned": last_planned,
-        "ingredients": [
-            {"season_months": ri.ingredient.season_months or []}
-            for ri in getattr(recipe, "recipe_ingredients", [])
-        ],
+        "ingredients": ingredients,
         "tags": [t.name for t in recipe.tags],
     }
 
@@ -73,6 +77,10 @@ def generate_plan(
 
     recipes = (
         session.query(Recipe)
+        .options(
+            joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+            joinedload(Recipe.tags),
+        )
         .filter(Recipe.course.in_(["main", "first-course"]))
         .all()
     )
@@ -101,23 +109,16 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
-        filtered = [
-            r
-            for r in available
-            if slot.soft_hold_recipe_id == r.id
-            or slot.date - last_planned.get(r.id, date.min)
-            >= timedelta(days=min_recipe_gap)
-        ]
-        if filtered:
-            available = filtered
         if not available:
             raise ValueError("No recipes available")
         base_scores = [r.score or 0.0 for r in available]
         scored: List[tuple[Recipe, float]] = []
+        print(f"planning date: {slot.date} (meal {slot.meal_number}) \n\n ")
         for r in available:
+            print("\033[31m  recipe: \033[0m", r.title )
             score = score_recipe(
                 _recipe_to_dict(r, last_planned.get(r.id)),
-                today=slot.date,
+                planning_date=slot.date,
                 seasonality_weight=seasonality_weight,
                 recency_weight=0.0
                 if slot.soft_hold_recipe_id == r.id
@@ -127,6 +128,7 @@ def generate_plan(
                 reduce_tags=reduce_tags or [],
                 base_scores=base_scores,
             )
+            print( "score: ", score)
             if slot.soft_hold_recipe_id and r.id != slot.soft_hold_recipe_id:
                 score -= settings.get("SOFT_HOLD_PENALTY", 0.0)
             scored.append((r, score))
@@ -272,7 +274,7 @@ def generate_side_dish(
     for r in available:
         score = score_recipe(
             _recipe_to_dict(r, last_planned.get(r.id)),
-            today=today,
+            planning_date=today,
             seasonality_weight=seasonality_weight,
             recency_weight=recency_weight,
             tag_penalty_weight=tag_penalty_weight,
