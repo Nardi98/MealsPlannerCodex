@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 import crud
-from mealplanner.models import Tag
+from mealplanner.models import Tag, MealPlan, Meal, MealSide
 
 
 def override_get_db(session):
@@ -32,24 +32,44 @@ def test_generate_side_dish_endpoint_returns_side(db_session):
 
 def test_generate_side_dish_respects_tag_weight(db_session):
     today = date.today()
-    crud.create_recipe(
+    good = crud.create_recipe(
         db_session,
         title="Good",
         servings_default=1,
         course="side",
         score=1.0,
         bulk_prep=True,
-        date_last_consumed=today - timedelta(days=60),
     )
-    crud.create_recipe(
+    recent = crud.create_recipe(
         db_session,
         title="Recent",
         servings_default=1,
         course="side",
         score=2.0,
         bulk_prep=True,
-        date_last_consumed=today - timedelta(days=1),
     )
+    db_session.commit()
+    db_session.add_all(
+        [
+            MealPlan(plan_date=today - timedelta(days=60)),
+            Meal(plan_date=today - timedelta(days=60), meal_number=1),
+            MealSide(
+                plan_date=today - timedelta(days=60),
+                meal_number=1,
+                position=1,
+                side_recipe_id=good.id,
+            ),
+            MealPlan(plan_date=today - timedelta(days=1)),
+            Meal(plan_date=today - timedelta(days=1), meal_number=1),
+            MealSide(
+                plan_date=today - timedelta(days=1),
+                meal_number=1,
+                position=1,
+                side_recipe_id=recent.id,
+            ),
+        ]
+    )
+    db_session.commit()
     crud.create_recipe(
         db_session,
         title="Avoid",

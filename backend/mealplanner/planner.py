@@ -8,9 +8,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func, false
+from sqlalchemy.orm import Session, joinedload
 
-from .models import Ingredient, Recipe, RecipeIngredient
+from .models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -28,17 +29,21 @@ class Slot:
     soft_hold_recipe_id: int | None = None
 
 
-def _recipe_to_dict(recipe: Recipe) -> Dict[str, object]:
-    """Return a mapping representation of ``recipe`` for scoring functions."""
+def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
+    if last_planned is None:
+        last_planned = date.today() - timedelta(days=10_000)
+
+    # Your ORM exposes Recipe.ingredients -> List[RecipeIngredient]
+    ingredients = [
+        {"season_months": (ri.ingredient.season_months or [])}
+        for ri in getattr(recipe, "ingredients", [])  # <- fixed
+    ]
 
     return {
         "score": recipe.score,
         "bulk_prep": recipe.bulk_prep,
-        "date_last_consumed": recipe.date_last_consumed,
-        "ingredients": [
-            {"season_months": ri.ingredient.season_months or []}
-            for ri in getattr(recipe, "recipe_ingredients", [])
-        ],
+        "date_last_planned": last_planned,
+        "ingredients": ingredients,
         "tags": [t.name for t in recipe.tags],
     }
 
@@ -58,6 +63,7 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
+    min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
 ) -> Dict[str, List[str]] | List[Slot]:
@@ -71,8 +77,18 @@ def generate_plan(
 
     recipes = (
         session.query(Recipe)
+        .options(
+            joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+            joinedload(Recipe.tags),
+        )
         .filter(Recipe.course.in_(["main", "first-course"]))
         .all()
+    )
+
+    last_planned: Dict[int, date] = dict(
+        session.query(Meal.recipe_id, func.max(Meal.plan_date))
+        .filter(Meal.leftover == false())
+        .group_by(Meal.recipe_id)
     )
 
     slots: List[Slot] = []
@@ -93,19 +109,26 @@ def generate_plan(
             avoid_tags=avoid_tags,
             reduce_tags=reduce_tags,
         )
+        if not available:
+            raise ValueError("No recipes available")
         base_scores = [r.score or 0.0 for r in available]
         scored: List[tuple[Recipe, float]] = []
+        print(f"planning date: {slot.date} (meal {slot.meal_number}) \n\n ")
         for r in available:
+            print("\033[31m  recipe: \033[0m", r.title )
             score = score_recipe(
-                _recipe_to_dict(r),
-                today=slot.date,
+                _recipe_to_dict(r, last_planned.get(r.id)),
+                planning_date=slot.date,
                 seasonality_weight=seasonality_weight,
-                recency_weight=recency_weight,
+                recency_weight=0.0
+                if slot.soft_hold_recipe_id == r.id
+                else recency_weight,
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
                 reduce_tags=reduce_tags or [],
                 base_scores=base_scores,
             )
+            print( "score: ", score)
             if slot.soft_hold_recipe_id and r.id != slot.soft_hold_recipe_id:
                 score -= settings.get("SOFT_HOLD_PENALTY", 0.0)
             scored.append((r, score))
@@ -137,6 +160,7 @@ def generate_plan(
                         leftovers.remove(record)
                     break
         else:
+            last_planned[chosen.id] = slot.date
             if chosen.bulk_prep and bulk_leftovers:
                 repeats = settings.get("LEFTOVER_REPEAT_BY_RECIPE", {}).get(
                     chosen.id, settings.get("LEFTOVER_REPEAT_DEFAULT", 0)
@@ -239,12 +263,18 @@ def generate_side_dish(
     if not available:
         raise ValueError("No side dishes available")
 
+    last_planned: Dict[int, date] = dict(
+        session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date)).group_by(
+            MealSide.side_recipe_id
+        )
+    )
+
     base_scores = [r.score or 0.0 for r in available]
     scored: List[tuple[Recipe, float]] = []
     for r in available:
         score = score_recipe(
-            _recipe_to_dict(r),
-            today=today,
+            _recipe_to_dict(r, last_planned.get(r.id)),
+            planning_date=today,
             seasonality_weight=seasonality_weight,
             recency_weight=recency_weight,
             tag_penalty_weight=tag_penalty_weight,

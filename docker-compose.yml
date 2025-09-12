@@ -3,9 +3,12 @@ version: "3.9"
 services:
   backend:
     build: ./backend
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    # run python in unbuffered mode (+ louder uvicorn logs)
+    command: python -u -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
     ports:
       - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./backend:/app
 
@@ -15,4 +18,3 @@ services:
       - "3000:3000"
     depends_on:
       - backend
-
