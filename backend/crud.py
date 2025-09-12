@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
+from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from models import (
     Ingredient,
     MealPlan,
@@ -350,6 +351,18 @@ def save_plan(
     *,
     bulk_leftovers: bool | None = None,
     keep_days: int | None = None,
+    leftover_repeat_default: int | None = None,
+    leftover_repeat_by_recipe: Dict[int, int] | None = None,
+    leftover_spacing_gap: int | None = None,
+    max_leftovers_per_day: int | None = None,
+    max_leftovers_per_week: int | None = None,
+    leftover_accept_weight: float | None = None,
+    leftover_daypart_pref: Dict[str, float] | None = None,
+    leftover_daypart_weight: float | None = None,
+    protect_explore_slots: bool | None = None,
+    soft_hold_penalty: float | None = None,
+    explore_protection_cost: float | None = None,
+    meal_number_to_daypart: Dict[int, str] | None = None,
 ) -> None:
     """Persist ``plan`` and optional metadata in memory for later retrieval."""
 
@@ -380,10 +393,25 @@ def save_plan(
                 )
         normalised[day] = items
     _PLAN_CACHE.update(normalised)
-    if bulk_leftovers is not None:
-        _PLAN_SETTINGS["bulk_leftovers"] = bulk_leftovers
-    if keep_days is not None:
-        _PLAN_SETTINGS["keep_days"] = keep_days
+    settings: Dict[str, Any] = {
+        "bulk_leftovers": bulk_leftovers,
+        "keep_days": keep_days,
+        "LEFTOVER_REPEAT_DEFAULT": leftover_repeat_default,
+        "LEFTOVER_REPEAT_BY_RECIPE": leftover_repeat_by_recipe,
+        "LEFTOVER_SPACING_GAP": leftover_spacing_gap,
+        "MAX_LEFTOVERS_PER_DAY": max_leftovers_per_day,
+        "MAX_LEFTOVERS_PER_WEEK": max_leftovers_per_week,
+        "LEFTOVER_ACCEPT_WEIGHT": leftover_accept_weight,
+        "LEFTOVER_DAYPART_PREF": leftover_daypart_pref,
+        "LEFTOVER_DAYPART_WEIGHT": leftover_daypart_weight,
+        "PROTECT_EXPLORE_SLOTS": protect_explore_slots,
+        "SOFT_HOLD_PENALTY": soft_hold_penalty,
+        "EXPLORE_PROTECTION_COST": explore_protection_cost,
+        "MEAL_NUMBER_TO_DAYPART": meal_number_to_daypart,
+    }
+    for key, value in settings.items():
+        if value is not None:
+            _PLAN_SETTINGS[key] = value
 
 
 def get_plan(
@@ -457,14 +485,14 @@ def get_plan(
 
 
 def get_plan_settings() -> Dict[str, Any]:
-    """Return cached plan metadata such as ``keep_days``.
+    """Return plan settings merged with defaults.
 
-    The settings are populated by :func:`save_plan` and stored in-memory only.
-    A shallow copy is returned to prevent accidental modification of the
-    internal cache.
+    Settings are populated by :func:`save_plan` and stored in-memory only.
+    Defaults from :mod:`mealplanner.config` are merged to ensure all known
+    configuration options are represented.
     """
 
-    return dict(_PLAN_SETTINGS)
+    return {**DEFAULT_PLAN_SETTINGS, **_PLAN_SETTINGS}
 
 
 def mark_meal_accepted(
