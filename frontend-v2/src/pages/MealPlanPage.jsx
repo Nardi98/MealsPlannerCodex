@@ -25,23 +25,28 @@ export default function MealPlanPage() {
   }
 
   const [start, setStart] = React.useState(() => startOfWeek(today))
+  const [end, setEnd] = React.useState(() => {
+    const e = startOfWeek(today)
+    e.setDate(e.getDate() + 6)
+    return e
+  })
+
+  const diffDays = (s, e) => (e - s) / 86400000 + 1
 
   const days = React.useMemo(
     () =>
-      Array.from({ length: 7 }, (_, i) => {
+      Array.from({ length: diffDays(start, end) }, (_, i) => {
         const d = new Date(start)
         d.setDate(start.getDate() + i)
         return d
       }),
-    [start]
+    [start, end]
   )
 
   const isToday = (d) => d.toDateString() === today.toDateString()
 
   const fmt = (d) => d.toISOString().split('T')[0]
   const startIso = fmt(start)
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
   const endIso = fmt(end)
 
   const [tags, setTags] = React.useState([])
@@ -49,9 +54,6 @@ export default function MealPlanPage() {
   const [activeCell, setActiveCell] = React.useState(null)
 
   const [form, setForm] = React.useState({
-    start: startIso,
-    end: endIso,
-    days: 7,
     meals_per_day: 2,
     epsilon: 0,
     seasonality_weight: 1,
@@ -77,10 +79,6 @@ export default function MealPlanPage() {
   }
 
   React.useEffect(() => {
-    setForm((f) => ({ ...f, start: startIso, end: endIso }))
-  }, [startIso, endIso])
-
-  React.useEffect(() => {
     async function loadTags() {
       try {
         const data = await tagsApi.fetchAll()
@@ -103,8 +101,8 @@ export default function MealPlanPage() {
     setMessage('')
     try {
       const params = {
-        start: form.start,
-        days: Number(form.days),
+        start: startIso,
+        days: diffDays(start, end),
         meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
@@ -118,7 +116,7 @@ export default function MealPlanPage() {
       }
       const generated = await mealPlansApi.generate(params)
       const payload = {
-        plan_date: form.start,
+        plan_date: startIso,
         plan: Object.fromEntries(
           Object.entries(generated).map(([day, meals]) => [
             day,
@@ -149,7 +147,7 @@ export default function MealPlanPage() {
           throw err
         }
       }
-      const updated = await mealPlansApi.fetchRange(form.start, form.end)
+      const updated = await mealPlansApi.fetchRange(startIso, endIso)
       const resetAccepted = Object.fromEntries(
         Object.entries(updated || {}).map(([day, meals]) => [
           day,
@@ -157,7 +155,6 @@ export default function MealPlanPage() {
         ])
       )
       setPlan(resetAccepted)
-      setStart(new Date(form.start))
       setMessage('Plan generated successfully.')
     } catch (err) {
       setError(err.message)
@@ -177,9 +174,15 @@ export default function MealPlanPage() {
   }, [startIso, endIso])
 
   const changeWeek = (delta) => {
+    const length = diffDays(start, end)
     setStart((s) => {
       const d = new Date(s)
-      d.setDate(d.getDate() + delta)
+      d.setDate(d.getDate() + delta * length)
+      return d
+    })
+    setEnd((e) => {
+      const d = new Date(e)
+      d.setDate(d.getDate() + delta * length)
       return d
     })
   }
@@ -534,10 +537,10 @@ export default function MealPlanPage() {
         Meal Plan
       </h1>
       <div className="flex justify-between">
-        <Button variant="ghost" onClick={() => changeWeek(-7)}>
+        <Button variant="ghost" onClick={() => changeWeek(-1)}>
           Previous week
         </Button>
-        <Button variant="ghost" onClick={() => changeWeek(7)}>
+        <Button variant="ghost" onClick={() => changeWeek(1)}>
           Next week
         </Button>
       </div>
@@ -575,15 +578,21 @@ export default function MealPlanPage() {
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col text-sm">
               <span className="mb-1">Start date</span>
-              <Input type="date" name="start" value={form.start} onChange={handleChange} />
+              <Input
+                type="date"
+                name="start"
+                value={startIso}
+                onChange={(e) => setStart(new Date(e.target.value))}
+              />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">End date</span>
-              <Input type="date" name="end" value={form.end} onChange={handleChange} />
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1">Days</span>
-              <Input type="number" name="days" min="1" value={form.days} onChange={handleChange} />
+              <Input
+                type="date"
+                name="end"
+                value={endIso}
+                onChange={(e) => setEnd(new Date(e.target.value))}
+              />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">Meals per day</span>
