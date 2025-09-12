@@ -26,8 +26,10 @@ export default function RecipesPage() {
   const [ingredients, setIngredients] = React.useState([])
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
+  const [selectedCourses, setSelectedCourses] = React.useState([])
   const [tagsOpen, setTagsOpen] = React.useState(false)
   const [ingredientsOpen, setIngredientsOpen] = React.useState(false)
+  const [coursesOpen, setCoursesOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -59,9 +61,21 @@ export default function RecipesPage() {
         const matchesIngredients = selectedIngredients.every((i) =>
           r.ingredients?.some((ing) => (ing.name || ing) === i)
         )
-        return matchesSearch && matchesTags && matchesIngredients
+        const matchesCourses =
+          selectedCourses.length === 0 || selectedCourses.includes(r.course)
+        return (
+          matchesSearch &&
+          matchesTags &&
+          matchesIngredients &&
+          matchesCourses
+        )
       }),
-    [recipes, search, selectedTags, selectedIngredients]
+    [recipes, search, selectedTags, selectedIngredients, selectedCourses]
+  )
+
+  const courseOptions = React.useMemo(
+    () => Array.from(new Set(recipes.map((r) => r.course))).filter(Boolean),
+    [recipes]
   )
 
   const toggleTag = (tag) =>
@@ -74,6 +88,11 @@ export default function RecipesPage() {
       ings.includes(ing)
         ? ings.filter((x) => x !== ing)
         : [...ings, ing]
+    )
+
+  const toggleCourse = (course) =>
+    setSelectedCourses((cs) =>
+      cs.includes(course) ? cs.filter((c) => c !== course) : [...cs, course]
     )
 
   const handleSave = async (recipe) => {
@@ -122,6 +141,34 @@ export default function RecipesPage() {
                 style={{ borderColor: 'var(--border)' }}
               >
                 <div>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-sm"
+                    onClick={() => setCoursesOpen((o) => !o)}
+                  >
+                    Course
+                    <ChevronDownIcon
+                      className={`h-4 w-4 transition-transform ${
+                        coursesOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {coursesOpen && (
+                    <div className="mt-1 max-h-40 overflow-y-auto">
+                      {courseOptions.map((c) => (
+                        <label key={c} className="flex items-center gap-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedCourses.includes(c)}
+                            onChange={() => toggleCourse(c)}
+                          />
+                          {c}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2">
                   <button
                     type="button"
                     className="flex w-full items-center justify-between text-sm"

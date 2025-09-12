@@ -41,8 +41,8 @@ afterEach(() => {
 
 test('filters recipes as user types', async () => {
   recipesApi.fetchAll.mockResolvedValue([
-    { id: 1, title: 'Spaghetti' },
-    { id: 2, title: 'Pizza' },
+    { id: 1, title: 'Spaghetti', course: 'main' },
+    { id: 2, title: 'Pizza', course: 'main' },
   ])
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
@@ -75,12 +75,14 @@ test('filters recipes by tags and ingredients', async () => {
       title: 'Spaghetti',
       tags: ['Italian'],
       ingredients: [{ name: 'Tomato' }, { name: 'Salt' }],
+      course: 'main',
     },
     {
       id: 2,
       title: 'Salad',
       tags: ['Vegan'],
       ingredients: [{ name: 'Lettuce' }, { name: 'Tomato' }],
+      course: 'side',
     },
   ])
   tagsApi.fetchAll.mockResolvedValue([{ name: 'Italian' }, { name: 'Vegan' }])
@@ -111,5 +113,28 @@ test('filters recipes by tags and ingredients', async () => {
   await waitFor(() => {
     expect(screen.getByText('Salad')).toBeInTheDocument()
     expect(screen.queryByText('Spaghetti')).toBeNull()
+  })
+})
+
+test('filters recipes by course', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Soup', course: 'main' },
+    { id: 2, title: 'Cake', course: 'dessert' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  await screen.findByText('Soup')
+  await screen.findByText('Cake')
+
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByText('Course'))
+  fireEvent.click(screen.getByLabelText('dessert'))
+
+  await waitFor(() => {
+    expect(screen.getByText('Cake')).toBeInTheDocument()
+    expect(screen.queryByText('Soup')).toBeNull()
   })
 })
