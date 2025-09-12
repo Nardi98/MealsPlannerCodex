@@ -108,7 +108,7 @@ class MealPlanCreate(BaseModel):
 
 class MealPlanGenerate(BaseModel):
     start: date
-    days: int
+    end: date
     meals_per_day: int
     epsilon: float = 0.0
     avoid_tags: List[str] = []
