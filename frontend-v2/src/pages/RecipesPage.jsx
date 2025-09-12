@@ -13,6 +13,8 @@ export default function RecipesPage() {
   const [expanded, setExpanded] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
+  const [query, setQuery] = React.useState('')
+  const [courseFilter, setCourseFilter] = React.useState('')
 
   React.useEffect(() => {
     async function load() {
@@ -54,6 +56,18 @@ export default function RecipesPage() {
     }
   }
 
+  const filteredRecipes = React.useMemo(
+    () =>
+      recipes.filter((r) => {
+        const matchesQuery = r.title
+          .toLowerCase()
+          .includes(query.toLowerCase())
+        const matchesCourse = courseFilter === '' || r.course === courseFilter
+        return matchesQuery && matchesCourse
+      }),
+    [recipes, query, courseFilter]
+  )
+
   return (
     <Card>
       <div className="mb-4 flex items-center justify-between">
@@ -61,7 +75,23 @@ export default function RecipesPage() {
           <BookmarkIcon className="h-5 w-5" /> Recipes
         </div>
         <div className="flex items-center gap-2">
-          <Input placeholder="Search recipes…" className="w-56" />
+          <Input
+            placeholder="Search recipes…"
+            className="w-56"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <select
+            className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+            style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+          >
+            <option value="">All courses</option>
+            <option value="main">Main dish</option>
+            <option value="side">Side dish</option>
+            <option value="first-course">First course</option>
+          </select>
           <Button
             variant="a1"
             onClick={() => {
@@ -75,7 +105,7 @@ export default function RecipesPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3">
-        {recipes.map((r) => (
+        {filteredRecipes.map((r) => (
           <Motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
             <div
               className="rounded-2xl border p-3 bg-white cursor-pointer"
