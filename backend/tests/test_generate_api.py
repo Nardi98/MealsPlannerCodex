@@ -24,7 +24,7 @@ def test_generate_endpoint_returns_plan(db_session):
     client = TestClient(app)
     response = client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "days": 1, "meals_per_day": 1},
+        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
     )
     app.dependency_overrides.clear()
     assert response.status_code == 200

@@ -110,7 +110,6 @@ export default function MealPlanPage() {
       const params = {
         start: form.start,
         end: form.end,
-        days,
         meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),

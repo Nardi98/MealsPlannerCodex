@@ -388,10 +388,11 @@ def feedback_reject(
 def generate_plan_endpoint(
     payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
 ) -> Dict[str, List[Dict[str, object]]]:
+    days = (payload.end - payload.start).days + 1
     plan_titles = planner.generate_plan(
         db,
         start=payload.start,
-        days=payload.days,
+        days=days,
         meals_per_day=payload.meals_per_day,
         keep_days=payload.keep_days,
         bulk_leftovers=payload.bulk_leftovers,

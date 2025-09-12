@@ -23,10 +23,10 @@ export const mealPlansApi = {
       ]),
     );
   },
-  generate: async (params) => {
+  generate: async ({ start, end, ...params }) => {
     const data = await request('/meal-plans/generate', {
       method: 'POST',
-      body: JSON.stringify(params),
+      body: JSON.stringify({ start, end, ...params }),
     });
     return Object.fromEntries(
       Object.entries(data || {}).map(([day, meals]) => [
