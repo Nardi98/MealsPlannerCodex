@@ -24,15 +24,8 @@ export default function MealPlanPage() {
     return start
   }
 
-  const [start, setStart] = React.useState(() => startOfWeek(today))
-  const [end, setEnd] = React.useState(() => {
-    const e = startOfWeek(today)
-    e.setDate(e.getDate() + 6)
-    return e
-  })
   const [viewStart, setViewStart] = React.useState(() => startOfWeek(today))
 
-  const diffDays = (s, e) => (e - s) / 86400000 + 1
 
   const weekDays = React.useMemo(
     () =>
@@ -47,14 +40,21 @@ export default function MealPlanPage() {
   const isToday = (d) => d.toDateString() === today.toDateString()
 
   const fmt = (d) => d.toISOString().split('T')[0]
-  const startIso = fmt(start)
-  const endIso = fmt(end)
+
+  const defaultStart = fmt(startOfWeek(today))
+  const defaultEnd = (() => {
+    const e = startOfWeek(today)
+    e.setDate(e.getDate() + 6)
+    return fmt(e)
+  })()
 
   const [tags, setTags] = React.useState([])
   const [plan, setPlan] = React.useState({})
   const [activeCell, setActiveCell] = React.useState(null)
 
   const [form, setForm] = React.useState({
+    start: defaultStart,
+    end: defaultEnd,
     meals_per_day: 2,
     epsilon: 0,
     seasonality_weight: 1,
@@ -101,9 +101,16 @@ export default function MealPlanPage() {
     setError('')
     setMessage('')
     try {
+      const days =
+        (new Date(form.end) - new Date(form.start)) / 86400000 + 1
+      if (days < 1) {
+        setError('End date cannot be before start date')
+        return
+      }
       const params = {
-        start: startIso,
-        days: diffDays(start, end),
+        start: form.start,
+        end: form.end,
+        days,
         meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
@@ -117,7 +124,7 @@ export default function MealPlanPage() {
       }
       const generated = await mealPlansApi.generate(params)
       const payload = {
-        plan_date: startIso,
+        plan_date: form.start,
         plan: Object.fromEntries(
           Object.entries(generated).map(([day, meals]) => [
             day,
@@ -148,7 +155,7 @@ export default function MealPlanPage() {
           throw err
         }
       }
-      const updated = await mealPlansApi.fetchRange(startIso, endIso)
+      const updated = await mealPlansApi.fetchRange(form.start, form.end)
       const resetAccepted = Object.fromEntries(
         Object.entries(updated || {}).map(([day, meals]) => [
           day,
@@ -578,8 +585,8 @@ export default function MealPlanPage() {
               <Input
                 type="date"
                 name="start"
-                value={startIso}
-                onChange={(e) => setStart(new Date(e.target.value))}
+                value={form.start}
+                onChange={handleChange}
               />
             </label>
             <label className="flex flex-col text-sm">
@@ -587,8 +594,8 @@ export default function MealPlanPage() {
               <Input
                 type="date"
                 name="end"
-                value={endIso}
-                onChange={(e) => setEnd(new Date(e.target.value))}
+                value={form.end}
+                onChange={handleChange}
               />
             </label>
             <label className="flex flex-col text-sm">
