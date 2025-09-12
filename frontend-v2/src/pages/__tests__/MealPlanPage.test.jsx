@@ -47,11 +47,7 @@ vi.mock('../../api/sideDishesApi', () => ({
 }))
 
 beforeEach(() => {
-  const today = new Date()
-  const day = today.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  const start = new Date(today)
-  start.setDate(today.getDate() + diff)
+  const start = new Date()
   const startIso = start.toISOString().slice(0, 10)
   mealPlansApi.fetchRange.mockResolvedValue({
     [startIso]: [

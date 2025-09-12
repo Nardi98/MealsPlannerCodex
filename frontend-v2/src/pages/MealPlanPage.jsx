@@ -16,32 +16,31 @@ import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
 export default function MealPlanPage() {
   const today = new Date()
 
-  const startOfWeek = (base) => {
-    const start = new Date(base)
-    const day = start.getDay()
-    const diff = day === 0 ? -6 : 1 - day
-    start.setDate(start.getDate() + diff)
-    return start
-  }
+  const [start, setStart] = React.useState(() => new Date())
+  const [end, setEnd] = React.useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 6)
+    return d
+  })
 
-  const [start, setStart] = React.useState(() => startOfWeek(today))
-
-  const days = React.useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(start)
-        d.setDate(start.getDate() + i)
-        return d
-      }),
-    [start]
-  )
+  const days = React.useMemo(() => {
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    const diff = Math.max(
+      0,
+      Math.round((endDate - startDate) / (1000 * 60 * 60 * 24))
+    )
+    return Array.from({ length: diff + 1 }, (_, i) => {
+      const d = new Date(startDate)
+      d.setDate(startDate.getDate() + i)
+      return d
+    })
+  }, [start, end])
 
   const isToday = (d) => d.toDateString() === today.toDateString()
 
   const fmt = (d) => d.toISOString().split('T')[0]
   const startIso = fmt(start)
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
   const endIso = fmt(end)
 
   const [tags, setTags] = React.useState([])
@@ -51,7 +50,6 @@ export default function MealPlanPage() {
   const [form, setForm] = React.useState({
     start: startIso,
     end: endIso,
-    days: 7,
     meals_per_day: 2,
     epsilon: 0,
     seasonality_weight: 1,
@@ -102,9 +100,14 @@ export default function MealPlanPage() {
     setError('')
     setMessage('')
     try {
+      const dayCount =
+        Math.round(
+          (new Date(form.end) - new Date(form.start)) /
+            (1000 * 60 * 60 * 24)
+        ) + 1
       const params = {
         start: form.start,
-        days: Number(form.days),
+        days: dayCount,
         meals_per_day: Number(form.meals_per_day) || 1,
         epsilon: Number(form.epsilon),
         seasonality_weight: Number(form.seasonality_weight),
@@ -158,6 +161,7 @@ export default function MealPlanPage() {
       )
       setPlan(resetAccepted)
       setStart(new Date(form.start))
+      setEnd(new Date(form.end))
       setMessage('Plan generated successfully.')
     } catch (err) {
       setError(err.message)
@@ -176,10 +180,16 @@ export default function MealPlanPage() {
     load()
   }, [startIso, endIso])
 
-  const changeWeek = (delta) => {
+  const changeWeek = (direction) => {
+    const range = days.length
     setStart((s) => {
       const d = new Date(s)
-      d.setDate(d.getDate() + delta)
+      d.setDate(d.getDate() + direction * range)
+      return d
+    })
+    setEnd((e) => {
+      const d = new Date(e)
+      d.setDate(d.getDate() + direction * range)
       return d
     })
   }
@@ -534,15 +544,18 @@ export default function MealPlanPage() {
         Meal Plan
       </h1>
       <div className="flex justify-between">
-        <Button variant="ghost" onClick={() => changeWeek(-7)}>
-          Previous week
+        <Button variant="ghost" onClick={() => changeWeek(-1)}>
+          Previous range
         </Button>
-        <Button variant="ghost" onClick={() => changeWeek(7)}>
-          Next week
+        <Button variant="ghost" onClick={() => changeWeek(1)}>
+          Next range
         </Button>
       </div>
       <Card>
-        <div className="grid grid-cols-8">
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: `repeat(${days.length + 1}, minmax(0, 1fr))` }}
+        >
           <div />
           {days.map((d) => {
             const weekday = d.toLocaleDateString(undefined, { weekday: 'short' })
@@ -580,10 +593,6 @@ export default function MealPlanPage() {
             <label className="flex flex-col text-sm">
               <span className="mb-1">End date</span>
               <Input type="date" name="end" value={form.end} onChange={handleChange} />
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1">Days</span>
-              <Input type="number" name="days" min="1" value={form.days} onChange={handleChange} />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">Meals per day</span>
