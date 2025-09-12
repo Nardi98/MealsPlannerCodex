@@ -30,17 +30,18 @@ export default function MealPlanPage() {
     e.setDate(e.getDate() + 6)
     return e
   })
+  const [viewStart, setViewStart] = React.useState(() => startOfWeek(today))
 
   const diffDays = (s, e) => (e - s) / 86400000 + 1
 
-  const days = React.useMemo(
+  const weekDays = React.useMemo(
     () =>
-      Array.from({ length: diffDays(start, end) }, (_, i) => {
-        const d = new Date(start)
-        d.setDate(start.getDate() + i)
+      Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(viewStart)
+        d.setDate(viewStart.getDate() + i)
         return d
       }),
-    [start, end]
+    [viewStart]
   )
 
   const isToday = (d) => d.toDateString() === today.toDateString()
@@ -164,25 +165,21 @@ export default function MealPlanPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const data = await mealPlansApi.fetchRange(startIso, endIso)
+        const viewEnd = new Date(viewStart)
+        viewEnd.setDate(viewEnd.getDate() + 6)
+        const data = await mealPlansApi.fetchRange(fmt(viewStart), fmt(viewEnd))
         setPlan(data || {})
       } catch (err) {
         console.error('Failed to load meal plan', err)
       }
     }
     load()
-  }, [startIso, endIso])
+  }, [viewStart])
 
   const changeWeek = (delta) => {
-    const length = diffDays(start, end)
-    setStart((s) => {
+    setViewStart((s) => {
       const d = new Date(s)
-      d.setDate(d.getDate() + delta * length)
-      return d
-    })
-    setEnd((e) => {
-      const d = new Date(e)
-      d.setDate(d.getDate() + delta * length)
+      d.setDate(d.getDate() + delta * 7)
       return d
     })
   }
@@ -547,7 +544,7 @@ export default function MealPlanPage() {
       <Card>
         <div className="grid grid-cols-8">
           <div />
-          {days.map((d) => {
+          {weekDays.map((d) => {
             const weekday = d.toLocaleDateString(undefined, { weekday: 'short' })
             const dm = `${d.getDate()}/${d.getMonth() + 1}`
             return (
@@ -568,9 +565,9 @@ export default function MealPlanPage() {
             )
           })}
           <div className="p-2 text-left font-medium">Lunch</div>
-          {days.map((d) => renderCell(d, 0))}
+          {weekDays.map((d) => renderCell(d, 0))}
           <div className="p-2 text-left font-medium">Dinner</div>
-          {days.map((d) => renderCell(d, 1))}
+          {weekDays.map((d) => renderCell(d, 1))}
         </div>
       </Card>
       <Card>
