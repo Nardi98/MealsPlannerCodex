@@ -126,7 +126,6 @@ def tag_penalty(
 
     recipe_tags = {t.lower() for t in recipe.get("tags", [])}
     targets = {t.lower() for t in reduce_tags}
-    print("recipe tags", recipe_tags, "targets ", targets)
     if recipe_tags.intersection(targets):
         return -float(penalty)
     return 0.0
@@ -211,8 +210,6 @@ def score_recipe(
     total += recency_weight * recency_penalty(recipe, planning_date)
     total += bulk_bonus_weight * bulk_bonus(recipe)
     total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
-    print("bulk bonus: ", bulk_bonus(recipe))
-    print("tag penalty: ", tag_penalty(recipe, reduce_tags or []))
     return total
 
 
