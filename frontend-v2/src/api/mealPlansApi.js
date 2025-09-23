@@ -23,6 +23,11 @@ export const mealPlansApi = {
       ]),
     );
   },
+  checkRange: async (startDate, endDate) => {
+    const data = await mealPlansApi.fetchRange(startDate, endDate);
+    if (!data) return [];
+    return Object.keys(data);
+  },
   generate: async (params) => {
     const data = await request('/meal-plans/generate', {
       method: 'POST',
@@ -84,4 +89,11 @@ export const mealPlansApi = {
         leftover,
       }),
     }),
+  deleteRange: (startDate, endDate) =>
+    request(
+      `/meal-plans?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
 };
