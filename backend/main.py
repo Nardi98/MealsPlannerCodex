@@ -7,7 +7,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 import random
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select, func
@@ -295,11 +295,21 @@ def set_plan(
 
 @app.delete("/meal-plans", response_model=Dict[str, int])
 def delete_meal_plans(
-    payload: schemas.MealPlanDelete, db: Session = Depends(get_db)
+    payload: schemas.MealPlanDelete | None = Body(default=None),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: Session = Depends(get_db),
 ) -> Dict[str, int]:
-    if payload.end_date < payload.start_date:
+    if payload is not None:
+        start_date = payload.start_date
+        end_date = payload.end_date
+    if start_date is None or end_date is None:
+        raise HTTPException(
+            status_code=400, detail="start_date and end_date are required"
+        )
+    if end_date < start_date:
         raise HTTPException(status_code=400, detail="end_date must not precede start_date")
-    deleted = crud.delete_meal_plans(db, payload.start_date, payload.end_date)
+    deleted = crud.delete_meal_plans(db, start_date, end_date)
     return {"deleted": deleted}
 
 
