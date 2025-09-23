@@ -5,6 +5,7 @@ import {
   Input,
   TagSelector,
   MealActionModal,
+  OverwriteConfirmModal,
 } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
@@ -65,6 +66,8 @@ export default function MealPlanPage() {
   })
   const [message, setMessage] = React.useState('')
   const [error, setError] = React.useState('')
+  const [showOverwriteModal, setShowOverwriteModal] = React.useState(false)
+  const [pendingGeneration, setPendingGeneration] = React.useState(null)
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -97,71 +100,88 @@ export default function MealPlanPage() {
   const handleReduceChange = (selected) =>
     setForm((f) => ({ ...f, reduce_tags: selected }))
 
+  const executeGeneration = async ({ params, startDate, endDate }) => {
+    const generated = await mealPlansApi.generate(params)
+    const payload = {
+      plan_date: startDate,
+      plan: Object.fromEntries(
+        Object.entries(generated || {}).map(([day, meals]) => [
+          day,
+          meals.map((m) => ({
+            main_id: m.id,
+            side_ids: [],
+            leftover: m.leftover,
+          })),
+        ])
+      ),
+      bulk_leftovers: params.bulk_leftovers,
+      keep_days: params.keep_days,
+    }
+    await mealPlansApi.create(payload)
+    const updated = await mealPlansApi.fetchRange(startDate, endDate)
+    const resetAccepted = Object.fromEntries(
+      Object.entries(updated || {}).map(([day, meals]) => [
+        day,
+        meals.map((m) => ({ ...m, accepted: false })),
+      ])
+    )
+    setPlan(resetAccepted)
+    setStart(new Date(startDate))
+    setMessage('Plan generated successfully.')
+  }
+
   const handleGenerate = async (e) => {
     e.preventDefault()
     setError('')
     setMessage('')
+    const startDate = form.start
+    const endDate = form.end
+    const params = {
+      start: form.start,
+      days: Number(form.days),
+      meals_per_day: Number(form.meals_per_day) || 1,
+      epsilon: Number(form.epsilon),
+      seasonality_weight: Number(form.seasonality_weight),
+      recency_weight: Number(form.recency_weight),
+      tag_penalty_weight: Number(form.tag_penalty_weight),
+      bulk_bonus_weight: Number(form.bulk_bonus_weight),
+      bulk_leftovers: Boolean(form.bulk_leftovers),
+      avoid_tags: form.avoid_tags,
+      reduce_tags: form.reduce_tags,
+      keep_days: Number(form.keep_days),
+    }
     try {
-      const params = {
-        start: form.start,
-        days: Number(form.days),
-        meals_per_day: Number(form.meals_per_day) || 1,
-        epsilon: Number(form.epsilon),
-        seasonality_weight: Number(form.seasonality_weight),
-        recency_weight: Number(form.recency_weight),
-        tag_penalty_weight: Number(form.tag_penalty_weight),
-        bulk_bonus_weight: Number(form.bulk_bonus_weight),
-        bulk_leftovers: Boolean(form.bulk_leftovers),
-        avoid_tags: form.avoid_tags,
-        reduce_tags: form.reduce_tags,
-        keep_days: Number(form.keep_days),
+      const conflicts = await mealPlansApi.checkRange(startDate, endDate)
+      if (conflicts && conflicts.length > 0) {
+        setPendingGeneration({ params, startDate, endDate })
+        setShowOverwriteModal(true)
+        return
       }
-      const generated = await mealPlansApi.generate(params)
-      const payload = {
-        plan_date: form.start,
-        plan: Object.fromEntries(
-          Object.entries(generated).map(([day, meals]) => [
-            day,
-            meals.map((m) => ({
-              main_id: m.id,
-              side_ids: [],
-              leftover: m.leftover,
-            })),
-          ]),
-        ),
-        bulk_leftovers: Boolean(form.bulk_leftovers),
-        keep_days: Number(form.keep_days),
-      }
-      try {
-        await mealPlansApi.create(payload)
-      } catch (err) {
-        if (err.data?.conflicts) {
-          const days = err.data.conflicts.join(', ')
-          const overwrite = window.confirm(
-            `Conflicts on: ${days}. Overwrite existing plans?`
-          )
-          if (!overwrite) {
-            setError(`Conflicts on: ${days}`)
-            return
-          }
-          await mealPlansApi.create(payload, { force: true })
-        } else {
-          throw err
-        }
-      }
-      const updated = await mealPlansApi.fetchRange(form.start, form.end)
-      const resetAccepted = Object.fromEntries(
-        Object.entries(updated || {}).map(([day, meals]) => [
-          day,
-          meals.map((m) => ({ ...m, accepted: false })),
-        ])
-      )
-      setPlan(resetAccepted)
-      setStart(new Date(form.start))
-      setMessage('Plan generated successfully.')
+      await executeGeneration({ params, startDate, endDate })
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  const confirmOverwrite = async () => {
+    if (!pendingGeneration) return
+    setShowOverwriteModal(false)
+    setError('')
+    setMessage('')
+    try {
+      const { params, startDate, endDate } = pendingGeneration
+      await mealPlansApi.deleteRange(startDate, endDate)
+      await executeGeneration({ params, startDate, endDate })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPendingGeneration(null)
+    }
+  }
+
+  const cancelOverwrite = () => {
+    setShowOverwriteModal(false)
+    setPendingGeneration(null)
   }
 
   React.useEffect(() => {
@@ -681,6 +701,12 @@ export default function MealPlanPage() {
           onRemoveSide={handleRemoveSide}
           onSwapSide={handleSwapSide}
           onClose={() => setActiveCell(null)}
+        />
+      )}
+      {showOverwriteModal && (
+        <OverwriteConfirmModal
+          onCancel={cancelOverwrite}
+          onConfirm={confirmOverwrite}
         />
       )}
     </div>
