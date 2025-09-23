@@ -106,6 +106,13 @@ class MealPlanCreate(BaseModel):
     keep_days: int | None = None
 
 
+class MealPlanDelete(BaseModel):
+    """Payload for deleting meal plans within a date range."""
+
+    start_date: date
+    end_date: date
+
+
 class MealPlanGenerate(BaseModel):
     start: date
     days: int

@@ -235,6 +235,20 @@ If any of the supplied `plan_date` values already exist, the API returns
 `409` with a `conflicts` array. Resubmit the request with
 `?force=true` to overwrite existing plans.
 
+### Deleting plans in bulk
+
+Send `DELETE /meal-plans` with a body containing `start_date` and `end_date`
+to remove all plans within that inclusive range:
+
+```json
+{
+  "start_date": "2024-01-01",
+  "end_date": "2024-01-07"
+}
+```
+
+The response reports how many plans were removed.
+
 ### Toggling meal acceptance
 
 Use `POST /meal-plans/accept` to update the `accepted` flag for a meal:
