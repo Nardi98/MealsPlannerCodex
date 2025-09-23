@@ -5,8 +5,8 @@ import {
   Input,
   TagSelector,
   MealActionModal,
-  OverwriteConfirmModal,
 } from '../components'
+import OverwriteConfirmModal from '../components/OverwriteConfirmModal'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
 import { feedbackApi } from '../api/feedbackApi'
