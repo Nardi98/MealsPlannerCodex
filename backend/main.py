@@ -293,6 +293,16 @@ def set_plan(
     return crud.get_plan(db, payload.plan_date)
 
 
+@app.delete("/meal-plans", response_model=Dict[str, int])
+def delete_meal_plans(
+    payload: schemas.MealPlanDelete, db: Session = Depends(get_db)
+) -> Dict[str, int]:
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=400, detail="end_date must not precede start_date")
+    deleted = crud.delete_meal_plans(db, payload.start_date, payload.end_date)
+    return {"deleted": deleted}
+
+
 @app.get("/plan/settings", response_model=Dict[str, Any])
 def plan_settings() -> Dict[str, Any]:
     """Return metadata about the current plan such as ``keep_days``."""

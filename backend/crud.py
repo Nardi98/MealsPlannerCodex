@@ -51,6 +51,7 @@ __all__ = [
     "import_data",
     "export_data",
     "clear_data",
+    "delete_meal_plans",
 ]
 
 
@@ -482,6 +483,19 @@ def get_plan(
             }
         )
     return result
+
+
+def delete_meal_plans(session: Session, start_date: date, end_date: date) -> int:
+    """Delete meal plans within ``start_date`` and ``end_date`` (inclusive)."""
+
+    stmt = select(MealPlan).where(MealPlan.plan_date.between(start_date, end_date))
+    meal_plans = session.execute(stmt).scalars().all()
+    deleted = 0
+    for meal_plan in meal_plans:
+        session.delete(meal_plan)
+        deleted += 1
+    session.commit()
+    return deleted
 
 
 def get_plan_settings() -> Dict[str, Any]:
