@@ -3,22 +3,30 @@ from __future__ import annotations
 
 import io
 import json
+import logging
+import os
+import random
+import time
 from datetime import date
 from typing import Any, Dict, List, Optional
-import random
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import func, inspect, select
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy.exc import SQLAlchemyError
 
 import crud
 import models
 import schemas
-from mealplanner import planner
 from database import SessionLocal, engine, USING_DEV_FALLBACK
+from mealplanner import planner
+
+logger = logging.getLogger(__name__)
+
+_STARTUP_RETRY_ATTEMPTS = int(os.getenv("DB_STARTUP_RETRY_ATTEMPTS", "5"))
+_STARTUP_RETRY_DELAY = float(os.getenv("DB_STARTUP_RETRY_DELAY", "2"))
 
 
 def _verify_schema_state() -> None:
@@ -28,13 +36,33 @@ def _verify_schema_state() -> None:
         models.Base.metadata.create_all(bind=engine)
         return
 
-    try:
-        inspector = inspect(engine)
-    except SQLAlchemyError as exc:  # pragma: no cover - defensive guard
+    inspector = None
+    last_error: SQLAlchemyError | None = None
+    for attempt in range(1, _STARTUP_RETRY_ATTEMPTS + 1):
+        try:
+            inspector = inspect(engine)
+            break
+        except OperationalError as exc:
+            last_error = exc
+            if attempt == _STARTUP_RETRY_ATTEMPTS:
+                break
+            logger.info(
+                "Database not ready (attempt %s/%s); retrying in %s seconds.",
+                attempt,
+                _STARTUP_RETRY_ATTEMPTS,
+                _STARTUP_RETRY_DELAY,
+            )
+            time.sleep(_STARTUP_RETRY_DELAY)
+        except SQLAlchemyError as exc:  # pragma: no cover - defensive guard
+            raise RuntimeError(
+                "Unable to connect to the configured database. Check DATABASE_URL "
+                "and ensure the database is reachable."
+            ) from exc
+    if inspector is None:
         raise RuntimeError(
-            "Unable to connect to the configured database. Check DATABASE_URL "
-            "and ensure the database is reachable."
-        ) from exc
+            "Unable to connect to the configured database after multiple attempts. "
+            "Check DATABASE_URL and ensure the database is reachable."
+        ) from last_error
 
     missing = [
         table_name

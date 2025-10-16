@@ -161,6 +161,7 @@ docker-compose up --build
 Set the necessary environment variables before starting:
 
 - `DATABASE_URL` – connection string for the database (e.g. `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`)
+- `DB_STARTUP_RETRY_ATTEMPTS` / `DB_STARTUP_RETRY_DELAY` – optional knobs to control how long the backend waits for the database to become reachable during startup
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 
