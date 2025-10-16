@@ -1,10 +1,10 @@
 """Pydantic schemas for API responses and requests."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from models import UnitEnum
 
@@ -138,6 +138,29 @@ class MealPlanGenerate(BaseModel):
     soft_hold_penalty: float | None = None
     explore_protection_cost: float | None = None
     meal_number_to_daypart: Dict[int, str] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_end_from_days(cls, values: object) -> object:
+        if not isinstance(values, dict):
+            return values
+        if values.get("end") is not None:
+            return values
+        days = values.get("days")
+        if days is None:
+            return values
+        try:
+            day_span = int(days)
+        except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            raise ValueError("Date range must include at least one day") from exc
+        if day_span <= 0:
+            raise ValueError("Date range must include at least one day")
+        start_raw = values.get("start")
+        if start_raw is None:
+            return values
+        start_date = TypeAdapter(date).validate_python(start_raw)
+        values["end"] = start_date + timedelta(days=day_span - 1)
+        return values
 
     @model_validator(mode="after")
     def _validate_range(self):

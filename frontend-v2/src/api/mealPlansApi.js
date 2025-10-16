@@ -29,9 +29,20 @@ export const mealPlansApi = {
     return Object.keys(data);
   },
   generate: async (params) => {
+    const body = { ...params };
+    if (!body.end && body.start && body.days) {
+      const startDate = new Date(body.start);
+      const span = Number(body.days);
+      if (!Number.isNaN(startDate.getTime()) && Number.isFinite(span) && span > 0) {
+        const derived = new Date(startDate);
+        derived.setDate(startDate.getDate() + span - 1);
+        body.end = derived.toISOString().split('T')[0];
+      }
+      delete body.days;
+    }
     const data = await request('/meal-plans/generate', {
       method: 'POST',
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
     });
     return Object.fromEntries(
       Object.entries(data || {}).map(([day, meals]) => [
