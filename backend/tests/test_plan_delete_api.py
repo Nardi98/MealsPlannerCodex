@@ -65,7 +65,7 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session):
     try:
         resp = client.delete(
             "/meal-plans",
-            params={"start": start.isoformat(), "end": second.isoformat()},
+            params={"start_date": start.isoformat(), "end_date": second.isoformat()},
         )
         assert resp.status_code == 200
         assert resp.json() == {"deleted": 2}
@@ -91,5 +91,43 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session):
         )
         assert start.isoformat() in generated
         assert generated[start.isoformat()]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_delete_meal_plans_legacy_route(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+
+    start = date(2024, 1, 1)
+
+    crud.set_meal_plan(
+        db_session,
+        {start.isoformat(): [{"main_id": main.id}]},
+    )
+
+    crud.save_plan(
+        {
+            start.isoformat(): [
+                {
+                    "recipe": "Main",
+                    "side_recipes": [],
+                    "accepted": False,
+                    "leftover": False,
+                }
+            ]
+        }
+    )
+
+    os.makedirs("data", exist_ok=True)
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+
+    try:
+        resp = client.delete(
+            "/plan",
+            params={"start_date": start.isoformat(), "end_date": start.isoformat()},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 1}
     finally:
         app.dependency_overrides.clear()

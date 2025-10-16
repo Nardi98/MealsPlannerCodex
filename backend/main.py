@@ -293,16 +293,19 @@ def set_plan(
     return crud.get_plan(db, payload.plan_date)
 
 
+@app.delete("/plan", response_model=Dict[str, int])
 @app.delete("/meal-plans", response_model=Dict[str, int])
 def delete_meal_plans(
-    start: date = Query(..., description="Inclusive start date for deletion"),
-    end: date = Query(..., description="Inclusive end date for deletion"),
+    start_date: date = Query(..., description="Inclusive start date for deletion"),
+    end_date: date = Query(..., description="Inclusive end date for deletion"),
     db: Session = Depends(get_db),
 ) -> Dict[str, int]:
-    if end < start:
-        raise HTTPException(status_code=422, detail="end must not be before start")
+    if end_date < start_date:
+        raise HTTPException(
+            status_code=422, detail="end_date must not be before start_date"
+        )
 
-    deleted = crud.delete_meal_plans(db, start, end)
+    deleted = crud.delete_meal_plans(db, start_date, end_date)
     return {"deleted": deleted}
 
 
