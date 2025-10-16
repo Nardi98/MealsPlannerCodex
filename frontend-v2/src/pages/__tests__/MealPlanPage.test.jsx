@@ -9,6 +9,8 @@ import '@testing-library/jest-dom/vitest'
 import MealPlanPage from '../MealPlanPage'
 import { mealPlansApi } from '../../api/mealPlansApi'
 import { tagsApi } from '../../api/tagsApi'
+import { feedbackApi } from '../../api/feedbackApi'
+import { recipesApi } from '../../api/recipesApi'
 
 vi.mock('../../api/mealPlansApi', () => ({
   mealPlansApi: {
@@ -74,6 +76,46 @@ test('leftover meals display leftover icon', async () => {
   await screen.findByText('Bulk')
   const icon = await screen.findByAltText('Leftover')
   expect(icon).toBeInTheDocument()
+})
+
+test('rejecting a leftover meal clears leftover flag for replacement', async () => {
+  const user = userEvent.setup()
+  const today = new Date()
+  const day = today.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  const start = new Date(today)
+  start.setDate(today.getDate() + diff)
+  const startIso = start.toISOString().slice(0, 10)
+
+  mealPlansApi.create.mockResolvedValue()
+  feedbackApi.rejectRecipe.mockResolvedValue('Replacement')
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Bulk' },
+    { id: 2, title: 'Replacement' },
+  ])
+
+  render(<MealPlanPage />)
+
+  await screen.findByText('Bulk')
+  await user.click(screen.getByText('Bulk'))
+  await user.click(await screen.findByRole('button', { name: /reject/i }))
+
+  await waitFor(() => {
+    expect(mealPlansApi.create).toHaveBeenCalledWith({
+      plan_date: startIso,
+      plan: {
+        [startIso]: [
+          {
+            main_id: 2,
+            side_ids: [],
+            leftover: false,
+          },
+        ],
+      },
+    })
+  })
+
+  expect(screen.queryByAltText('Leftover')).not.toBeInTheDocument()
 })
 
 test('regeneration waits for overwrite confirmation before proceeding', async () => {
