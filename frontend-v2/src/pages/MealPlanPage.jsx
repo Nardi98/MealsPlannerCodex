@@ -52,7 +52,6 @@ export default function MealPlanPage() {
   const [form, setForm] = React.useState({
     start: startIso,
     end: endIso,
-    days: 7,
     meals_per_day: 2,
     epsilon: 0,
     seasonality_weight: 1,
@@ -127,7 +126,19 @@ export default function MealPlanPage() {
     )
     setPlan(resetAccepted)
     setStart(new Date(startDate))
-    setMessage('Plan generated successfully.')
+    const startObj = new Date(startDate)
+    const endObj = new Date(endDate)
+    const dayCount =
+      Number.isNaN(startObj.getTime()) || Number.isNaN(endObj.getTime())
+        ? null
+        : Math.floor((endObj - startObj) / (1000 * 60 * 60 * 24)) + 1
+    setMessage(
+      dayCount && dayCount > 0
+        ? `Plan generated successfully for ${dayCount} day${
+            dayCount === 1 ? '' : 's'
+          }.`
+        : 'Plan generated successfully.'
+    )
   }
 
   const handleGenerate = async (e) => {
@@ -136,9 +147,24 @@ export default function MealPlanPage() {
     setMessage('')
     const startDate = form.start
     const endDate = form.end
+    const startDateObj = new Date(startDate)
+    const endDateObj = new Date(endDate)
+    if (
+      !startDate ||
+      Number.isNaN(startDateObj.getTime()) ||
+      !endDate ||
+      Number.isNaN(endDateObj.getTime())
+    ) {
+      setError('Please provide both a valid start date and end date.')
+      return
+    }
+    if (startDateObj > endDateObj) {
+      setError('End date must be on or after the start date.')
+      return
+    }
     const params = {
-      start: form.start,
-      days: Number(form.days),
+      start: startDate,
+      end: endDate,
       meals_per_day: Number(form.meals_per_day) || 1,
       epsilon: Number(form.epsilon),
       seasonality_weight: Number(form.seasonality_weight),
@@ -600,10 +626,6 @@ export default function MealPlanPage() {
             <label className="flex flex-col text-sm">
               <span className="mb-1">End date</span>
               <Input type="date" name="end" value={form.end} onChange={handleChange} />
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1">Days</span>
-              <Input type="number" name="days" min="1" value={form.days} onChange={handleChange} />
             </label>
             <label className="flex flex-col text-sm">
               <span className="mb-1">Meals per day</span>

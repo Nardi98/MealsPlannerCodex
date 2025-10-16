@@ -173,4 +173,27 @@ test('deletes existing plans before generating a new one on confirm', async () =
   expect(
     mealPlansApi.deleteRange.mock.invocationCallOrder[0]
   ).toBeLessThan(mealPlansApi.generate.mock.invocationCallOrder[0])
+
+  const generateArgs = mealPlansApi.generate.mock.calls[0][0]
+  expect(generateArgs).toMatchObject({ start: expect.any(String), end: expect.any(String) })
+  expect(generateArgs).not.toHaveProperty('days')
+})
+
+test('shows an error when end date is before the start date', async () => {
+  render(<MealPlanPage />)
+
+  await screen.findByText('Bulk')
+
+  const startInput = screen.getByLabelText(/start date/i)
+  const endInput = screen.getByLabelText(/end date/i)
+
+  fireEvent.change(startInput, { target: { value: '2024-01-10' } })
+  fireEvent.change(endInput, { target: { value: '2024-01-09' } })
+
+  fireEvent.click(screen.getByRole('button', { name: /generate plan/i }))
+
+  await screen.findByText('End date must be on or after the start date.')
+
+  expect(mealPlansApi.checkRange).not.toHaveBeenCalled()
+  expect(mealPlansApi.generate).not.toHaveBeenCalled()
 })
