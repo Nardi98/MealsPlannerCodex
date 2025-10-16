@@ -48,6 +48,7 @@ export default function MealPlanPage() {
   const [tags, setTags] = React.useState([])
   const [plan, setPlan] = React.useState({})
   const [activeCell, setActiveCell] = React.useState(null)
+  const [keepDays, setKeepDays] = React.useState(3)
 
   const [form, setForm] = React.useState({
     start: startIso,
@@ -58,7 +59,6 @@ export default function MealPlanPage() {
     recency_weight: 1,
     tag_penalty_weight: 1,
     bulk_bonus_weight: 1,
-    keep_days: 3,
     bulk_leftovers: true,
     avoid_tags: [],
     reduce_tags: [],
@@ -92,6 +92,20 @@ export default function MealPlanPage() {
       }
     }
     loadTags()
+  }, [])
+
+  React.useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settings = await mealPlansApi.fetchSettings()
+        if (settings?.keep_days !== undefined && settings.keep_days !== null) {
+          setKeepDays(settings.keep_days)
+        }
+      } catch (err) {
+        console.error('Failed to load plan settings', err)
+      }
+    }
+    loadSettings()
   }, [])
 
   const handleAvoidChange = (selected) =>
@@ -162,6 +176,7 @@ export default function MealPlanPage() {
       setError('End date must be on or after the start date.')
       return
     }
+    const keepDaysValue = Number(keepDays)
     const params = {
       start: startDate,
       end: endDate,
@@ -174,7 +189,7 @@ export default function MealPlanPage() {
       bulk_leftovers: Boolean(form.bulk_leftovers),
       avoid_tags: form.avoid_tags,
       reduce_tags: form.reduce_tags,
-      keep_days: Number(form.keep_days),
+      keep_days: Number.isNaN(keepDaysValue) ? 0 : keepDaysValue,
     }
     try {
       const conflicts = await mealPlansApi.checkRange(startDate, endDate)
@@ -666,10 +681,6 @@ export default function MealPlanPage() {
             <label className="flex flex-col text-sm">
               <span className="mb-1">Bulk bonus weight</span>
               <Input type="number" step="0.1" name="bulk_bonus_weight" value={form.bulk_bonus_weight} onChange={handleChange} />
-            </label>
-            <label className="flex flex-col text-sm">
-              <span className="mb-1">Keep days</span>
-              <Input type="number" name="keep_days" min="0" value={form.keep_days} onChange={handleChange} />
             </label>
             <label className="flex items-center gap-2 col-span-2 text-sm">
               <input

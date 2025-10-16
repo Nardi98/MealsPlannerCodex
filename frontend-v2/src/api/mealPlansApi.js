@@ -107,4 +107,5 @@ export const mealPlansApi = {
         method: 'DELETE',
       },
     ),
+  fetchSettings: () => request('/plan/settings'),
 };

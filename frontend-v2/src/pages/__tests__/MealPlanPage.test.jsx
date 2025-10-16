@@ -20,6 +20,7 @@ vi.mock('../../api/mealPlansApi', () => ({
     addSide: vi.fn(),
     replaceSide: vi.fn(),
     removeSide: vi.fn(),
+    fetchSettings: vi.fn(),
   },
 }))
 
@@ -64,6 +65,7 @@ beforeEach(() => {
   mealPlansApi.create.mockResolvedValue()
   mealPlansApi.checkRange.mockResolvedValue([])
   mealPlansApi.deleteRange.mockResolvedValue()
+  mealPlansApi.fetchSettings.mockResolvedValue({ keep_days: 5 })
   tagsApi.fetchAll.mockResolvedValue([])
 })
 
@@ -74,6 +76,7 @@ afterEach(() => {
 
 test('leftover meals display leftover icon', async () => {
   render(<MealPlanPage />)
+  await waitFor(() => expect(mealPlansApi.fetchSettings).toHaveBeenCalled())
   await screen.findByText('Bulk')
   const icon = await screen.findByAltText('Leftover')
   expect(icon).toBeInTheDocument()
@@ -85,6 +88,8 @@ test('shows overwrite confirmation modal when conflicts are detected', async () 
   ])
 
   render(<MealPlanPage />)
+
+  await waitFor(() => expect(mealPlansApi.fetchSettings).toHaveBeenCalled())
 
   await screen.findByText('Bulk')
   fireEvent.click(screen.getByRole('button', { name: /generate plan/i }))
@@ -139,6 +144,8 @@ test('does not generate a plan when overwrite is cancelled', async () => {
 
   render(<MealPlanPage />)
 
+  await waitFor(() => expect(mealPlansApi.fetchSettings).toHaveBeenCalled())
+
   await screen.findByText('Bulk')
   fireEvent.click(screen.getByRole('button', { name: /generate plan/i }))
 
@@ -159,6 +166,8 @@ test('deletes existing plans before generating a new one on confirm', async () =
 
   render(<MealPlanPage />)
 
+  await waitFor(() => expect(mealPlansApi.fetchSettings).toHaveBeenCalled())
+
   await screen.findByText('Bulk')
   fireEvent.click(screen.getByRole('button', { name: /generate plan/i }))
 
@@ -175,12 +184,18 @@ test('deletes existing plans before generating a new one on confirm', async () =
   ).toBeLessThan(mealPlansApi.generate.mock.invocationCallOrder[0])
 
   const generateArgs = mealPlansApi.generate.mock.calls[0][0]
-  expect(generateArgs).toMatchObject({ start: expect.any(String), end: expect.any(String) })
+  expect(generateArgs).toMatchObject({
+    start: expect.any(String),
+    end: expect.any(String),
+    keep_days: 5,
+  })
   expect(generateArgs).not.toHaveProperty('days')
 })
 
 test('shows an error when end date is before the start date', async () => {
   render(<MealPlanPage />)
+
+  await waitFor(() => expect(mealPlansApi.fetchSettings).toHaveBeenCalled())
 
   await screen.findByText('Bulk')
 
