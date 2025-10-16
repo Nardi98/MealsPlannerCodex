@@ -44,6 +44,13 @@ export const mealPlansApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  deleteRange: (startDate, endDate) =>
+    request(
+      `/plan?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+      {
+        method: 'DELETE',
+      },
+    ),
   accept: (planDate, mealNumber, accepted) =>
     request('/meal-plans/accept', {
       method: 'POST',
