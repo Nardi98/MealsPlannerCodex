@@ -408,10 +408,16 @@ def feedback_reject(
 def generate_plan_endpoint(
     payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
 ) -> Dict[str, List[Dict[str, object]]]:
+    days = payload.days
+    if days <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Date range must include at least one day",
+        )
     plan_titles = planner.generate_plan(
         db,
         start=payload.start,
-        days=payload.days,
+        days=days,
         meals_per_day=payload.meals_per_day,
         keep_days=payload.keep_days,
         bulk_leftovers=payload.bulk_leftovers,

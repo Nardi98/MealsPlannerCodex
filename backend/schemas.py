@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from models import UnitEnum
 
@@ -115,7 +115,7 @@ class MealPlanDelete(BaseModel):
 
 class MealPlanGenerate(BaseModel):
     start: date
-    days: int
+    end: date
     meals_per_day: int
     epsilon: float = 0.0
     avoid_tags: List[str] = []
@@ -138,6 +138,18 @@ class MealPlanGenerate(BaseModel):
     soft_hold_penalty: float | None = None
     explore_protection_cost: float | None = None
     meal_number_to_daypart: Dict[int, str] | None = None
+
+    @model_validator(mode="after")
+    def _validate_range(self):
+        if self.end < self.start:
+            raise ValueError("end must be on or after start")
+        return self
+
+    @property
+    def days(self) -> int:
+        """Inclusive number of days in the requested plan."""
+
+        return (self.end - self.start).days + 1
 
 
 class SideDishGenerate(BaseModel):
