@@ -258,11 +258,13 @@ def set_plan(
         models.MealPlan.plan_date.in_(plan_dates)
     )
     existing = db.execute(stmt).scalars().all()
-    if existing and not force:
-        conflicts = [d.isoformat() for d in existing]
-        from fastapi.responses import JSONResponse
+    if existing:
+        if not force:
+            conflicts = [d.isoformat() for d in existing]
+            from fastapi.responses import JSONResponse
 
-        return JSONResponse(status_code=409, content={"conflicts": conflicts})
+            return JSONResponse(status_code=409, content={"conflicts": conflicts})
+        crud.delete_meal_plans_for_dates(db, existing)
 
     crud.set_meal_plan(db, payload.plan)
     title_plan: Dict[str, List[Dict[str, object]]] = {}

@@ -53,3 +53,39 @@ def test_post_meal_plan_conflict_requires_force(db_session):
     assert meal is not None and meal.recipe_id == r2.id
 
     app.dependency_overrides.clear()
+
+
+def test_force_overwrite_only_removes_conflicting_dates(db_session):
+    r1 = crud.create_recipe(db_session, title="A", servings_default=1, course="main")
+    r2 = crud.create_recipe(db_session, title="B", servings_default=1, course="main")
+    r3 = crud.create_recipe(db_session, title="C", servings_default=1, course="main")
+
+    target_date = date(2024, 1, 1)
+    keep_date = date(2024, 1, 2)
+    crud.set_meal_plan(
+        db_session,
+        {
+            target_date.isoformat(): [r1.id],
+            keep_date.isoformat(): [r3.id],
+        },
+    )
+
+    os.makedirs("data", exist_ok=True)
+    app.dependency_overrides[get_db] = override_get_db(db_session)
+    client = TestClient(app)
+
+    payload = {
+        "plan_date": target_date.isoformat(),
+        "plan": {target_date.isoformat(): [{"main_id": r2.id}]},
+    }
+
+    resp = client.post("/meal-plans?force=true", json=payload)
+    assert resp.status_code == 200
+
+    replaced_meal = db_session.get(Meal, (target_date, 1))
+    assert replaced_meal is not None and replaced_meal.recipe_id == r2.id
+
+    kept_meal = db_session.get(Meal, (keep_date, 1))
+    assert kept_meal is not None and kept_meal.recipe_id == r3.id
+
+    app.dependency_overrides.clear()

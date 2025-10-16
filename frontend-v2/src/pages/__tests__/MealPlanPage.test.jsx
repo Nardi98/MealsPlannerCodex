@@ -168,6 +168,7 @@ test('deletes existing plans before generating a new one on confirm', async () =
   await waitFor(() => {
     expect(mealPlansApi.deleteRange).toHaveBeenCalledTimes(1)
     expect(mealPlansApi.generate).toHaveBeenCalledTimes(1)
+    expect(mealPlansApi.create).toHaveBeenCalledWith(expect.any(Object), { force: true })
   })
 
   expect(

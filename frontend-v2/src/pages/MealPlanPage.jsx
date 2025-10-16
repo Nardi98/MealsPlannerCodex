@@ -100,7 +100,7 @@ export default function MealPlanPage() {
   const handleReduceChange = (selected) =>
     setForm((f) => ({ ...f, reduce_tags: selected }))
 
-  const executeGeneration = async ({ params, startDate, endDate }) => {
+  const executeGeneration = async ({ params, startDate, endDate, force = false }) => {
     const generated = await mealPlansApi.generate(params)
     const payload = {
       plan_date: startDate,
@@ -117,7 +117,7 @@ export default function MealPlanPage() {
       bulk_leftovers: params.bulk_leftovers,
       keep_days: params.keep_days,
     }
-    await mealPlansApi.create(payload)
+    await mealPlansApi.create(payload, { force })
     const updated = await mealPlansApi.fetchRange(startDate, endDate)
     const resetAccepted = Object.fromEntries(
       Object.entries(updated || {}).map(([day, meals]) => [
@@ -171,7 +171,7 @@ export default function MealPlanPage() {
     try {
       const { params, startDate, endDate } = pendingGeneration
       await mealPlansApi.deleteRange(startDate, endDate)
-      await executeGeneration({ params, startDate, endDate })
+      await executeGeneration({ params, startDate, endDate, force: true })
     } catch (err) {
       setError(err.message)
     } finally {

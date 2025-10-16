@@ -52,6 +52,7 @@ __all__ = [
     "export_data",
     "clear_data",
     "delete_meal_plans",
+    "delete_meal_plans_for_dates",
 ]
 
 
@@ -495,6 +496,28 @@ def delete_meal_plans(session: Session, start_date: date, end_date: date) -> int
         session.delete(meal_plan)
         deleted += 1
     session.commit()
+    return deleted
+
+
+def delete_meal_plans_for_dates(
+    session: Session, plan_dates: Iterable[date]
+) -> int:
+    """Delete meal plans whose dates match ``plan_dates`` exactly."""
+
+    unique_dates = {
+        day if isinstance(day, date) else date.fromisoformat(day)
+        for day in plan_dates
+    }
+    if not unique_dates:
+        return 0
+
+    stmt = select(MealPlan).where(MealPlan.plan_date.in_(unique_dates))
+    meal_plans = session.execute(stmt).scalars().all()
+    deleted = 0
+    for meal_plan in meal_plans:
+        session.delete(meal_plan)
+        deleted += 1
+    session.flush()
     return deleted
 
 
