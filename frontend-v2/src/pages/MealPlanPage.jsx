@@ -161,7 +161,7 @@ export default function MealPlanPage() {
           meals.map((m) => ({ ...m, accepted: false })),
         ])
       )
-      setPlan(resetAccepted)
+      setPlan((prev) => ({ ...prev, ...resetAccepted }))
       setMessage('Plan generated successfully.')
     } catch (err) {
       setError(err.message)
