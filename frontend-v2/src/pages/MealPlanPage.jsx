@@ -56,7 +56,7 @@ export default function MealPlanPage() {
     start: defaultStart,
     end: defaultEnd,
     meals_per_day: 2,
-    epsilon: 0,
+    epsilon: 0.25,
     seasonality_weight: 1,
     recency_weight: 1,
     tag_penalty_weight: 1,
@@ -161,7 +161,7 @@ export default function MealPlanPage() {
           meals.map((m) => ({ ...m, accepted: false })),
         ])
       )
-      setPlan(resetAccepted)
+      setPlan((prev) => ({ ...prev, ...resetAccepted }))
       setMessage('Plan generated successfully.')
     } catch (err) {
       setError(err.message)
