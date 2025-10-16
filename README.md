@@ -162,6 +162,7 @@ Set the necessary environment variables before starting:
 
 - `DATABASE_URL` – connection string for the database (e.g. `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`)
 - `DB_STARTUP_RETRY_ATTEMPTS` / `DB_STARTUP_RETRY_DELAY` – optional knobs to control how long the backend waits for the database to become reachable during startup
+- `DB_AUTO_APPLY_MIGRATIONS` – set to `true` to let the backend run the bundled Alembic migrations automatically when starting against an empty database
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 
@@ -169,6 +170,11 @@ The Docker Compose configuration now provisions a PostgreSQL service and injects
 `DATABASE_URL` into the backend container automatically. For production
 deployments prefer installing the `psycopg[c]` package instead of the
 `psycopg2-binary` wheel that is bundled for local development.
+
+When `DB_AUTO_APPLY_MIGRATIONS` is enabled (as in the provided Docker Compose
+setup) the API will bootstrap a new database by executing every migration under
+`backend/migrations/`. If you prefer to manage migrations manually simply omit
+the variable and run `alembic upgrade head` before starting the backend.
 
 Build steps:
 

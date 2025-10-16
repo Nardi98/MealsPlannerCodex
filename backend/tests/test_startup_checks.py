@@ -18,6 +18,14 @@ class _DummyInspector:
         return True
 
 
+class _MissingInspector:
+    def __init__(self, missing: set[str]):
+        self._missing = missing
+
+    def has_table(self, name: str) -> bool:  # pragma: no cover - simple data holder
+        return name not in self._missing
+
+
 def _operational_error() -> OperationalError:
     return OperationalError("SELECT 1", {}, Exception("boom"))
 
@@ -69,3 +77,46 @@ def test_verify_schema_uses_sqlite_fallback(monkeypatch):
     main._verify_schema_state()
 
     assert called.get("ran") is True
+
+
+def test_verify_schema_auto_applies_migrations(monkeypatch):
+    inspectors = iter(
+        [
+            _MissingInspector({"recipes"}),
+            _DummyInspector(),
+        ]
+    )
+    migrated = {}
+
+    def fake_inspect(_engine):
+        return next(inspectors)
+
+    def fake_run_migrations():
+        migrated["ran"] = True
+
+    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
+    monkeypatch.setattr(main, "_AUTO_APPLY_MIGRATIONS", True, raising=False)
+    monkeypatch.setattr(main, "inspect", fake_inspect)
+    monkeypatch.setattr(main, "_run_migrations", fake_run_migrations)
+
+    main._verify_schema_state()
+
+    assert migrated.get("ran") is True
+
+
+def test_verify_schema_auto_apply_failure(monkeypatch):
+    def fake_inspect(_engine):
+        return _MissingInspector({"recipes"})
+
+    def fake_run_migrations():
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
+    monkeypatch.setattr(main, "_AUTO_APPLY_MIGRATIONS", True, raising=False)
+    monkeypatch.setattr(main, "inspect", fake_inspect)
+    monkeypatch.setattr(main, "_run_migrations", fake_run_migrations)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        main._verify_schema_state()
+
+    assert "Automatic migration failed" in str(excinfo.value)
