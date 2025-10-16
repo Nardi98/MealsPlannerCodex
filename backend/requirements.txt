@@ -7,3 +7,4 @@ fastapi
 httpx
 uvicorn
 alembic
+psycopg2-binary  # Local PostgreSQL driver; prefer "psycopg[c]" in production.

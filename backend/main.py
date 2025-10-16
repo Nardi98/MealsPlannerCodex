@@ -10,19 +10,51 @@ import random
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import select, func
+from sqlalchemy import func, inspect, select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.exc import SQLAlchemyError
 
 import crud
 import models
 import schemas
 from mealplanner import planner
-from database import SessionLocal, engine
+from database import SessionLocal, engine, USING_DEV_FALLBACK
 
-# Ensure database tables exist on startup
-models.Base.metadata.create_all(bind=engine)
+
+def _verify_schema_state() -> None:
+    """Ensure the database schema has been prepared via Alembic migrations."""
+
+    if USING_DEV_FALLBACK:
+        models.Base.metadata.create_all(bind=engine)
+        return
+
+    try:
+        inspector = inspect(engine)
+    except SQLAlchemyError as exc:  # pragma: no cover - defensive guard
+        raise RuntimeError(
+            "Unable to connect to the configured database. Check DATABASE_URL "
+            "and ensure the database is reachable."
+        ) from exc
+
+    missing = [
+        table_name
+        for table_name in models.Base.metadata.tables
+        if not inspector.has_table(table_name)
+    ]
+    if missing:
+        raise RuntimeError(
+            "Database schema is missing required tables: {tables}. "
+            "Run 'alembic upgrade head' before starting the API.".format(
+                tables=", ".join(sorted(missing))
+            )
+        )
 
 app = FastAPI()
+
+
+@app.on_event("startup")
+def _startup_check() -> None:
+    _verify_schema_state()
 
 # Allow all CORS for demo purposes
 app.add_middleware(

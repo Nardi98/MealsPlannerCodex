@@ -57,7 +57,7 @@
 
 - **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
 - **Frontend:** React.
-- **Database:** SQLite with SQLAlchemy ORM.
+- **Database:** PostgreSQL via SQLAlchemy ORM (with a SQLite fallback for quick local experiments).
 - **Version control:** Git.
 
 ### UI
@@ -77,8 +77,20 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# Configure SQLAlchemy to talk to PostgreSQL
+export DATABASE_URL="postgresql+psycopg2://mealplanner:mealplanner@localhost:5432/mealplanner"
+
+# Apply database migrations before starting the API
+alembic upgrade head
+
 uvicorn app.main:app --reload
 ```
+
+The backend reads the `DATABASE_URL` environment variable. When it is not set it
+falls back to a SQLite database stored under `backend/data/app.db`. That fallback
+is only intended for quick developer tests—the production stack requires a
+PostgreSQL database with Alembic migrations applied.
 
 #### Database migrations
 
@@ -148,9 +160,14 @@ docker-compose up --build
 
 Set the necessary environment variables before starting:
 
-- `DATABASE_URL` – connection string for the database
+- `DATABASE_URL` – connection string for the database (e.g. `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`)
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
+
+The Docker Compose configuration now provisions a PostgreSQL service and injects
+`DATABASE_URL` into the backend container automatically. For production
+deployments prefer installing the `psycopg[c]` package instead of the
+`psycopg2-binary` wheel that is bundled for local development.
 
 Build steps:
 

@@ -1,6 +1,17 @@
 version: "3.9"
 
 services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: mealplanner
+      POSTGRES_PASSWORD: mealplanner
+      POSTGRES_DB: mealplanner
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   backend:
     build: ./backend
     # run python in unbuffered mode (+ louder uvicorn logs)
@@ -9,8 +20,11 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner
     volumes:
       - ./backend:/app
+    depends_on:
+      - postgres
 
   frontend-v2:
     build: ./frontend-v2
@@ -18,3 +32,6 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+volumes:
+  postgres_data:
