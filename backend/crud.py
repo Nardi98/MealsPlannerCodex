@@ -6,7 +6,7 @@ from datetime import date
 import json
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
@@ -511,12 +511,15 @@ def delete_meal_plans_for_dates(
     if not unique_dates:
         return 0
 
-    stmt = select(MealPlan).where(MealPlan.plan_date.in_(unique_dates))
-    meal_plans = session.execute(stmt).scalars().all()
-    deleted = 0
-    for meal_plan in meal_plans:
-        session.delete(meal_plan)
-        deleted += 1
+    stmt = select(MealPlan.plan_date).where(MealPlan.plan_date.in_(unique_dates))
+    target_dates = set(session.execute(stmt).scalars().all())
+    if not target_dates:
+        return 0
+
+    session.execute(delete(MealSide).where(MealSide.plan_date.in_(target_dates)))
+    session.execute(delete(Meal).where(Meal.plan_date.in_(target_dates)))
+    result = session.execute(delete(MealPlan).where(MealPlan.plan_date.in_(target_dates)))
+    deleted = result.rowcount or 0
     session.flush()
     return deleted
 

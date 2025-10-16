@@ -1,10 +1,12 @@
 import os
 from datetime import date
+
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 import crud
 from main import app, get_db
-from mealplanner.models import MealPlan, Meal
+from mealplanner.models import MealPlan, Meal, MealSide
 
 
 def override_get_db(session):
@@ -89,3 +91,37 @@ def test_force_overwrite_only_removes_conflicting_dates(db_session):
     assert kept_meal is not None and kept_meal.recipe_id == r3.id
 
     app.dependency_overrides.clear()
+
+
+def test_delete_meal_plans_for_dates_clears_all_tables(db_session):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
+    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
+
+    plan_date = date(2024, 1, 3)
+    crud.set_meal_plan(
+        db_session,
+        {
+            plan_date.isoformat(): [
+                {
+                    "main_id": main.id,
+                    "side_ids": [side.id],
+                }
+            ]
+        },
+    )
+
+    assert db_session.get(MealPlan, plan_date) is not None
+    assert db_session.get(Meal, (plan_date, 1)) is not None
+    assert db_session.execute(
+        select(MealSide).where(MealSide.plan_date == plan_date)
+    ).first() is not None
+
+    deleted = crud.delete_meal_plans_for_dates(db_session, [plan_date])
+    assert deleted == 1
+
+    assert db_session.get(MealPlan, plan_date) is None
+    assert db_session.get(Meal, (plan_date, 1)) is None
+    side_rows = db_session.execute(
+        select(MealSide).where(MealSide.plan_date == plan_date)
+    ).scalars().all()
+    assert side_rows == []
