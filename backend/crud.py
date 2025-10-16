@@ -40,6 +40,7 @@ __all__ = [
     "set_meal_plan",
     "save_plan",
     "get_plan",
+    "delete_meal_plans",
     "get_plan_settings",
     "mark_meal_accepted",
     "add_meal_side",
@@ -412,6 +413,33 @@ def save_plan(
     for key, value in settings.items():
         if value is not None:
             _PLAN_SETTINGS[key] = value
+
+
+def delete_meal_plans(
+    session: Session, start_date: date, end_date: date
+) -> int:
+    """Delete meal plans within ``start_date`` and ``end_date`` inclusive."""
+
+    stmt = select(MealPlan).where(
+        MealPlan.plan_date.between(start_date, end_date)
+    )
+    meal_plans = session.execute(stmt).scalars().all()
+    deleted = len(meal_plans)
+
+    for meal_plan in meal_plans:
+        session.delete(meal_plan)
+
+    session.commit()
+
+    for key in list(_PLAN_CACHE.keys()):
+        try:
+            key_date = date.fromisoformat(key)
+        except ValueError:
+            continue
+        if start_date <= key_date <= end_date:
+            _PLAN_CACHE.pop(key, None)
+
+    return deleted
 
 
 def get_plan(
