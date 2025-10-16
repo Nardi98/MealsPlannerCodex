@@ -5,6 +5,7 @@ import {
   Input,
   TagSelector,
   MealActionModal,
+  OverwriteConfirmModal,
 } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { tagsApi } from '../api/tagsApi'
@@ -68,6 +69,9 @@ export default function MealPlanPage() {
   })
   const [message, setMessage] = React.useState('')
   const [error, setError] = React.useState('')
+  const [showOverwriteModal, setShowOverwriteModal] = React.useState(false)
+  const [conflictDays, setConflictDays] = React.useState([])
+  const [pendingGeneration, setPendingGeneration] = React.useState(null)
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
@@ -96,6 +100,56 @@ export default function MealPlanPage() {
   const handleReduceChange = (selected) =>
     setForm((f) => ({ ...f, reduce_tags: selected }))
 
+  const executeGeneration = async (config) => {
+    if (!config) return false
+    const { params, range } = config
+    try {
+      const generated = await mealPlansApi.generate(params)
+      const payload = {
+        plan_date: range.start,
+        plan: Object.fromEntries(
+          Object.entries(generated || {}).map(([day, meals]) => [
+            day,
+            meals.map((m) => ({
+              main_id: m.id,
+              side_ids: [],
+              leftover: m.leftover,
+            })),
+          ]),
+        ),
+        bulk_leftovers: Boolean(params.bulk_leftovers),
+        keep_days: Number(params.keep_days),
+      }
+      try {
+        await mealPlansApi.create(payload)
+      } catch (err) {
+        if (err.data?.conflicts?.length) {
+          const conflictList = [...err.data.conflicts].sort()
+          setConflictDays(conflictList)
+          setPendingGeneration(config)
+          setShowOverwriteModal(true)
+          return false
+        }
+        throw err
+      }
+      const updated = await mealPlansApi.fetchRange(range.start, range.end)
+      const resetAccepted = Object.fromEntries(
+        Object.entries(updated || {}).map(([day, meals]) => [
+          day,
+          meals.map((m) => ({ ...m, accepted: false })),
+        ])
+      )
+      setPlan((prev) => ({ ...prev, ...resetAccepted }))
+      setMessage('Plan generated successfully.')
+      setPendingGeneration(null)
+      return true
+    } catch (err) {
+      setError(err.message)
+      setPendingGeneration(null)
+      return false
+    }
+  }
+
   const handleGenerate = async (e) => {
     e.preventDefault()
     setError('')
@@ -121,49 +175,59 @@ export default function MealPlanPage() {
         reduce_tags: form.reduce_tags,
         keep_days: Number(form.keep_days),
       }
-      const generated = await mealPlansApi.generate(params)
-      const payload = {
-        plan_date: form.start,
-        plan: Object.fromEntries(
-          Object.entries(generated).map(([day, meals]) => [
-            day,
-            meals.map((m) => ({
-              main_id: m.id,
-              side_ids: [],
-              leftover: m.leftover,
-            })),
-          ]),
-        ),
-        bulk_leftovers: Boolean(form.bulk_leftovers),
-        keep_days: Number(form.keep_days),
+      const range = { start: form.start, end: form.end }
+      const config = { params, range }
+      setPendingGeneration(config)
+      const existing = await mealPlansApi.fetchRange(range.start, range.end)
+      const conflicts = Object.entries(existing || {})
+        .filter(([, meals]) => Array.isArray(meals) && meals.length > 0)
+        .map(([day]) => day)
+      if (conflicts.length) {
+        setConflictDays(conflicts.sort())
+        setShowOverwriteModal(true)
+        return
       }
-      try {
-        await mealPlansApi.create(payload)
-      } catch (err) {
-        if (err.data?.conflicts) {
-          const days = err.data.conflicts.join(', ')
-          const overwrite = window.confirm(
-            `Conflicts on: ${days}. Overwrite existing plans?`
-          )
-          if (!overwrite) {
-            setError(`Conflicts on: ${days}`)
-            return
-          }
-          await mealPlansApi.create(payload, { force: true })
-        } else {
-          throw err
-        }
-      }
-      const updated = await mealPlansApi.fetchRange(form.start, form.end)
-      const resetAccepted = Object.fromEntries(
-        Object.entries(updated || {}).map(([day, meals]) => [
-          day,
-          meals.map((m) => ({ ...m, accepted: false })),
-        ])
-      )
-      setPlan((prev) => ({ ...prev, ...resetAccepted }))
-      setMessage('Plan generated successfully.')
+      await executeGeneration(config)
     } catch (err) {
+      setPendingGeneration(null)
+      setError(err.message)
+    }
+  }
+
+  const handleCancelOverwrite = () => {
+    setShowOverwriteModal(false)
+    setConflictDays([])
+    setPendingGeneration(null)
+  }
+
+  const handleConfirmOverwrite = async () => {
+    if (!pendingGeneration) {
+      setShowOverwriteModal(false)
+      return
+    }
+    setError('')
+    setMessage('')
+    const { range } = pendingGeneration
+    try {
+      await mealPlansApi.deleteRange(range.start, range.end)
+      if (conflictDays.length) {
+        setPlan((prev) => {
+          const next = { ...prev }
+          let changed = false
+          conflictDays.forEach((day) => {
+            if (Object.prototype.hasOwnProperty.call(next, day)) {
+              delete next[day]
+              changed = true
+            }
+          })
+          return changed ? next : prev
+        })
+      }
+      setShowOverwriteModal(false)
+      setConflictDays([])
+      await executeGeneration(pendingGeneration)
+    } catch (err) {
+      setShowOverwriteModal(false)
       setError(err.message)
     }
   }
@@ -678,6 +742,15 @@ export default function MealPlanPage() {
           <Button type="submit">Generate plan</Button>
         </form>
       </Card>
+      {showOverwriteModal && (
+        <OverwriteConfirmModal
+          onCancel={handleCancelOverwrite}
+          onConfirm={handleConfirmOverwrite}
+          title="Overwrite Existing Plans"
+          message="The following dates already have meal plans. Overwrite them?"
+          items={conflictDays}
+        />
+      )}
       {activeCell && (
         <MealActionModal
           date={activeCell.date}
