@@ -305,7 +305,9 @@ export default function MealPlanPage() {
       }
 
       const updatedDay = plan[date].map((m, i) =>
-        i === mealIndex ? { ...m, recipe: replacement, accepted: false } : m
+        i === mealIndex
+          ? { ...m, recipe: replacement, accepted: false, leftover: false }
+          : m
       )
       setPlan((p) => ({ ...p, [date]: updatedDay }))
 
@@ -348,7 +350,9 @@ export default function MealPlanPage() {
       await feedbackApi.rejectRecipe(meal.recipe, date)
       await feedbackApi.acceptRecipe(newTitle, date)
       const updatedDay = plan[date].map((m, i) =>
-        i === mealIndex ? { ...m, recipe: newTitle, accepted: false } : m
+        i === mealIndex
+          ? { ...m, recipe: newTitle, accepted: false, leftover: false }
+          : m
       )
       setPlan((p) => ({ ...p, [date]: updatedDay }))
       try {
