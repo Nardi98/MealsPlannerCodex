@@ -23,6 +23,7 @@ import models
 import schemas
 from database import DATABASE_URL, SessionLocal, engine
 from mealplanner import planner
+from migration_runner import upgrade as run_migrations
 
 logger = logging.getLogger(__name__)
 
@@ -101,20 +102,9 @@ def _await_database_ready() -> Any:
 def _verify_schema_state() -> None:
     """Ensure the database exists and required tables are available."""
 
-    inspector = _await_database_ready()
-
-    missing = [
-        table_name
-        for table_name in models.Base.metadata.tables
-        if not inspector.has_table(table_name)
-    ]
-
-    if missing:
-        logger.info(
-            "Detected missing tables (%s); creating them automatically.",
-            ", ".join(sorted(missing)),
-        )
-        models.Base.metadata.create_all(bind=engine)
+    _await_database_ready()
+    logger.info("Applying Alembic migrations to ensure schema is up to date.")
+    run_migrations(DATABASE_URL)
 
 
 app = FastAPI()

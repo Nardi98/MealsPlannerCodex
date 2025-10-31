@@ -1,11 +1,7 @@
-from pathlib import Path
-import importlib.util
-
 import sqlalchemy as sa
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 
 from tests.conftest import TEST_DATABASE_URL, temporary_database
+from migration_runner import upgrade as run_migrations
 
 
 def test_migration_adds_course_default():
@@ -37,20 +33,7 @@ CREATE TABLE recipes (
             conn.execute(insert_sql)
             conn.commit()
 
-        migrations_dir = Path(__file__).resolve().parent.parent / "migrations"
-        migration_file = sorted(migrations_dir.glob("003*.py"))[0]
-        spec = importlib.util.spec_from_file_location(
-            "migration", migration_file
-        )
-        migration = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(migration)
-
-        with engine.connect() as conn:
-            ctx = MigrationContext.configure(conn)
-            op = Operations(ctx)
-            migration.op = op
-            migration.upgrade()
-            conn.commit()
+        run_migrations(url)
 
         with engine.connect() as conn:
             result = conn.execute(
