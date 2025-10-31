@@ -81,23 +81,18 @@ pip install -r requirements.txt
 # Configure SQLAlchemy to talk to PostgreSQL (required)
 export DATABASE_URL="postgresql+psycopg2://mealplanner:mealplanner@localhost:5432/mealplanner"
 
+# Apply database migrations before starting the API
+alembic upgrade head
+
 uvicorn app.main:app --reload
 ```
 
 The backend requires the `DATABASE_URL` environment variable. Point it to a
 PostgreSQL database that already exists or can be created by the configured
-user. During startup the application will create the database automatically if
-the user has `CREATE DATABASE` privileges, and it will always create any missing
-tables using the SQLAlchemy models.
-
-For a brand-new PostgreSQL instance you can prepare the schema with either of
-the following workflows:
-
-1. Run `uvicorn app.main:app --reload` (or `docker-compose up backend`) once and
-   allow the startup checks to create the database and tables automatically.
-2. Or, if you prefer Alembic migrations, install the backend requirements and
-   execute `alembic upgrade head` from the `backend/` directory after exporting
-   `DATABASE_URL`.
+user. During startup the application verifies the connection (creating the
+database automatically if the credentials allow it) and then applies the Alembic
+schema migrations. Running `alembic upgrade head` prior to launching the API is
+now the supported workflow for aligning the schema.
 
 ### Frontend (`frontend-v2/`)
 

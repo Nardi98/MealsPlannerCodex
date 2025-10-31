@@ -4,13 +4,18 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
+from sqlalchemy import text
+
 from main import app
 from mealplanner.db import Base, engine
+from migration_runner import upgrade as run_migrations
 
 
 def _reset_db() -> None:
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    run_migrations(engine)
 
 
 def test_invalid_unit_rejected() -> None:

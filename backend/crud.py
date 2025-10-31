@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
+from migration_runner import upgrade as run_migrations
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from models import (
     Ingredient,
@@ -53,6 +54,16 @@ __all__ = [
     "export_data",
     "clear_data",
 ]
+
+
+def _run_migrations_for_session(session: Session) -> None:
+    """Ensure the database schema matches the latest Alembic revision."""
+
+    bind = session.get_bind()
+    if bind is None:
+        return
+
+    run_migrations(bind)
 
 
 def create_recipe(session: Session, **data: Any) -> Recipe:
@@ -714,7 +725,7 @@ def import_data(
         close_session = True
 
     # Ensure database tables exist for this session's engine
-    Base.metadata.create_all(bind=session.get_bind())
+    _run_migrations_for_session(session)
 
     try:
         raw = file_obj.read()
@@ -873,7 +884,7 @@ def export_data(session: Optional[Session] = None) -> str:
         close_session = True
 
     # Ensure database tables exist for this session's engine
-    Base.metadata.create_all(bind=session.get_bind())
+    _run_migrations_for_session(session)
 
     try:
         recipes_data = []

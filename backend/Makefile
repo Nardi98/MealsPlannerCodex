@@ -1,9 +1,12 @@
 PYTHON=python
 
-.PHONY: lint test
+.PHONY: lint test migrate
 
 lint:
-	flake8 .
+flake8 .
 
-test:
-	pytest
+migrate:
+alembic upgrade head
+
+test: migrate
+pytest

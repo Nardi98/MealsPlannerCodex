@@ -75,15 +75,15 @@ def test_verify_schema_raises_after_max_attempts(monkeypatch):
 def test_verify_schema_creates_missing_tables(monkeypatch):
     called = {}
 
-    def fake_create_all(*args, **kwargs):
-        called["ran"] = True
+    def fake_run_migrations(url):
+        called["ran"] = url
 
-    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
-    monkeypatch.setattr(main, "inspect", lambda _engine: _MissingInspector({"recipes"}))
+    monkeypatch.setattr(main, "run_migrations", fake_run_migrations)
+    monkeypatch.setattr(main, "_await_database_ready", lambda: _MissingInspector({"recipes"}))
 
     main._verify_schema_state()
 
-    assert called.get("ran") is True
+    assert called.get("ran") == main.DATABASE_URL
 
 
 def test_verify_schema_creates_database(monkeypatch):
@@ -95,16 +95,13 @@ def test_verify_schema_creates_database(monkeypatch):
             raise _operational_error()
         return _MissingInspector({"recipes"})
 
-    def fake_create_all(*args, **kwargs):
-        created["tables"] = True
-
     def fake_attempt_create_database(error):
         created["database"] = True
         return True
 
-    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
     monkeypatch.setattr(main, "inspect", fake_inspect)
     monkeypatch.setattr(main, "_attempt_create_database", fake_attempt_create_database)
+    monkeypatch.setattr(main, "run_migrations", lambda url: created.setdefault("tables", True))
 
     main._verify_schema_state()
 

@@ -134,7 +134,8 @@ def _prepare_database_url(base_url: str) -> Tuple[str, Callable[[], None]]:
     if url.drivername.startswith("postgresql"):
         # Fall back to an in-memory SQLite database when the configured
         # Postgres instance is unavailable.
-        sqlite_url = make_url("sqlite+pysqlite:///:memory:")
+        sqlite_path = Path(tempfile.gettempdir()) / f"mealplanner_test_{uuid4().hex}.db"
+        sqlite_url = make_url(f"sqlite+pysqlite:///{sqlite_path}")
         return _prepare_sqlite_url(sqlite_url)
 
     if url.drivername.startswith("sqlite"):
@@ -154,8 +155,10 @@ _BASE_TEST_DATABASE_URL = _default_database_url()
 TEST_DATABASE_URL = _RESOLVED_TEST_DATABASE_URL
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
-from mealplanner.db import Base  # noqa: E402
 import mealplanner.models  # noqa: E402,F401
+from mealplanner.db import Base  # noqa: E402
+from migration_runner import upgrade as run_migrations  # noqa: E402
+from sqlalchemy import text
 
 
 @contextmanager
@@ -210,7 +213,7 @@ def engine():
             engine_kwargs["poolclass"] = StaticPool
 
     eng = create_engine(str(url), **engine_kwargs)
-    Base.metadata.create_all(bind=eng)
+    run_migrations(eng)
     yield eng
     eng.dispose()
     cleanup()
@@ -230,3 +233,8 @@ def db_session(engine):
         session.close()
         trans.rollback()
         connection.close()
+        if engine.dialect.name == "sqlite":
+            Base.metadata.drop_all(bind=engine)
+            with engine.begin() as conn:
+                conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            run_migrations(engine)
