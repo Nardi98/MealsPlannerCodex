@@ -57,7 +57,7 @@
 
 - **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
 - **Frontend:** React.
-- **Database:** PostgreSQL via SQLAlchemy ORM (with a SQLite fallback for quick local experiments).
+- **Database:** PostgreSQL via SQLAlchemy ORM.
 - **Version control:** Git.
 
 ### UI
@@ -78,17 +78,26 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# Configure SQLAlchemy to talk to PostgreSQL
+# Configure SQLAlchemy to talk to PostgreSQL (required)
 export DATABASE_URL="postgresql+psycopg2://mealplanner:mealplanner@localhost:5432/mealplanner"
 
 uvicorn app.main:app --reload
 ```
 
-The backend reads the `DATABASE_URL` environment variable. When it is not set it
-falls back to a SQLite database stored under `backend/data/app.db`. That fallback
-is only intended for quick developer tests—the production stack requires a
-PostgreSQL database. On startup the backend will create the configured database
-and any missing tables automatically when using PostgreSQL.
+The backend requires the `DATABASE_URL` environment variable. Point it to a
+PostgreSQL database that already exists or can be created by the configured
+user. During startup the application will create the database automatically if
+the user has `CREATE DATABASE` privileges, and it will always create any missing
+tables using the SQLAlchemy models.
+
+For a brand-new PostgreSQL instance you can prepare the schema with either of
+the following workflows:
+
+1. Run `uvicorn app.main:app --reload` (or `docker-compose up backend`) once and
+   allow the startup checks to create the database and tables automatically.
+2. Or, if you prefer Alembic migrations, install the backend requirements and
+   execute `alembic upgrade head` from the `backend/` directory after exporting
+   `DATABASE_URL`.
 
 ### Frontend (`frontend-v2/`)
 
@@ -105,15 +114,14 @@ meal-planner/
 ├── README.md                  # project specs (already created)
 ├── backend/                   # FastAPI application
 │   ├── app/                   # business logic and API routers
+│   ├── migrations/            # Alembic migration scripts
 │   ├── requirements.txt       # backend dependencies
 │   └── ...
 ├── frontend-v2/             # Updated UI
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-├── migrations/                # (optional) alembic migration scripts
-└── data/
-    └── app.db                 # sqlite database (created on first run)
+└── docker-compose.yml        # Service orchestration
 ```
 
 ## 📦 Requirements
@@ -146,10 +154,15 @@ docker-compose up --build
 
 Set the necessary environment variables before starting:
 
-- `DATABASE_URL` – connection string for the database (e.g. `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`)
-- `DB_STARTUP_RETRY_ATTEMPTS` / `DB_STARTUP_RETRY_DELAY` – optional knobs to control how long the backend waits for the database to become reachable during startup
-- `API_BASE_URL` – URL used by the frontend to reach the backend
-- `PORT` – server port for the backend
+- `DATABASE_URL` **(required)** – PostgreSQL connection string (e.g.
+  `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`).
+- `DB_STARTUP_RETRY_ATTEMPTS` / `DB_STARTUP_RETRY_DELAY` – optional knobs to
+  control how long the backend waits for the database to become reachable during
+  startup.
+- `SQLALCHEMY_POOL_SIZE` / `SQLALCHEMY_MAX_OVERFLOW` – optional overrides for
+  the PostgreSQL connection pool sizing.
+- `API_BASE_URL` – URL used by the frontend to reach the backend.
+- `PORT` – server port for the backend.
 
 The Docker Compose configuration now provisions a PostgreSQL service and injects
 `DATABASE_URL` into the backend container automatically. For production

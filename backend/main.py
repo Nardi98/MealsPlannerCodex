@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, selectinload
 import crud
 import models
 import schemas
-from database import DATABASE_URL, SessionLocal, engine, USING_DEV_FALLBACK
+from database import DATABASE_URL, SessionLocal, engine
 from mealplanner import planner
 
 logger = logging.getLogger(__name__)
@@ -102,10 +102,6 @@ def _verify_schema_state() -> None:
     """Ensure the database exists and required tables are available."""
 
     inspector = _await_database_ready()
-
-    if USING_DEV_FALLBACK:
-        models.Base.metadata.create_all(bind=engine)
-        return
 
     missing = [
         table_name

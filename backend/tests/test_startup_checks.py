@@ -49,7 +49,6 @@ def test_verify_schema_retries_until_success(monkeypatch):
             raise _operational_error()
         return _DummyInspector()
 
-    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
     monkeypatch.setattr(main, "inspect", fake_inspect)
     monkeypatch.setattr(main, "_STARTUP_RETRY_ATTEMPTS", 5, raising=False)
     monkeypatch.setattr(main, "_STARTUP_RETRY_DELAY", 0, raising=False)
@@ -63,7 +62,6 @@ def test_verify_schema_raises_after_max_attempts(monkeypatch):
     def fake_inspect(_engine):
         raise _operational_error()
 
-    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
     monkeypatch.setattr(main, "inspect", fake_inspect)
     monkeypatch.setattr(main, "_STARTUP_RETRY_ATTEMPTS", 2, raising=False)
     monkeypatch.setattr(main, "_STARTUP_RETRY_DELAY", 0, raising=False)
@@ -72,6 +70,20 @@ def test_verify_schema_raises_after_max_attempts(monkeypatch):
         main._verify_schema_state()
 
     assert "Unable to connect to the configured database" in str(excinfo.value)
+
+
+def test_verify_schema_creates_missing_tables(monkeypatch):
+    called = {}
+
+    def fake_create_all(*args, **kwargs):
+        called["ran"] = True
+
+    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
+    monkeypatch.setattr(main, "inspect", lambda _engine: _MissingInspector({"recipes"}))
+
+    main._verify_schema_state()
+
+    assert called.get("ran") is True
 
 
 def test_verify_schema_creates_database(monkeypatch):
@@ -90,7 +102,6 @@ def test_verify_schema_creates_database(monkeypatch):
         created["database"] = True
         return True
 
-    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
     monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
     monkeypatch.setattr(main, "inspect", fake_inspect)
     monkeypatch.setattr(main, "_attempt_create_database", fake_attempt_create_database)
