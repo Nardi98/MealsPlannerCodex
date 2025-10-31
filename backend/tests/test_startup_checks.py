@@ -30,6 +30,15 @@ def _operational_error() -> OperationalError:
     return OperationalError("SELECT 1", {}, Exception("boom"))
 
 
+class _FakePgError:
+    def __init__(self, pgcode: str | None, message: str):
+        self.pgcode = pgcode
+        self._message = message
+
+    def __str__(self) -> str:  # pragma: no cover - trivial accessor
+        return self._message
+
+
 def test_verify_schema_retries_until_success(monkeypatch):
     attempts = 0
 
@@ -79,44 +88,74 @@ def test_verify_schema_uses_sqlite_fallback(monkeypatch):
     assert called.get("ran") is True
 
 
-def test_verify_schema_auto_applies_migrations(monkeypatch):
-    inspectors = iter(
-        [
-            _MissingInspector({"recipes"}),
-            _DummyInspector(),
-        ]
-    )
-    migrated = {}
+def test_verify_schema_creates_database(monkeypatch):
+    created = {}
 
     def fake_inspect(_engine):
-        return next(inspectors)
+        if "error" not in created:
+            created["error"] = True
+            raise _operational_error()
+        return _MissingInspector({"recipes"})
 
-    def fake_run_migrations():
-        migrated["ran"] = True
+    def fake_create_all(*args, **kwargs):
+        created["tables"] = True
+
+    def fake_attempt_create_database(error):
+        created["database"] = True
+        return True
 
     monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
-    monkeypatch.setattr(main, "_AUTO_APPLY_MIGRATIONS", True, raising=False)
+    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
     monkeypatch.setattr(main, "inspect", fake_inspect)
-    monkeypatch.setattr(main, "_run_migrations", fake_run_migrations)
+    monkeypatch.setattr(main, "_attempt_create_database", fake_attempt_create_database)
 
     main._verify_schema_state()
 
-    assert migrated.get("ran") is True
+    assert created["database"] is True
+    assert created["tables"] is True
 
 
-def test_verify_schema_auto_apply_failure(monkeypatch):
-    def fake_inspect(_engine):
-        return _MissingInspector({"recipes"})
+def test_attempt_create_database_non_postgres(monkeypatch):
+    error = _operational_error()
+    monkeypatch.setattr(main, "DATABASE_URL", "sqlite:///test.db", raising=False)
 
-    def fake_run_migrations():
-        raise RuntimeError("boom")
+    assert main._attempt_create_database(error) is False
 
-    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
-    monkeypatch.setattr(main, "_AUTO_APPLY_MIGRATIONS", True, raising=False)
-    monkeypatch.setattr(main, "inspect", fake_inspect)
-    monkeypatch.setattr(main, "_run_migrations", fake_run_migrations)
 
-    with pytest.raises(RuntimeError) as excinfo:
-        main._verify_schema_state()
+def test_attempt_create_database_creates(monkeypatch):
+    created = {}
 
-    assert "Automatic migration failed" in str(excinfo.value)
+    class DummyConn:
+        dialect = type(
+            "_Dialect",
+            (),
+            {"identifier_preparer": type("_Prep", (), {"quote": staticmethod(lambda value: f'"{value}"')})()},
+        )()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def exec_driver_sql(self, statement):
+            created["sql"] = statement
+
+    class DummyEngine:
+        def connect(self):
+            created["connected"] = True
+            return DummyConn()
+
+        def dispose(self):
+            created["disposed"] = True
+
+    orig_error = _FakePgError("3D000", "database does not exist")
+    error = OperationalError("SELECT 1", {}, orig_error)
+
+    monkeypatch.setattr(main, "DATABASE_URL", "postgresql+psycopg2://user:pass@host/dbname", raising=False)
+    monkeypatch.setattr(main, "create_engine", lambda url, **kwargs: DummyEngine())
+
+    assert main._attempt_create_database(error) is True
+    assert created["connected"] is True
+    assert created["disposed"] is True
+    assert created["sql"] == 'CREATE DATABASE "dbname"'

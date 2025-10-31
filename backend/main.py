@@ -1,7 +1,6 @@
 """FastAPI application for Meals Planner Codex."""
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import logging
@@ -9,67 +8,60 @@ import os
 import random
 import time
 from datetime import date
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
-from sqlalchemy import func, inspect, select
+from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 import crud
 import models
 import schemas
-from database import SessionLocal, engine, USING_DEV_FALLBACK
+from database import DATABASE_URL, SessionLocal, engine, USING_DEV_FALLBACK
 from mealplanner import planner
 
 logger = logging.getLogger(__name__)
 
 _STARTUP_RETRY_ATTEMPTS = int(os.getenv("DB_STARTUP_RETRY_ATTEMPTS", "5"))
 _STARTUP_RETRY_DELAY = float(os.getenv("DB_STARTUP_RETRY_DELAY", "2"))
-_AUTO_APPLY_MIGRATIONS = os.getenv("DB_AUTO_APPLY_MIGRATIONS", "0").lower() in {
-    "1",
-    "true",
-    "yes",
-}
-_MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+_POSTGRES_MISSING_DATABASE_CODES = {"3D000"}
 
 
-def _run_migrations() -> None:
-    """Apply all Alembic-style migrations in order."""
+def _attempt_create_database(error: OperationalError) -> bool:
+    """Create the configured PostgreSQL database if it does not yet exist."""
 
-    if not _MIGRATIONS_DIR.exists():
-        raise RuntimeError("Migrations directory not found; cannot apply migrations automatically.")
+    if not DATABASE_URL.startswith("postgresql"):
+        return False
 
-    migration_files = sorted(p for p in _MIGRATIONS_DIR.glob("*.py") if p.is_file())
-    if not migration_files:
-        logger.info("No migration files detected; skipping automatic migration step.")
-        return
+    original = getattr(error, "orig", None)
+    if original is None:
+        return False
 
-    with engine.begin() as connection:
-        context = MigrationContext.configure(connection)
-        operations = Operations(context)
+    pgcode = getattr(original, "pgcode", None)
+    message = str(original).lower()
+    if pgcode not in _POSTGRES_MISSING_DATABASE_CODES and "does not exist" not in message:
+        return False
 
-        for path in migration_files:
-            spec = importlib.util.spec_from_file_location(f"migration_{path.stem}", path)
-            if spec is None or spec.loader is None:
-                raise RuntimeError(f"Unable to load migration module from {path}.")
+    url = make_url(DATABASE_URL)
+    if not url.database:
+        return False
 
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+    admin_url = url.set(database="postgres")
+    admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT", future=True)
 
-            upgrade = getattr(module, "upgrade", None)
-            if upgrade is None:
-                logger.debug("Skipping migration %s because it has no upgrade() function.", path.name)
-                continue
+    try:
+        with admin_engine.connect() as conn:
+            quoted_name = conn.dialect.identifier_preparer.quote(url.database)
+            conn.exec_driver_sql(f"CREATE DATABASE {quoted_name}")
+    finally:
+        admin_engine.dispose()
 
-            setattr(module, "op", operations)
-            logger.info("Applying migration %s", path.name)
-            upgrade()
+    logger.info("Created missing PostgreSQL database '%s'.", url.database)
+    return True
 
 
 def _await_database_ready() -> Any:
@@ -81,6 +73,9 @@ def _await_database_ready() -> Any:
             break
         except OperationalError as exc:
             last_error = exc
+            if _attempt_create_database(exc):
+                # Retry immediately after creating the database.
+                continue
             if attempt == _STARTUP_RETRY_ATTEMPTS:
                 break
             logger.info(
@@ -104,13 +99,13 @@ def _await_database_ready() -> Any:
 
 
 def _verify_schema_state() -> None:
-    """Ensure the database schema has been prepared via Alembic migrations."""
+    """Ensure the database exists and required tables are available."""
+
+    inspector = _await_database_ready()
 
     if USING_DEV_FALLBACK:
         models.Base.metadata.create_all(bind=engine)
         return
-
-    inspector = _await_database_ready()
 
     missing = [
         table_name
@@ -118,32 +113,12 @@ def _verify_schema_state() -> None:
         if not inspector.has_table(table_name)
     ]
 
-    if missing and _AUTO_APPLY_MIGRATIONS:
+    if missing:
         logger.info(
-            "Detected missing tables (%s); attempting to apply migrations automatically.",
+            "Detected missing tables (%s); creating them automatically.",
             ", ".join(sorted(missing)),
         )
-        try:
-            _run_migrations()
-        except Exception as exc:  # pragma: no cover - defensive guard
-            raise RuntimeError(
-                "Automatic migration failed. Review the logs for details or run "
-                "'alembic upgrade head' manually."
-            ) from exc
-        inspector = inspect(engine)
-        missing = [
-            table_name
-            for table_name in models.Base.metadata.tables
-            if not inspector.has_table(table_name)
-        ]
-
-    if missing:
-        raise RuntimeError(
-            "Database schema is missing required tables: {tables}. "
-            "Run 'alembic upgrade head' before starting the API.".format(
-                tables=", ".join(sorted(missing))
-            )
-        )
+        models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 

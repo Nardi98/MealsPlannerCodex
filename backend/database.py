@@ -64,6 +64,6 @@ def init_db() -> None:
     """Deprecated helper retained for backwards compatibility."""
 
     raise RuntimeError(
-        "init_db() is no longer supported. Run Alembic migrations instead with "
-        "'alembic upgrade head'."
+        "init_db() is no longer supported. The application manages schema creation "
+        "automatically during startup."
     )

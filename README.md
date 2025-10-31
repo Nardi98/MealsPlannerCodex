@@ -81,28 +81,14 @@ pip install -r requirements.txt
 # Configure SQLAlchemy to talk to PostgreSQL
 export DATABASE_URL="postgresql+psycopg2://mealplanner:mealplanner@localhost:5432/mealplanner"
 
-# Apply database migrations before starting the API
-alembic upgrade head
-
 uvicorn app.main:app --reload
 ```
 
 The backend reads the `DATABASE_URL` environment variable. When it is not set it
 falls back to a SQLite database stored under `backend/data/app.db`. That fallback
 is only intended for quick developer tests—the production stack requires a
-PostgreSQL database with Alembic migrations applied.
-
-#### Database migrations
-
-If you already have a database, run the Alembic migrations to bring it up to
-date:
-
-```bash
-cd backend
-alembic upgrade head
-```
-
-This applies schema changes such as the new `course` column on recipes.
+PostgreSQL database. On startup the backend will create the configured database
+and any missing tables automatically when using PostgreSQL.
 
 ### Frontend (`frontend-v2/`)
 
@@ -162,7 +148,6 @@ Set the necessary environment variables before starting:
 
 - `DATABASE_URL` – connection string for the database (e.g. `postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner`)
 - `DB_STARTUP_RETRY_ATTEMPTS` / `DB_STARTUP_RETRY_DELAY` – optional knobs to control how long the backend waits for the database to become reachable during startup
-- `DB_AUTO_APPLY_MIGRATIONS` – set to `true` to let the backend run the bundled Alembic migrations automatically when starting against an empty database
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 
@@ -170,11 +155,6 @@ The Docker Compose configuration now provisions a PostgreSQL service and injects
 `DATABASE_URL` into the backend container automatically. For production
 deployments prefer installing the `psycopg[c]` package instead of the
 `psycopg2-binary` wheel that is bundled for local development.
-
-When `DB_AUTO_APPLY_MIGRATIONS` is enabled (as in the provided Docker Compose
-setup) the API will bootstrap a new database by executing every migration under
-`backend/migrations/`. If you prefer to manage migrations manually simply omit
-the variable and run `alembic upgrade head` before starting the backend.
 
 Build steps:
 

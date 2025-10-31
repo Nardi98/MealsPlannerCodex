@@ -21,7 +21,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql+psycopg2://mealplanner:mealplanner@postgres:5432/mealplanner
-      - DB_AUTO_APPLY_MIGRATIONS=true
     volumes:
       - ./backend:/app
     depends_on:
