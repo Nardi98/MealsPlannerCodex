@@ -74,20 +74,6 @@ def test_verify_schema_raises_after_max_attempts(monkeypatch):
     assert "Unable to connect to the configured database" in str(excinfo.value)
 
 
-def test_verify_schema_uses_sqlite_fallback(monkeypatch):
-    called = {}
-
-    def fake_create_all(*args, **kwargs):
-        called["ran"] = True
-
-    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
-    monkeypatch.setattr(main, "USING_DEV_FALLBACK", True, raising=False)
-
-    main._verify_schema_state()
-
-    assert called.get("ran") is True
-
-
 def test_verify_schema_creates_database(monkeypatch):
     created = {}
 
@@ -113,6 +99,28 @@ def test_verify_schema_creates_database(monkeypatch):
 
     assert created["database"] is True
     assert created["tables"] is True
+
+
+def test_verify_schema_creates_tables_when_missing(monkeypatch):
+    class _PartialInspector:
+        def has_table(self, name: str) -> bool:
+            return name != "recipes"
+
+    called = {}
+
+    def fake_inspect(_engine):
+        return _PartialInspector()
+
+    def fake_create_all(*args, **kwargs):
+        called["ran"] = True
+
+    monkeypatch.setattr(main, "USING_DEV_FALLBACK", False, raising=False)
+    monkeypatch.setattr(main, "inspect", fake_inspect)
+    monkeypatch.setattr(main.models.Base.metadata, "create_all", fake_create_all)
+
+    main._verify_schema_state()
+
+    assert called.get("ran") is True
 
 
 def test_attempt_create_database_non_postgres(monkeypatch):

@@ -1,9 +1,10 @@
 import io
 import json
+import uuid
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
@@ -131,11 +132,10 @@ def test_export_includes_related_objects(db_session):
     assert meal_info["leftover"] is False
 
 
-def test_import_creates_tables_when_missing():
+def test_import_creates_tables_when_missing(engine):
     """import_data should initialise schema if tables are absent."""
-    engine = create_engine("sqlite:///:memory:", future=True)
-    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
+    schema = f"import_missing_{uuid.uuid4().hex}"
     payload = {
         "recipes": [
             {
@@ -150,9 +150,26 @@ def test_import_creates_tables_when_missing():
         "meal_plans": [],
     }
 
-    with Session() as session:
-        crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
-        assert session.query(Recipe).count() == 1
+    Session = sessionmaker(autoflush=False, autocommit=False, future=True)
+
+    with engine.connect() as connection:
+        connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+        connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+
+    try:
+        with engine.connect() as connection:
+            connection.execute(text(f'SET search_path TO "{schema}"'))
+            session = Session(bind=connection)
+            try:
+                crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
+                assert session.query(Recipe).count() == 1
+            finally:
+                session.close()
+    finally:
+        with engine.connect() as connection:
+            connection = connection.execution_options(isolation_level="AUTOCOMMIT")
+            connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
 
 
 def test_clear_data(db_session):
