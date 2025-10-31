@@ -6,7 +6,9 @@ import os
 from typing import Final
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 _DATABASE_URL_ENV: Final = "DATABASE_URL"
 
@@ -19,22 +21,30 @@ def _resolve_database_url() -> str:
         return env_value
     raise RuntimeError(
         "The DATABASE_URL environment variable is required. Set it to a "
-        "PostgreSQL connection string (e.g. postgresql+psycopg2://user:pass@host/db)."
+        "PostgreSQL connection string (e.g. postgresql+psycopg2://"
+        "user:pass@host/db)."
     )
 
 
 DATABASE_URL = _resolve_database_url()
 
-_POOL_SIZE = int(os.getenv("SQLALCHEMY_POOL_SIZE", "5"))
-_MAX_OVERFLOW = int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "10"))
+url = make_url(DATABASE_URL)
+engine_kwargs: dict[str, object] = {"future": True, "pool_pre_ping": True}
 
-engine_kwargs: dict[str, object] = {
-    "future": True,
-    "pool_pre_ping": True,
-    "pool_size": _POOL_SIZE,
-    "max_overflow": _MAX_OVERFLOW,
-    "isolation_level": "READ COMMITTED",
-}
+if url.get_backend_name() == "sqlite":
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+    if url.database in (None, "", ":memory:"):
+        engine_kwargs["poolclass"] = StaticPool
+else:
+    _POOL_SIZE = int(os.getenv("SQLALCHEMY_POOL_SIZE", "5"))
+    _MAX_OVERFLOW = int(os.getenv("SQLALCHEMY_MAX_OVERFLOW", "10"))
+    engine_kwargs.update(
+        {
+            "pool_size": _POOL_SIZE,
+            "max_overflow": _MAX_OVERFLOW,
+            "isolation_level": "READ COMMITTED",
+        }
+    )
 
 engine = create_engine(DATABASE_URL, **engine_kwargs)
 
@@ -51,6 +61,6 @@ def init_db() -> None:
     """Deprecated helper retained for backwards compatibility."""
 
     raise RuntimeError(
-        "init_db() is no longer supported. The application manages schema creation "
-        "automatically during startup."
+        "init_db() is no longer supported. The application manages schema "
+        "creation automatically during startup."
     )

@@ -3,11 +3,14 @@ import json
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 
 from mealplanner import crud
 from mealplanner.models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
+from mealplanner.db import Base
+
+from tests.conftest import TEST_DATABASE_URL, temporary_database
 
 
 def _create_sample_data(session):
@@ -133,26 +136,33 @@ def test_export_includes_related_objects(db_session):
 
 def test_import_creates_tables_when_missing():
     """import_data should initialise schema if tables are absent."""
-    engine = create_engine("sqlite:///:memory:", future=True)
-    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    with temporary_database(TEST_DATABASE_URL) as url:
+        engine = create_engine(url, future=True, pool_pre_ping=True)
+        Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
-    payload = {
-        "recipes": [
-            {
-                "title": "Temp",
-                "servings_default": 1,
-                "course": "main",
-                "ingredients": [],
-                "tags": [],
-            }
-        ],
-        "tags": [],
-        "meal_plans": [],
-    }
+        payload = {
+            "recipes": [
+                {
+                    "title": "Temp",
+                    "servings_default": 1,
+                    "course": "main",
+                    "ingredients": [],
+                    "tags": [],
+                }
+            ],
+            "tags": [],
+            "meal_plans": [],
+        }
 
-    with Session() as session:
-        crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
-        assert session.query(Recipe).count() == 1
+        with Session() as session:
+            crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
+            assert session.query(Recipe).count() == 1
+            # Tables should now exist when inspected via metadata.
+            with engine.connect() as connection:
+                inspector = inspect(connection)
+                for table in Base.metadata.tables.values():
+                    assert inspector.has_table(table.name)
+        engine.dispose()
 
 
 def test_clear_data(db_session):

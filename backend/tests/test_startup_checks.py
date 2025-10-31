@@ -112,9 +112,11 @@ def test_verify_schema_creates_database(monkeypatch):
     assert created["tables"] is True
 
 
-def test_attempt_create_database_non_postgres(monkeypatch):
-    error = _operational_error()
-    monkeypatch.setattr(main, "DATABASE_URL", "sqlite:///test.db", raising=False)
+def test_attempt_create_database_ignored_for_unrelated_error(monkeypatch):
+    error = OperationalError("SELECT 1", {}, _FakePgError("42883", "function missing"))
+    monkeypatch.setattr(
+        main, "DATABASE_URL", "postgresql+psycopg2://user:pass@host/dbname", raising=False
+    )
 
     assert main._attempt_create_database(error) is False
 
