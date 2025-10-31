@@ -116,12 +116,14 @@ def _verify_schema_state() -> None:
         )
         models.Base.metadata.create_all(bind=engine)
 
+
 app = FastAPI()
 
 
 @app.on_event("startup")
 def _startup_check() -> None:
     _verify_schema_state()
+
 
 # Allow all CORS for demo purposes
 app.add_middleware(
