@@ -243,6 +243,7 @@ def search_ingredients(
             season_months=ing.season_months or [],
             unit=ing.unit,
             recipe_count=count,
+            owner_id=ing.user_id,
         )
         for ing, count in rows
     ]
@@ -265,6 +266,7 @@ def create_ingredient(
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
         recipe_count=0,
+        owner_id=ingredient.user_id,
     )
 
 
@@ -292,6 +294,7 @@ def update_ingredient(
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
         recipe_count=count or 0,
+        owner_id=ingredient.user_id,
     )
 
 
@@ -306,7 +309,10 @@ def ingredient_recipes(
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     recipes = crud.get_recipes_by_ingredient(db, ingredient_id)
-    return [schemas.RecipeSummary(id=r.id, title=r.title) for r in recipes]
+    return [
+        schemas.RecipeSummary(id=r.id, title=r.title, owner_id=r.user_id)
+        for r in recipes
+    ]
 
 
 @app.delete("/ingredients/{ingredient_id}", status_code=204)

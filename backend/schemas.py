@@ -1,31 +1,92 @@
 """Pydantic schemas for API responses and requests."""
 from __future__ import annotations
 
-from datetime import date
-from typing import Dict, List, Optional
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, root_validator
 
 from models import UnitEnum
 
 
-class TagOut(BaseModel):
+class UserBase(BaseModel):
+    """Shared attributes for user-facing schemas."""
+
+    email: EmailStr
+    username: str
+
+
+class UserCreate(UserBase):
+    """Payload for user creation."""
+
+    password: str
+
+
+class UserLogin(BaseModel):
+    """Authentication payload accepting an email or username."""
+
+    email: EmailStr | None = None
+    username: str | None = None
+    password: str
+
+    @root_validator
+    def _validate_identifier(cls, values: Dict[str, Optional[str]]) -> Dict[str, Optional[str]]:
+        if not values.get("email") and not values.get("username"):
+            raise ValueError("Either email or username must be provided")
+        return values
+
+
+class UserOut(UserBase):
+    """Representation of a user without sensitive fields."""
+
     id: int
-    name: str
+    created_at: datetime
 
     class Config:
         orm_mode = True
 
 
-class IngredientOut(BaseModel):
+class Token(BaseModel):
+    """Bearer token returned after successful authentication."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+class TokenPayload(BaseModel):
+    """Data encoded in authentication tokens."""
+
+    sub: str | None = None
+    exp: int | None = None
+
+
+class OwnedModel(BaseModel):
+    """Base schema for resources owned by a user."""
+
+    owner_id: int | None = None
+
+    @root_validator(pre=True)
+    def _populate_owner(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        user_id = values.get("user_id")
+        if values.get("owner_id") is None and user_id is not None:
+            values["owner_id"] = user_id
+        return values
+
+    class Config:
+        orm_mode = True
+
+
+class TagOut(OwnedModel):
+    id: int
+    name: str
+
+
+class IngredientOut(OwnedModel):
     id: int
     name: str
     quantity: Optional[float] = None
     unit: Optional[UnitEnum] = None
     season_months: List[int] = Field(default_factory=list)
-
-    class Config:
-        orm_mode = True
 
 
 class IngredientIn(BaseModel):
@@ -42,15 +103,12 @@ class IngredientCreate(BaseModel):
     unit: Optional[UnitEnum] = None
 
 
-class IngredientSummary(BaseModel):
+class IngredientSummary(OwnedModel):
     id: int
     name: str
     season_months: List[int] = Field(default_factory=list)
     unit: Optional[UnitEnum] = None
     recipe_count: int
-
-    class Config:
-        orm_mode = True
 
 
 class IngredientUpdate(BaseModel):
@@ -59,12 +117,9 @@ class IngredientUpdate(BaseModel):
     unit: Optional[UnitEnum] = None
 
 
-class RecipeSummary(BaseModel):
+class RecipeSummary(OwnedModel):
     id: int
     title: str
-
-    class Config:
-        orm_mode = True
 
 
 class RecipeIn(BaseModel):
@@ -77,7 +132,7 @@ class RecipeIn(BaseModel):
     ingredients: List[IngredientIn] = []
 
 
-class RecipeOut(BaseModel):
+class RecipeOut(OwnedModel):
     id: int
     title: str
     servings_default: int
@@ -88,9 +143,6 @@ class RecipeOut(BaseModel):
     date_last_consumed: Optional[date] = None
     ingredients: List[IngredientOut] = []
     tags: List[TagOut] = []
-
-    class Config:
-        orm_mode = True
 
 
 class MealAssignment(BaseModel):
