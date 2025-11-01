@@ -3,10 +3,12 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, Tuple
+from types import SimpleNamespace
+from typing import Callable, Dict, Tuple
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import OperationalError
@@ -159,6 +161,7 @@ import mealplanner.models  # noqa: E402,F401
 from mealplanner.db import Base  # noqa: E402
 from migration_runner import upgrade as run_migrations  # noqa: E402
 from sqlalchemy import text
+from main import app, get_db  # noqa: E402
 
 
 @contextmanager
@@ -238,3 +241,71 @@ def db_session(engine):
             with engine.begin() as conn:
                 conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
             run_migrations(engine)
+
+
+@pytest.fixture
+def client(db_session):
+    def _override_get_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = _override_get_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def register_user(client):
+    def _register_user(**overrides: Dict[str, str]):
+        suffix = uuid4().hex
+        payload = {
+            "email": overrides.pop("email", f"user-{suffix}@example.com"),
+            "username": overrides.pop("username", f"user-{suffix}"),
+            "password": overrides.pop("password", "ChangeMe123!"),
+        }
+        payload.update(overrides)
+        response = client.post("/users/register", json=payload)
+        return response, payload
+
+    return _register_user
+
+
+@pytest.fixture
+def login_user(client):
+    def _login(identifier: str, password: str):
+        return client.post(
+            "/auth/login",
+            data={"username": identifier, "password": password},
+        )
+
+    return _login
+
+
+@pytest.fixture
+def user_token_factory(register_user, login_user):
+    def _factory(**overrides: Dict[str, str]) -> SimpleNamespace:
+        response, credentials = register_user(**overrides)
+        assert response.status_code == 201, response.text
+        user_data = response.json()
+
+        identifier = overrides.get("login_identifier", credentials["email"])
+        login_response = login_user(identifier, credentials["password"])
+        assert login_response.status_code == 200, login_response.text
+        token = login_response.json()["access_token"]
+
+        return SimpleNamespace(
+            user=user_data,
+            credentials=credentials,
+            token=token,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    return _factory
+
+
+@pytest.fixture
+def auth_headers(user_token_factory):
+    return user_token_factory().headers
