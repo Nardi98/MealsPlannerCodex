@@ -1,26 +1,30 @@
-from datetime import date
+"""Tests for feedback endpoints that adjust recipe scores."""
 
 from datetime import date
 
-from fastapi.testclient import TestClient
-from main import app, get_db
-from mealplanner import crud
+import crud
 
 
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-    return _override
+def test_feedback_endpoints_require_authentication(client):
+    consumed = {"title": "A", "consumed_date": "2024-01-01"}
+    assert client.post("/feedback/accept", json=consumed).status_code == 401
+    assert client.post("/feedback/reject", json=consumed).status_code == 401
 
 
-def test_feedback_endpoints_return_unique_replacement(db_session):
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
+def test_feedback_endpoints_return_unique_replacement(
+    client, db_session, user_token_factory
+):
+    auth = user_token_factory()
+    user_id = auth.user["id"]
+    a = crud.create_recipe(
+        db_session, title="A", servings_default=1, course="main", score=0, user=user_id
+    )
+    crud.create_recipe(
+        db_session, title="B", servings_default=1, course="main", score=0, user=user_id
+    )
+    crud.create_recipe(
+        db_session, title="C", servings_default=1, course="main", score=0, user=user_id
+    )
     crud.save_plan(
         {
             "2024-01-01": [
@@ -37,13 +41,15 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
                     "leftover": True,
                 },
             ]
-        }
+        },
+        user=user_id,
     )
-    client = TestClient(app)
 
     consumed = date(2024, 1, 1)
     resp = client.post(
-        "/feedback/accept", json={"title": "A", "consumed_date": consumed.isoformat()}
+        "/feedback/accept",
+        json={"title": "A", "consumed_date": consumed.isoformat()},
+        headers=auth.headers,
     )
     assert resp.status_code == 200
     db_session.refresh(a)
@@ -51,7 +57,9 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     assert a.date_last_consumed == consumed
 
     resp = client.post(
-        "/feedback/reject", json={"title": "A", "consumed_date": consumed.isoformat()}
+        "/feedback/reject",
+        json={"title": "A", "consumed_date": consumed.isoformat()},
+        headers=auth.headers,
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -59,15 +67,21 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
 
     crud._PLAN_CACHE.clear()
     crud._PLAN_SETTINGS.clear()
-    app.dependency_overrides.clear()
 
 
-def test_reject_replacement_limited_to_main_courses(db_session):
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
+def test_reject_replacement_limited_to_main_courses(
+    client, db_session, user_token_factory
+):
+    auth = user_token_factory()
+    user_id = auth.user["id"]
     crud.create_recipe(
-        db_session, title="C", servings_default=1, course="dessert", score=0
+        db_session, title="A", servings_default=1, course="main", score=0, user=user_id
+    )
+    crud.create_recipe(
+        db_session, title="B", servings_default=1, course="main", score=0, user=user_id
+    )
+    crud.create_recipe(
+        db_session, title="C", servings_default=1, course="dessert", score=0, user=user_id
     )
     crud.save_plan(
         {
@@ -79,13 +93,15 @@ def test_reject_replacement_limited_to_main_courses(db_session):
                     "leftover": False,
                 }
             ]
-        }
+        },
+        user=user_id,
     )
-    client = TestClient(app)
 
     consumed = date(2024, 1, 1)
     resp = client.post(
-        "/feedback/reject", json={"title": "A", "consumed_date": consumed.isoformat()}
+        "/feedback/reject",
+        json={"title": "A", "consumed_date": consumed.isoformat()},
+        headers=auth.headers,
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -94,5 +110,3 @@ def test_reject_replacement_limited_to_main_courses(db_session):
 
     crud._PLAN_CACHE.clear()
     crud._PLAN_SETTINGS.clear()
-    app.dependency_overrides.clear()
-
