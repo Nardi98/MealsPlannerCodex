@@ -12,6 +12,7 @@ from typing import Iterable
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import column, table
 
 revision = "bb1194d1b81e"
@@ -20,15 +21,7 @@ branch_labels = None
 depends_on = None
 
 
-UNIT_ENUM = sa.Enum(
-    "g",
-    "kg",
-    "l",
-    "ml",
-    "piece",
-    name="unit_enum",
-    create_type=False,
-)
+UNIT_ENUM = postgresql.ENUM(name="unit_enum", create_type=False)
 
 
 def _add_user_id_column(table_name: str, default_user_id: int) -> None:
