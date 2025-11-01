@@ -29,7 +29,7 @@ class UserLogin(BaseModel):
     username: str | None = None
     password: str
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def _validate_identifier(cls, values: Dict[str, Optional[str]]) -> Dict[str, Optional[str]]:
         if not values.get("email") and not values.get("username"):
             raise ValueError("Either email or username must be provided")
