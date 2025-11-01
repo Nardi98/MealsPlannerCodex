@@ -8,3 +8,7 @@ httpx
 uvicorn
 alembic
 psycopg2-binary  # Local PostgreSQL driver; prefer "psycopg[c]" in production.
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+email-validator
