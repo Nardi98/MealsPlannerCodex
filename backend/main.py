@@ -7,12 +7,15 @@ import logging
 import os
 import random
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
+from pydantic import ValidationError
 from sqlalchemy import create_engine, func, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
@@ -145,32 +148,111 @@ def get_db() -> Session:
         db.close()
 
 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> models.User:
+    """Return the authenticated user for the supplied bearer ``token``."""
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, crud.SECRET_KEY, algorithms=[crud.ALGORITHM])
+        token_data = schemas.TokenPayload(**payload)
+    except (JWTError, ValidationError):
+        raise credentials_exception from None
+
+    if token_data.sub is None:
+        raise credentials_exception
+
+    if token_data.exp is not None:
+        try:
+            expires_at = datetime.utcfromtimestamp(token_data.exp)
+        except (TypeError, ValueError):
+            raise credentials_exception from None
+        if expires_at < datetime.utcnow():
+            raise credentials_exception
+
+    try:
+        user_id = int(token_data.sub)
+    except (TypeError, ValueError):
+        raise credentials_exception from None
+
+    user = db.get(models.User, user_id)
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+@app.post("/users/register", response_model=schemas.UserOut, status_code=201)
+def register_user(
+    payload: schemas.UserCreate, db: Session = Depends(get_db)
+) -> schemas.UserOut:
+    """Register a new user account."""
+
+    user = crud.create_user(
+        db,
+        email=payload.email,
+        username=payload.username,
+        password=payload.password,
+    )
+    return user
+
+
+@app.post("/auth/login", response_model=schemas.Token)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+) -> schemas.Token:
+    """Authenticate the user and return a bearer token."""
+
+    user = crud.authenticate_user(db, form_data.username, form_data.password)
+    access_token = crud.create_access_token({"sub": str(user.id)})
+    return schemas.Token(access_token=access_token)
+
+
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
-def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
+def read_recipes(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> List[schemas.RecipeOut]:
     stmt = select(models.Recipe).options(
         selectinload(models.Recipe.tags),
         selectinload(models.Recipe.ingredients).selectinload(
             models.RecipeIngredient.ingredient
         ),
-    )
+    ).where(models.Recipe.user_id == current_user.id)
     return db.execute(stmt).scalars().all()
 
 
 @app.get("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
-def read_recipe(recipe_id: int, db: Session = Depends(get_db)) -> schemas.RecipeOut:
-    recipe = crud.get_recipe(db, recipe_id)
+def read_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> schemas.RecipeOut:
+    recipe = crud.get_recipe(db, recipe_id, user=current_user)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
 
 
-def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
-    tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
+def _payload_to_data(
+    payload: schemas.RecipeIn, db: Session, current_user: models.User
+) -> dict:
+    tags = [crud.get_or_create_tag(db, name, user=current_user) for name in payload.tags]
     ingredients: List[models.RecipeIngredient] = []
     for ing in payload.ingredients:
         if ing.id is None and not ing.name:
             continue
-        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name, ing.unit)
+        ingredient_obj = crud.get_or_create_ingredient(
+            db, ing.id, ing.name, ing.unit, user=current_user
+        )
         ingredient_obj.season_months = ing.season_months or list(range(1, 13))
         ingredients.append(
             models.RecipeIngredient(
@@ -191,45 +273,69 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
 
 
 @app.post("/recipes", response_model=schemas.RecipeOut, status_code=201)
-def create_recipe(payload: schemas.RecipeIn, db: Session = Depends(get_db)) -> schemas.RecipeOut:
-    data = _payload_to_data(payload, db)
-    return crud.create_recipe(db, **data)
+def create_recipe(
+    payload: schemas.RecipeIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> schemas.RecipeOut:
+    data = _payload_to_data(payload, db, current_user)
+    return crud.create_recipe(db, user=current_user, **data)
 
 
 @app.put("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
 def update_recipe(
-    recipe_id: int, payload: schemas.RecipeIn, db: Session = Depends(get_db)
+    recipe_id: int,
+    payload: schemas.RecipeIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.RecipeOut:
-    data = _payload_to_data(payload, db)
-    recipe = crud.update_recipe(db, recipe_id, **data)
+    data = _payload_to_data(payload, db, current_user)
+    recipe = crud.update_recipe(db, recipe_id, user=current_user, **data)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
 
 
 @app.delete("/recipes/{recipe_id}", status_code=204)
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
-    deleted = crud.delete_recipe(db, recipe_id)
+def delete_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> Response:
+    deleted = crud.delete_recipe(db, recipe_id, user=current_user)
     if not deleted:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return Response(status_code=204)
 
 
 @app.get("/tags", response_model=List[schemas.TagOut])
-def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
-    return db.execute(select(models.Tag)).scalars().all()
+def read_tags(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> List[schemas.TagOut]:
+    stmt = select(models.Tag).where(models.Tag.user_id == current_user.id)
+    return db.execute(stmt).scalars().all()
 
 
 @app.get("/ingredients", response_model=List[schemas.IngredientSummary])
 def search_ingredients(
-    search: str = "", db: Session = Depends(get_db)
+    search: str = "",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> List[schemas.IngredientSummary]:
     stmt = (
         select(
             models.Ingredient,
             func.count(models.RecipeIngredient.recipe_id).label("recipe_count"),
         )
-        .outerjoin(models.Ingredient.recipes)
+        .outerjoin(
+            models.RecipeIngredient,
+            (
+                models.RecipeIngredient.ingredient_id == models.Ingredient.id
+            )
+            & (models.RecipeIngredient.user_id == current_user.id),
+        )
+        .where(models.Ingredient.user_id == current_user.id)
         .group_by(models.Ingredient.id)
         .order_by(models.Ingredient.name)
     )
@@ -255,10 +361,12 @@ def search_ingredients(
     status_code=201,
 )
 def create_ingredient(
-    payload: schemas.IngredientCreate, db: Session = Depends(get_db)
+    payload: schemas.IngredientCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.IngredientSummary:
     ingredient = crud.create_ingredient(
-        db, payload.name, payload.unit, payload.season_months
+        db, payload.name, payload.unit, payload.season_months, user=current_user
     )
     return schemas.IngredientSummary(
         id=ingredient.id,
@@ -275,8 +383,9 @@ def update_ingredient(
     ingredient_id: int,
     payload: schemas.IngredientUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.IngredientSummary:
-    ingredient = db.get(models.Ingredient, ingredient_id)
+    ingredient = crud.get_ingredient(db, ingredient_id, user=current_user)
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     ingredient.name = payload.name
@@ -303,12 +412,14 @@ def update_ingredient(
     response_model=List[schemas.RecipeSummary],
 )
 def ingredient_recipes(
-    ingredient_id: int, db: Session = Depends(get_db)
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> List[schemas.RecipeSummary]:
-    ingredient = crud.get_ingredient(db, ingredient_id)
+    ingredient = crud.get_ingredient(db, ingredient_id, user=current_user)
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
-    recipes = crud.get_recipes_by_ingredient(db, ingredient_id)
+    recipes = crud.get_recipes_by_ingredient(db, ingredient_id, user=current_user)
     return [
         schemas.RecipeSummary(id=r.id, title=r.title, owner_id=r.user_id)
         for r in recipes
@@ -317,9 +428,12 @@ def ingredient_recipes(
 
 @app.delete("/ingredients/{ingredient_id}", status_code=204)
 def delete_ingredient(
-    ingredient_id: int, force: bool = False, db: Session = Depends(get_db)
+    ingredient_id: int,
+    force: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Response:
-    deleted = crud.delete_ingredient(db, ingredient_id, force=force)
+    deleted = crud.delete_ingredient(db, ingredient_id, force=force, user=current_user)
     if deleted is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     if deleted is False:
@@ -336,8 +450,9 @@ def get_plan(
     start_date: date | None = None,
     end_date: date | None = None,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, List[schemas.MealOut]]:
-    return crud.get_plan(db, plan_date, start_date, end_date)
+    return crud.get_plan(db, plan_date, start_date, end_date, user=current_user)
 
 
 @app.post("/plan", response_model=Dict[str, List[schemas.MealOut]])
@@ -346,6 +461,7 @@ def set_plan(
     payload: schemas.MealPlanCreate,
     force: bool = False,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, List[schemas.MealOut]]:
     plan_dates = [
         day if isinstance(day, date) else date.fromisoformat(day)
@@ -361,7 +477,7 @@ def set_plan(
 
         return JSONResponse(status_code=409, content={"conflicts": conflicts})
 
-    crud.set_meal_plan(db, payload.plan)
+    crud.set_meal_plan(db, payload.plan, user=current_user)
     title_plan: Dict[str, List[Dict[str, object]]] = {}
     for day, meals in payload.plan.items():
         titles: List[Dict[str, object]] = []
@@ -386,8 +502,9 @@ def set_plan(
         title_plan,
         bulk_leftovers=payload.bulk_leftovers,
         keep_days=payload.keep_days,
+        user=current_user,
     )
-    return crud.get_plan(db, payload.plan_date)
+    return crud.get_plan(db, payload.plan_date, user=current_user)
 
 
 @app.delete("/plan", response_model=Dict[str, int])
@@ -396,18 +513,21 @@ def delete_meal_plans(
     start_date: date = Query(..., description="Inclusive start date for deletion"),
     end_date: date = Query(..., description="Inclusive end date for deletion"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, int]:
     if end_date < start_date:
         raise HTTPException(
             status_code=422, detail="end_date must not be before start_date"
         )
 
-    deleted = crud.delete_meal_plans(db, start_date, end_date)
+    deleted = crud.delete_meal_plans(db, start_date, end_date, user=current_user)
     return {"deleted": deleted}
 
 
 @app.get("/plan/settings", response_model=Dict[str, Any])
-def plan_settings() -> Dict[str, Any]:
+def plan_settings(
+    _current_user: models.User = Depends(get_current_user),
+) -> Dict[str, Any]:
     """Return metadata about the current plan such as ``keep_days``."""
 
     return crud.get_plan_settings()
@@ -415,10 +535,16 @@ def plan_settings() -> Dict[str, Any]:
 
 @app.post("/meal-plans/accept", response_model=schemas.MealOut)
 def toggle_meal_acceptance(
-    payload: schemas.MealAcceptanceIn, db: Session = Depends(get_db)
+    payload: schemas.MealAcceptanceIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.MealOut:
     meal = crud.mark_meal_accepted(
-        db, payload.plan_date, payload.meal_number, payload.accepted
+        db,
+        payload.plan_date,
+        payload.meal_number,
+        payload.accepted,
+        user=current_user,
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -432,15 +558,26 @@ def toggle_meal_acceptance(
 
 @app.post("/meal-plans/side", response_model=schemas.MealOut)
 def upsert_side_dish(
-    payload: schemas.MealSideIn, db: Session = Depends(get_db)
+    payload: schemas.MealSideIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.MealOut:
     if payload.index is None:
         meal = crud.add_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.side_id
+            db,
+            payload.plan_date,
+            payload.meal_number,
+            payload.side_id,
+            user=current_user,
         )
     else:
         meal = crud.replace_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
+            db,
+            payload.plan_date,
+            payload.meal_number,
+            payload.index,
+            payload.side_id,
+            user=current_user,
         )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -454,10 +591,16 @@ def upsert_side_dish(
 
 @app.delete("/meal-plans/side", response_model=schemas.MealOut)
 def delete_side_dish(
-    payload: schemas.MealSideRemoveIn, db: Session = Depends(get_db)
+    payload: schemas.MealSideRemoveIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> schemas.MealOut:
     meal = crud.remove_meal_side(
-        db, payload.plan_date, payload.meal_number, payload.index
+        db,
+        payload.plan_date,
+        payload.meal_number,
+        payload.index,
+        user=current_user,
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
@@ -471,27 +614,45 @@ def delete_side_dish(
 
 @app.post("/feedback/accept")
 def feedback_accept(
-    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+    payload: schemas.FeedbackIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, str]:
     """Record user acceptance of a recipe."""
 
-    if crud.accept_recipe(db, payload.title, payload.consumed_date) is None:
+    if (
+        crud.accept_recipe(
+            db, payload.title, payload.consumed_date, user=current_user
+        )
+        is None
+    ):
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"status": "ok"}
 
 
 @app.post("/feedback/reject")
 def feedback_reject(
-    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+    payload: schemas.FeedbackIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, Optional[str]]:
     """Record user rejection of a recipe and suggest a replacement."""
 
-    if crud.reject_recipe(db, payload.title) is None:
+    if crud.reject_recipe(db, payload.title, user=current_user) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    existing = {meal["recipe"] for meals in crud.get_plan().values() for meal in meals}
+    existing = {
+        meal["recipe"]
+        for meals in crud.get_plan(user=current_user).values()
+        for meal in meals
+    }
     existing.add(payload.title)
     available = list(
-        set(crud.list_recipe_titles(db, courses=["main", "first-course"])) - existing
+        set(
+            crud.list_recipe_titles(
+                db, courses=["main", "first-course"], user=current_user
+            )
+        )
+        - existing
     )
     replacement = random.choice(available) if available else None
     return {"replacement": replacement}
@@ -499,7 +660,9 @@ def feedback_reject(
 
 @app.post("/meal-plans/generate")
 def generate_plan_endpoint(
-    payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
+    payload: schemas.MealPlanGenerate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, List[Dict[str, object]]]:
     days = (payload.end - payload.start).days + 1
     plan_titles = planner.generate_plan(
@@ -533,6 +696,7 @@ def generate_plan_endpoint(
         soft_hold_penalty=payload.soft_hold_penalty,
         explore_protection_cost=payload.explore_protection_cost,
         meal_number_to_daypart=payload.meal_number_to_daypart,
+        user=current_user,
     )
     result: Dict[str, List[Dict[str, object]]] = {}
     for day, titles in plan_titles.items():
@@ -541,7 +705,12 @@ def generate_plan_endpoint(
             leftover = title.endswith(" (leftover)")
             base = title[:-11] if leftover else title
             recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base).limit(1)
+                select(models.Recipe)
+                .where(
+                    models.Recipe.title == base,
+                    models.Recipe.user_id == current_user.id,
+                )
+                .limit(1)
             ).scalar_one_or_none()
             if recipe is None:
                 raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
@@ -552,7 +721,9 @@ def generate_plan_endpoint(
 
 @app.post("/side-dishes/generate")
 def generate_side_dish_endpoint(
-    payload: schemas.SideDishGenerate, db: Session = Depends(get_db)
+    payload: schemas.SideDishGenerate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, object]:
     try:
         recipe = planner.generate_side_dish(
@@ -570,12 +741,17 @@ def generate_side_dish_endpoint(
         )
     except ValueError as exc:  # pragma: no cover - error path
         raise HTTPException(status_code=400, detail=str(exc))
+    if recipe.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Side dish not found")
     return {"id": recipe.id, "title": recipe.title}
 
 
 @app.get("/data/export")
-def export_data_endpoint(db: Session = Depends(get_db)) -> Response:
-    data = crud.export_data(db)
+def export_data_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> Response:
+    data = crud.export_data(db, user=current_user)
     return Response(content=data, media_type="application/json")
 
 
@@ -584,17 +760,23 @@ def import_data_endpoint(
     payload: Dict[str, Any],
     mode: str = "overwrite",
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
 ) -> Dict[str, str]:
     try:
-        crud.import_data(io.StringIO(json.dumps(payload)), db, mode=mode)
+        crud.import_data(
+            io.StringIO(json.dumps(payload)), db, mode=mode, user=current_user
+        )
     except ValueError as exc:  # pragma: no cover - value error path
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
 
 @app.delete("/data")
-def clear_data_endpoint(db: Session = Depends(get_db)) -> Dict[str, str]:
-    crud.clear_data(db)
+def clear_data_endpoint(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+) -> Dict[str, str]:
+    crud.clear_data(db, user=current_user)
     return {"status": "ok"}
 
 
