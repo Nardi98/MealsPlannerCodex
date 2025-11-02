@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 import crud
 from mealplanner import planner
-from mealplanner.models import Meal, MealPlan
+from mealplanner.models import Meal, MealPlan, User
 
 
 def test_delete_meal_plans_requires_authentication(client):
@@ -44,6 +44,8 @@ def test_delete_meal_plans_removes_rows_and_cache(
         user=user_id,
     )
 
+    user_obj = db_session.get(User, user_id)
+    assert user_obj is not None
     crud.save_plan(
         {
             start.isoformat(): [
@@ -63,7 +65,7 @@ def test_delete_meal_plans_removes_rows_and_cache(
                 }
             ],
         },
-        user=user_id,
+        user=user_obj,
     )
 
     assert db_session.query(MealPlan).count() == 2
@@ -80,13 +82,14 @@ def test_delete_meal_plans_removes_rows_and_cache(
 
     assert db_session.query(MealPlan).count() == 0
     assert db_session.query(Meal).count() == 0
-    assert crud.get_plan(user=user_id) == {}
+    assert crud.get_plan(user=user_obj) == {}
 
     generated = planner.generate_plan(
         db_session,
         start=start,
         days=1,
         meals_per_day=1,
+        user_id=user_id,
         keep_days=7,
         bulk_leftovers=False,
         epsilon=0.0,
@@ -117,6 +120,8 @@ def test_delete_meal_plans_legacy_route(client, db_session, user_token_factory):
         user=user_id,
     )
 
+    user_obj = db_session.get(User, user_id)
+    assert user_obj is not None
     crud.save_plan(
         {
             start.isoformat(): [
@@ -128,7 +133,7 @@ def test_delete_meal_plans_legacy_route(client, db_session, user_token_factory):
                 }
             ]
         },
-        user=user_id,
+        user=user_obj,
     )
 
     os.makedirs("data", exist_ok=True)

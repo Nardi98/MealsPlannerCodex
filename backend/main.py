@@ -349,7 +349,7 @@ def search_ingredients(
             season_months=ing.season_months or [],
             unit=ing.unit,
             recipe_count=count,
-            owner_id=ing.user_id,
+            user_id=ing.user_id,
         )
         for ing, count in rows
     ]
@@ -374,7 +374,7 @@ def create_ingredient(
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
         recipe_count=0,
-        owner_id=ingredient.user_id,
+        user_id=ingredient.user_id,
     )
 
 
@@ -403,7 +403,7 @@ def update_ingredient(
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
         recipe_count=count or 0,
-        owner_id=ingredient.user_id,
+        user_id=ingredient.user_id,
     )
 
 
@@ -421,7 +421,7 @@ def ingredient_recipes(
         raise HTTPException(status_code=404, detail="Ingredient not found")
     recipes = crud.get_recipes_by_ingredient(db, ingredient_id, user=current_user)
     return [
-        schemas.RecipeSummary(id=r.id, title=r.title, owner_id=r.user_id)
+        schemas.RecipeSummary(id=r.id, title=r.title, user_id=r.user_id)
         for r in recipes
     ]
 
@@ -671,6 +671,7 @@ def generate_plan_endpoint(
         start=payload.start,
         days=days,
         meals_per_day=payload.meals_per_day,
+        user_id=current_user.id,
         keep_days=payload.keep_days,
         bulk_leftovers=payload.bulk_leftovers,
         epsilon=payload.epsilon,
@@ -729,6 +730,7 @@ def generate_side_dish_endpoint(
     try:
         recipe = planner.generate_side_dish(
             db,
+            user_id=current_user.id,
             avoid_tags=payload.avoid_tags,
             reduce_tags=payload.reduce_tags,
             avoid_titles=payload.avoid_titles,

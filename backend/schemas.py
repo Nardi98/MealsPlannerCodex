@@ -44,6 +44,7 @@ class UserOut(UserBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class Token(BaseModel):
@@ -63,24 +64,24 @@ class TokenPayload(BaseModel):
 class OwnedModel(BaseModel):
     """Base schema for resources owned by a user."""
 
-    owner_id: int | None = None
+    user_id: int
 
     @root_validator(pre=True)
-    def _populate_owner(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+    def _populate_user_id(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(values, dict):
-            user_id = values.get("user_id")
-            if values.get("owner_id") is None and user_id is not None:
-                values["owner_id"] = user_id
+            owner_id = values.get("owner_id")
+            if values.get("user_id") is None and owner_id is not None:
+                values["user_id"] = owner_id
             return values
 
         user_id = getattr(values, "user_id", None)
-        owner_id = getattr(values, "owner_id", None)
-        if owner_id is None and user_id is not None:
-            setattr(values, "owner_id", user_id)
+        if user_id is None and hasattr(values, "owner_id"):
+            setattr(values, "user_id", getattr(values, "owner_id"))
         return values
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class TagOut(OwnedModel):
