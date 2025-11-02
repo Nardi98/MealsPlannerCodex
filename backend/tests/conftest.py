@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 
+
 def _default_database_url() -> str:
     return os.environ.get(
         "TEST_DATABASE_URL",
@@ -255,6 +256,20 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture
+def test_user(db_session):
+    import crud
+
+    suffix = uuid4().hex
+    user = crud.create_user(
+        db_session,
+        email=f"test-user-{suffix}@example.com",
+        username=f"test-user-{suffix}",
+        password="ChangeMe123!",
+    )
+    return user
 
 
 @pytest.fixture

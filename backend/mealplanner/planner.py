@@ -53,6 +53,8 @@ def generate_plan(
     start: date,
     days: int,
     meals_per_day: int,
+    *,
+    user_id: int,
     keep_days: int = 7,
     bulk_leftovers: bool = True,
     epsilon: float = 0.0,
@@ -81,13 +83,16 @@ def generate_plan(
             joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
             joinedload(Recipe.tags),
         )
-        .filter(Recipe.course.in_(["main", "first-course"]))
+        .filter(
+            Recipe.course.in_(["main", "first-course"]),
+            Recipe.user_id == user_id,
+        )
         .all()
     )
 
     last_planned: Dict[int, date] = dict(
         session.query(Meal.recipe_id, func.max(Meal.plan_date))
-        .filter(Meal.leftover == false())
+        .filter(Meal.leftover == false(), Meal.user_id == user_id)
         .group_by(Meal.recipe_id)
     )
 
@@ -234,6 +239,8 @@ def _apply_soft_holds(
 
 def generate_side_dish(
     session: Session,
+    *,
+    user_id: int,
     tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
@@ -248,7 +255,11 @@ def generate_side_dish(
 ) -> Recipe:
     """Select a single side dish using the planner's scoring logic."""
 
-    recipes = session.query(Recipe).filter(Recipe.course == "side").all()
+    recipes = (
+        session.query(Recipe)
+        .filter(Recipe.course == "side", Recipe.user_id == user_id)
+        .all()
+    )
     if avoid_titles:
         avoid_set = set(avoid_titles)
         recipes = [r for r in recipes if r.title not in avoid_set]
@@ -264,9 +275,9 @@ def generate_side_dish(
         raise ValueError("No side dishes available")
 
     last_planned: Dict[int, date] = dict(
-        session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date)).group_by(
-            MealSide.side_recipe_id
-        )
+        session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date))
+        .filter(MealSide.user_id == user_id)
+        .group_by(MealSide.side_recipe_id)
     )
 
     base_scores = [r.score or 0.0 for r in available]

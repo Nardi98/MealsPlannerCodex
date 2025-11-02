@@ -18,11 +18,25 @@ def make_recipe(name, bulk=False, tags=None, season=None):
 
 
 
-def test_generate_plan_avoid_tags_from_ui(db_session):
+def test_generate_plan_avoid_tags_from_ui(db_session, test_user):
     """Avoid tags supplied as a list should exclude recipes."""
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
-    bad = Recipe(title="Bad", servings_default=1, score=1.5, bulk_prep=True, course="main")
-    bad.tags = [Tag(name="avoid")]
+    good = Recipe(
+        title="Good",
+        servings_default=1,
+        score=1.0,
+        bulk_prep=True,
+        course="main",
+        user_id=test_user.id,
+    )
+    bad = Recipe(
+        title="Bad",
+        servings_default=1,
+        score=1.5,
+        bulk_prep=True,
+        course="main",
+        user_id=test_user.id,
+    )
+    bad.tags = [Tag(name="avoid", user_id=test_user.id)]
     db_session.add_all([good, bad])
     db_session.commit()
     start = date(2024, 1, 1)
@@ -33,17 +47,19 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
         meals_per_day=1,
         epsilon=0.0,
         avoid_tags=["avoid"],
+        user_id=test_user.id,
     )
     assert plan["2024-01-01"] == ["Good"]
 
 
-def test_recency_weight(db_session):
+def test_recency_weight(db_session, test_user):
     fresh = Recipe(
         title="Fresh",
         servings_default=1,
         score=1.0,
         bulk_prep=True,
         course="main",
+        user_id=test_user.id,
     )
     recent = Recipe(
         title="Recent",
@@ -51,16 +67,27 @@ def test_recency_weight(db_session):
         score=1.2,
         bulk_prep=True,
         course="main",
+        user_id=test_user.id,
     )
     db_session.add_all([fresh, recent])
     db_session.commit()
 
     db_session.add_all(
         [
-            MealPlan(plan_date=date(2023, 12, 1)),
-            Meal(plan_date=date(2023, 12, 1), meal_number=1, recipe_id=fresh.id),
-            MealPlan(plan_date=date(2024, 1, 1)),
-            Meal(plan_date=date(2024, 1, 1), meal_number=1, recipe_id=recent.id),
+            MealPlan(plan_date=date(2023, 12, 1), user_id=test_user.id),
+            Meal(
+                user_id=test_user.id,
+                plan_date=date(2023, 12, 1),
+                meal_number=1,
+                recipe_id=fresh.id,
+            ),
+            MealPlan(plan_date=date(2024, 1, 1), user_id=test_user.id),
+            Meal(
+                user_id=test_user.id,
+                plan_date=date(2024, 1, 1),
+                meal_number=1,
+                recipe_id=recent.id,
+            ),
         ]
     )
     db_session.commit()
@@ -73,6 +100,7 @@ def test_recency_weight(db_session):
         epsilon=0.0,
         recency_weight=0.0,
         min_recipe_gap=0,
+        user_id=test_user.id,
     )
     # Without recency penalty, higher base score wins
     assert plan["2024-01-01"] == ["Recent"]
@@ -84,18 +112,20 @@ def test_recency_weight(db_session):
         epsilon=0.0,
         recency_weight=2.0,
         min_recipe_gap=0,
+        user_id=test_user.id,
     )
     # Heavier penalty pushes the fresher recipe to the top
     assert plan["2024-01-01"] == ["Fresh"]
 
 
-def test_leftover_ignores_recency_penalty(db_session):
+def test_leftover_ignores_recency_penalty(db_session, test_user):
     bulk = Recipe(
         title="Bulk",
         servings_default=1,
         score=5.0,
         bulk_prep=True,
         course="main",
+        user_id=test_user.id,
     )
     other = Recipe(
         title="Other",
@@ -103,6 +133,7 @@ def test_leftover_ignores_recency_penalty(db_session):
         score=4.0,
         bulk_prep=False,
         course="main",
+        user_id=test_user.id,
     )
     db_session.add_all([bulk, other])
     db_session.commit()
@@ -114,6 +145,7 @@ def test_leftover_ignores_recency_penalty(db_session):
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=0,
+        user_id=test_user.id,
     )
     assert plan == {
         "2024-01-01": ["Bulk"],
@@ -121,11 +153,25 @@ def test_leftover_ignores_recency_penalty(db_session):
     }
 
 
-def test_generate_plan_epsilon_randomness(db_session):
+def test_generate_plan_epsilon_randomness(db_session, test_user):
     """With epsilon > 0 the selection may choose lower scoring recipes."""
     recipes = [
-        Recipe(title="Top", servings_default=1, score=2.0, bulk_prep=True, course="main"),
-        Recipe(title="Low", servings_default=1, score=1.0, bulk_prep=True, course="main"),
+        Recipe(
+            title="Top",
+            servings_default=1,
+            score=2.0,
+            bulk_prep=True,
+            course="main",
+            user_id=test_user.id,
+        ),
+        Recipe(
+            title="Low",
+            servings_default=1,
+            score=1.0,
+            bulk_prep=True,
+            course="main",
+            user_id=test_user.id,
+        ),
     ]
     db_session.add_all(recipes)
     db_session.commit()
@@ -137,12 +183,20 @@ def test_generate_plan_epsilon_randomness(db_session):
         days=1,
         meals_per_day=1,
         epsilon=1.0,
+        user_id=test_user.id,
     )
     assert plan["2024-01-01"] == ["Low"]
 
 
-def test_generate_plan_leftover_expiry(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
+def test_generate_plan_leftover_expiry(db_session, test_user):
+    recipe = Recipe(
+        title="Bulk",
+        servings_default=1,
+        bulk_prep=True,
+        score=1.0,
+        course="main",
+        user_id=test_user.id,
+    )
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
@@ -154,6 +208,7 @@ def test_generate_plan_leftover_expiry(db_session):
         epsilon=0.0,
         keep_days=2,
         min_recipe_gap=0,
+        user_id=test_user.id,
     )
     expected = {
         "2024-01-01": ["Bulk"],
@@ -164,8 +219,15 @@ def test_generate_plan_leftover_expiry(db_session):
     assert plan == expected
 
 
-def test_generate_plan_bulk_leftovers_disabled(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
+def test_generate_plan_bulk_leftovers_disabled(db_session, test_user):
+    recipe = Recipe(
+        title="Bulk",
+        servings_default=1,
+        bulk_prep=True,
+        score=1.0,
+        course="main",
+        user_id=test_user.id,
+    )
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
@@ -178,6 +240,7 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
         keep_days=2,
         bulk_leftovers=False,
         min_recipe_gap=0,
+        user_id=test_user.id,
     )
     assert plan == {
         "2024-01-01": ["Bulk"],
@@ -185,25 +248,57 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
     }
 
 
-def test_generate_plan_respects_meals_per_day(db_session):
-    first = Recipe(title="MealA", servings_default=1, score=1.0, course="main")
-    second = Recipe(title="MealB", servings_default=1, score=1.0, course="main")
+def test_generate_plan_respects_meals_per_day(db_session, test_user):
+    first = Recipe(
+        title="MealA",
+        servings_default=1,
+        score=1.0,
+        course="main",
+        user_id=test_user.id,
+    )
+    second = Recipe(
+        title="MealB",
+        servings_default=1,
+        score=1.0,
+        course="main",
+        user_id=test_user.id,
+    )
     db_session.add_all([first, second])
     db_session.commit()
     start = date(2024, 1, 1)
-    plan = generate_plan(db_session, start, days=1, meals_per_day=2, epsilon=0.0)
+    plan = generate_plan(
+        db_session, start, days=1, meals_per_day=2, epsilon=0.0, user_id=test_user.id
+    )
     assert len(plan["2024-01-01"]) == 2
 
 
-def test_generate_plan_gap_filter(db_session):
-    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
-    r2 = Recipe(title="R2", servings_default=1, score=1.0, course="main")
+def test_generate_plan_gap_filter(db_session, test_user):
+    r1 = Recipe(
+        title="R1",
+        servings_default=1,
+        score=5.0,
+        course="main",
+        user_id=test_user.id,
+    )
+    r2 = Recipe(
+        title="R2",
+        servings_default=1,
+        score=1.0,
+        course="main",
+        user_id=test_user.id,
+    )
     db_session.add_all([r1, r2])
     db_session.commit()
 
     hist_date = date(2024, 1, 1)
-    plan = MealPlan(plan_date=hist_date)
-    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    plan = MealPlan(plan_date=hist_date, user_id=test_user.id)
+    meal = Meal(
+        user_id=test_user.id,
+        plan_date=hist_date,
+        meal_number=1,
+        recipe=r1,
+        leftover=False,
+    )
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
@@ -216,18 +311,31 @@ def test_generate_plan_gap_filter(db_session):
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=5,
+        user_id=test_user.id,
     )
     assert schedule["2024-01-02"] == ["R2"]
 
 
-def test_generate_plan_gap_filter_fallback(db_session):
-    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
+def test_generate_plan_gap_filter_fallback(db_session, test_user):
+    r1 = Recipe(
+        title="R1",
+        servings_default=1,
+        score=5.0,
+        course="main",
+        user_id=test_user.id,
+    )
     db_session.add(r1)
     db_session.commit()
 
     hist_date = date(2024, 1, 1)
-    plan = MealPlan(plan_date=hist_date)
-    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    plan = MealPlan(plan_date=hist_date, user_id=test_user.id)
+    meal = Meal(
+        user_id=test_user.id,
+        plan_date=hist_date,
+        meal_number=1,
+        recipe=r1,
+        leftover=False,
+    )
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
@@ -240,5 +348,6 @@ def test_generate_plan_gap_filter_fallback(db_session):
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=5,
+        user_id=test_user.id,
     )
     assert schedule["2024-01-02"] == ["R1"]
