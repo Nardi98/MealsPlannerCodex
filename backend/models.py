@@ -319,7 +319,7 @@ class MealSide(Base):
 
     __tablename__ = "meal_side_dishes"
 
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
     position = Column(Integer, nullable=False)

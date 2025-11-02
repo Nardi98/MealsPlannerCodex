@@ -53,6 +53,35 @@ def test_recipe_crud_flow(client, user_token_factory):
     assert all(r["id"] != recipe_id for r in listing.json())
 
 
+def test_recipe_isolation_between_users(client, user_token_factory):
+    primary = user_token_factory()
+    secondary = user_token_factory()
+
+    payload = {
+        "title": "Private Soup",
+        "servings_default": 2,
+        "course": "main",
+        "ingredients": [{"name": "Water", "quantity": 1, "unit": "l"}],
+    }
+
+    create = client.post("/recipes", json=payload, headers=primary.headers)
+    assert create.status_code == 201
+    recipe_id = create.json()["id"]
+
+    primary_list = client.get("/recipes", headers=primary.headers)
+    assert primary_list.status_code == 200
+    assert any(item["id"] == recipe_id for item in primary_list.json())
+
+    secondary_list = client.get("/recipes", headers=secondary.headers)
+    assert secondary_list.status_code == 200
+    assert all(item["id"] != recipe_id for item in secondary_list.json())
+
+    secondary_detail = client.get(
+        f"/recipes/{recipe_id}", headers=secondary.headers
+    )
+    assert secondary_detail.status_code == 404
+
+
 def test_create_recipe_ignores_blank_ingredients(client, user_token_factory):
     auth = user_token_factory()
     payload = {
