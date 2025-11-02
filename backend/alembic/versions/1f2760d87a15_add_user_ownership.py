@@ -6,6 +6,7 @@ from typing import Iterable, Sequence
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.sql import column, table
 
 revision = "1f2760d87a15"
@@ -56,8 +57,12 @@ def _ensure_admin_user(connection: sa.engine.Connection) -> int:
     return int(new_id)
 
 
+def _get_inspector() -> Inspector:
+    return inspect(op.get_bind())
+
+
 def _drop_unique_constraint(table_name: str, columns: Sequence[str]) -> None:
-    inspector = inspect(op.get_bind())
+    inspector = _get_inspector()
     target = [col.lower() for col in columns]
     for constraint in inspector.get_unique_constraints(table_name):
         existing = [col.lower() for col in constraint.get("column_names", [])]
@@ -69,6 +74,47 @@ def _drop_unique_constraint(table_name: str, columns: Sequence[str]) -> None:
             break
 
 
+def _has_index(table_name: str, columns: Sequence[str]) -> bool:
+    inspector = _get_inspector()
+    target = [col.lower() for col in columns]
+    for index in inspector.get_indexes(table_name):
+        existing = [col.lower() for col in index.get("column_names", [])]
+        if existing == target:
+            return True
+    return False
+
+
+def _has_unique_constraint(table_name: str, columns: Sequence[str]) -> bool:
+    inspector = _get_inspector()
+    target = [col.lower() for col in columns]
+    for constraint in inspector.get_unique_constraints(table_name):
+        existing = [col.lower() for col in constraint.get("column_names", [])]
+        if existing == target:
+            return True
+    return False
+
+
+def _has_foreign_key(
+    table_name: str,
+    columns: Sequence[str],
+    referred_table: str,
+    referred_columns: Sequence[str],
+) -> bool:
+    inspector = _get_inspector()
+    target_local = [col.lower() for col in columns]
+    target_remote = [col.lower() for col in referred_columns]
+    for fk in inspector.get_foreign_keys(table_name):
+        local_cols = [col.lower() for col in fk.get("constrained_columns", [])]
+        remote_cols = [col.lower() for col in fk.get("referred_columns", [])]
+        if (
+            local_cols == target_local
+            and remote_cols == target_remote
+            and fk.get("referred_table", "").lower() == referred_table.lower()
+        ):
+            return True
+    return False
+
+
 def _add_user_id_column(
     table_name: str,
     default_user_id: int,
@@ -77,33 +123,62 @@ def _add_user_id_column(
     drop_uniques: Iterable[Sequence[str]] = (),
     index_columns: Iterable[tuple[str, Sequence[str]]] = (),
 ) -> None:
+    bind = op.get_bind()
+    inspector = _get_inspector()
+    existing_columns = {col["name"].lower() for col in inspector.get_columns(table_name)}
+    dialect = bind.dialect.name
+
     for columns in drop_uniques:
         _drop_unique_constraint(table_name, columns)
 
-    with op.batch_alter_table(table_name) as batch:
-        batch.add_column(
-            sa.Column(
-                "user_id",
-                sa.Integer(),
-                nullable=True,
-                server_default=sa.text(str(default_user_id)),
+    if "user_id" not in existing_columns:
+        with op.batch_alter_table(table_name) as batch:
+            batch.add_column(
+                sa.Column(
+                    "user_id",
+                    sa.Integer(),
+                    nullable=True,
+                    server_default=sa.text(str(default_user_id)),
+                )
             )
-        )
+    else:
+        if dialect != "sqlite":
+            bind.execute(
+                sa.text(
+                    f"ALTER TABLE {table_name} ALTER COLUMN user_id SET DEFAULT :default"
+                ).bindparams(default=default_user_id)
+            )
+
+    bind.execute(
+        sa.text(
+            f"UPDATE {table_name} SET user_id = :user_id WHERE user_id IS NULL"
+        ).bindparams(user_id=default_user_id)
+    )
 
     with op.batch_alter_table(table_name) as batch:
         batch.alter_column("user_id", existing_type=sa.Integer(), nullable=False)
         batch.alter_column("user_id", server_default=None)
-        batch.create_foreign_key(
-            f"fk_{table_name}_user_id_users",
-            "users",
-            ["user_id"],
-            ["id"],
-        )
+        if not _has_foreign_key(table_name, ["user_id"], "users", ["id"]):
+            batch.create_foreign_key(
+                f"fk_{table_name}_user_id_users",
+                "users",
+                ["user_id"],
+                ["id"],
+            )
         for name, columns in unique_constraints:
-            batch.create_unique_constraint(name, list(columns))
+            if not _has_unique_constraint(table_name, columns):
+                batch.create_unique_constraint(name, list(columns))
 
     for name, columns in index_columns:
-        op.create_index(name, table_name, list(columns))
+        if not _has_index(table_name, columns):
+            op.create_index(name, table_name, list(columns))
+
+    if "user_id" in existing_columns and dialect != "sqlite":
+        bind.execute(
+            sa.text(
+                f"ALTER TABLE {table_name} ALTER COLUMN user_id DROP DEFAULT"
+            )
+        )
 
 
 def upgrade() -> None:
