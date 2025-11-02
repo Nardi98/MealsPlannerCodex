@@ -243,6 +243,63 @@ def upgrade() -> None:
     ).fetchall()
     meal_plan_rows = bind.execute(sa.text("SELECT plan_date FROM meal_plans")).fetchall()
 
+    recipe_owner_rows = bind.execute(
+        sa.text("SELECT id, user_id FROM recipes")
+    ).fetchall()
+    recipe_user_map = {
+        int(row.id): int(row.user_id) if row.user_id is not None else admin_user_id
+        for row in recipe_owner_rows
+    }
+
+    tag_owner_rows = bind.execute(
+        sa.text("SELECT id, user_id FROM tags")
+    ).fetchall()
+    tag_user_map = {
+        int(row.id): int(row.user_id) if row.user_id is not None else admin_user_id
+        for row in tag_owner_rows
+    }
+
+    ingredient_owner_rows = bind.execute(
+        sa.text("SELECT id, user_id FROM ingredients")
+    ).fetchall()
+    ingredient_user_map = {
+        int(row.id): int(row.user_id) if row.user_id is not None else admin_user_id
+        for row in ingredient_owner_rows
+    }
+
+    def _resolve_recipe_user(recipe_id: int | None) -> int:
+        if recipe_id is None:
+            return admin_user_id
+        return recipe_user_map.get(int(recipe_id), admin_user_id)
+
+    def _ensure_tag_owner(tag_id: int | None, desired_user: int) -> int:
+        if tag_id is None:
+            return desired_user
+        tag_key = int(tag_id)
+        current = tag_user_map.get(tag_key)
+        if current != desired_user:
+            bind.execute(
+                sa.text("UPDATE tags SET user_id = :user_id WHERE id = :tag_id"),
+                {"user_id": desired_user, "tag_id": tag_key},
+            )
+            tag_user_map[tag_key] = desired_user
+        return desired_user
+
+    def _ensure_ingredient_owner(ingredient_id: int | None, desired_user: int) -> int:
+        if ingredient_id is None:
+            return desired_user
+        ingredient_key = int(ingredient_id)
+        current = ingredient_user_map.get(ingredient_key)
+        if current != desired_user:
+            bind.execute(
+                sa.text(
+                    "UPDATE ingredients SET user_id = :user_id WHERE id = :ingredient_id"
+                ),
+                {"user_id": desired_user, "ingredient_id": ingredient_key},
+            )
+            ingredient_user_map[ingredient_key] = desired_user
+        return desired_user
+
     op.drop_table("recipe_tag")
     op.drop_table("recipe_ingredients")
     op.drop_table("meal_side_dishes")
@@ -263,16 +320,25 @@ def upgrade() -> None:
         unique=False,
     )
 
-    if meal_plan_rows:
-        bind.execute(
-            sa.text(
-                "INSERT INTO meal_plans (user_id, plan_date) VALUES (:user_id, :plan_date)"
-            ),
-            [
-                {"user_id": admin_user_id, "plan_date": row.plan_date}
-                for row in meal_plan_rows
-            ],
+    meal_plan_payload: set[tuple[int, object]] = {
+        (admin_user_id, row.plan_date) for row in meal_plan_rows
+    }
+
+    meals_payload = []
+    for row in meals_rows:
+        user_id = _resolve_recipe_user(row.recipe_id)
+        meal_plan_payload.add((user_id, row.plan_date))
+        meals_payload.append(
+            {
+                "user_id": user_id,
+                "plan_date": row.plan_date,
+                "meal_number": row.meal_number,
+                "recipe_id": row.recipe_id,
+                "accepted": row.accepted,
+                "leftover": row.leftover,
+            }
         )
+
 
     op.create_table(
         "meals",
@@ -301,26 +367,10 @@ def upgrade() -> None:
         unique=False,
     )
 
-    if meals_rows:
-        bind.execute(
-            sa.text(
-                """
-                INSERT INTO meals (user_id, plan_date, meal_number, recipe_id, accepted, leftover)
-                VALUES (:user_id, :plan_date, :meal_number, :recipe_id, :accepted, :leftover)
-                """
-            ),
-            [
-                {
-                    "user_id": admin_user_id,
-                    "plan_date": row.plan_date,
-                    "meal_number": row.meal_number,
-                    "recipe_id": row.recipe_id,
-                    "accepted": row.accepted,
-                    "leftover": row.leftover,
-                }
-                for row in meals_rows
-            ],
-        )
+    meal_user_lookup = {
+        (payload["plan_date"], payload["meal_number"]): payload["user_id"]
+        for payload in meals_payload
+    }
 
     op.create_table(
         "meal_side_dishes",
@@ -341,7 +391,61 @@ def upgrade() -> None:
         ),
     )
 
-    if meal_side_rows:
+    meal_side_payload = []
+    for row in meal_side_rows:
+        key = (row.plan_date, row.meal_number)
+        existing_user = meal_user_lookup.get(key)
+        side_owner = _resolve_recipe_user(row.side_recipe_id)
+        if existing_user is None:
+            user_id = side_owner
+            meal_user_lookup[key] = user_id
+        elif row.side_recipe_id is not None and side_owner != existing_user:
+            meal_plan_payload.discard((existing_user, row.plan_date))
+            user_id = side_owner
+            meal_user_lookup[key] = user_id
+            for payload in meals_payload:
+                if (
+                    payload["plan_date"] == row.plan_date
+                    and payload["meal_number"] == row.meal_number
+                ):
+                    payload["user_id"] = user_id
+                    break
+        else:
+            user_id = existing_user
+        meal_plan_payload.add((user_id, row.plan_date))
+        meal_side_payload.append(
+            {
+                "user_id": user_id,
+                "plan_date": row.plan_date,
+                "meal_number": row.meal_number,
+                "position": row.position,
+                "side_recipe_id": row.side_recipe_id,
+            }
+        )
+
+    if meal_plan_payload:
+        bind.execute(
+            sa.text(
+                "INSERT INTO meal_plans (user_id, plan_date) VALUES (:user_id, :plan_date)"
+            ),
+            [
+                {"user_id": user_id, "plan_date": plan_date}
+                for user_id, plan_date in sorted(meal_plan_payload, key=lambda item: (item[0], item[1]))
+            ],
+        )
+
+    if meals_payload:
+        bind.execute(
+            sa.text(
+                """
+                INSERT INTO meals (user_id, plan_date, meal_number, recipe_id, accepted, leftover)
+                VALUES (:user_id, :plan_date, :meal_number, :recipe_id, :accepted, :leftover)
+                """
+            ),
+            meals_payload,
+        )
+
+    if meal_side_payload:
         bind.execute(
             sa.text(
                 """
@@ -349,16 +453,7 @@ def upgrade() -> None:
                 VALUES (:user_id, :plan_date, :meal_number, :position, :side_recipe_id)
                 """
             ),
-            [
-                {
-                    "user_id": admin_user_id,
-                    "plan_date": row.plan_date,
-                    "meal_number": row.meal_number,
-                    "position": row.position,
-                    "side_recipe_id": row.side_recipe_id,
-                }
-                for row in meal_side_rows
-            ],
+            meal_side_payload,
         )
 
     op.create_table(
@@ -379,7 +474,19 @@ def upgrade() -> None:
         ),
     )
 
-    if recipe_tag_rows:
+    recipe_tag_payload = []
+    for row in recipe_tag_rows:
+        user_id = _resolve_recipe_user(row.recipe_id)
+        user_id = _ensure_tag_owner(row.tag_id, user_id)
+        recipe_tag_payload.append(
+            {
+                "user_id": user_id,
+                "recipe_id": row.recipe_id,
+                "tag_id": row.tag_id,
+            }
+        )
+
+    if recipe_tag_payload:
         bind.execute(
             sa.text(
                 """
@@ -387,14 +494,7 @@ def upgrade() -> None:
                 VALUES (:user_id, :recipe_id, :tag_id)
                 """
             ),
-            [
-                {
-                    "user_id": admin_user_id,
-                    "recipe_id": row.recipe_id,
-                    "tag_id": row.tag_id,
-                }
-                for row in recipe_tag_rows
-            ],
+            recipe_tag_payload,
         )
 
     op.create_table(
@@ -417,7 +517,21 @@ def upgrade() -> None:
         ),
     )
 
-    if recipe_ingredient_rows:
+    recipe_ingredient_payload = []
+    for row in recipe_ingredient_rows:
+        user_id = _resolve_recipe_user(row.recipe_id)
+        user_id = _ensure_ingredient_owner(row.ingredient_id, user_id)
+        recipe_ingredient_payload.append(
+            {
+                "user_id": user_id,
+                "recipe_id": row.recipe_id,
+                "ingredient_id": row.ingredient_id,
+                "quantity": row.quantity,
+                "unit": row.unit,
+            }
+        )
+
+    if recipe_ingredient_payload:
         bind.execute(
             sa.text(
                 """
@@ -425,16 +539,7 @@ def upgrade() -> None:
                 VALUES (:user_id, :recipe_id, :ingredient_id, :quantity, :unit)
                 """
             ),
-            [
-                {
-                    "user_id": admin_user_id,
-                    "recipe_id": row.recipe_id,
-                    "ingredient_id": row.ingredient_id,
-                    "quantity": row.quantity,
-                    "unit": row.unit,
-                }
-                for row in recipe_ingredient_rows
-            ],
+            recipe_ingredient_payload,
         )
 
 
