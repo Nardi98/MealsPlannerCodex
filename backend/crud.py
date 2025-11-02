@@ -8,9 +8,9 @@ from datetime import date, datetime, timedelta
 from uuid import uuid4
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
+import bcrypt
 from fastapi import HTTPException, status
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -33,8 +33,6 @@ from models import (
 
 _PLAN_CACHE: Dict[int, Dict[str, List[Dict[str, Any]]]] = {}
 _PLAN_SETTINGS: Dict[str, Any] = {}
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -84,7 +82,10 @@ __all__ = [
 def hash_password(password: str) -> str:
     """Hash ``password`` using the configured password context."""
 
-    return pwd_context.hash(password)
+    if not isinstance(password, str):
+        raise TypeError("password must be a string")
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -93,8 +94,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not hashed_password:
         return False
     try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except ValueError:  # pragma: no cover - defensive guard
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"), hashed_password.encode("utf-8")
+        )
+    except (ValueError, TypeError):  # pragma: no cover - defensive guard
         return False
 
 

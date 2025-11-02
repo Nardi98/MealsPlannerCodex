@@ -67,9 +67,16 @@ class OwnedModel(BaseModel):
 
     @root_validator(pre=True)
     def _populate_owner(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        user_id = values.get("user_id")
-        if values.get("owner_id") is None and user_id is not None:
-            values["owner_id"] = user_id
+        if isinstance(values, dict):
+            user_id = values.get("user_id")
+            if values.get("owner_id") is None and user_id is not None:
+                values["owner_id"] = user_id
+            return values
+
+        user_id = getattr(values, "user_id", None)
+        owner_id = getattr(values, "owner_id", None)
+        if owner_id is None and user_id is not None:
+            setattr(values, "owner_id", user_id)
         return values
 
     class Config:

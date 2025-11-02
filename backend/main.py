@@ -468,7 +468,8 @@ def set_plan(
         for day in payload.plan.keys()
     ]
     stmt = select(models.MealPlan.plan_date).where(
-        models.MealPlan.plan_date.in_(plan_dates)
+        models.MealPlan.user_id == current_user.id,
+        models.MealPlan.plan_date.in_(plan_dates),
     )
     existing = db.execute(stmt).scalars().all()
     if existing and not force:
