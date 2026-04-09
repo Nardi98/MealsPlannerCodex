@@ -229,7 +229,6 @@ def _apply_soft_holds(
             counts[s.date] += 1
             repeats -= 1
             next_date = s.date + timedelta(days=spacing)
-        record["next_date"] = next_date
 
 
 def generate_side_dish(

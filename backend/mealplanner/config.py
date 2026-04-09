@@ -11,7 +11,7 @@ DEFAULT_PLAN_SETTINGS: Dict[str, Any] = {
     # New leftover and scheduling parameters
     "LEFTOVER_REPEAT_DEFAULT": 1,
     "LEFTOVER_REPEAT_BY_RECIPE": {},
-    "LEFTOVER_SPACING_GAP": 1,
+    "LEFTOVER_SPACING_GAP": 2,
     "MAX_LEFTOVERS_PER_DAY": 2,
     "MAX_LEFTOVERS_PER_WEEK": 7,
     "LEFTOVER_ACCEPT_WEIGHT": 1.0,

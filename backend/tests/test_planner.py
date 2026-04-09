@@ -114,6 +114,7 @@ def test_leftover_ignores_recency_penalty(db_session):
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=0,
+        plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
     assert plan == {
         "2024-01-01": ["Bulk"],
@@ -154,6 +155,7 @@ def test_generate_plan_leftover_expiry(db_session):
         epsilon=0.0,
         keep_days=2,
         min_recipe_gap=0,
+        plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
     expected = {
         "2024-01-01": ["Bulk"],
