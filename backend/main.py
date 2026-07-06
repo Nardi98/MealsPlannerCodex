@@ -443,7 +443,7 @@ def generate_plan_endpoint(
     payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
 ) -> Dict[str, List[Dict[str, object]]]:
     days = (payload.end - payload.start).days + 1
-    plan_titles = planner.generate_plan(
+    slots = planner.generate_plan(
         db,
         start=payload.start,
         days=days,
@@ -457,20 +457,16 @@ def generate_plan_endpoint(
         recency_weight=payload.recency_weight,
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
+        return_slots=True,
     )
     result: Dict[str, List[Dict[str, object]]] = {}
-    for day, titles in plan_titles.items():
-        items: List[Dict[str, object]] = []
-        for title in titles:
-            leftover = title.endswith(" (leftover)")
-            base = title[:-11] if leftover else title
-            recipe = db.execute(
-                select(models.Recipe).where(models.Recipe.title == base).limit(1)
-            ).scalar_one_or_none()
-            if recipe is None:
-                raise HTTPException(status_code=404, detail=f"Recipe '{base}' not found")
-            items.append({"id": recipe.id, "title": base, "leftover": leftover})
-        result[day] = items
+    for slot in slots:
+        recipe = slot.recipe
+        if recipe is None:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        result.setdefault(slot.date.isoformat(), []).append(
+            {"id": recipe.id, "title": recipe.title, "leftover": slot.leftover}
+        )
     return result
 
 

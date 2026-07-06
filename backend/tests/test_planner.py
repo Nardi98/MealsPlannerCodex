@@ -124,19 +124,20 @@ def test_leftover_ignores_recency_penalty(db_session):
     db_session.add_all([bulk, other])
     db_session.commit()
     start = date(2024, 1, 1)
-    plan = generate_plan(
-        db_session,
-        start,
+    kwargs = dict(
         days=2,
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
+    plan = generate_plan(db_session, start, **kwargs)
     assert plan == {
         "2024-01-01": ["Bulk"],
-        "2024-01-02": ["Bulk (leftover)"],
+        "2024-01-02": ["Bulk"],
     }
+    slots = generate_plan(db_session, start, return_slots=True, **kwargs)
+    assert [s.leftover for s in slots] == [False, True]
 
 
 def test_generate_plan_epsilon_randomness(db_session):
@@ -164,9 +165,7 @@ def test_generate_plan_leftover_expiry(db_session):
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
-    plan = generate_plan(
-        db_session,
-        start,
+    kwargs = dict(
         days=4,
         meals_per_day=1,
         epsilon=0.0,
@@ -174,13 +173,15 @@ def test_generate_plan_leftover_expiry(db_session):
         min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
-    expected = {
+    plan = generate_plan(db_session, start, **kwargs)
+    assert plan == {
         "2024-01-01": ["Bulk"],
-        "2024-01-02": ["Bulk (leftover)"],
+        "2024-01-02": ["Bulk"],
         "2024-01-03": ["Bulk"],
-        "2024-01-04": ["Bulk (leftover)"],
+        "2024-01-04": ["Bulk"],
     }
-    assert plan == expected
+    slots = generate_plan(db_session, start, return_slots=True, **kwargs)
+    assert [s.leftover for s in slots] == [False, True, False, True]
 
 
 def test_generate_plan_bulk_leftovers_disabled(db_session):

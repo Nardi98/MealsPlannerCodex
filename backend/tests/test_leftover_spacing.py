@@ -144,16 +144,18 @@ def test_existing_test_still_passes(db_session):
     db_session.add_all([bulk, other])
     db_session.commit()
 
-    plan = generate_plan(
-        db_session,
+    kwargs = dict(
         start=date(2024, 1, 1),
         days=3,
         meals_per_day=1,
         epsilon=0.0,
         min_recipe_gap=0,
     )
+    plan = generate_plan(db_session, **kwargs)
     assert plan == {
         "2024-01-01": ["Bulk"],
         "2024-01-02": ["Other"],
-        "2024-01-03": ["Bulk (leftover)"],
+        "2024-01-03": ["Bulk"],
     }
+    slots = generate_plan(db_session, return_slots=True, **kwargs)
+    assert [s.leftover for s in slots] == [False, False, True]

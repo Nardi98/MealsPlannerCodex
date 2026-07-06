@@ -186,8 +186,7 @@ def generate_plan(
     schedule: Dict[str, List[str]] = {}
     for slot in slots:
         key = slot.date.isoformat()
-        title = slot.recipe.title + (" (leftover)" if slot.leftover else "")
-        schedule.setdefault(key, []).append(title)
+        schedule.setdefault(key, []).append(slot.recipe.title)
     return schedule
 
 
