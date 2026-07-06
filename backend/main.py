@@ -265,31 +265,6 @@ def set_plan(
         return JSONResponse(status_code=409, content={"conflicts": conflicts})
 
     crud.set_meal_plan(db, payload.plan)
-    title_plan: Dict[str, List[Dict[str, object]]] = {}
-    for day, meals in payload.plan.items():
-        titles: List[Dict[str, object]] = []
-        for item in meals:
-            recipe = db.get(models.Recipe, item.main_id)
-            side_titles: List[str] = []
-            for sid in getattr(item, "side_ids", []) or []:
-                sr = db.get(models.Recipe, sid)
-                if sr is not None:
-                    side_titles.append(sr.title)
-            if recipe is not None:
-                titles.append(
-                    {
-                        "recipe": recipe.title,
-                        "side_recipes": side_titles,
-                        "accepted": False,
-                        "leftover": item.leftover,
-                    }
-                )
-        title_plan[day] = titles
-    crud.save_plan(
-        title_plan,
-        bulk_leftovers=payload.bulk_leftovers,
-        keep_days=payload.keep_days,
-    )
     return crud.get_plan(db, payload.plan_date)
 
 
@@ -310,10 +285,10 @@ def delete_meal_plans(
 
 
 @app.get("/plan/settings", response_model=Dict[str, Any])
-def plan_settings() -> Dict[str, Any]:
-    """Return metadata about the current plan such as ``keep_days``."""
+def plan_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Return plan settings (currently the defaults; per-user overrides later)."""
 
-    return crud.get_plan_settings()
+    return crud.get_plan_settings(db)
 
 
 @app.post("/meal-plans/accept", response_model=schemas.MealOut)
@@ -391,7 +366,7 @@ def feedback_reject(
 
     if crud.reject_recipe(db, payload.title) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    existing = {meal["recipe"] for meals in crud.get_plan().values() for meal in meals}
+    existing = set(crud.list_planned_titles(db))
     existing.add(payload.title)
     available = list(
         set(crud.list_recipe_titles(db, courses=["main", "first-course"])) - existing
@@ -419,23 +394,6 @@ def generate_plan_endpoint(
         recency_weight=payload.recency_weight,
         tag_penalty_weight=payload.tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
-    )
-    crud.save_plan(
-        plan_titles,
-        bulk_leftovers=payload.bulk_leftovers,
-        keep_days=payload.keep_days,
-        leftover_repeat_default=payload.leftover_repeat_default,
-        leftover_repeat_by_recipe=payload.leftover_repeat_by_recipe,
-        leftover_spacing_gap=payload.leftover_spacing_gap,
-        max_leftovers_per_day=payload.max_leftovers_per_day,
-        max_leftovers_per_week=payload.max_leftovers_per_week,
-        leftover_accept_weight=payload.leftover_accept_weight,
-        leftover_daypart_pref=payload.leftover_daypart_pref,
-        leftover_daypart_weight=payload.leftover_daypart_weight,
-        protect_explore_slots=payload.protect_explore_slots,
-        soft_hold_penalty=payload.soft_hold_penalty,
-        explore_protection_cost=payload.explore_protection_cost,
-        meal_number_to_daypart=payload.meal_number_to_daypart,
     )
     result: Dict[str, List[Dict[str, object]]] = {}
     for day, titles in plan_titles.items():

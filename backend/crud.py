@@ -23,9 +23,6 @@ from models import (
     recipe_tag_table,
 )
 
-_PLAN_CACHE: Dict[str, List[Dict[str, Any]]] = {}
-_PLAN_SETTINGS: Dict[str, Any] = {}
-
 __all__ = [
     "create_recipe",
     "create_ingredient",
@@ -38,7 +35,6 @@ __all__ = [
     "delete_recipe",
     "delete_ingredient",
     "set_meal_plan",
-    "save_plan",
     "get_plan",
     "delete_meal_plans",
     "get_plan_settings",
@@ -49,6 +45,7 @@ __all__ = [
     "accept_recipe",
     "reject_recipe",
     "list_recipe_titles",
+    "list_planned_titles",
     "import_data",
     "export_data",
     "clear_data",
@@ -347,74 +344,6 @@ def set_meal_plan(
     return plans
 
 
-def save_plan(
-    plan: Dict[str, Iterable[Any]],
-    *,
-    bulk_leftovers: bool | None = None,
-    keep_days: int | None = None,
-    leftover_repeat_default: int | None = None,
-    leftover_repeat_by_recipe: Dict[int, int] | None = None,
-    leftover_spacing_gap: int | None = None,
-    max_leftovers_per_day: int | None = None,
-    max_leftovers_per_week: int | None = None,
-    leftover_accept_weight: float | None = None,
-    leftover_daypart_pref: Dict[str, float] | None = None,
-    leftover_daypart_weight: float | None = None,
-    protect_explore_slots: bool | None = None,
-    soft_hold_penalty: float | None = None,
-    explore_protection_cost: float | None = None,
-    meal_number_to_daypart: Dict[int, str] | None = None,
-) -> None:
-    """Persist ``plan`` and optional metadata in memory for later retrieval."""
-
-    _PLAN_CACHE.clear()
-    normalised: Dict[str, List[Dict[str, Any]]] = {}
-    for day, meals in plan.items():
-        items: List[Dict[str, Any]] = []
-        for meal in meals:
-            if isinstance(meal, str):
-                items.append({
-                    "recipe": meal,
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": False,
-                })
-            else:
-                side_recipes = meal.get("side_recipes")
-                if side_recipes is None:
-                    sr = meal.get("side_recipe")
-                    side_recipes = [sr] if sr else []
-                items.append(
-                    {
-                        "recipe": meal.get("recipe"),
-                        "side_recipes": side_recipes,
-                        "accepted": bool(meal.get("accepted", False)),
-                        "leftover": bool(meal.get("leftover", False)),
-                    }
-                )
-        normalised[day] = items
-    _PLAN_CACHE.update(normalised)
-    settings: Dict[str, Any] = {
-        "bulk_leftovers": bulk_leftovers,
-        "keep_days": keep_days,
-        "LEFTOVER_REPEAT_DEFAULT": leftover_repeat_default,
-        "LEFTOVER_REPEAT_BY_RECIPE": leftover_repeat_by_recipe,
-        "LEFTOVER_SPACING_GAP": leftover_spacing_gap,
-        "MAX_LEFTOVERS_PER_DAY": max_leftovers_per_day,
-        "MAX_LEFTOVERS_PER_WEEK": max_leftovers_per_week,
-        "LEFTOVER_ACCEPT_WEIGHT": leftover_accept_weight,
-        "LEFTOVER_DAYPART_PREF": leftover_daypart_pref,
-        "LEFTOVER_DAYPART_WEIGHT": leftover_daypart_weight,
-        "PROTECT_EXPLORE_SLOTS": protect_explore_slots,
-        "SOFT_HOLD_PENALTY": soft_hold_penalty,
-        "EXPLORE_PROTECTION_COST": explore_protection_cost,
-        "MEAL_NUMBER_TO_DAYPART": meal_number_to_daypart,
-    }
-    for key, value in settings.items():
-        if value is not None:
-            _PLAN_SETTINGS[key] = value
-
-
 def delete_meal_plans(
     session: Session, start_date: date, end_date: date
 ) -> int:
@@ -431,33 +360,22 @@ def delete_meal_plans(
 
     session.commit()
 
-    for key in list(_PLAN_CACHE.keys()):
-        try:
-            key_date = date.fromisoformat(key)
-        except ValueError:
-            continue
-        if start_date <= key_date <= end_date:
-            _PLAN_CACHE.pop(key, None)
-
     return deleted
 
 
 def get_plan(
-    session: Session | None = None,
+    session: Session,
     plan_date: Optional[date] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Return the cached plan or fetch from the database if a session is given.
+    """Fetch a plan from the database.
 
-    When ``start_date`` and ``end_date`` are provided, all plans within the
-    inclusive date range are returned.
+    The database is the single source of truth. When ``start_date`` and
+    ``end_date`` are provided, all plans within the inclusive date range are
+    returned; otherwise the plan for ``plan_date`` (defaulting to today) is
+    returned.
     """
-
-    if session is None:
-        return {
-            day: [dict(item) for item in meals] for day, meals in _PLAN_CACHE.items()
-        }
 
     if start_date is not None and end_date is not None:
         stmt = (
@@ -512,15 +430,18 @@ def get_plan(
     return result
 
 
-def get_plan_settings() -> Dict[str, Any]:
-    """Return plan settings merged with defaults.
+def get_plan_settings(
+    session: Session | None = None, user_id: int | None = None
+) -> Dict[str, Any]:
+    """Return plan settings.
 
-    Settings are populated by :func:`save_plan` and stored in-memory only.
-    Defaults from :mod:`mealplanner.config` are merged to ensure all known
-    configuration options are represented.
+    For now this returns a copy of :data:`DEFAULT_PLAN_SETTINGS`. The
+    ``session`` and ``user_id`` parameters are accepted so that a future
+    per-user settings feature can layer stored overrides on top of the
+    defaults without changing this call signature.
     """
 
-    return {**DEFAULT_PLAN_SETTINGS, **_PLAN_SETTINGS}
+    return dict(DEFAULT_PLAN_SETTINGS)
 
 
 def mark_meal_accepted(
@@ -556,13 +477,6 @@ def add_meal_side(
     meal.sides.append(MealSide(position=position, side_recipe_id=side_id))
     session.commit()
     session.refresh(meal)
-
-    key = plan_date.isoformat()
-    meals = _PLAN_CACHE.get(key)
-    if meals and 0 < meal_number <= len(meals):
-        meals[meal_number - 1]["side_recipes"] = [
-            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-        ]
     return meal
 
 
@@ -587,13 +501,6 @@ def replace_meal_side(
     meal.sides[index].side_recipe_id = side_id
     session.commit()
     session.refresh(meal)
-
-    key = plan_date.isoformat()
-    meals = _PLAN_CACHE.get(key)
-    if meals and 0 < meal_number <= len(meals):
-        meals[meal_number - 1]["side_recipes"] = [
-            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-        ]
     return meal
 
 
@@ -615,13 +522,6 @@ def remove_meal_side(
 
     session.commit()
     session.refresh(meal)
-
-    key = plan_date.isoformat()
-    meals = _PLAN_CACHE.get(key)
-    if meals and 0 < meal_number <= len(meals):
-        meals[meal_number - 1]["side_recipes"] = [
-            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-        ]
     return meal
 
 
@@ -674,6 +574,21 @@ def list_recipe_titles(session: Session, courses: Sequence[str] | None = None) -
     if courses:
         stmt = stmt.where(Recipe.course.in_(courses))
     return session.scalars(stmt).all()
+
+
+def list_planned_titles(session: Session) -> set[str]:
+    """Return the distinct set of main-recipe titles across all persisted plans.
+
+    This replaces the former in-memory ``_PLAN_CACHE`` lookup used when
+    suggesting rejection replacements: the DB is the single source of truth.
+    """
+
+    stmt = (
+        select(Recipe.title)
+        .join(Meal, Meal.recipe_id == Recipe.id)
+        .distinct()
+    )
+    return set(session.scalars(stmt).all())
 
 
 def clear_data(session: Session) -> None:

@@ -35,27 +35,6 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session):
         },
     )
 
-    crud.save_plan(
-        {
-            start.isoformat(): [
-                {
-                    "recipe": "Main",
-                    "side_recipes": ["Side"],
-                    "accepted": False,
-                    "leftover": False,
-                }
-            ],
-            second.isoformat(): [
-                {
-                    "recipe": "Alt",
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": False,
-                }
-            ],
-        }
-    )
-
     assert db_session.query(MealPlan).count() == 2
 
     os.makedirs("data", exist_ok=True)
@@ -72,7 +51,7 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session):
 
         assert db_session.query(MealPlan).count() == 0
         assert db_session.query(Meal).count() == 0
-        assert crud.get_plan() == {}
+        assert crud.get_plan(db_session, start_date=start, end_date=second) == {}
 
         generated = planner.generate_plan(
             db_session,
@@ -103,19 +82,6 @@ def test_delete_meal_plans_legacy_route(db_session):
     crud.set_meal_plan(
         db_session,
         {start.isoformat(): [{"main_id": main.id}]},
-    )
-
-    crud.save_plan(
-        {
-            start.isoformat(): [
-                {
-                    "recipe": "Main",
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": False,
-                }
-            ]
-        }
     )
 
     os.makedirs("data", exist_ok=True)

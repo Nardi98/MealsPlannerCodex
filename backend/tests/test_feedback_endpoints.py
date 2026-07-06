@@ -1,7 +1,5 @@
 from datetime import date
 
-from datetime import date
-
 from fastapi.testclient import TestClient
 from main import app, get_db
 from mealplanner import crud
@@ -20,24 +18,15 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     app.dependency_overrides[get_db] = override_get_db(db_session)
     a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
     crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
-    crud.save_plan(
+    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
+    crud.set_meal_plan(
+        db_session,
         {
             "2024-01-01": [
-                {
-                    "recipe": "A",
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": False,
-                },
-                {
-                    "recipe": "C",
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": True,
-                },
+                {"main_id": a.id, "leftover": False},
+                {"main_id": c.id, "leftover": True},
             ]
-        }
+        },
     )
     client = TestClient(app)
 
@@ -57,29 +46,19 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     data = resp.json()
     assert data["replacement"] == "B"
 
-    crud._PLAN_CACHE.clear()
-    crud._PLAN_SETTINGS.clear()
     app.dependency_overrides.clear()
 
 
 def test_reject_replacement_limited_to_main_courses(db_session):
     app.dependency_overrides[get_db] = override_get_db(db_session)
-    crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
     crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
     crud.create_recipe(
         db_session, title="C", servings_default=1, course="dessert", score=0
     )
-    crud.save_plan(
-        {
-            "2024-01-01": [
-                {
-                    "recipe": "A",
-                    "side_recipes": [],
-                    "accepted": False,
-                    "leftover": False,
-                }
-            ]
-        }
+    crud.set_meal_plan(
+        db_session,
+        {"2024-01-01": [{"main_id": a.id, "leftover": False}]},
     )
     client = TestClient(app)
 
@@ -92,7 +71,4 @@ def test_reject_replacement_limited_to_main_courses(db_session):
     assert data["replacement"] == "B"
     assert data["replacement"] != "C"
 
-    crud._PLAN_CACHE.clear()
-    crud._PLAN_SETTINGS.clear()
     app.dependency_overrides.clear()
-
