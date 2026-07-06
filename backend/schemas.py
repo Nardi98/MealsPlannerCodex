@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from models import UnitEnum
 
@@ -13,8 +13,7 @@ class TagOut(BaseModel):
     id: int
     name: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IngredientOut(BaseModel):
@@ -24,8 +23,7 @@ class IngredientOut(BaseModel):
     unit: Optional[UnitEnum] = None
     season_months: List[int] = Field(default_factory=list)
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IngredientIn(BaseModel):
@@ -49,8 +47,7 @@ class IngredientSummary(BaseModel):
     unit: Optional[UnitEnum] = None
     recipe_count: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IngredientUpdate(BaseModel):
@@ -63,8 +60,7 @@ class RecipeSummary(BaseModel):
     id: int
     title: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class RecipeIn(BaseModel):
@@ -89,8 +85,7 @@ class RecipeOut(BaseModel):
     ingredients: List[IngredientOut] = []
     tags: List[TagOut] = []
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MealAssignment(BaseModel):
