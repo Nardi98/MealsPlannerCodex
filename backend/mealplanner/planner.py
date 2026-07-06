@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import logging
 import random
 from collections import Counter
 from dataclasses import dataclass
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session, joinedload
 from .models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -113,9 +116,9 @@ def generate_plan(
             raise ValueError("No recipes available")
         base_scores = [r.score or 0.0 for r in available]
         scored: List[tuple[Recipe, float]] = []
-        print(f"planning date: {slot.date} (meal {slot.meal_number}) \n\n ")
+        logger.debug("planning date: %s (meal %s)", slot.date, slot.meal_number)
         for r in available:
-            print("\033[31m  recipe: \033[0m", r.title )
+            logger.debug("recipe: %s", r.title)
             score = score_recipe(
                 _recipe_to_dict(r, last_planned.get(r.id)),
                 planning_date=slot.date,
@@ -128,7 +131,7 @@ def generate_plan(
                 reduce_tags=reduce_tags or [],
                 base_scores=base_scores,
             )
-            print( "score: ", score)
+            logger.debug("score: %s", score)
             if slot.soft_hold_recipe_id and r.id != slot.soft_hold_recipe_id:
                 score -= settings.get("SOFT_HOLD_PENALTY", 0.0)
             scored.append((r, score))
