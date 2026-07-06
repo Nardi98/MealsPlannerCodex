@@ -155,6 +155,60 @@ def test_import_creates_tables_when_missing():
         assert session.query(Recipe).count() == 1
 
 
+_FULL_RECIPE_PAYLOAD = {
+    "title": "Stew",
+    "servings_default": 4,
+    "procedure": "Simmer everything.",
+    "bulk_prep": True,
+    "course": "first-course",
+    "score": 3.5,
+    "date_last_consumed": "2024-02-03",
+    "ingredients": [],
+    "tags": [],
+}
+
+
+def _assert_full_recipe(recipe):
+    assert recipe.title == "Stew"
+    assert recipe.servings_default == 4
+    assert recipe.procedure == "Simmer everything."
+    assert recipe.bulk_prep is True
+    assert recipe.course == "first-course"
+    assert recipe.score == 3.5
+    assert recipe.date_last_consumed == date(2024, 2, 3)
+
+
+def test_import_merge_builds_all_recipe_fields(db_session):
+    payload = {"recipes": [dict(_FULL_RECIPE_PAYLOAD)], "tags": [], "meal_plans": []}
+    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="merge")
+    _assert_full_recipe(db_session.query(Recipe).one())
+
+
+def test_import_overwrite_new_builds_all_recipe_fields(db_session):
+    payload = {"recipes": [dict(_FULL_RECIPE_PAYLOAD)], "tags": [], "meal_plans": []}
+    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="overwrite")
+    _assert_full_recipe(db_session.query(Recipe).one())
+
+
+def test_import_overwrite_existing_builds_all_recipe_fields(db_session):
+    existing = Recipe(id=7, title="Old", servings_default=1, course="main")
+    db_session.add(existing)
+    db_session.commit()
+
+    payload = {
+        "recipes": [dict(_FULL_RECIPE_PAYLOAD, id=7)],
+        "tags": [],
+        "meal_plans": [],
+    }
+    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="overwrite")
+    _assert_full_recipe(db_session.query(Recipe).one())
+
+
+def test_get_recipes_dead_stub_removed():
+    """The dead ``tests.test_app``-stub-referencing helper is gone."""
+    assert not hasattr(crud, "get_recipes")
+
+
 def test_clear_data(db_session):
     _create_sample_data(db_session)
     assert db_session.query(Recipe).count() == 1

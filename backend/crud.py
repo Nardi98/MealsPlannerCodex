@@ -267,20 +267,6 @@ def delete_ingredient(
     return True
 
 
-def get_recipes() -> List[str]:
-    """Return a list of recipe names.
-
-    Titles are loaded directly from the database using a lightweight query.
-    ``tests.test_app`` replaces this function with a stub to avoid the database
-    dependency during tests, but in normal operation we should perform a real
-    query.
-    """
-
-    with SessionLocal() as session:
-        stmt = select(Recipe.title).order_by(Recipe.title)
-        return session.execute(stmt).scalars().all()
-
-
 def set_meal_plan(
     session: Session, plan: Dict[str, Iterable[Any]]
 ) -> Dict[str, MealPlan]:
@@ -605,6 +591,27 @@ def clear_data(session: Session) -> None:
     session.expunge_all()
 
 
+def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None) -> Recipe:
+    """Build a :class:`Recipe` from an import payload entry.
+
+    ``rec_id`` is only supplied when the recipe should keep its original id
+    (a brand-new recipe in overwrite mode); otherwise the id is left for the
+    database to assign.
+    """
+
+    consumed = rec_info.get("date_last_consumed")
+    return Recipe(
+        id=rec_id,
+        title=rec_info["title"],
+        servings_default=rec_info["servings_default"],
+        procedure=rec_info.get("procedure"),
+        bulk_prep=rec_info.get("bulk_prep", False),
+        course=rec_info.get("course", "main"),
+        score=rec_info.get("score"),
+        date_last_consumed=date.fromisoformat(consumed) if consumed else None,
+    )
+
+
 def import_data(
     file_obj: Any, session: Optional[Session] = None, mode: str = "overwrite"
 ) -> None:
@@ -667,51 +674,15 @@ def import_data(
         recipe_id_map: Dict[int, int] = {}
         for rec_info in data.get("recipes", []):
             rec_id = rec_info.get("id")
-            if mode == "merge":
-                recipe = Recipe(
-                    title=rec_info["title"],
-                    servings_default=rec_info["servings_default"],
-                    procedure=rec_info.get("procedure"),
-                    bulk_prep=rec_info.get("bulk_prep", False),
-                    course=rec_info.get("course", "main"),
-                    score=rec_info.get("score"),
-                    date_last_consumed=(
-                        date.fromisoformat(rec_info["date_last_consumed"])
-                        if rec_info.get("date_last_consumed")
-                        else None
-                    ),
-                )
-            else:
-                existing = session.get(Recipe, rec_id) if rec_id is not None else None
-                if existing is None:
-                    recipe = Recipe(
-                        id=rec_id,
-                        title=rec_info["title"],
-                        servings_default=rec_info["servings_default"],
-                        procedure=rec_info.get("procedure"),
-                        bulk_prep=rec_info.get("bulk_prep", False),
-                        course=rec_info.get("course", "main"),
-                        score=rec_info.get("score"),
-                        date_last_consumed=(
-                            date.fromisoformat(rec_info["date_last_consumed"])
-                            if rec_info.get("date_last_consumed")
-                            else None
-                        ),
-                    )
-                else:
-                    recipe = Recipe(
-                        title=rec_info["title"],
-                        servings_default=rec_info["servings_default"],
-                        procedure=rec_info.get("procedure"),
-                        bulk_prep=rec_info.get("bulk_prep", False),
-                        course=rec_info.get("course", "main"),
-                        score=rec_info.get("score"),
-                        date_last_consumed=(
-                            date.fromisoformat(rec_info["date_last_consumed"])
-                            if rec_info.get("date_last_consumed")
-                            else None
-                        ),
-                    )
+            # In overwrite mode a brand-new recipe keeps its original id; in
+            # every other case (merge, or overwrite of an existing id) a fresh
+            # id is assigned. The field values are identical regardless.
+            keep_id = (
+                mode == "overwrite"
+                and rec_id is not None
+                and session.get(Recipe, rec_id) is None
+            )
+            recipe = _recipe_from_payload(rec_info, rec_id if keep_id else None)
             session.add(recipe)
             session.flush()
             if rec_id is not None:
