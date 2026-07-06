@@ -334,7 +334,7 @@ def filter_recipes(
             continue
         if tag_set and not recipe_tags.intersection(tag_set):
             continue
-        recipe_ingredients = getattr(recipe, "recipe_ingredients", [])
+        recipe_ingredients = getattr(recipe, "ingredients", [])
         if season is not None and recipe_ingredients and not any(
             _ingredient_in_season(ri.ingredient, season)
             for ri in recipe_ingredients

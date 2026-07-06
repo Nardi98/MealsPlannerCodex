@@ -8,9 +8,20 @@ const API_BASE_URL =
       process.env.NEXT_PUBLIC_API_BASE_URL)) ||
   '';
 
+function getApiKey() {
+  return (
+    (typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      import.meta.env.VITE_API_KEY) ||
+    ''
+  );
+}
+
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
   const defaultHeaders = { 'Content-Type': 'application/json' };
+  const apiKey = getApiKey();
+  if (apiKey) defaultHeaders['X-API-Key'] = apiKey;
   const config = { ...options, headers: { ...defaultHeaders, ...(options.headers || {}) } };
 
   const response = await fetch(url, config);

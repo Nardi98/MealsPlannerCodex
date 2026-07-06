@@ -17,9 +17,11 @@ The :func:`score_recipe` function combines several simple signals:
     contributes ``0``.
 
 ``recency``
-    Recipes eaten recently receive a negative penalty.  The penalty starts at
-    ``-10`` for a recipe eaten today and decreases in magnitude proportionally
-    to the number of days since it was last consumed.
+    Recipes planned recently receive a negative penalty.  The penalty is
+    strongest (``-RECENCY_MAX_PENALTY``) for a recipe planned today, decays
+    exponentially with a ``HALF_LIFE_DAYS`` half-life, and disappears once the
+    gap reaches ``RECENCY_WINDOW_DAYS``.  A recipe last planned *after* the
+    planning date is not yet consumed and receives no penalty.
 
 ``bulk bonus``
     Bulk-prepared recipes get a small positive bonus.
@@ -37,35 +39,54 @@ from typing import Callable, Dict, Iterable, Optional, Any
 RecipeDict = Dict[str, object]
 
 # Tunables
-RECENCY_WINDOW_DAYS = 15.0        # after 30 days, no penalty
-RECENCY_MAX_PENALTY = 30.0        # strength of the penalty when very recent
-HALF_LIFE_DAYS = 4.0              # penalty halves every 7 days
+RECENCY_WINDOW_DAYS = 15.0        # no penalty once the gap reaches this many days
+RECENCY_MAX_PENALTY = 30.0        # strength of the penalty when planned today
+HALF_LIFE_DAYS = 4.0              # penalty halves every this many days
+SEASONALITY_BONUS_SCALE = 10.0    # magnitude of a fully in/out-of-season recipe
 
 
 def recency_penalty(recipe: RecipeDict, planned_date: date) -> float:
-    """
-    Compute a penalty if a recipe was used too recently compared to the planned date.
-    Both last_date and planned_date must be actual date objects (not None).
+    """Penalise recipes planned recently relative to ``planned_date``.
+
+    ``date_last_planned`` must be an actual :class:`date` (not ``None``). The
+    penalty is ``-RECENCY_MAX_PENALTY`` on the planning day itself, decays with
+    a ``HALF_LIFE_DAYS`` half-life, and is ``0`` once the gap reaches
+    ``RECENCY_WINDOW_DAYS``. A recipe last planned *after* ``planned_date`` has
+    not been consumed yet, so it receives no penalty.
     """
 
-    # Days since recipe was last used relative to planned date
+    # Days between the last time the recipe was planned and this slot. Negative
+    # means it is planned in the future relative to this slot -> not consumed.
     days = (planned_date - recipe.get("date_last_planned")).days
-    days = abs(days)
-    # If planning in the past or same day, force strong penalty
-    if days == 0:
-        return -RECENCY_MAX_PENALTY * 2.0
+    if days < 0:
+        return 0.0
 
-    # No penalty after the recency window
+    # Same-day: strongest penalty.
+    if days == 0:
+        return -RECENCY_MAX_PENALTY
+
+    # No penalty after the recency window.
     if days >= RECENCY_WINDOW_DAYS:
         return 0.0
 
-    # Exponential decay toward 0 as days increase
+    # Exponential decay toward 0 as days increase.
     penalty = RECENCY_MAX_PENALTY * math.exp(-math.log(2) * days / HALF_LIFE_DAYS)
     return -max(penalty, 0.0)
 
 
 
 def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float:
+    """Reward recipes whose ingredients are in season for ``today``'s month.
+
+    Each ingredient with meaningful seasonal data (``0 < len(season_months) <
+    12``) votes ``+1`` when in season and ``-1`` when out of season. Ingredients
+    with no data or available all year round are neutral (they contribute ``0``,
+    matching the module docstring). The net vote is scaled by
+    ``SEASONALITY_BONUS_SCALE`` and averaged over all ingredients, so a recipe
+    that is fully in season scores ``+SEASONALITY_BONUS_SCALE`` and one fully
+    out of season scores ``-SEASONALITY_BONUS_SCALE``.
+    """
+
     today = today or date.today()
 
     # Try ORM attributes first: prefer 'ingredients' (your model), then fallback
@@ -82,20 +103,18 @@ def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float
         return 0.0
 
     month = today.month
-    in_season = 0
+    net = 0
     for ri in items:
         # Works with ORM association objects or mapping dicts
         if hasattr(ri, "ingredient"):
             months = getattr(ri.ingredient, "season_months", []) or []
         else:
             months = ri.get("season_months") or []
-        if len(months) < 12:
-            if month in months:
-                print("it is in season")
-                in_season += 1
-            else:
-                in_season -=2
-    return 10 * in_season / len(items)
+        # Skip ingredients without meaningful seasonal data (missing or all-year).
+        if not months or len(months) >= 12:
+            continue
+        net += 1 if month in months else -1
+    return SEASONALITY_BONUS_SCALE * net / len(items)
 
 
 

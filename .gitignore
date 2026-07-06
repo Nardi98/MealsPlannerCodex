@@ -1,2 +1,6 @@
 node_modules
 frontend-v2/dist
+
+# SQLite databases (keep the data/ dir via .gitkeep, ignore the DB files)
+*.db
+backend/data/*.db

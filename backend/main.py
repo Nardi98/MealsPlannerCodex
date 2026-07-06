@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import random
 from datetime import date
 from typing import Any, Dict, List, Optional
-import random
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session, selectinload
 import crud
 import models
 import schemas
+from auth import require_api_key
 from mealplanner import planner
 from database import SessionLocal, engine
 
@@ -24,11 +26,22 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Allow all CORS for demo purposes
+# Applied to mutating routes so they honour ``API_KEY`` when configured.
+_AUTH = [Depends(require_api_key)]
+
+# Restrict CORS to the configured frontend origin(s). ``ALLOWED_ORIGINS`` is a
+# comma-separated list; default to the local dev server. Credentials are only
+# enabled when concrete origins are set (a wildcard + credentials is rejected by
+# browsers and is a security smell).
+_allowed_origins = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
+    allow_credentials="*" not in _allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -99,13 +112,22 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     }
 
 
-@app.post("/recipes", response_model=schemas.RecipeOut, status_code=201)
+@app.post(
+    "/recipes",
+    response_model=schemas.RecipeOut,
+    status_code=201,
+    dependencies=_AUTH,
+)
 def create_recipe(payload: schemas.RecipeIn, db: Session = Depends(get_db)) -> schemas.RecipeOut:
     data = _payload_to_data(payload, db)
     return crud.create_recipe(db, **data)
 
 
-@app.put("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
+@app.put(
+    "/recipes/{recipe_id}",
+    response_model=schemas.RecipeOut,
+    dependencies=_AUTH,
+)
 def update_recipe(
     recipe_id: int, payload: schemas.RecipeIn, db: Session = Depends(get_db)
 ) -> schemas.RecipeOut:
@@ -116,7 +138,11 @@ def update_recipe(
     return recipe
 
 
-@app.delete("/recipes/{recipe_id}", status_code=204)
+@app.delete(
+    "/recipes/{recipe_id}",
+    status_code=204,
+    dependencies=_AUTH,
+)
 def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
     deleted = crud.delete_recipe(db, recipe_id)
     if not deleted:
@@ -161,6 +187,7 @@ def search_ingredients(
     "/ingredients",
     response_model=schemas.IngredientSummary,
     status_code=201,
+    dependencies=_AUTH,
 )
 def create_ingredient(
     payload: schemas.IngredientCreate, db: Session = Depends(get_db)
@@ -177,7 +204,11 @@ def create_ingredient(
     )
 
 
-@app.put("/ingredients/{ingredient_id}", response_model=schemas.IngredientSummary)
+@app.put(
+    "/ingredients/{ingredient_id}",
+    response_model=schemas.IngredientSummary,
+    dependencies=_AUTH,
+)
 def update_ingredient(
     ingredient_id: int,
     payload: schemas.IngredientUpdate,
@@ -218,7 +249,11 @@ def ingredient_recipes(
     return [schemas.RecipeSummary(id=r.id, title=r.title) for r in recipes]
 
 
-@app.delete("/ingredients/{ingredient_id}", status_code=204)
+@app.delete(
+    "/ingredients/{ingredient_id}",
+    status_code=204,
+    dependencies=_AUTH,
+)
 def delete_ingredient(
     ingredient_id: int, force: bool = False, db: Session = Depends(get_db)
 ) -> Response:
@@ -243,8 +278,16 @@ def get_plan(
     return crud.get_plan(db, plan_date, start_date, end_date)
 
 
-@app.post("/plan", response_model=Dict[str, List[schemas.MealOut]])
-@app.post("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
+@app.post(
+    "/plan",
+    response_model=Dict[str, List[schemas.MealOut]],
+    dependencies=_AUTH,
+)
+@app.post(
+    "/meal-plans",
+    response_model=Dict[str, List[schemas.MealOut]],
+    dependencies=_AUTH,
+)
 def set_plan(
     payload: schemas.MealPlanCreate,
     force: bool = False,
@@ -268,8 +311,16 @@ def set_plan(
     return crud.get_plan(db, payload.plan_date)
 
 
-@app.delete("/plan", response_model=Dict[str, int])
-@app.delete("/meal-plans", response_model=Dict[str, int])
+@app.delete(
+    "/plan",
+    response_model=Dict[str, int],
+    dependencies=_AUTH,
+)
+@app.delete(
+    "/meal-plans",
+    response_model=Dict[str, int],
+    dependencies=_AUTH,
+)
 def delete_meal_plans(
     start_date: date = Query(..., description="Inclusive start date for deletion"),
     end_date: date = Query(..., description="Inclusive end date for deletion"),
@@ -291,7 +342,11 @@ def plan_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
     return crud.get_plan_settings(db)
 
 
-@app.post("/meal-plans/accept", response_model=schemas.MealOut)
+@app.post(
+    "/meal-plans/accept",
+    response_model=schemas.MealOut,
+    dependencies=_AUTH,
+)
 def toggle_meal_acceptance(
     payload: schemas.MealAcceptanceIn, db: Session = Depends(get_db)
 ) -> schemas.MealOut:
@@ -308,7 +363,11 @@ def toggle_meal_acceptance(
     )
 
 
-@app.post("/meal-plans/side", response_model=schemas.MealOut)
+@app.post(
+    "/meal-plans/side",
+    response_model=schemas.MealOut,
+    dependencies=_AUTH,
+)
 def upsert_side_dish(
     payload: schemas.MealSideIn, db: Session = Depends(get_db)
 ) -> schemas.MealOut:
@@ -330,7 +389,11 @@ def upsert_side_dish(
     )
 
 
-@app.delete("/meal-plans/side", response_model=schemas.MealOut)
+@app.delete(
+    "/meal-plans/side",
+    response_model=schemas.MealOut,
+    dependencies=_AUTH,
+)
 def delete_side_dish(
     payload: schemas.MealSideRemoveIn, db: Session = Depends(get_db)
 ) -> schemas.MealOut:
@@ -347,7 +410,7 @@ def delete_side_dish(
     )
 
 
-@app.post("/feedback/accept")
+@app.post("/feedback/accept", dependencies=_AUTH)
 def feedback_accept(
     payload: schemas.FeedbackIn, db: Session = Depends(get_db)
 ) -> Dict[str, str]:
@@ -358,7 +421,7 @@ def feedback_accept(
     return {"status": "ok"}
 
 
-@app.post("/feedback/reject")
+@app.post("/feedback/reject", dependencies=_AUTH)
 def feedback_reject(
     payload: schemas.FeedbackIn, db: Session = Depends(get_db)
 ) -> Dict[str, Optional[str]]:
@@ -375,7 +438,7 @@ def feedback_reject(
     return {"replacement": replacement}
 
 
-@app.post("/meal-plans/generate")
+@app.post("/meal-plans/generate", dependencies=_AUTH)
 def generate_plan_endpoint(
     payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
 ) -> Dict[str, List[Dict[str, object]]]:
@@ -411,7 +474,7 @@ def generate_plan_endpoint(
     return result
 
 
-@app.post("/side-dishes/generate")
+@app.post("/side-dishes/generate", dependencies=_AUTH)
 def generate_side_dish_endpoint(
     payload: schemas.SideDishGenerate, db: Session = Depends(get_db)
 ) -> Dict[str, object]:
@@ -440,7 +503,7 @@ def export_data_endpoint(db: Session = Depends(get_db)) -> Response:
     return Response(content=data, media_type="application/json")
 
 
-@app.post("/data/import")
+@app.post("/data/import", dependencies=_AUTH)
 def import_data_endpoint(
     payload: Dict[str, Any],
     mode: str = "overwrite",
@@ -453,7 +516,7 @@ def import_data_endpoint(
     return {"status": "ok"}
 
 
-@app.delete("/data")
+@app.delete("/data", dependencies=_AUTH)
 def clear_data_endpoint(db: Session = Depends(get_db)) -> Dict[str, str]:
     crud.clear_data(db)
     return {"status": "ok"}

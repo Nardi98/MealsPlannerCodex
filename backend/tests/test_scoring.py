@@ -8,7 +8,50 @@ from mealplanner.scoring import (
     seasonality_bonus,
     recency_penalty,
     bulk_bonus,
+    SEASONALITY_BONUS_SCALE,
 )
+
+
+def test_recency_penalty_decays_monotonically():
+    """More days since last planned means a smaller-magnitude penalty."""
+    planned = date(2024, 6, 15)
+    near = {"date_last_planned": date(2024, 6, 13)}   # 2 days
+    far = {"date_last_planned": date(2024, 6, 9)}     # 6 days
+    near_pen = recency_penalty(near, planned)
+    far_pen = recency_penalty(far, planned)
+    assert near_pen < far_pen <= 0
+    assert abs(near_pen) > abs(far_pen)
+
+
+def test_recency_penalty_no_penalty_for_future_last_planned():
+    """A recipe last planned after the planning date is not yet consumed."""
+    planned = date(2024, 6, 1)
+    recipe = {"date_last_planned": date(2024, 6, 10)}
+    assert recency_penalty(recipe, planned) == 0.0
+
+
+def test_recency_penalty_zero_outside_window():
+    planned = date(2024, 6, 30)
+    recipe = {"date_last_planned": date(2024, 6, 1)}  # 29 days > window
+    assert recency_penalty(recipe, planned) == 0.0
+
+
+def test_seasonality_bonus_in_season_is_positive():
+    today = date(2024, 6, 1)
+    recipe = {"ingredients": [{"season_months": [6]}, {"season_months": [5, 6]}]}
+    assert seasonality_bonus(recipe, today) == pytest.approx(SEASONALITY_BONUS_SCALE)
+
+
+def test_seasonality_bonus_out_of_season_is_symmetric_negative():
+    today = date(2024, 6, 1)
+    recipe = {"ingredients": [{"season_months": [1]}, {"season_months": [12]}]}
+    assert seasonality_bonus(recipe, today) == pytest.approx(-SEASONALITY_BONUS_SCALE)
+
+
+def test_seasonality_bonus_missing_data_is_neutral():
+    today = date(2024, 6, 1)
+    recipe = {"ingredients": [{"season_months": []}, {"season_months": list(range(1, 13))}]}
+    assert seasonality_bonus(recipe, today) == pytest.approx(0.0)
 
 
 def test_all_in_season_old_recipe():
