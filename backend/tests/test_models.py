@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
 from sqlalchemy import select
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
+from models import Recipe, Ingredient, RecipeIngredient, Tag
 
 
 def test_recipe_insert_defaults(db_session):

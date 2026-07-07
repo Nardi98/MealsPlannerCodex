@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import math
 from datetime import date
-from typing import Callable, Dict, Iterable, Optional, Any
+from typing import Dict, Iterable, Optional
 
 RecipeDict = Dict[str, object]
 
@@ -74,7 +74,6 @@ def recency_penalty(recipe: RecipeDict, planned_date: date) -> float:
     # Exponential decay toward 0 as days increase.
     penalty = RECENCY_MAX_PENALTY * math.exp(-math.log(2) * days / HALF_LIFE_DAYS)
     return -max(penalty, 0.0)
-
 
 
 def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float:
@@ -117,8 +116,6 @@ def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float
             continue
         net += 1 if month in months else -1
     return SEASONALITY_BONUS_SCALE * net / len(items)
-
-
 
 
 def bulk_bonus(recipe: RecipeDict) -> float:
@@ -197,7 +194,6 @@ def score_recipe(
 
     planning_date = planning_date
 
-
     # Normalise the raw base score using per-user statistics then squash into a
     # bounded contribution so that extreme values cannot dominate the final
     # score.
@@ -244,4 +240,3 @@ __all__ = [
     "BULK_PREP_BONUS",
     "DEFAULT_TAG_PENALTY",
 ]
-

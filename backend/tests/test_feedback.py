@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from mealplanner import crud
+import crud
 
 
 def test_accept_recipe_updates_score_and_date(db_session):

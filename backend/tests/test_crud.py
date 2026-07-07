@@ -1,12 +1,12 @@
 import pytest
 
-from mealplanner.crud import (
+from crud import (
     create_recipe,
     get_recipe,
     update_recipe,
     delete_recipe,
 )
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, UnitEnum
+from models import Recipe, Ingredient, RecipeIngredient, UnitEnum
 
 
 def test_create_recipe(db_session):

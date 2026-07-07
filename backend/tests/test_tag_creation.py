@@ -1,6 +1,6 @@
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Tag
+from models import Recipe, Tag
 from mealplanner.seed import _create_recipe
 
 

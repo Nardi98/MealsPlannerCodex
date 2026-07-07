@@ -12,7 +12,7 @@ from typing import Dict, Iterable, List, Sequence, Set
 from sqlalchemy import func, false
 from sqlalchemy.orm import Session, joinedload
 
-from .models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
+from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -291,7 +291,8 @@ def generate_side_dish(
     else:
         idx = 0
     return scored[idx][0]
-    
+
+
 def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
     """Return ``True`` if ``ingredient`` is available in ``month``.
 
@@ -313,7 +314,7 @@ def filter_recipes(
     """Filter ``recipes`` according to ``season`` and ``tags``.
 
     Args:
-        recipes: Collection of :class:`~mealplanner.models.Recipe` objects.
+        recipes: Collection of :class:`~models.Recipe` objects.
         season: Optional month number (``1-12``). Only recipes with at least one
             ingredient available in that month are kept.
         tags: Optional iterable of tag names. A recipe must contain at least one
@@ -355,4 +356,3 @@ __all__ = [
     "generate_side_dish",
     "filter_recipes",
 ]
-

@@ -2,7 +2,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 from main import app, get_db
-from mealplanner import crud
+import crud
 
 
 def override_get_db(session):

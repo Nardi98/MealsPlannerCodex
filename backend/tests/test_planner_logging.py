@@ -1,7 +1,7 @@
 import logging
 from datetime import date
 
-from mealplanner.models import Recipe
+from models import Recipe
 from mealplanner.planner import generate_plan
 
 

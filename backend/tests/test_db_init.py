@@ -1,6 +1,6 @@
-import mealplanner.db as db
+import database as db
 from sqlalchemy import create_engine, inspect
-import mealplanner.models  # ensure models are registered with Base
+import models  # ensure models are registered with Base
 
 
 def test_init_db_creates_tables_and_is_idempotent():

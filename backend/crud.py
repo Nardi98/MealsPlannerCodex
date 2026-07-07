@@ -53,7 +53,7 @@ __all__ = [
 
 
 def create_recipe(session: Session, **data: Any) -> Recipe:
-    """Create a new :class:`~mealplanner.models.Recipe`.
+    """Create a new :class:`~models.Recipe`.
 
     Parameters
     ----------
@@ -162,7 +162,7 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
 
 
 def get_or_create_tag(session: Session, name: str) -> Tag:
-    """Return a :class:`~mealplanner.models.Tag` with ``name``.
+    """Return a :class:`~models.Tag` with ``name``.
 
     The tag is created and added to the session if it does not already exist.
     The session is flushed so that tags added earlier in the transaction are
@@ -623,7 +623,7 @@ def import_data(
         File-like object providing the JSON payload via ``read``.
     session:
         Optional SQLAlchemy session. If omitted a new session is created using
-        :func:`~mealplanner.db.SessionLocal`.
+        :func:`~database.SessionLocal`.
     mode:
         Specifies how imported data should be handled. ``"overwrite"`` clears
         existing tables before import, while ``"merge"`` leaves existing data
@@ -750,7 +750,7 @@ def export_data(session: Optional[Session] = None) -> str:
     ----------
     session:
         Optional SQLAlchemy session. If omitted a new session is created using
-        :func:`~mealplanner.db.SessionLocal`.
+        :func:`~database.SessionLocal`.
     """
 
     close_session = False

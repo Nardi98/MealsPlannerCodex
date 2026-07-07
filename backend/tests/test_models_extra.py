@@ -1,7 +1,7 @@
 from datetime import date
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag, recipe_tag_table
+from models import Recipe, Ingredient, RecipeIngredient, Tag, recipe_tag_table
 
 
 def test_remove_tag_from_recipe(db_session):

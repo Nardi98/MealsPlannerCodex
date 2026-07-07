@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag
+from models import Recipe, Ingredient, RecipeIngredient, Tag
 from mealplanner.seed import seed_sample_data
 
 

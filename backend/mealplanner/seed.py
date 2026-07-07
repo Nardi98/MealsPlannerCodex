@@ -16,7 +16,7 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Ingredient, Recipe, Tag, RecipeIngredient, UnitEnum
+from models import Ingredient, Recipe, Tag, RecipeIngredient, UnitEnum
 
 
 # ---------------------------------------------------------------------------
@@ -126,4 +126,3 @@ def seed_sample_data(session: Session) -> None:
 
 
 __all__ = ["seed_sample_data"]
-

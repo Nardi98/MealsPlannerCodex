@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 import crud
 from main import app, get_db
 from mealplanner import planner
-from mealplanner.models import Meal, MealPlan
+from models import Meal, MealPlan
 
 
 def override_get_db(session):

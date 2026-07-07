@@ -1,6 +1,6 @@
 from datetime import date
 
-from mealplanner import crud
+import crud
 
 
 def test_list_planned_titles_returns_distinct_titles_from_db(db_session):

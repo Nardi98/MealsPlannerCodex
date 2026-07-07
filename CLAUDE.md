@@ -32,16 +32,16 @@ Set `VITE_API_BASE_URL` to point the frontend at the backend; otherwise requests
 
 ## Architecture
 
-### The `mealplanner` package is mostly compatibility shims
-`backend/mealplanner/models.py`, `db.py`, and `crud.py` are NOT real modules — each replaces itself in `sys.modules` with the root-level `models` / `database` / `crud` module. This lets code import either `models` or `mealplanner.models` and get the same objects, whether run from the repo root or from `backend/`. There is exactly **one** set of ORM models and one CRUD module.
+### One import root: top-level modules + the `mealplanner` package
+There is a **single canonical set** of ORM models / db / crud, imported as the top-level modules `models`, `database`, and `crud` (run from `backend/`). The old `sys.modules` self-replacement shims (`mealplanner/models.py`, `db.py`, `crud.py`) have been **removed** — import `models` / `database` / `crud` directly. `mealplanner/*` code imports the canonical modules by top-level name (e.g. `from models import Recipe`).
 
-The package's *real* logic lives in:
+The `mealplanner` package holds only the planner's *real* logic:
 - `mealplanner/planner.py` — `generate_plan`, `generate_side_dish`, `filter_recipes`, and leftover "soft hold" scheduling.
 - `mealplanner/scoring.py` — `score_recipe` and its components (base z-score/percentile squash, seasonality, recency decay, bulk bonus, tag penalty).
 - `mealplanner/config.py` — `DEFAULT_PLAN_SETTINGS` (leftover repeats, spacing, daypart prefs, etc.).
 - `mealplanner/seed.py`, `mealplanner/utils.py`.
 
-Because of the shims, tests import from `mealplanner.*` freely (see `conftest.py`, which also inserts the backend root onto `sys.path`).
+Tests import models/db/crud from the top-level modules and planner logic from `mealplanner.*` (see `tests/conftest.py`, which inserts the backend root onto `sys.path`). `mealplanner/` now lints under `flake8` (it is no longer excluded).
 
 ### Backend layers (all at `backend/` root)
 - `main.py` — every FastAPI route. Recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export. Routes are double-registered under legacy (`/plan`) and current (`/meal-plans`) paths. **The legacy `/plan` routes are deprecated** (kept for backward compatibility only) — prefer `/meal-plans`. Removal is scheduled no earlier than **2026-10-01**; do not add new features to the `/plan` paths.
@@ -66,7 +66,7 @@ Because of the shims, tests import from `mealplanner.*` freely (see `conftest.py
 - Leftover titles are encoded by suffixing `" (leftover)"` on the recipe title string; `main.py` parses this suffix back out.
 
 ## Conventions
-- `flake8` excludes `mealplanner/`, `pages/`, and `tests/`; max line length 120. New backend code outside those dirs must lint clean.
+- `flake8` excludes `pages/` and `tests/` (the `mealplanner/` package is now linted); max line length 120. New backend code outside the excluded dirs must lint clean.
 - Backend commands assume the working directory is `backend/` (imports are top-level, not package-qualified from the repo root).
 
 ## Plans 

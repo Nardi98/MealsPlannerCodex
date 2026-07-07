@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from mealplanner.db import Base
-from mealplanner import models  # ensures tables are registered
+from database import Base
+import models  # ensures tables are registered
 
 @pytest.fixture(scope="session")
 def engine():

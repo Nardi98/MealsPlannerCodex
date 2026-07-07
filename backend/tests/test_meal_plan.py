@@ -3,8 +3,8 @@ from datetime import date
 from sqlalchemy import select
 
 from mealplanner import planner
-from mealplanner.crud import create_recipe, set_meal_plan, get_plan, mark_meal_accepted
-from mealplanner.models import MealPlan, Meal, Recipe
+from crud import create_recipe, set_meal_plan, get_plan, mark_meal_accepted
+from models import MealPlan, Meal, Recipe
 
 
 def test_meal_plan_model_relationships(db_session):

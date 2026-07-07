@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from mealplanner import crud
-from mealplanner.models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
+import crud
+from models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
 
 
 def _create_sample_data(session):

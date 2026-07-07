@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from fastapi.testclient import TestClient
 
 import crud
-from mealplanner.models import Tag, MealPlan, Meal, MealSide
+from models import Tag, MealPlan, Meal, MealSide
 
 
 def override_get_db(session):

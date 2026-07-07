@@ -2,7 +2,7 @@ import pytest
 import random
 from datetime import date
 
-from mealplanner.models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
+from models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
 from mealplanner.planner import generate_plan, filter_recipes
 
 

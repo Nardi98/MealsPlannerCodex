@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from mealplanner.db import Base, engine
+from database import Base, engine
 
 
 def _reset_db() -> None:
