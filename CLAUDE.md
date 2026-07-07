@@ -44,14 +44,14 @@ The package's *real* logic lives in:
 Because of the shims, tests import from `mealplanner.*` freely (see `conftest.py`, which also inserts the backend root onto `sys.path`).
 
 ### Backend layers (all at `backend/` root)
-- `main.py` — every FastAPI route. Recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export. Routes are double-registered under legacy (`/plan`) and current (`/meal-plans`) paths.
-- `crud.py` — DB operations **plus a process-global in-memory cache** `_PLAN_CACHE` / `_PLAN_SETTINGS`. This is a key gotcha: `save_plan`/`get_plan` operate on this module-level dict, and `get_plan()` can be called with **no** `db` argument (returns the cache). The persisted `meals`/`meal_plans` tables and this cache are separate stores that must be kept consistent.
+- `main.py` — every FastAPI route. Recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export. Routes are double-registered under legacy (`/plan`) and current (`/meal-plans`) paths. **The legacy `/plan` routes are deprecated** (kept for backward compatibility only) — prefer `/meal-plans`. Removal is scheduled no earlier than **2026-10-01**; do not add new features to the `/plan` paths.
+- `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans. (An earlier process-global in-memory cache `_PLAN_CACHE` / `_PLAN_SETTINGS` has been removed; see `list_planned_titles`'s comment noting it "replaces the former in-memory `_PLAN_CACHE`".)
 - `models.py` — SQLAlchemy models. `Meal` has composite PK `(plan_date, meal_number)` with a `CHECK meal_number IN (1,2)`. `IntList` TypeDecorator stores `list[int]` (e.g. `season_months`) as comma-separated strings. `MealSide` holds ordered side dishes per meal.
 - `schemas.py` — Pydantic request/response models.
 - `database.py` — engine + `SessionLocal` + `Base`; SQLite file at `backend/data/app.db` (absolute path derived from the module location). `main.py` calls `Base.metadata.create_all` on startup, so a fresh DB needs no migration step.
 
 ### Migrations
-`backend/migrations/00X_*.py` are Alembic-style revision files (`upgrade`/`downgrade`, `down_revision` chain). There is no committed `alembic.ini`/`env.py`, so `alembic upgrade head` needs config that isn't in the repo — for fresh databases, startup table creation covers the schema. When adding a column, add both the model change and a numbered migration continuing the revision chain.
+**The real schema story is `Base.metadata.create_all` on startup** (`main.py`), so a fresh DB needs no migration step. `backend/migrations/00X_*.py` are Alembic-style revision files kept for **historical/reference** purposes only — there is no committed `alembic.ini`/`env.py`, so `alembic upgrade head` cannot be run as-is. This means there is **no automated migration path for an existing, populated DB**: schema changes to a populated database are **manual**. When adding a column, add both the model change and a numbered migration continuing the revision chain (for the record), and apply it by hand to any existing DB.
 
 ### Frontend (`frontend-v2/src/`)
 - `api/` — one module per resource (`recipesApi`, `mealPlansApi`, `ingredientsApi`, etc.); all go through `api/client.js`'s `request()` helper, which unwraps FastAPI's `{detail}` errors and returns `null` on 204.

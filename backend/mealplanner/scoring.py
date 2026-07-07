@@ -43,6 +43,8 @@ RECENCY_WINDOW_DAYS = 15.0        # no penalty once the gap reaches this many da
 RECENCY_MAX_PENALTY = 30.0        # strength of the penalty when planned today
 HALF_LIFE_DAYS = 4.0              # penalty halves every this many days
 SEASONALITY_BONUS_SCALE = 10.0    # magnitude of a fully in/out-of-season recipe
+BULK_PREP_BONUS = 10.0            # bonus applied to bulk-prep recipes
+DEFAULT_TAG_PENALTY = 3.0         # default penalty for a matching reduce-tag
 
 
 def recency_penalty(recipe: RecipeDict, planned_date: date) -> float:
@@ -122,13 +124,13 @@ def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float
 def bulk_bonus(recipe: RecipeDict) -> float:
     """Small bonus if the recipe is marked as bulk-prep."""
 
-    return 10 if recipe.get("bulk_prep") else 0.0
+    return BULK_PREP_BONUS if recipe.get("bulk_prep") else 0.0
 
 
 def tag_penalty(
     recipe: RecipeDict,
     reduce_tags: Iterable[str],
-    penalty: float = 3,
+    penalty: float = DEFAULT_TAG_PENALTY,
 ) -> float:
     """Return a negative penalty if ``recipe`` contains any ``reduce_tags``.
 
@@ -238,5 +240,8 @@ __all__ = [
     "bulk_bonus",
     "tag_penalty",
     "score_recipe",
+    "SEASONALITY_BONUS_SCALE",
+    "BULK_PREP_BONUS",
+    "DEFAULT_TAG_PENALTY",
 ]
 

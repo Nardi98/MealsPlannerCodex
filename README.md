@@ -77,20 +77,20 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
-#### Database migrations
+#### Database schema & migrations
 
-If you already have a database, run the Alembic migrations to bring it up to
-date:
+The schema is created automatically on startup: `main.py` calls
+`Base.metadata.create_all`, so a **fresh** database needs no migration step.
 
-```bash
-cd backend
-alembic upgrade head
-```
-
-This applies schema changes such as the new `course` column on recipes.
+The numbered files under `backend/migrations/00X_*.py` are Alembic-style revision
+scripts kept for historical/reference purposes only — there is **no committed
+`alembic.ini` / `env.py`, so `alembic upgrade head` cannot be run as-is**. For an
+existing, populated database, schema changes (e.g. adding the `course` column on
+recipes) must be applied **manually**. When adding a column, add both the model
+change and a numbered migration continuing the revision chain for the record.
 
 ### Frontend (`frontend-v2/`)
 
@@ -154,7 +154,7 @@ Set the necessary environment variables before starting:
 
 Build steps:
 
-- Backend: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- Backend: `uvicorn main:app --host 0.0.0.0 --port 8000`
 - Frontend: `npm run build` and serve the contents of the `build/` directory
 
 ## Database Schema

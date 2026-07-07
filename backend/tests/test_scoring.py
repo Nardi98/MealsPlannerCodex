@@ -9,6 +9,8 @@ from mealplanner.scoring import (
     recency_penalty,
     bulk_bonus,
     SEASONALITY_BONUS_SCALE,
+    BULK_PREP_BONUS,
+    DEFAULT_TAG_PENALTY,
 )
 
 
@@ -151,3 +153,14 @@ def test_tag_penalty():
     recipe = {"tags": ["spicy", "vegan"]}
     assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-3.0)
     assert tag_penalty(recipe, {"gluten-free"}) == pytest.approx(0.0)
+
+
+def test_bulk_bonus_uses_named_constant():
+    recipe = {"bulk_prep": True}
+    assert bulk_bonus(recipe) == pytest.approx(BULK_PREP_BONUS)
+    assert bulk_bonus({"bulk_prep": False}) == pytest.approx(0.0)
+
+
+def test_tag_penalty_default_uses_named_constant():
+    recipe = {"tags": ["spicy"]}
+    assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-DEFAULT_TAG_PENALTY)

@@ -267,6 +267,9 @@ def delete_ingredient(
     return Response(status_code=204)
 
 
+# DEPRECATED: the legacy `/plan` routes below are kept for backward
+# compatibility only. Prefer the `/meal-plans` paths. Removal is scheduled no
+# earlier than 2026-10-01; do not add new behaviour to the `/plan` paths.
 @app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
 @app.get("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
 def get_plan(
