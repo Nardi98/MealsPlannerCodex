@@ -3,8 +3,11 @@ version: "3.9"
 services:
   backend:
     build: ./backend
+    # On every compose, wipe + repopulate the DB with testing data, then serve.
     # run python in unbuffered mode (+ louder uvicorn logs)
-    command: python -u -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug
+    command: >
+      sh -c "python -u scripts/seed_testing_data.py &&
+             python -u -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-level debug"
     ports:
       - "8000:8000"
     environment:

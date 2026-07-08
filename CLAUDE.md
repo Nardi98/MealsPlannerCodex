@@ -51,7 +51,12 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 - `database.py` — engine + `SessionLocal` + `Base`; SQLite file at `backend/data/app.db` (absolute path derived from the module location). `main.py` calls `Base.metadata.create_all` on startup, so a fresh DB needs no migration step.
 
 ### Migrations
-**The real schema story is `Base.metadata.create_all` on startup** (`main.py`), so a fresh DB needs no migration step. `backend/migrations/00X_*.py` are Alembic-style revision files kept for **historical/reference** purposes only — there is no committed `alembic.ini`/`env.py`, so `alembic upgrade head` cannot be run as-is. This means there is **no automated migration path for an existing, populated DB**: schema changes to a populated database are **manual**. When adding a column, add both the model change and a numbered migration continuing the revision chain (for the record), and apply it by hand to any existing DB.
+**The real schema story is `Base.metadata.create_all` on startup** (`main.py`), so a fresh DB needs no migration step. There is **no active migration system** and `alembic` is not a dependency. During development, changing the schema means changing the model and starting against a fresh DB — nothing else. Real migrations will be adopted via `alembic init` (generating a fresh baseline from the models) when the project approaches production and must evolve a populated DB in place. `backend/migrations/README.md` holds a historical changelog of past schema changes; do **not** add new revision scripts.
+
+### Testing data seed
+`backend/scripts/seed_testing_data.py` performs a **complete DB reset** (drops + recreates every table) and inserts a coherent testing dataset (≥40 recipes, ≥50 ingredients, ≥10 tags). `docker-compose.yml` runs it before uvicorn, so **every `docker compose up` (built or not) starts from a clean, fully-populated database**. Run it manually with `python scripts/seed_testing_data.py` from `backend/`.
+
+**MANDATORY:** whenever the database schema or domain model changes (new/renamed/removed columns, tables, enums, relationships, or constraints), `seed_testing_data.py` MUST be updated in the same change so the seeded data stays coherent with the updated database. A schema change is not complete until the seed script inserts valid data again.
 
 ### Frontend (`frontend-v2/src/`)
 - `api/` — one module per resource (`recipesApi`, `mealPlansApi`, `ingredientsApi`, etc.); all go through `api/client.js`'s `request()` helper, which unwraps FastAPI's `{detail}` errors and returns `null` on 204.
@@ -72,3 +77,7 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 ## Plans 
 - when developing a plan require to use the /test-driven-development to implement it. Create each plan following the test driven development rules
 -the last step of each plan has to run the /simplify skill
+
+## Instruction 
+
+- call me sir when adressing me.
