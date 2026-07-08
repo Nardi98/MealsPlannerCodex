@@ -18,7 +18,7 @@ def _create_sample_data(session):
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
     plan = MealPlan(plan_date=date(2024, 1, 1))
-    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True, leftover=False))
+    plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True))
     session.add_all([tag, recipe, plan])
     session.commit()
 

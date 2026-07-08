@@ -93,6 +93,16 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
     { id: 1, title: 'Bulk' },
     { id: 2, title: 'Replacement' },
   ])
+  // Mount fetch returns the leftover; the post-reject refetch returns the replacement.
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Bulk', side_recipes: [], accepted: false, leftover: true }],
+    })
+    .mockResolvedValueOnce({
+      [startIso]: [
+        { recipe: 'Replacement', side_recipes: [], accepted: false, leftover: false },
+      ],
+    })
 
   render(<MealPlanPage />)
 

@@ -66,6 +66,14 @@ test('rejecting a leftover meal clears the leftover flag for the replacement', a
     { id: 1, title: 'Bulk' },
     { id: 2, title: 'Replacement' },
   ])
+  // Mount fetch returns the leftover; the post-reject refetch returns the replacement.
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Bulk', side_recipes: [], accepted: false, leftover: true }],
+    })
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Replacement', side_recipes: [], accepted: false, leftover: false }],
+    })
   const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
   await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
 
@@ -80,4 +88,64 @@ test('rejecting a leftover meal clears the leftover flag for the replacement', a
     })
   )
   expect(result.current.plan[startIso][0].leftover).toBe(false)
+})
+
+test('rejecting a meal refetches the week to reflect server-side changes', async () => {
+  feedbackApi.rejectRecipe.mockResolvedValue('Replacement')
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Solo' },
+    { id: 2, title: 'Replacement' },
+  ])
+  // A plain meal with no leftovers; the post-reject refetch is the source of truth.
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Solo', side_recipes: [], accepted: false, leftover: false }],
+    })
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Replacement', side_recipes: [], accepted: false, leftover: false }],
+    })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.handleReject({ date: startIso, mealIndex: 0 })
+  })
+
+  await waitFor(() => expect(mealPlansApi.fetchRange).toHaveBeenCalledTimes(2))
+  expect(result.current.plan[startIso][0].recipe).toBe('Replacement')
+})
+
+test('rejecting a bulk source re-extracts its leftover slots as fresh meals', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Bulk' },
+    { id: 2, title: 'NewSource' },
+    { id: 3, title: 'NewLeftover' },
+  ])
+  feedbackApi.rejectRecipe
+    .mockResolvedValueOnce('NewSource')
+    .mockResolvedValueOnce('NewLeftover')
+  const day2 = new Date(startIso)
+  day2.setDate(day2.getDate() + 1)
+  const day2Iso = day2.toISOString().slice(0, 10)
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'Bulk', side_recipes: [], accepted: false, leftover: false }],
+      [day2Iso]: [{ recipe: 'Bulk', side_recipes: [], accepted: false, leftover: true }],
+    })
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'NewSource', side_recipes: [], accepted: false, leftover: false }],
+      [day2Iso]: [{ recipe: 'NewLeftover', side_recipes: [], accepted: false, leftover: false }],
+    })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[day2Iso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.handleReject({ date: startIso, mealIndex: 0 })
+  })
+
+  await waitFor(() => expect(mealPlansApi.create).toHaveBeenCalled())
+  const payload = mealPlansApi.create.mock.calls[0][0]
+  // Both the source slot and its leftover slot get fresh, non-leftover recipes.
+  expect(payload.plan[startIso][0]).toEqual({ main_id: 2, side_ids: [], leftover: false })
+  expect(payload.plan[day2Iso][0]).toEqual({ main_id: 3, side_ids: [], leftover: false })
 })

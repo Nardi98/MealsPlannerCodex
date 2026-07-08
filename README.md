@@ -83,14 +83,14 @@ uvicorn main:app --reload
 #### Database schema & migrations
 
 The schema is created automatically on startup: `main.py` calls
-`Base.metadata.create_all`, so a **fresh** database needs no migration step.
+`Base.metadata.create_all`, so a **fresh** database needs no migration step. During
+development this is the whole story — to change the schema, change the SQLAlchemy
+model and start against a fresh DB.
 
-The numbered files under `backend/migrations/00X_*.py` are Alembic-style revision
-scripts kept for historical/reference purposes only — there is **no committed
-`alembic.ini` / `env.py`, so `alembic upgrade head` cannot be run as-is**. For an
-existing, populated database, schema changes (e.g. adding the `course` column on
-recipes) must be applied **manually**. When adding a column, add both the model
-change and a numbered migration continuing the revision chain for the record.
+There is **no active migration system**. Real migrations will be introduced with
+`alembic init` when the project approaches production and needs to evolve a populated
+database in place. A historical changelog of past schema changes is kept in
+[`backend/migrations/README.md`](backend/migrations/README.md).
 
 ### Frontend (`frontend-v2/`)
 
@@ -113,7 +113,7 @@ meal-planner/
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-├── migrations/                # (optional) alembic migration scripts
+├── migrations/                # schema-change changelog (no active migrations)
 └── data/
     └── app.db                 # sqlite database (created on first run)
 ```

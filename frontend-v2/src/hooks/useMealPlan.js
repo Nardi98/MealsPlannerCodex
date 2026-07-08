@@ -13,16 +13,21 @@ export const startOfWeek = (base) => {
 
 export const fmt = (d) => d.toISOString().split('T')[0]
 
-// Persist a single day's meals, forcing an overwrite if the day already exists.
-const persistDay = async (date, dayMeals) => {
+// Persist one or more days' meals in a single request, forcing an overwrite if
+// any day already exists. `anchorDate` names the plan_date the response echoes.
+const persistDays = async (anchorDate, daysMap) => {
   const recipes = await recipesApi.fetchAll()
   const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
-  const serialised = dayMeals.map((m) => ({
-    main_id: titleToId[m.recipe],
-    side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
-    leftover: m.leftover,
-  }))
-  const payload = { plan_date: date, plan: { [date]: serialised } }
+  const serialise = (dayMeals) =>
+    dayMeals.map((m) => ({
+      main_id: titleToId[m.recipe],
+      side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
+      leftover: m.leftover,
+    }))
+  const plan = Object.fromEntries(
+    Object.entries(daysMap).map(([day, meals]) => [day, serialise(meals)])
+  )
+  const payload = { plan_date: anchorDate, plan }
   try {
     await mealPlansApi.create(payload)
   } catch (apiErr) {
@@ -101,40 +106,80 @@ export function useMealPlan({ setError }) {
     }
   }
 
+  // Extract a fresh replacement distinct from the rejected recipe, its sides,
+  // and any already-chosen replacements in the same batch.
+  const extractReplacement = async (meal, date, used) => {
+    let replacement
+    let attempts = 0
+    do {
+      replacement = await feedbackApi.rejectRecipe(meal.recipe, date)
+      attempts += 1
+    } while (
+      replacement &&
+      (used.has(replacement) || meal.side_recipes?.includes(replacement)) &&
+      attempts < 5
+    )
+    if (!replacement || used.has(replacement) || meal.side_recipes?.includes(replacement)) {
+      return null
+    }
+    used.add(replacement)
+    return replacement
+  }
+
   const handleReject = async (cell) => {
     if (!cell) return
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      let replacement
-      let attempts = 0
-      do {
-        replacement = await feedbackApi.rejectRecipe(meal.recipe, date)
-        attempts += 1
-      } while (
-        replacement &&
-        (replacement === meal.recipe || meal.side_recipes?.includes(replacement)) &&
-        attempts < 5
-      )
-      if (
-        !replacement ||
-        replacement === meal.recipe ||
-        meal.side_recipes?.includes(replacement)
-      ) {
-        setError('No replacement recipe available.')
-        return
+      // A bulk source drags its leftovers with it: re-extract those slots too so
+      // they don't get cascade-removed and left empty. Leftovers share the
+      // source's recipe title and carry the leftover flag.
+      const batch = [{ date, mealIndex, meal }]
+      if (!meal.leftover) {
+        Object.entries(plan).forEach(([d, meals]) => {
+          meals.forEach((m, i) => {
+            if (m.leftover && m.recipe === meal.recipe && !(d === date && i === mealIndex)) {
+              batch.push({ date: d, mealIndex: i, meal: m })
+            }
+          })
+        })
       }
 
-      const updatedDay = plan[date].map((m, i) =>
-        i === mealIndex
-          ? { ...m, recipe: replacement, accepted: false, leftover: false }
-          : m
-      )
-      setPlan((p) => ({ ...p, [date]: updatedDay }))
+      const used = new Set([meal.recipe])
+      const replacements = []
+      for (const slot of batch) {
+        const replacement = await extractReplacement(slot.meal, slot.date, used)
+        if (!replacement) {
+          setError('No replacement recipe available.')
+          return
+        }
+        replacements.push(replacement)
+      }
+
+      // Apply replacements locally and collect the affected days for persistence.
+      const nextPlan = { ...plan }
+      batch.forEach((slot, idx) => {
+        nextPlan[slot.date] = nextPlan[slot.date].map((m, i) =>
+          i === slot.mealIndex
+            ? { ...m, recipe: replacements[idx], accepted: false, leftover: false }
+            : m
+        )
+      })
+      setPlan(nextPlan)
+
+      const daysMap = {}
+      batch.forEach((slot) => {
+        daysMap[slot.date] = nextPlan[slot.date]
+      })
 
       try {
-        await persistDay(date, updatedDay)
+        await persistDays(date, daysMap)
+        // Refetch the visible week so server-side cascade effects are reflected.
+        const viewEnd = new Date(viewStart)
+        viewEnd.setDate(viewEnd.getDate() + 6)
+        const refreshed = await mealPlansApi.fetchRange(fmt(viewStart), fmt(viewEnd))
+        setPlan(refreshed || {})
       } catch (apiErr) {
         console.error('Failed to persist rejected meal', apiErr)
       }
@@ -158,7 +203,7 @@ export function useMealPlan({ setError }) {
       )
       setPlan((p) => ({ ...p, [date]: updatedDay }))
       try {
-        await persistDay(date, updatedDay)
+        await persistDays(date, { [date]: updatedDay })
       } catch (apiErr) {
         console.error('Failed to persist swapped meal', apiErr)
       }

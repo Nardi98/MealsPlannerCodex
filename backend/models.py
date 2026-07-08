@@ -73,6 +73,7 @@ class Recipe(Base):
     bulk_prep = Column(Boolean, default=False)
     score = Column(Float)
     date_last_consumed = Column(Date)
+    date_last_rejected = Column(Date)
     course = Column(String, nullable=False, default="main")
 
     # Relationship to ``RecipeIngredient`` association objects.
@@ -168,7 +169,11 @@ class Meal(Base):
     meal_number = Column(Integer, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
     accepted = Column(Boolean, default=False)
-    leftover = Column(Boolean, default=False)
+    # A meal is a leftover iff it links back to the source meal that produced
+    # it. The two columns are all-or-nothing (see the CHECK constraint below);
+    # ``leftover`` is derived from their presence rather than stored separately.
+    leftover_source_date = Column(Date, nullable=True)
+    leftover_source_meal = Column(Integer, nullable=True)
 
     plan = relationship("MealPlan", back_populates="meals")
     recipe = relationship("Recipe", foreign_keys=[recipe_id])
@@ -182,7 +187,16 @@ class Meal(Base):
     __table_args__ = (
         PrimaryKeyConstraint("plan_date", "meal_number"),
         CheckConstraint("meal_number IN (1,2)"),
+        CheckConstraint(
+            "(leftover_source_date IS NULL) = (leftover_source_meal IS NULL)",
+            name="ck_meal_leftover_source_all_or_nothing",
+        ),
     )
+
+    @property
+    def leftover(self) -> bool:
+        """A meal is a leftover exactly when it links to a source meal."""
+        return self.leftover_source_date is not None
 
     @property
     def side_recipe(self):

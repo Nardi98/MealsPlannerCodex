@@ -37,6 +37,7 @@ __all__ = [
     "set_meal_plan",
     "get_plan",
     "delete_meal_plans",
+    "remove_leftovers_for_source",
     "get_plan_settings",
     "mark_meal_accepted",
     "add_meal_side",
@@ -285,17 +286,37 @@ def set_meal_plan(
     """
 
     plans: Dict[str, MealPlan] = {}
-    for day, meals in plan.items():
+    # Built meals paired with their leftover hint, fed to _assign_leftover_sources
+    # once every day is rebuilt so cross-day links resolve in date order.
+    entries: List[tuple] = []
+    # Positions whose recipe changed on re-persist, so their now-orphaned
+    # leftovers can be cascade-removed after the rebuild.
+    replaced_sources: List[tuple] = []
+
+    def _day_key(item):
+        day = item[0]
+        return day if isinstance(day, date) else date.fromisoformat(day)
+
+    for day, meals in sorted(plan.items(), key=_day_key):
         plan_date = day if isinstance(day, date) else date.fromisoformat(day)
         stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
         meal_plan = session.execute(stmt).scalar_one_or_none()
+        old_recipe_by_number: Dict[int, Optional[int]] = {}
         if meal_plan is None:
             meal_plan = MealPlan(plan_date=plan_date)
             session.add(meal_plan)
             session.flush()
         else:
+            old_recipe_by_number = {
+                m.meal_number: m.recipe_id for m in meal_plan.meals
+            }
+            # Flush the delete before re-inserting rows with the same composite
+            # PK, otherwise SQLAlchemy issues an UPDATE that leaves unset columns
+            # (e.g. a stale leftover link) untouched.
             meal_plan.meals = []
+            session.flush()
 
+        new_recipe_by_number: Dict[int, Optional[int]] = {}
         for index, meal in enumerate(meals, start=1):
             if isinstance(meal, int):
                 main_id = meal
@@ -310,24 +331,100 @@ def set_meal_plan(
                 side_ids = list(getattr(meal, "side_ids", []) or [])
                 leftover = bool(getattr(meal, "leftover", False))
 
-            meal_plan.meals.append(
-                Meal(
-                    meal_number=index,
-                    recipe_id=main_id,
-                    accepted=False,
-                    leftover=leftover,
-                    sides=[
-                        MealSide(position=i + 1, side_recipe_id=sid)
-                        for i, sid in enumerate(side_ids)
-                    ],
-                )
+            new_recipe_by_number[index] = main_id
+            meal_obj = Meal(
+                meal_number=index,
+                recipe_id=main_id,
+                accepted=False,
+                sides=[
+                    MealSide(position=i + 1, side_recipe_id=sid)
+                    for i, sid in enumerate(side_ids)
+                ],
             )
+            meal_plan.meals.append(meal_obj)
+            entries.append((meal_obj, plan_date, index, main_id, leftover))
+
+        # A source position whose recipe changed (or was removed) leaves its
+        # leftovers orphaned; schedule them for cascade removal.
+        for number, old_recipe in old_recipe_by_number.items():
+            if new_recipe_by_number.get(number) != old_recipe:
+                replaced_sources.append((plan_date, number))
+
         plans[day] = meal_plan
+
+    _assign_leftover_sources(entries, session=session)
+    for source_date, source_number in replaced_sources:
+        remove_leftovers_for_source(session, source_date, source_number)
 
     session.commit()
     for meal_plan in plans.values():
         session.refresh(meal_plan)
     return plans
+
+
+def remove_leftovers_for_source(
+    session: Session, source_date: date, source_meal: int
+) -> int:
+    """Delete every leftover meal linked to the given source meal.
+
+    Returns the number of leftover meals removed.
+    """
+
+    stmt = select(Meal).where(
+        Meal.leftover_source_date == source_date,
+        Meal.leftover_source_meal == source_meal,
+    )
+    leftovers = session.execute(stmt).scalars().all()
+    for meal in leftovers:
+        session.delete(meal)
+    session.flush()
+    return len(leftovers)
+
+
+def _db_source_for(
+    session: Session, recipe_id: int, before_date: date
+) -> Optional[tuple]:
+    """Most recent non-leftover meal of ``recipe_id`` planned before a date."""
+
+    row = session.execute(
+        select(Meal.plan_date, Meal.meal_number)
+        .where(
+            Meal.recipe_id == recipe_id,
+            Meal.leftover_source_date.is_(None),
+            Meal.plan_date < before_date,
+        )
+        .order_by(Meal.plan_date.desc(), Meal.meal_number.desc())
+        .limit(1)
+    ).first()
+    return (row[0], row[1]) if row else None
+
+
+def _assign_leftover_sources(
+    entries: Iterable[tuple], session: Optional[Session] = None
+) -> None:
+    """Link leftover meals to the source meal that produced them.
+
+    ``entries`` is an iterable of ``(meal, plan_date, meal_number, recipe_id,
+    is_leftover)`` tuples. Processed in ``(plan_date, meal_number)`` order so a
+    leftover resolves to the most recent earlier non-leftover meal of the same
+    recipe. When a source is not among ``entries`` and ``session`` is provided,
+    it is looked up from the existing plan so a re-persisted day keeps a leftover
+    linked to a source on another day. Unresolved leftovers keep both link
+    columns ``NULL``.
+    """
+
+    last_source: Dict[int, tuple] = {}
+    for meal, plan_date, meal_number, recipe_id, is_leftover in sorted(
+        entries, key=lambda e: (e[1], e[2])
+    ):
+        if is_leftover:
+            source = last_source.get(recipe_id)
+            if source is None and session is not None:
+                source = _db_source_for(session, recipe_id, plan_date)
+            if source is not None:
+                meal.leftover_source_date, meal.leftover_source_meal = source
+        else:
+            last_source[recipe_id] = (plan_date, meal_number)
 
 
 def delete_meal_plans(
@@ -539,6 +636,7 @@ def reject_recipe(session: Session, title: str) -> Optional[Recipe]:
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) - 1
+    recipe.date_last_rejected = date.today()
     session.commit()
     session.refresh(recipe)
     return recipe
@@ -712,6 +810,7 @@ def import_data(
                 if tag is not None:
                     recipe.tags.append(tag)
 
+        imported_meals: List[tuple] = []
         for plan_info in data.get("meal_plans", []):
             pdate = date.fromisoformat(plan_info["plan_date"])
             meal_plan = session.get(MealPlan, pdate)
@@ -730,10 +829,14 @@ def import_data(
                     meal_number=meal_info["meal_number"],
                     recipe_id=rid,
                     accepted=meal_info.get("accepted", False),
-                    leftover=meal_info.get("leftover", False),
                 )
                 meal_plan.meals.append(meal)
+                imported_meals.append(
+                    (meal, pdate, meal.meal_number, rid,
+                     bool(meal_info.get("leftover", False)))
+                )
 
+        _assign_leftover_sources(imported_meals)
         session.commit()
     except Exception as exc:  # noqa: BLE001
         session.rollback()

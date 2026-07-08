@@ -162,25 +162,27 @@ def test_meal_with_side_recipe(db_session):
 
 
 def test_leftover_persistence(db_session):
+    """A leftover is persisted as a link to its source meal on an earlier day."""
     main = create_recipe(db_session, title="Main", servings_default=1, course="main")
-    plan_date = date(2024, 9, 2)
+    source_date = date(2024, 9, 2)
+    leftover_date = date(2024, 9, 3)
     set_meal_plan(
         db_session,
-        {plan_date.isoformat(): [{"main_id": main.id, "leftover": True}]},
+        {
+            source_date.isoformat(): [{"main_id": main.id, "leftover": False}],
+            leftover_date.isoformat(): [{"main_id": main.id, "leftover": True}],
+        },
     )
-    fetched = get_plan(db_session, plan_date)
-    assert fetched == {
-        plan_date.isoformat(): [
-            {
-                "recipe": main.title,
-                "side_recipes": [],
-                "accepted": False,
-                "leftover": True,
-            }
-        ]
-    }
-    meal = db_session.get(Meal, (plan_date, 1))
-    assert meal is not None and meal.leftover is True
+    fetched = get_plan(
+        db_session, start_date=source_date, end_date=leftover_date
+    )
+    assert fetched[source_date.isoformat()][0]["leftover"] is False
+    assert fetched[leftover_date.isoformat()][0]["leftover"] is True
+
+    leftover = db_session.get(Meal, (leftover_date, 1))
+    assert leftover is not None and leftover.leftover is True
+    assert leftover.leftover_source_date == source_date
+    assert leftover.leftover_source_meal == 1
 
 
 def test_delete_plan_cascades_meals(db_session):

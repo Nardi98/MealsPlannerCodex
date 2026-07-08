@@ -56,6 +56,13 @@ TAG_REPEAT_MAX_PENALTY = 5.0
 TAG_REPEAT_HALF_LIFE_DAYS = 1.5
 TAG_REPEAT_WINDOW_DAYS = 4.0
 
+# Directed exploration ("uncertainty bonus"): weights the ε-greedy explore pick
+# toward recipes not proposed recently. Values are relative, so the growth slope
+# cancels under normalisation; only the ratios below carry meaning.
+EXPLORE_COOLDOWN_DAYS = 7.0            # zero weight for this long after a proposal
+EXPLORE_NEW_RECIPE_STALENESS_DAYS = 365.0  # anchor for never-rejected recipes
+EXPLORE_DAMP_SCALE = 20.0             # negative score halves weight every this many
+
 
 def _decayed_penalty(
     days: int, max_penalty: float, half_life: float, window: float
@@ -245,6 +252,41 @@ def tag_repetition_penalty(
     )
 
 
+def exploration_weight(
+    *,
+    slot_date: date,
+    date_last_rejected: Optional[date],
+    last_proposed: Optional[date],
+    score: Optional[float],
+    cooldown_days: float = EXPLORE_COOLDOWN_DAYS,
+    new_recipe_staleness_days: float = EXPLORE_NEW_RECIPE_STALENESS_DAYS,
+    damp_scale: float = EXPLORE_DAMP_SCALE,
+) -> float:
+    """Return a non-negative sampling weight for the ε-greedy explore branch.
+
+    The weight grows linearly with *staleness* (days since the recipe was last
+    rejected -- acceptance never resets this anchor) so a recipe untouched for
+    two months is twice as likely to be explored as one untouched for one. A
+    recipe proposed within ``cooldown_days`` is excluded (weight ``0``) so a
+    stale dish cannot carpet a plan. Badly negative scores damp the weight so
+    genuine losers fade while seasonal near-misses do not; ``score`` is halved
+    for every ``damp_scale`` points below zero. Never-rejected recipes use
+    ``new_recipe_staleness_days`` as their anchor, giving a strong first
+    audition.
+    """
+
+    if last_proposed is not None and (slot_date - last_proposed).days < cooldown_days:
+        return 0.0
+
+    if date_last_rejected is None:
+        days_stale = new_recipe_staleness_days
+    else:
+        days_stale = max((slot_date - date_last_rejected).days, 0)
+
+    damp = 2 ** (min(score or 0.0, 0.0) / damp_scale)
+    return days_stale * damp
+
+
 def score_recipe(
     recipe: RecipeDict,
     planning_date: date,
@@ -344,6 +386,7 @@ __all__ = [
     "tag_penalty",
     "ingredient_repetition_penalty",
     "tag_repetition_penalty",
+    "exploration_weight",
     "score_recipe",
     "SEASONALITY_BONUS_SCALE",
     "BULK_PREP_BONUS",
@@ -354,4 +397,7 @@ __all__ = [
     "TAG_REPEAT_MAX_PENALTY",
     "TAG_REPEAT_HALF_LIFE_DAYS",
     "TAG_REPEAT_WINDOW_DAYS",
+    "EXPLORE_COOLDOWN_DAYS",
+    "EXPLORE_NEW_RECIPE_STALENESS_DAYS",
+    "EXPLORE_DAMP_SCALE",
 ]

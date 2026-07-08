@@ -18,7 +18,86 @@ from mealplanner.scoring import (
     INGREDIENT_REPEAT_WINDOW_DAYS,
     TAG_REPEAT_MAX_PENALTY,
     TAG_REPEAT_HALF_LIFE_DAYS,
+    exploration_weight,
+    EXPLORE_COOLDOWN_DAYS,
+    EXPLORE_NEW_RECIPE_STALENESS_DAYS,
+    EXPLORE_DAMP_SCALE,
 )
+
+
+SLOT = date(2024, 6, 30)
+
+
+def test_exploration_weight_grows_linearly_with_staleness():
+    """Twice as stale means twice the weight (relative pick-probability)."""
+    one_month = exploration_weight(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=30),
+        last_proposed=None,
+        score=0.0,
+    )
+    two_months = exploration_weight(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=60),
+        last_proposed=None,
+        score=0.0,
+    )
+    assert two_months == pytest.approx(2 * one_month)
+
+
+def test_exploration_weight_zero_within_cooldown():
+    """A recipe proposed within the cooldown is out of the explore pool."""
+    w = exploration_weight(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=90),
+        last_proposed=SLOT - timedelta(days=int(EXPLORE_COOLDOWN_DAYS) - 1),
+        score=0.0,
+    )
+    assert w == 0.0
+
+
+def test_exploration_weight_null_anchor_is_maximally_stale():
+    """Never-rejected recipes audition strongly (treated as far-past anchor)."""
+    new = exploration_weight(
+        slot_date=SLOT, date_last_rejected=None, last_proposed=None, score=0.0
+    )
+    month_old = exploration_weight(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=30),
+        last_proposed=None,
+        score=0.0,
+    )
+    assert new == pytest.approx(EXPLORE_NEW_RECIPE_STALENESS_DAYS)
+    assert new > month_old
+
+
+def test_exploration_weight_negative_score_damps_monotonically():
+    """More negative scores shrink the weight; losers fade, near-misses don't."""
+    kwargs = dict(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=60),
+        last_proposed=None,
+    )
+    mild = exploration_weight(score=-10.0, **kwargs)
+    harsh = exploration_weight(score=-80.0, **kwargs)
+    neutral = exploration_weight(score=0.0, **kwargs)
+    assert 0 < harsh < mild < neutral
+
+
+def test_exploration_weight_nonnegative_score_not_damped():
+    """Positive scores get no damping (factor 1)."""
+    kwargs = dict(
+        slot_date=SLOT,
+        date_last_rejected=SLOT - timedelta(days=60),
+        last_proposed=None,
+    )
+    assert exploration_weight(score=0.0, **kwargs) == pytest.approx(
+        exploration_weight(score=50.0, **kwargs)
+    )
+    # Sanity: damp scale is the halving constant for negative scores.
+    assert exploration_weight(score=-EXPLORE_DAMP_SCALE, **kwargs) == pytest.approx(
+        0.5 * exploration_weight(score=0.0, **kwargs)
+    )
 
 
 def test_recency_penalty_decays_monotonically():

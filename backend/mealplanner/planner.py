@@ -9,11 +9,11 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
-from sqlalchemy import func, false, true
+from sqlalchemy import func, true
 from sqlalchemy.orm import Session, joinedload
 
 from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide, Tag
-from .scoring import score_recipe
+from .scoring import score_recipe, exploration_weight
 from .config import DEFAULT_PLAN_SETTINGS
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,14 @@ def generate_plan(
 
     last_planned: Dict[int, date] = dict(
         session.query(Meal.recipe_id, func.max(Meal.plan_date))
-        .filter(Meal.leftover == false())
+        .filter(Meal.leftover_source_date.is_(None))
+        .group_by(Meal.recipe_id)
+    )
+
+    # Last date each recipe was *proposed* (any outcome, incl. leftovers). Drives
+    # the directed-exploration cooldown; updated with every pick within the run.
+    last_proposed: Dict[int, date] = dict(
+        session.query(Meal.recipe_id, func.max(Meal.plan_date))
         .group_by(Meal.recipe_id)
     )
 
@@ -102,7 +109,7 @@ def generate_plan(
     ingredient_last_used: Dict[int, date] = dict(
         session.query(RecipeIngredient.ingredient_id, func.max(Meal.plan_date))
         .join(Meal, Meal.recipe_id == RecipeIngredient.recipe_id)
-        .filter(Meal.leftover == false())
+        .filter(Meal.leftover_source_date.is_(None))
         .group_by(RecipeIngredient.ingredient_id)
     )
 
@@ -119,7 +126,7 @@ def generate_plan(
             session.query(Tag.name, func.max(Meal.plan_date))
             .join(Recipe.tags)
             .join(Meal, Meal.recipe_id == Recipe.id)
-            .filter(Meal.leftover == false())
+            .filter(Meal.leftover_source_date.is_(None))
             .filter(Tag.name.in_(penalized_tags))
             .group_by(Tag.name)
         )
@@ -173,7 +180,24 @@ def generate_plan(
 
         scored.sort(key=lambda x: x[1], reverse=True)
         if epsilon and random.random() < epsilon:
-            choice_idx = random.randrange(len(scored))
+            # Directed exploration: sample toward recipes not proposed recently,
+            # excluding those still within their cooldown (weight 0).
+            weights = [
+                exploration_weight(
+                    slot_date=slot.date,
+                    date_last_rejected=r.date_last_rejected,
+                    last_proposed=last_proposed.get(r.id),
+                    score=r.score,
+                )
+                for r, _ in scored
+            ]
+            if any(weights):
+                choice_idx = random.choices(
+                    range(len(scored)), weights=weights, k=1
+                )[0]
+            else:
+                # Everything is on cooldown -> fall back to uniform exploration.
+                choice_idx = random.randrange(len(scored))
             slot.selection_mode = "explore"
         else:
             choice_idx = 0
@@ -183,6 +207,9 @@ def generate_plan(
         chosen = scored[choice_idx][0]
         slot.recipe = chosen
         slot.leftover = slot.soft_hold_recipe_id == getattr(chosen, "id", None)
+
+        # Proposing a recipe (leftover or not) starts its exploration cooldown.
+        last_proposed[chosen.id] = slot.date
 
         # The chosen recipe's ingredients / penalized tags are eaten on this
         # date regardless of leftover status, so update the diversity maps.

@@ -1,6 +1,6 @@
 import pytest
 import random
-from datetime import date
+from datetime import date, timedelta
 
 from models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
 from mealplanner.planner import generate_plan, filter_recipes
@@ -160,6 +160,52 @@ def test_generate_plan_epsilon_randomness(db_session):
     assert plan["2024-01-01"] == ["Low"]
 
 
+def test_exploration_favors_stale_recipes(db_session):
+    """With epsilon=1, a long-unrejected recipe is explored far more often."""
+    start = date(2024, 6, 1)
+    stale = Recipe(title="Stale", servings_default=1, score=1.0, course="main")
+    stale.date_last_rejected = start - timedelta(days=60)
+    fresh = Recipe(title="Fresh", servings_default=1, score=1.0, course="main")
+    fresh.date_last_rejected = start - timedelta(days=2)
+    db_session.add_all([stale, fresh])
+    db_session.commit()
+
+    random.seed(0)
+    counts = {"Stale": 0, "Fresh": 0}
+    for _ in range(200):
+        plan = generate_plan(
+            db_session, start, days=1, meals_per_day=1, epsilon=1.0,
+            min_recipe_gap=0,
+        )
+        counts[plan["2024-06-01"][0]] += 1
+    assert counts["Stale"] > counts["Fresh"] * 3
+
+
+def test_exploration_excludes_recipe_within_cooldown(db_session):
+    """A recipe proposed within the cooldown is never chosen on the explore branch."""
+    start = date(2024, 6, 1)
+    recent = Recipe(title="Recent", servings_default=1, score=1.0, course="main")
+    recent.date_last_rejected = start - timedelta(days=90)  # very stale...
+    available = Recipe(title="Available", servings_default=1, score=1.0, course="main")
+    db_session.add_all([recent, available])
+    db_session.commit()
+
+    # ...but proposed only 3 days ago -> inside the 7-day cooldown.
+    db_session.add_all([
+        MealPlan(plan_date=start - timedelta(days=3)),
+        Meal(plan_date=start - timedelta(days=3), meal_number=1, recipe_id=recent.id),
+    ])
+    db_session.commit()
+
+    random.seed(0)
+    for _ in range(50):
+        plan = generate_plan(
+            db_session, start, days=1, meals_per_day=1, epsilon=1.0,
+            min_recipe_gap=0,
+        )
+        assert plan["2024-06-01"][0] == "Available"
+
+
 def test_generate_plan_leftover_expiry(db_session):
     recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
     db_session.add(recipe)
@@ -223,7 +269,7 @@ def test_generate_plan_gap_filter(db_session):
 
     hist_date = date(2024, 1, 1)
     plan = MealPlan(plan_date=hist_date)
-    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    meal = Meal(meal_number=1, recipe=r1)
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
@@ -247,7 +293,7 @@ def test_generate_plan_gap_filter_fallback(db_session):
 
     hist_date = date(2024, 1, 1)
     plan = MealPlan(plan_date=hist_date)
-    meal = Meal(meal_number=1, recipe=r1, leftover=False)
+    meal = Meal(meal_number=1, recipe=r1)
     plan.meals.append(meal)
     db_session.add(plan)
     db_session.commit()
