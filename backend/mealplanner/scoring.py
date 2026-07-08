@@ -46,6 +46,37 @@ SEASONALITY_BONUS_SCALE = 10.0    # magnitude of a fully in/out-of-season recipe
 BULK_PREP_BONUS = 10.0            # bonus applied to bulk-prep recipes
 DEFAULT_TAG_PENALTY = 3.0         # default penalty for a matching reduce-tag
 
+# Ingredient repetition: short timescale, small magnitude so seasonality can win.
+INGREDIENT_REPEAT_MAX_PENALTY = 2.0
+INGREDIENT_REPEAT_HALF_LIFE_DAYS = 1.0
+INGREDIENT_REPEAT_WINDOW_DAYS = 3.0
+
+# Tag (dish format) repetition: slightly longer and stronger than ingredients.
+TAG_REPEAT_MAX_PENALTY = 5.0
+TAG_REPEAT_HALF_LIFE_DAYS = 1.5
+TAG_REPEAT_WINDOW_DAYS = 4.0
+
+
+def _decayed_penalty(
+    days: int, max_penalty: float, half_life: float, window: float
+) -> float:
+    """Return a non-positive penalty that decays exponentially with ``days``.
+
+    ``days`` is the gap between a past consumption and the slot being scored.
+    The penalty is ``-max_penalty`` at ``days == 0``, halves every ``half_life``
+    days, and is ``0`` once the gap reaches ``window`` or is negative (the event
+    is in the future and therefore not yet consumed).
+    """
+
+    if days < 0:
+        return 0.0
+    if days == 0:
+        return -max_penalty
+    if days >= window:
+        return 0.0
+    penalty = max_penalty * math.exp(-math.log(2) * days / half_life)
+    return -max(penalty, 0.0)
+
 
 def recency_penalty(recipe: RecipeDict, planned_date: date) -> float:
     """Penalise recipes planned recently relative to ``planned_date``.
@@ -60,20 +91,9 @@ def recency_penalty(recipe: RecipeDict, planned_date: date) -> float:
     # Days between the last time the recipe was planned and this slot. Negative
     # means it is planned in the future relative to this slot -> not consumed.
     days = (planned_date - recipe.get("date_last_planned")).days
-    if days < 0:
-        return 0.0
-
-    # Same-day: strongest penalty.
-    if days == 0:
-        return -RECENCY_MAX_PENALTY
-
-    # No penalty after the recency window.
-    if days >= RECENCY_WINDOW_DAYS:
-        return 0.0
-
-    # Exponential decay toward 0 as days increase.
-    penalty = RECENCY_MAX_PENALTY * math.exp(-math.log(2) * days / HALF_LIFE_DAYS)
-    return -max(penalty, 0.0)
+    return _decayed_penalty(
+        days, RECENCY_MAX_PENALTY, HALF_LIFE_DAYS, RECENCY_WINDOW_DAYS
+    )
 
 
 def seasonality_bonus(recipe: RecipeDict, today: Optional[date] = None) -> float:
@@ -149,6 +169,82 @@ def tag_penalty(
     return 0.0
 
 
+def _summed_repetition_penalty(
+    keys: Iterable,
+    planning_date: date,
+    last_used: Dict,
+    max_penalty: float,
+    half_life: float,
+    window: float,
+) -> float:
+    """Sum :func:`_decayed_penalty` over ``keys`` present in ``last_used``.
+
+    Shared by the ingredient and tag diversity penalties. ``last_used`` maps a
+    key (ingredient id or tag name) to its last consumption date. Summing means
+    overlap magnitude matters: three recently-used keys sting roughly three
+    times one. An empty map contributes ``0``.
+    """
+
+    if not last_used:
+        return 0.0
+    total = 0.0
+    for key in keys:
+        consumed = last_used.get(key)
+        if consumed is None:
+            continue
+        total += _decayed_penalty(
+            (planning_date - consumed).days, max_penalty, half_life, window
+        )
+    return total
+
+
+def ingredient_repetition_penalty(
+    recipe: RecipeDict,
+    planning_date: date,
+    ingredient_last_used: Dict[int, date],
+) -> float:
+    """Penalise reusing ingredients consumed recently.
+
+    Sums the decayed penalty over the recipe's ``ingredient_ids`` that appear
+    in ``ingredient_last_used`` (a map of ingredient id -> last consumption
+    date), using a short half-life so seasonality can still win.
+    """
+
+    return _summed_repetition_penalty(
+        recipe.get("ingredient_ids", []),
+        planning_date,
+        ingredient_last_used,
+        INGREDIENT_REPEAT_MAX_PENALTY,
+        INGREDIENT_REPEAT_HALF_LIFE_DAYS,
+        INGREDIENT_REPEAT_WINDOW_DAYS,
+    )
+
+
+def tag_repetition_penalty(
+    recipe: RecipeDict,
+    planning_date: date,
+    tag_last_used: Dict[str, date],
+    penalized_tags: Iterable[str],
+) -> float:
+    """Penalise repeating the same *kind* of dish (format tags).
+
+    Only the recipe's tags that are in ``penalized_tags`` are considered;
+    attribute tags are ignored. The sum runs over those tags present in
+    ``tag_last_used``, and an empty map contributes ``0``.
+    """
+
+    penalized = set(penalized_tags or [])
+    tags = [t for t in recipe.get("tags", []) if t in penalized]
+    return _summed_repetition_penalty(
+        tags,
+        planning_date,
+        tag_last_used,
+        TAG_REPEAT_MAX_PENALTY,
+        TAG_REPEAT_HALF_LIFE_DAYS,
+        TAG_REPEAT_WINDOW_DAYS,
+    )
+
+
 def score_recipe(
     recipe: RecipeDict,
     planning_date: date,
@@ -157,7 +253,12 @@ def score_recipe(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
+    ingredient_repeat_weight: float = 1.0,
+    tag_repeat_weight: float = 1.0,
     reduce_tags: Iterable[str] | None = None,
+    ingredient_last_used: Dict[int, date] | None = None,
+    tag_last_used: Dict[str, date] | None = None,
+    penalized_tags: Iterable[str] | None = None,
     base_scores: Iterable[float] | None = None,
     squash_mode: str = "zscore",
     B: float = 3.0,
@@ -227,6 +328,12 @@ def score_recipe(
     total += recency_weight * recency_penalty(recipe, planning_date)
     total += bulk_bonus_weight * bulk_bonus(recipe)
     total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
+    total += ingredient_repeat_weight * ingredient_repetition_penalty(
+        recipe, planning_date, ingredient_last_used or {}
+    )
+    total += tag_repeat_weight * tag_repetition_penalty(
+        recipe, planning_date, tag_last_used or {}, penalized_tags or []
+    )
     return total
 
 
@@ -235,8 +342,16 @@ __all__ = [
     "recency_penalty",
     "bulk_bonus",
     "tag_penalty",
+    "ingredient_repetition_penalty",
+    "tag_repetition_penalty",
     "score_recipe",
     "SEASONALITY_BONUS_SCALE",
     "BULK_PREP_BONUS",
     "DEFAULT_TAG_PENALTY",
+    "INGREDIENT_REPEAT_MAX_PENALTY",
+    "INGREDIENT_REPEAT_HALF_LIFE_DAYS",
+    "INGREDIENT_REPEAT_WINDOW_DAYS",
+    "TAG_REPEAT_MAX_PENALTY",
+    "TAG_REPEAT_HALF_LIFE_DAYS",
+    "TAG_REPEAT_WINDOW_DAYS",
 ]

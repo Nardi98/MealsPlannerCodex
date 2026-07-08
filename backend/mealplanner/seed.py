@@ -89,6 +89,36 @@ def _create_recipe(
         recipe.tags.append(_get_or_create_tag(session, tag_name))
 
 
+# Curated system tags. Format tags carry the repetition penalty; attribute
+# tags do not (repeating them every meal is fine).
+_PENALIZED_SYSTEM_TAGS = [
+    "pasta", "soup", "risotto", "rice", "pizza", "salad", "stew", "roast",
+    "sandwich", "curry", "noodles", "gnocchi",
+]
+_NEUTRAL_SYSTEM_TAGS = [
+    "vegetarian", "vegan", "quick", "cheap", "spicy", "gluten-free", "breakfast",
+]
+
+
+def seed_system_tags(session: Session) -> None:
+    """Idempotently upsert the curated system tags.
+
+    Marks each tag ``is_system=True`` and sets ``penalize_repetition`` according
+    to whether it is a format tag. Pre-existing plain tags of the same name are
+    upgraded in place rather than duplicated. A ``commit`` is issued at the end.
+    """
+
+    for name, penalize in (
+        [(n, True) for n in _PENALIZED_SYSTEM_TAGS]
+        + [(n, False) for n in _NEUTRAL_SYSTEM_TAGS]
+    ):
+        tag = _get_or_create_tag(session, name)
+        tag.is_system = True
+        tag.penalize_repetition = penalize
+
+    session.commit()
+
+
 def seed_sample_data(session: Session) -> None:
     """Populate the database with a small set of example data.
 
@@ -125,4 +155,4 @@ def seed_sample_data(session: Session) -> None:
     session.commit()
 
 
-__all__ = ["seed_sample_data"]
+__all__ = ["seed_sample_data", "seed_system_tags"]

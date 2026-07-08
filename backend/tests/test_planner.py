@@ -262,3 +262,99 @@ def test_generate_plan_gap_filter_fallback(db_session):
         min_recipe_gap=5,
     )
     assert schedule["2024-01-02"] == ["R1"]
+
+
+def _recipe_with_ingredient(title, score, ingredient, tags=None):
+    r = Recipe(title=title, servings_default=1, score=score, course="main")
+    r.ingredients = [RecipeIngredient(ingredient=ingredient, recipe=r)]
+    if tags:
+        r.tags = tags
+    return r
+
+
+def test_ingredient_repetition_penalty_diverges_second_day(db_session):
+    """A shared ingredient should push the later slot toward a diverging dish."""
+    shared = Ingredient(name="shared-veg")
+    other = Ingredient(name="other-veg")
+    starter = _recipe_with_ingredient("Starter", 5.0, shared)
+    p = _recipe_with_ingredient("P", 1.0, shared)
+    q = _recipe_with_ingredient("Q", 0.9, other)
+    db_session.add_all([starter, p, q])
+    db_session.commit()
+
+    start = date(2024, 6, 1)
+    kwargs = dict(days=2, meals_per_day=1, epsilon=0.0, seasonality_weight=0.0)
+
+    # Without the ingredient penalty, day 2 keeps the higher-scoring P (shares
+    # the ingredient with day 1's Starter).
+    no_penalty = generate_plan(
+        db_session, start, ingredient_repeat_weight=0.0, **kwargs
+    )
+    assert no_penalty["2024-06-02"] == ["P"]
+
+    # With a strong penalty, day 2 diverges to Q which uses a fresh ingredient.
+    with_penalty = generate_plan(
+        db_session, start, ingredient_repeat_weight=10.0, **kwargs
+    )
+    assert with_penalty["2024-06-02"] == ["Q"]
+
+
+def test_ingredient_history_influences_first_slot(db_session):
+    """A recently consumed ingredient recorded in ``meals`` penalises slot 1."""
+    shared = Ingredient(name="hist-veg")
+    other = Ingredient(name="fresh-veg")
+    consumed = _recipe_with_ingredient("Consumed", 0.5, shared)
+    p = _recipe_with_ingredient("P", 1.0, shared)
+    q = _recipe_with_ingredient("Q", 0.9, other)
+    db_session.add_all([consumed, p, q])
+    db_session.commit()
+
+    # Consumed yesterday, recording the shared ingredient in history.
+    db_session.add_all([
+        MealPlan(plan_date=date(2024, 5, 31)),
+        Meal(plan_date=date(2024, 5, 31), meal_number=1, recipe_id=consumed.id),
+    ])
+    db_session.commit()
+
+    start = date(2024, 6, 1)
+    kwargs = dict(days=1, meals_per_day=1, epsilon=0.0, seasonality_weight=0.0)
+
+    no_penalty = generate_plan(
+        db_session, start, ingredient_repeat_weight=0.0, **kwargs
+    )
+    assert no_penalty["2024-06-01"] == ["P"]
+
+    with_penalty = generate_plan(
+        db_session, start, ingredient_repeat_weight=10.0, **kwargs
+    )
+    assert with_penalty["2024-06-01"] == ["Q"]
+
+
+def test_tag_repetition_penalty_only_penalized_tags(db_session):
+    """Format tags penalise repetition end-to-end; attribute tags do not."""
+    pasta = Tag(name="pasta", penalize_repetition=True, is_system=True)
+    veggie = Tag(name="vegetarian", penalize_repetition=False, is_system=True)
+    ing = Ingredient(name="tag-veg")
+
+    starter = _recipe_with_ingredient("Starter", 5.0, ing, tags=[pasta, veggie])
+    another_pasta = _recipe_with_ingredient("Pasta2", 1.0, ing, tags=[pasta])
+    veg_only = _recipe_with_ingredient("Veg2", 0.9, ing, tags=[veggie])
+    db_session.add_all([starter, another_pasta, veg_only])
+    db_session.commit()
+
+    start = date(2024, 6, 1)
+    kwargs = dict(days=2, meals_per_day=1, epsilon=0.0, seasonality_weight=0.0)
+
+    # Ingredient penalty off to isolate the tag effect (all share one ingredient).
+    no_penalty = generate_plan(
+        db_session, start, tag_repeat_weight=0.0, ingredient_repeat_weight=0.0,
+        **kwargs
+    )
+    assert no_penalty["2024-06-02"] == ["Pasta2"]
+
+    with_penalty = generate_plan(
+        db_session, start, tag_repeat_weight=10.0, ingredient_repeat_weight=0.0,
+        **kwargs
+    )
+    # The repeated "pasta" format is penalised, so the vegetarian-only dish wins.
+    assert with_penalty["2024-06-02"] == ["Veg2"]

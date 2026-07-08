@@ -9,10 +9,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Sequence, Set
 
-from sqlalchemy import func, false
+from sqlalchemy import func, false, true
 from sqlalchemy.orm import Session, joinedload
 
-from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide
+from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide, Tag
 from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -47,6 +47,7 @@ def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, obje
         "bulk_prep": recipe.bulk_prep,
         "date_last_planned": last_planned,
         "ingredients": ingredients,
+        "ingredient_ids": [ri.ingredient_id for ri in recipe.ingredients],
         "tags": [t.name for t in recipe.tags],
     }
 
@@ -66,6 +67,8 @@ def generate_plan(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
+    ingredient_repeat_weight: float = 1.0,
+    tag_repeat_weight: float = 1.0,
     min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
@@ -93,6 +96,33 @@ def generate_plan(
         .filter(Meal.leftover == false())
         .group_by(Meal.recipe_id)
     )
+
+    # History-seeded diversity maps: last real consumption date per ingredient
+    # and per penalized tag, updated as picks are made within the run.
+    ingredient_last_used: Dict[int, date] = dict(
+        session.query(RecipeIngredient.ingredient_id, func.max(Meal.plan_date))
+        .join(Meal, Meal.recipe_id == RecipeIngredient.recipe_id)
+        .filter(Meal.leftover == false())
+        .group_by(RecipeIngredient.ingredient_id)
+    )
+
+    penalized_tags: Set[str] = {
+        name
+        for (name,) in session.query(Tag.name).filter(
+            Tag.penalize_repetition == true()
+        )
+    }
+
+    tag_last_used: Dict[str, date] = {}
+    if penalized_tags:
+        tag_last_used = dict(
+            session.query(Tag.name, func.max(Meal.plan_date))
+            .join(Recipe.tags)
+            .join(Meal, Meal.recipe_id == Recipe.id)
+            .filter(Meal.leftover == false())
+            .filter(Tag.name.in_(penalized_tags))
+            .group_by(Tag.name)
+        )
 
     slots: List[Slot] = []
     for day_offset in range(days):
@@ -128,7 +158,12 @@ def generate_plan(
                 else recency_weight,
                 tag_penalty_weight=tag_penalty_weight,
                 bulk_bonus_weight=bulk_bonus_weight,
+                ingredient_repeat_weight=ingredient_repeat_weight,
+                tag_repeat_weight=tag_repeat_weight,
                 reduce_tags=reduce_tags or [],
+                ingredient_last_used=ingredient_last_used,
+                tag_last_used=tag_last_used,
+                penalized_tags=penalized_tags,
                 base_scores=base_scores,
             )
             logger.debug("score: %s", score)
@@ -148,6 +183,14 @@ def generate_plan(
         chosen = scored[choice_idx][0]
         slot.recipe = chosen
         slot.leftover = slot.soft_hold_recipe_id == getattr(chosen, "id", None)
+
+        # The chosen recipe's ingredients / penalized tags are eaten on this
+        # date regardless of leftover status, so update the diversity maps.
+        for ri in chosen.ingredients:
+            ingredient_last_used[ri.ingredient_id] = slot.date
+        for t in chosen.tags:
+            if t.name in penalized_tags:
+                tag_last_used[t.name] = slot.date
 
         if slot.leftover:
             for record in leftovers[:]:

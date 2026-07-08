@@ -12,6 +12,8 @@ from models import UnitEnum
 class TagOut(BaseModel):
     id: int
     name: str
+    penalize_repetition: bool = False
+    is_system: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

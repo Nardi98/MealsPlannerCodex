@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 import math
 import pytest
 
@@ -8,9 +8,16 @@ from mealplanner.scoring import (
     seasonality_bonus,
     recency_penalty,
     bulk_bonus,
+    ingredient_repetition_penalty,
+    tag_repetition_penalty,
     SEASONALITY_BONUS_SCALE,
     BULK_PREP_BONUS,
     DEFAULT_TAG_PENALTY,
+    INGREDIENT_REPEAT_MAX_PENALTY,
+    INGREDIENT_REPEAT_HALF_LIFE_DAYS,
+    INGREDIENT_REPEAT_WINDOW_DAYS,
+    TAG_REPEAT_MAX_PENALTY,
+    TAG_REPEAT_HALF_LIFE_DAYS,
 )
 
 
@@ -164,3 +171,104 @@ def test_bulk_bonus_uses_named_constant():
 def test_tag_penalty_default_uses_named_constant():
     recipe = {"tags": ["spicy"]}
     assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-DEFAULT_TAG_PENALTY)
+
+
+# ---------------------------------------------------------------------------
+# Ingredient repetition penalty
+# ---------------------------------------------------------------------------
+
+def test_ingredient_repetition_penalty_empty_map_is_zero():
+    recipe = {"ingredient_ids": [1, 2, 3]}
+    assert ingredient_repetition_penalty(recipe, date(2024, 6, 1), {}) == 0.0
+
+
+def test_ingredient_repetition_penalty_single_recent_decays():
+    planning = date(2024, 6, 3)
+    recipe = {"ingredient_ids": [1]}
+    same_day = ingredient_repetition_penalty(recipe, planning, {1: date(2024, 6, 3)})
+    one_day = ingredient_repetition_penalty(recipe, planning, {1: date(2024, 6, 2)})
+    assert same_day == pytest.approx(-INGREDIENT_REPEAT_MAX_PENALTY)
+    # ~1-day half-life: one day ago is roughly half the max penalty.
+    expected_one = -INGREDIENT_REPEAT_MAX_PENALTY * math.exp(
+        -math.log(2) * 1 / INGREDIENT_REPEAT_HALF_LIFE_DAYS
+    )
+    assert one_day == pytest.approx(expected_one)
+    assert same_day < one_day < 0
+
+
+def test_ingredient_repetition_penalty_sums_across_overlaps():
+    planning = date(2024, 6, 3)
+    one = {"ingredient_ids": [1]}
+    three = {"ingredient_ids": [1, 2, 3]}
+    used = {1: date(2024, 6, 3), 2: date(2024, 6, 3), 3: date(2024, 6, 3)}
+    pen_one = ingredient_repetition_penalty(one, planning, used)
+    pen_three = ingredient_repetition_penalty(three, planning, used)
+    assert pen_three == pytest.approx(3 * pen_one)
+
+
+def test_ingredient_repetition_penalty_zero_beyond_window():
+    planning = date(2024, 6, 10)
+    recipe = {"ingredient_ids": [1]}
+    old = {1: planning - timedelta(days=int(INGREDIENT_REPEAT_WINDOW_DAYS))}
+    assert ingredient_repetition_penalty(recipe, planning, old) == 0.0
+
+
+def test_ingredient_repetition_penalty_future_is_zero():
+    planning = date(2024, 6, 1)
+    recipe = {"ingredient_ids": [1]}
+    future = {1: date(2024, 6, 5)}
+    assert ingredient_repetition_penalty(recipe, planning, future) == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Tag repetition penalty
+# ---------------------------------------------------------------------------
+
+def test_tag_repetition_penalty_only_penalized_tags_count():
+    planning = date(2024, 6, 3)
+    recipe = {"tags": ["pasta", "vegetarian"]}
+    used = {"pasta": date(2024, 6, 3), "vegetarian": date(2024, 6, 3)}
+    penalized = {"pasta"}
+    # Only "pasta" is penalized; "vegetarian" repetition is ignored.
+    assert tag_repetition_penalty(recipe, planning, used, penalized) == pytest.approx(
+        -TAG_REPEAT_MAX_PENALTY
+    )
+
+
+def test_tag_repetition_penalty_attribute_tag_repeated_is_zero():
+    planning = date(2024, 6, 3)
+    recipe = {"tags": ["vegetarian"]}
+    used = {"vegetarian": date(2024, 6, 3)}
+    assert tag_repetition_penalty(recipe, planning, used, {"pasta"}) == 0.0
+
+
+def test_tag_repetition_penalty_format_tag_decays():
+    planning = date(2024, 6, 3)
+    recipe = {"tags": ["pasta"]}
+    penalized = {"pasta"}
+    same_day = tag_repetition_penalty(
+        recipe, planning, {"pasta": date(2024, 6, 3)}, penalized
+    )
+    later = tag_repetition_penalty(
+        recipe, planning, {"pasta": date(2024, 6, 1)}, penalized
+    )
+    expected_later = -TAG_REPEAT_MAX_PENALTY * math.exp(
+        -math.log(2) * 2 / TAG_REPEAT_HALF_LIFE_DAYS
+    )
+    assert same_day == pytest.approx(-TAG_REPEAT_MAX_PENALTY)
+    assert later == pytest.approx(expected_later)
+    assert same_day < later < 0
+
+
+def test_score_recipe_backward_compatible_without_maps():
+    today = date(2024, 6, 1)
+    recipe = {
+        "score": 1.0,
+        "ingredients": [{"season_months": [6]}, {"season_months": [5, 6]}],
+        "ingredient_ids": [1, 2],
+        "tags": ["pasta"],
+        "date_last_planned": date(2024, 4, 1),
+        "bulk_prep": False,
+    }
+    baseline = 3 * math.tanh(1.0) + seasonality_bonus(recipe, today)
+    assert score_recipe(recipe, today) == pytest.approx(baseline)

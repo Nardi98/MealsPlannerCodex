@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    false,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
@@ -136,6 +137,8 @@ class Tag(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
+    penalize_repetition = Column(Boolean, nullable=False, server_default=false())
+    is_system = Column(Boolean, nullable=False, server_default=false())
 
     recipes = relationship(
         "Recipe", secondary=recipe_tag_table, back_populates="tags"

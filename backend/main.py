@@ -19,10 +19,16 @@ import models
 import schemas
 from auth import require_api_key
 from mealplanner import planner
+from mealplanner.seed import seed_system_tags
 from database import SessionLocal, engine
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
+
+# Seed the curated system tags (with repetition-penalty flags) so tagging a
+# recipe with a known format tag transparently reuses the penalized system tag.
+with SessionLocal() as _session:
+    seed_system_tags(_session)
 
 app = FastAPI()
 
