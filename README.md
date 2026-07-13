@@ -57,7 +57,7 @@
 
 - **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
 - **Frontend:** React.
-- **Database:** SQLite with SQLAlchemy ORM.
+- **Database:** PostgreSQL with SQLAlchemy ORM (falls back to a local SQLite file when `DATABASE_URL` is unset).
 - **Version control:** Git.
 
 ### UI
@@ -148,7 +148,11 @@ docker-compose up --build
 
 Set the necessary environment variables before starting:
 
-- `DATABASE_URL` – connection string for the database
+- `DATABASE_URL` – SQLAlchemy connection string for the database. Set to a
+  PostgreSQL URL (e.g. `postgresql://user:pass@host:5432/mealsdb`); Railway
+  injects this automatically. A bare `postgres://` scheme is normalized to
+  `postgresql://`. When unset, the backend falls back to a local SQLite file at
+  `data/app.db`.
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 

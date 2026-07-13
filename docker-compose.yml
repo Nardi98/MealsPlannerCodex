@@ -1,6 +1,20 @@
 version: "3.9"
 
 services:
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=mealsdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d mealsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     # On every compose, wipe + repopulate the DB with testing data, then serve.
@@ -12,6 +26,10 @@ services:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://user:pass@db:5432/mealsdb
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./backend:/app
 
@@ -21,3 +39,6 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+
+volumes:
+  pgdata:

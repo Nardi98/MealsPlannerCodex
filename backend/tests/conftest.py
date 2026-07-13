@@ -1,4 +1,5 @@
 # tests/conftest.py
+import os
 import sys
 from pathlib import Path
 
@@ -15,11 +16,20 @@ if str(ROOT) not in sys.path:
 from database import Base
 import models  # ensures tables are registered
 
+# The suite runs against PostgreSQL for parity with production (Railway). Point
+# ``TEST_DATABASE_URL`` at a disposable Postgres database; CI and docker-compose
+# provide one. Falls back to a local default matching the compose service.
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql://user:pass@localhost:5432/mealsdb_test",
+)
+
+
 @pytest.fixture(scope="session")
 def engine():
-    eng = create_engine(
-        "sqlite:///:memory:", future=True, connect_args={"check_same_thread": False}
-    )
+    eng = create_engine(TEST_DATABASE_URL, future=True)
+    # Reset any stale schema from a previous run, then build a clean one.
+    Base.metadata.drop_all(bind=eng)
     Base.metadata.create_all(bind=eng)
     return eng
 

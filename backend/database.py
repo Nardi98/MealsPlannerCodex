@@ -2,20 +2,44 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# SQLAlchemy database URL for the application. Uses a SQLite file stored under
-# the backend's ``data`` directory.  Build an absolute path so tests and the
-# app behave the same regardless of the current working directory.
+# Absolute path to the local SQLite fallback file, under the backend's ``data``
+# directory. Built from the module location so tests and the app behave the same
+# regardless of the current working directory.
 _BASE_DIR = Path(__file__).resolve().parent
-DATABASE_URL = f"sqlite:///{_BASE_DIR / 'data' / 'app.db'}"
+_SQLITE_FALLBACK_URL = f"sqlite:///{_BASE_DIR / 'data' / 'app.db'}"
+
+
+def resolve_database_url() -> tuple[str, dict]:
+    """Resolve the SQLAlchemy URL and engine ``connect_args`` from the env.
+
+    Honors the ``DATABASE_URL`` environment variable (which Railway injects),
+    falling back to a local SQLite file when it is unset. Railway sometimes
+    emits the bare ``postgres://`` scheme, which SQLAlchemy rejects, so it is
+    normalized to ``postgresql://``. SQLite-only ``connect_args`` are applied
+    only when the resolved URL is SQLite.
+    """
+
+    url = os.environ.get("DATABASE_URL") or _SQLITE_FALLBACK_URL
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+
+    if url.startswith("sqlite"):
+        return url, {"check_same_thread": False}
+    return url, {}
+
+
+# SQLAlchemy database URL for the application.
+DATABASE_URL, _CONNECT_ARGS = resolve_database_url()
 
 # Create the core SQLAlchemy engine and session factory. ``future=True`` enables
 # 2.0 style usage which is what this project is targeting.
-engine = create_engine(DATABASE_URL, future=True)
+engine = create_engine(DATABASE_URL, future=True, connect_args=_CONNECT_ARGS)
 
 SessionLocal = sessionmaker(
     bind=engine, autoflush=False, autocommit=False, future=True
