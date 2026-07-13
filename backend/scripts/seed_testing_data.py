@@ -40,65 +40,71 @@ from models import (  # noqa: E402
 )
 
 # ---------------------------------------------------------------------------
-# Ingredients: (name, unit, season_months)  -- 55 entries (>= 50 required)
+# Ingredients: (name, unit, season_months, categories)  -- 56 entries
 # ``season_months`` uses 1-12; an empty list means "available year round".
+# ``categories`` are drawn from ``models.CATEGORIES``; an empty list renders
+# under the synthetic "Uncategorized" section in the UI.
+# NOTE: "Tomato" and "Tomatoes" are an intentional near-duplicate pair (with
+# differing units) so the merge tool has something to find in a fresh DB.
 # ---------------------------------------------------------------------------
-INGREDIENTS: list[tuple[str, UnitEnum, list[int]]] = [
-    ("Spaghetti", UnitEnum.G, []),
-    ("Penne", UnitEnum.G, []),
-    ("Rice", UnitEnum.G, []),
-    ("Arborio Rice", UnitEnum.G, []),
-    ("Bread", UnitEnum.PIECE, []),
-    ("Flour", UnitEnum.G, []),
-    ("Oats", UnitEnum.G, []),
-    ("Potato", UnitEnum.G, [9, 10, 11, 12, 1]),
-    ("Sweet Potato", UnitEnum.G, [10, 11, 12]),
-    ("Tomato", UnitEnum.G, [6, 7, 8, 9]),
-    ("Cherry Tomato", UnitEnum.G, [6, 7, 8, 9]),
-    ("Onion", UnitEnum.G, []),
-    ("Garlic", UnitEnum.G, []),
-    ("Carrot", UnitEnum.G, []),
-    ("Celery", UnitEnum.G, []),
-    ("Zucchini", UnitEnum.G, [6, 7, 8, 9]),
-    ("Eggplant", UnitEnum.G, [7, 8, 9]),
-    ("Bell Pepper", UnitEnum.G, [7, 8, 9]),
-    ("Spinach", UnitEnum.G, [3, 4, 5, 10, 11]),
-    ("Broccoli", UnitEnum.G, [10, 11, 12, 1, 2]),
-    ("Cauliflower", UnitEnum.G, [10, 11, 12, 1]),
-    ("Green Beans", UnitEnum.G, [6, 7, 8]),
-    ("Peas", UnitEnum.G, [4, 5, 6]),
-    ("Mushroom", UnitEnum.G, [9, 10, 11]),
-    ("Pumpkin", UnitEnum.G, [10, 11, 12]),
-    ("Lettuce", UnitEnum.G, [4, 5, 6, 9, 10]),
-    ("Cucumber", UnitEnum.G, [6, 7, 8]),
-    ("Cabbage", UnitEnum.G, [11, 12, 1, 2]),
-    ("Chickpeas", UnitEnum.G, []),
-    ("Lentils", UnitEnum.G, []),
-    ("Black Beans", UnitEnum.G, []),
-    ("Kidney Beans", UnitEnum.G, []),
-    ("Chicken Breast", UnitEnum.G, []),
-    ("Chicken Thigh", UnitEnum.G, []),
-    ("Ground Beef", UnitEnum.G, []),
-    ("Beef Steak", UnitEnum.G, []),
-    ("Pork Loin", UnitEnum.G, []),
-    ("Sausage", UnitEnum.G, []),
-    ("Bacon", UnitEnum.G, []),
-    ("Salmon", UnitEnum.G, []),
-    ("Tuna", UnitEnum.G, []),
-    ("Shrimp", UnitEnum.G, []),
-    ("Egg", UnitEnum.PIECE, []),
-    ("Milk", UnitEnum.ML, []),
-    ("Butter", UnitEnum.G, []),
-    ("Cheddar Cheese", UnitEnum.G, []),
-    ("Parmesan", UnitEnum.G, []),
-    ("Mozzarella", UnitEnum.G, []),
-    ("Yogurt", UnitEnum.G, []),
-    ("Olive Oil", UnitEnum.ML, []),
-    ("Basil", UnitEnum.G, [6, 7, 8, 9]),
-    ("Parsley", UnitEnum.G, []),
-    ("Soy Sauce", UnitEnum.ML, []),
-    ("Coconut Milk", UnitEnum.ML, []),
-    ("Curry Paste", UnitEnum.G, []),
+INGREDIENTS: list[tuple[str, UnitEnum, list[int], list[str]]] = [
+    ("Spaghetti", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
+    ("Penne", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
+    ("Rice", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
+    ("Arborio Rice", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
+    ("Bread", UnitEnum.PIECE, [], ["Grains & Pasta", "Carbs"]),
+    ("Flour", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
+    ("Oats", UnitEnum.G, [], ["Grains & Pasta", "Carbs", "Fiber"]),
+    ("Potato", UnitEnum.G, [9, 10, 11, 12, 1], ["Vegetables", "Carbs"]),
+    ("Sweet Potato", UnitEnum.G, [10, 11, 12], ["Vegetables", "Carbs", "Fiber"]),
+    ("Tomato", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
+    ("Tomatoes", UnitEnum.PIECE, [6, 7, 8, 9], ["Vegetables"]),
+    ("Cherry Tomato", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
+    ("Onion", UnitEnum.G, [], ["Vegetables"]),
+    ("Garlic", UnitEnum.G, [], ["Vegetables", "Herbs & Spices"]),
+    ("Carrot", UnitEnum.G, [], ["Vegetables", "Fiber"]),
+    ("Celery", UnitEnum.G, [], ["Vegetables", "Fiber"]),
+    ("Zucchini", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
+    ("Eggplant", UnitEnum.G, [7, 8, 9], ["Vegetables"]),
+    ("Bell Pepper", UnitEnum.G, [7, 8, 9], ["Vegetables"]),
+    ("Spinach", UnitEnum.G, [3, 4, 5, 10, 11], ["Vegetables", "Fiber"]),
+    ("Broccoli", UnitEnum.G, [10, 11, 12, 1, 2], ["Vegetables", "Fiber"]),
+    ("Cauliflower", UnitEnum.G, [10, 11, 12, 1], ["Vegetables", "Fiber"]),
+    ("Green Beans", UnitEnum.G, [6, 7, 8], ["Vegetables", "Fiber"]),
+    ("Peas", UnitEnum.G, [4, 5, 6], ["Legumes", "Fiber", "Plant-based"]),
+    ("Mushroom", UnitEnum.G, [9, 10, 11], ["Vegetables"]),
+    ("Pumpkin", UnitEnum.G, [10, 11, 12], ["Vegetables", "Fiber"]),
+    ("Lettuce", UnitEnum.G, [4, 5, 6, 9, 10], ["Vegetables"]),
+    ("Cucumber", UnitEnum.G, [6, 7, 8], ["Vegetables"]),
+    ("Cabbage", UnitEnum.G, [11, 12, 1, 2], ["Vegetables", "Fiber"]),
+    ("Chickpeas", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Lentils", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Black Beans", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Kidney Beans", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Chicken Breast", UnitEnum.G, [], ["Meat", "Protein"]),
+    ("Chicken Thigh", UnitEnum.G, [], ["Meat", "Protein"]),
+    ("Ground Beef", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
+    ("Beef Steak", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
+    ("Pork Loin", UnitEnum.G, [], ["Meat", "Protein"]),
+    ("Sausage", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
+    ("Bacon", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
+    ("Salmon", UnitEnum.G, [], ["Fish", "Protein"]),
+    ("Tuna", UnitEnum.G, [], ["Fish", "Protein"]),
+    ("Shrimp", UnitEnum.G, [], ["Fish", "Protein"]),
+    ("Egg", UnitEnum.PIECE, [], ["Dairy & Eggs", "Protein"]),
+    ("Milk", UnitEnum.ML, [], ["Dairy & Eggs", "Beverages"]),
+    ("Butter", UnitEnum.G, [], ["Dairy & Eggs", "High-calorie"]),
+    ("Cheddar Cheese", UnitEnum.G, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
+    ("Parmesan", UnitEnum.G, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
+    ("Mozzarella", UnitEnum.G, [], ["Dairy & Eggs", "Protein"]),
+    ("Yogurt", UnitEnum.G, [], ["Dairy & Eggs", "Protein"]),
+    ("Olive Oil", UnitEnum.ML, [], ["Condiments & Oils", "High-calorie"]),
+    ("Basil", UnitEnum.G, [6, 7, 8, 9], ["Herbs & Spices", "Plant-based"]),
+    ("Parsley", UnitEnum.G, [], ["Herbs & Spices", "Plant-based"]),
+    ("Soy Sauce", UnitEnum.ML, [], ["Condiments & Oils"]),
+    ("Coconut Milk", UnitEnum.ML, [], ["Beverages", "High-calorie", "Plant-based"]),
+    ("Curry Paste", UnitEnum.G, [], []),
+    ("Baking Soda", UnitEnum.G, [], []),
 ]
 
 # ---------------------------------------------------------------------------
@@ -286,8 +292,10 @@ def populate(session) -> None:
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
-    for name, unit, months in INGREDIENTS:
-        ing = Ingredient(name=name, unit=unit, season_months=months)
+    for name, unit, months, categories in INGREDIENTS:
+        ing = Ingredient(
+            name=name, unit=unit, season_months=months, categories=categories
+        )
         session.add(ing)
         ingredients[name] = ing
 

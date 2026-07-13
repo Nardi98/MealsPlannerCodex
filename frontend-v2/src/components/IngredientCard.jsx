@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Button, SeasonalityGrid } from './'
+import { Card, Button, SeasonalityGrid, Badge } from './'
 
 /**
  * Displays an ingredient and optionally shows its details when expanded.
@@ -13,6 +13,7 @@ export default function IngredientCard({
   name,
   unit,
   season = [],
+  categories = [],
   expanded: expandedProp,
   onToggle,
   onEdit,
@@ -50,6 +51,15 @@ export default function IngredientCard({
             Unit: {unit}
           </div>
           <SeasonalityGrid months={season} />
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {categories.map((c) => (
+                <Badge key={c} tone="a2">
+                  {c}
+                </Badge>
+              ))}
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2 mt-auto">
             <Button size="sm" variant="a2" onClick={handleEdit}>
               Edit

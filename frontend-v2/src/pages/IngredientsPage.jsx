@@ -6,9 +6,22 @@ import {
   EditIngredientModal,
   ConfirmIngredientChangeModal,
   AddIngredientModal,
+  MergeIngredientsModal,
+  ToggleChip,
   Button,
 } from '../components'
 import { ingredientsApi } from '../api/ingredientsApi'
+import { groupByCategory } from '../utils/groupIngredients'
+
+const COLLAPSE_KEY = 'ingredientSectionCollapsed'
+
+function readCollapsed() {
+  try {
+    return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
 
 export default function IngredientsPage() {
   const [query, setQuery] = React.useState('')
@@ -19,20 +32,24 @@ export default function IngredientsPage() {
   const [editing, setEditing] = React.useState(null)
   const [confirm, setConfirm] = React.useState(null)
   const [adding, setAdding] = React.useState(false)
+  const [merging, setMerging] = React.useState(false)
+  const [selectedCategories, setSelectedCategories] = React.useState(null)
+  const [collapsed, setCollapsed] = React.useState(readCollapsed)
+
+  const load = React.useCallback(async () => {
+    try {
+      const data = query
+        ? await ingredientsApi.search(query)
+        : await ingredientsApi.fetchAll()
+      setIngredients(data)
+    } catch (err) {
+      console.error('Failed to load ingredients', err)
+    }
+  }, [query])
 
   React.useEffect(() => {
-    async function load() {
-      try {
-        const data = query
-          ? await ingredientsApi.search(query)
-          : await ingredientsApi.fetchAll()
-        setIngredients(data)
-      } catch (err) {
-        console.error('Failed to load ingredients', err)
-      }
-    }
     load()
-  }, [query])
+  }, [load])
 
   const filtered = React.useMemo(() => {
     if (!selectedMonths.length) return ingredients
@@ -44,6 +61,41 @@ export default function IngredientsPage() {
       return selectedMonths.some((m) => months.includes(m))
     })
   }, [ingredients, selectedMonths, mode])
+
+  // Non-empty groups in canonical order.
+  const groups = React.useMemo(
+    () => groupByCategory(filtered).filter((g) => g.items.length > 0),
+    [filtered]
+  )
+
+  // Initialise pill selection to ALL present categories whenever the set of
+  // present categories changes (not persisted; resets each visit).
+  const presentKey = groups.map((g) => g.category).join('|')
+  React.useEffect(() => {
+    setSelectedCategories(new Set(groups.map((g) => g.category)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentKey])
+
+  const togglePill = (category) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(category)) next.delete(category)
+      else next.add(category)
+      return next
+    })
+  }
+
+  const toggleCollapse = (category) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [category]: !prev[category] }
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore storage errors */
+      }
+      return next
+    })
+  }
 
   const handleDelete = async (id) => {
     try {
@@ -80,11 +132,10 @@ export default function IngredientsPage() {
               name: updates.name,
               unit: updates.unit,
               season_months: updates.season,
+              categories: updates.categories,
             })
             setIngredients((ings) =>
-              ings.map((i) =>
-                i.id === editing.id ? { ...i, ...updated } : i
-              )
+              ings.map((i) => (i.id === editing.id ? { ...i, ...updated } : i))
             )
             setEditing(null)
           } catch (err) {
@@ -99,12 +150,13 @@ export default function IngredientsPage() {
     }
   }
 
-  const handleAdd = async ({ name, unit, season }) => {
+  const handleAdd = async ({ name, unit, season, categories }) => {
     try {
       const created = await ingredientsApi.create({
         name,
         unit,
         season_months: season,
+        categories,
       })
       setIngredients((ings) =>
         !query || created.name.toLowerCase().includes(query.toLowerCase())
@@ -117,6 +169,8 @@ export default function IngredientsPage() {
       throw err
     }
   }
+
+  const selected = selectedCategories || new Set()
 
   return (
     <div className="space-y-4">
@@ -136,24 +190,77 @@ export default function IngredientsPage() {
         <Button variant="a1" onClick={() => setAdding(true)}>
           + New ingredient
         </Button>
+        <Button variant="a2" onClick={() => setMerging(true)}>
+          Merge ingredients
+        </Button>
       </div>
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Ingredients
       </h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
-        {filtered.map((ing) => (
-          <IngredientCard
-            key={ing.id}
-            name={ing.name}
-            unit={ing.unit}
-            season={ing.season_months || []}
-            expanded={expanded === ing.id}
-            onToggle={() => setExpanded(expanded === ing.id ? null : ing.id)}
-            onEdit={() => handleEdit(ing)}
-            onDelete={() => handleDelete(ing.id)}
-          />
+
+      {/* Category pills */}
+      <div className="flex flex-wrap gap-1.5">
+        {groups.map((g) => (
+          <ToggleChip
+            key={g.category}
+            active={selected.has(g.category)}
+            onClick={() => togglePill(g.category)}
+            label={`${g.category} filter`}
+          >
+            {g.category} · {g.items.length}
+          </ToggleChip>
         ))}
       </div>
+
+      {/* Sections */}
+      <div className="space-y-4">
+        {groups
+          .filter((g) => selected.has(g.category))
+          .map((g) => {
+            const isCollapsed = !!collapsed[g.category]
+            return (
+              <section key={g.category}>
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse(g.category)}
+                  aria-label={`${g.category} section`}
+                  className="flex items-center gap-2 w-full text-left py-1"
+                  style={{ color: 'var(--text-strong)' }}
+                >
+                  <span className="text-xs">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="font-medium">{g.category}</span>
+                  <span className="text-xs text-[color:var(--text-subtle)]">
+                    · {g.items.length}
+                  </span>
+                </button>
+                {!isCollapsed && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start mt-2">
+                    {g.items.map((ing) => (
+                      <IngredientCard
+                        key={`${g.category}-${ing.id}`}
+                        name={ing.name}
+                        unit={ing.unit}
+                        season={ing.season_months || []}
+                        categories={ing.categories || []}
+                        expanded={expanded === `${g.category}-${ing.id}`}
+                        onToggle={() =>
+                          setExpanded(
+                            expanded === `${g.category}-${ing.id}`
+                              ? null
+                              : `${g.category}-${ing.id}`
+                          )
+                        }
+                        onEdit={() => handleEdit(ing)}
+                        onDelete={() => handleDelete(ing.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )
+          })}
+      </div>
+
       {editing && (
         <EditIngredientModal
           ingredient={editing}
@@ -167,6 +274,12 @@ export default function IngredientsPage() {
           onSave={handleAdd}
         />
       )}
+      {merging && (
+        <MergeIngredientsModal
+          onClose={() => setMerging(false)}
+          onMerged={load}
+        />
+      )}
       {confirm && (
         <ConfirmIngredientChangeModal
           action={confirm.action}
@@ -178,4 +291,3 @@ export default function IngredientsPage() {
     </div>
   )
 }
-

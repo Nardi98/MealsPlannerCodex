@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Input, Button, MonthGrid } from '../components'
+import { Card, Input, Button, MonthGrid, MergeIngredientsModal } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 import { buildShoppingList, formatExportText } from '../utils/shoppingList'
@@ -15,6 +15,7 @@ export default function ShoppingListPage() {
   })
   const [recipes, setRecipes] = React.useState([])
   const [crossed, setCrossed] = React.useState(new Set())
+  const [merging, setMerging] = React.useState(false)
 
   const ingredients = React.useMemo(() => buildShoppingList(recipes), [recipes])
 
@@ -178,9 +179,14 @@ export default function ShoppingListPage() {
             >
               Ingredients
             </h2>
-            <Button variant="a2" onClick={handleExport}>
-              Export open items
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="a2" onClick={() => setMerging(true)}>
+                Merge ingredients
+              </Button>
+              <Button variant="a2" onClick={handleExport}>
+                Export open items
+              </Button>
+            </div>
           </div>
           <ul className="space-y-2">
             {ingredients.map((ing) => {
@@ -212,6 +218,12 @@ export default function ShoppingListPage() {
           </ul>
         </Card>
       </div>
+      {merging && (
+        <MergeIngredientsModal
+          onClose={() => setMerging(false)}
+          onMerged={handleLoad}
+        />
+      )}
     </div>
   )
 }

@@ -1,15 +1,33 @@
 import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
+import CategorySelect from './CategorySelect'
+import { ingredientsApi } from '../api/ingredientsApi'
 
 export default function AddIngredientModal({ onClose, onSave }) {
   const [name, setName] = React.useState('')
   const [unit, setUnit] = React.useState('')
   const [season, setSeason] = React.useState([])
+  const [categories, setCategories] = React.useState([])
+  const [similar, setSimilar] = React.useState([])
+
+  const checkSimilar = React.useCallback(async (value) => {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      setSimilar([])
+      return
+    }
+    try {
+      const matches = await ingredientsApi.similar(trimmed)
+      setSimilar(matches || [])
+    } catch (err) {
+      console.error('Failed to check similar ingredients', err)
+    }
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    await onSave?.({ name, unit, season })
+    await onSave?.({ name, unit, season, categories })
     onClose?.()
   }
 
@@ -20,7 +38,18 @@ export default function AddIngredientModal({ onClose, onSave }) {
           <h3 className="text-lg font-medium">New Ingredient</h3>
           <div className="space-y-1">
             <label className="text-sm">Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} required />
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onBlur={(e) => checkSimilar(e.target.value)}
+              required
+            />
+            {similar.length > 0 && (
+              <div className="text-xs" style={{ color: 'var(--c-a2)' }}>
+                Similar exists: {similar.map((s) => s.name).join(', ')} — did you
+                mean one of these?
+              </div>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-sm">Unit</label>
@@ -43,6 +72,10 @@ export default function AddIngredientModal({ onClose, onSave }) {
             <label className="text-sm">Seasonality</label>
             <SeasonalitySelect value={season} onChange={setSeason} />
           </div>
+          <div className="space-y-1">
+            <label className="text-sm">Categories</label>
+            <CategorySelect value={categories} onChange={setCategories} />
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
             <Button type="submit" variant="a1">Save</Button>
@@ -52,4 +85,3 @@ export default function AddIngredientModal({ onClose, onSave }) {
     </div>
   )
 }
-

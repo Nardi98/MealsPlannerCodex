@@ -4,9 +4,18 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from models import UnitEnum
+from models import CATEGORIES, UnitEnum
+
+
+def _validate_categories(value: List[str]) -> List[str]:
+    """Reject any category not in the canonical :data:`models.CATEGORIES`."""
+
+    for item in value:
+        if item not in CATEGORIES:
+            raise ValueError(f"Unknown category: {item!r}")
+    return value
 
 
 class TagOut(BaseModel):
@@ -40,6 +49,9 @@ class IngredientCreate(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
     unit: Optional[UnitEnum] = None
+    categories: List[str] = Field(default_factory=list)
+
+    _check_categories = field_validator("categories")(_validate_categories)
 
 
 class IngredientSummary(BaseModel):
@@ -47,15 +59,34 @@ class IngredientSummary(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
     unit: Optional[UnitEnum] = None
+    categories: List[str] = Field(default_factory=list)
     recipe_count: int
 
     model_config = ConfigDict(from_attributes=True)
+
+    _check_categories = field_validator("categories")(_validate_categories)
 
 
 class IngredientUpdate(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
     unit: Optional[UnitEnum] = None
+    categories: List[str] = Field(default_factory=list)
+
+    _check_categories = field_validator("categories")(_validate_categories)
+
+
+class DuplicatePair(BaseModel):
+    a: IngredientSummary
+    b: IngredientSummary
+    score: float
+
+
+class IngredientMergeRequest(BaseModel):
+    source_id: int
+    target_id: int
+    surviving_unit: Optional[UnitEnum] = None
+    conversion_factor: Optional[float] = None
 
 
 class RecipeSummary(BaseModel):

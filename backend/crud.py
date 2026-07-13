@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
+import difflib
 import json
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+import re
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -12,6 +14,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, Base
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from models import (
+    CATEGORIES,
     Ingredient,
     MealPlan,
     Meal,
@@ -31,6 +34,9 @@ __all__ = [
     "get_recipe",
     "get_ingredient",
     "get_recipes_by_ingredient",
+    "find_similar_ingredients",
+    "find_duplicate_pairs",
+    "merge_ingredients",
     "update_recipe",
     "delete_recipe",
     "delete_ingredient",
@@ -82,14 +88,162 @@ def create_ingredient(
     name: str,
     unit: UnitEnum | None,
     season_months: List[int],
+    categories: List[str] | None = None,
 ) -> Ingredient:
     """Create and persist a new :class:`Ingredient`."""
 
-    ingredient = Ingredient(name=name, unit=unit, season_months=season_months)
+    ingredient = Ingredient(
+        name=name,
+        unit=unit,
+        season_months=season_months,
+        categories=categories or [],
+    )
     session.add(ingredient)
     session.commit()
     session.refresh(ingredient)
     return ingredient
+
+
+def _normalize_name(name: str) -> str:
+    """Normalise an ingredient name for fuzzy comparison.
+
+    Lowercases, strips, collapses internal whitespace, and removes a naive
+    trailing plural ``s`` for singularisation.
+    """
+
+    normalized = re.sub(r"\s+", " ", name.strip().lower())
+    if len(normalized) > 1 and normalized.endswith("s"):
+        normalized = normalized[:-1]
+    return normalized
+
+
+def _similarity(a: str, b: str) -> float:
+    """Return a 0-1 similarity ratio between two normalised names."""
+
+    x = _normalize_name(a)
+    y = _normalize_name(b)
+    if x == y:
+        return 1.0
+    return difflib.SequenceMatcher(None, x, y).ratio()
+
+
+def find_similar_ingredients(
+    session: Session,
+    name: str,
+    *,
+    exclude_id: int | None = None,
+    threshold: float = 0.8,
+) -> List[Ingredient]:
+    """Return ingredients whose name is similar to ``name``.
+
+    Results are sorted by descending similarity score.
+    """
+
+    stmt = select(Ingredient)
+    if exclude_id is not None:
+        stmt = stmt.where(Ingredient.id != exclude_id)
+    candidates = session.execute(stmt).scalars().all()
+    scored = [
+        (other, _similarity(name, other.name)) for other in candidates
+    ]
+    matches = [(o, s) for o, s in scored if s >= threshold]
+    matches.sort(key=lambda pair: pair[1], reverse=True)
+    return [o for o, _ in matches]
+
+
+def find_duplicate_pairs(
+    session: Session, *, threshold: float = 0.8
+) -> List[Tuple[Ingredient, Ingredient, float]]:
+    """Return every candidate duplicate pair of ingredients.
+
+    Compares each unordered pair once and keeps those scoring at or above
+    ``threshold``, sorted by descending score.
+    """
+
+    ingredients = (
+        session.execute(select(Ingredient).order_by(Ingredient.id))
+        .scalars()
+        .all()
+    )
+    pairs: List[Tuple[Ingredient, Ingredient, float]] = []
+    for i in range(len(ingredients)):
+        for j in range(i + 1, len(ingredients)):
+            score = _similarity(ingredients[i].name, ingredients[j].name)
+            if score >= threshold:
+                pairs.append((ingredients[i], ingredients[j], score))
+    pairs.sort(key=lambda pair: pair[2], reverse=True)
+    return pairs
+
+
+def merge_ingredients(
+    session: Session,
+    source_id: int,
+    target_id: int,
+    *,
+    surviving_unit: UnitEnum | None = None,
+    conversion_factor: float | None = None,
+) -> Ingredient | None:
+    """Merge ``source_id`` into ``target_id`` within a single transaction.
+
+    Recipe references to the source are re-pointed to the target (folding into
+    an existing target line when the composite PK would collide). When the
+    source line's unit differs from ``surviving_unit`` and ``conversion_factor``
+    is provided, quantities are converted. Categories and season months are
+    unioned onto the target, then the source ingredient is deleted.
+    """
+
+    if source_id == target_id:
+        raise ValueError("Cannot merge an ingredient into itself")
+
+    source = session.get(Ingredient, source_id)
+    target = session.get(Ingredient, target_id)
+    if source is None or target is None:
+        return None
+
+    source_lines = (
+        session.execute(
+            select(RecipeIngredient).where(
+                RecipeIngredient.ingredient_id == source_id
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for line in source_lines:
+        if (
+            surviving_unit is not None
+            and line.unit != surviving_unit
+            and conversion_factor is not None
+        ):
+            if line.quantity is not None:
+                line.quantity *= conversion_factor
+            line.unit = surviving_unit
+
+        existing = session.get(RecipeIngredient, (line.recipe_id, target_id))
+        if existing is not None:
+            if line.quantity is not None:
+                existing.quantity = (existing.quantity or 0) + line.quantity
+            session.delete(line)
+        else:
+            line.ingredient_id = target_id
+        session.flush()
+
+    if surviving_unit is not None:
+        target.unit = surviving_unit
+
+    merged_categories = [
+        c for c in CATEGORIES
+        if c in (target.categories or []) or c in (source.categories or [])
+    ]
+    target.categories = merged_categories
+    target.season_months = sorted(
+        set(target.season_months or []) | set(source.season_months or [])
+    )
+
+    session.delete(source)
+    session.commit()
+    session.refresh(target)
+    return target
 
 
 def get_recipe(session: Session, recipe_id: int) -> Optional[Recipe]:

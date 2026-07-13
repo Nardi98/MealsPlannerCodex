@@ -16,4 +16,15 @@ export const ingredientsApi = {
   remove: (id, force = false) =>
     request(`/ingredients/${id}?force=${force}`, { method: 'DELETE' }),
   recipes: (id) => request(`/ingredients/${id}/recipes`),
+  similar: (name, excludeId) =>
+    request(
+      `/ingredients/similar?name=${encodeURIComponent(name)}` +
+        (excludeId ? `&exclude_id=${excludeId}` : '')
+    ),
+  duplicates: () => request('/ingredients/duplicates'),
+  merge: (payload) =>
+    request('/ingredients/merge', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 };

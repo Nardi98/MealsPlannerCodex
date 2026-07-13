@@ -42,6 +42,45 @@ class IntList(TypeDecorator):
         return [int(v) for v in value.split(",") if v]
 
 
+class StrList(TypeDecorator):
+    """Store ``list[str]`` values as comma separated strings."""
+
+    impl = String
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return ",".join(str(v) for v in value)
+
+    def process_result_value(self, value, dialect):
+        if not value:
+            return []
+        return [v for v in value.split(",") if v]
+
+
+#: Canonical, ordered set of ingredient categories. Single source of truth for
+#: the backend; the frontend mirrors this list in ``constants/categories.js``.
+CATEGORIES: tuple[str, ...] = (
+    "Vegetables",
+    "Fruit",
+    "Meat",
+    "Fish",
+    "Dairy & Eggs",
+    "Grains & Pasta",
+    "Legumes",
+    "Herbs & Spices",
+    "Condiments & Oils",
+    "Nuts & Seeds",
+    "Sweets & Sugar",
+    "Beverages",
+    "Protein",
+    "Fiber",
+    "Carbs",
+    "Plant-based",
+    "High-calorie",
+)
+
+
 # Association table linking recipes and tags for a many-to-many relationship.
 recipe_tag_table = Table(
     "recipe_tag",
@@ -94,6 +133,7 @@ class Ingredient(Base):
     name = Column(String, nullable=False, unique=True)
     season_months = Column(IntList)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
+    categories = Column(StrList, nullable=True)
 
     recipes = relationship(
         "RecipeIngredient", back_populates="ingredient", cascade="all, delete-orphan"

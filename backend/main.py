@@ -161,6 +161,14 @@ def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
     return db.execute(select(models.Tag)).scalars().all()
 
 
+def _ingredient_recipe_count(db: Session, ingredient_id: int) -> int:
+    return db.scalar(
+        select(func.count(models.RecipeIngredient.recipe_id)).where(
+            models.RecipeIngredient.ingredient_id == ingredient_id
+        )
+    ) or 0
+
+
 @app.get("/ingredients", response_model=List[schemas.IngredientSummary])
 def search_ingredients(
     search: str = "", db: Session = Depends(get_db)
@@ -183,10 +191,89 @@ def search_ingredients(
             name=ing.name,
             season_months=ing.season_months or [],
             unit=ing.unit,
+            categories=ing.categories or [],
             recipe_count=count,
         )
         for ing, count in rows
     ]
+
+
+@app.get(
+    "/ingredients/similar",
+    response_model=List[schemas.IngredientSummary],
+)
+def similar_ingredients(
+    name: str,
+    exclude_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> List[schemas.IngredientSummary]:
+    matches = crud.find_similar_ingredients(db, name, exclude_id=exclude_id)
+    return [
+        schemas.IngredientSummary(
+            id=ing.id,
+            name=ing.name,
+            season_months=ing.season_months or [],
+            unit=ing.unit,
+            categories=ing.categories or [],
+            recipe_count=_ingredient_recipe_count(db, ing.id),
+        )
+        for ing in matches
+    ]
+
+
+@app.get(
+    "/ingredients/duplicates",
+    response_model=List[schemas.DuplicatePair],
+)
+def duplicate_ingredients(
+    threshold: float = 0.8, db: Session = Depends(get_db)
+) -> List[schemas.DuplicatePair]:
+    pairs = crud.find_duplicate_pairs(db, threshold=threshold)
+
+    def summary(ing: models.Ingredient) -> schemas.IngredientSummary:
+        return schemas.IngredientSummary(
+            id=ing.id,
+            name=ing.name,
+            season_months=ing.season_months or [],
+            unit=ing.unit,
+            categories=ing.categories or [],
+            recipe_count=_ingredient_recipe_count(db, ing.id),
+        )
+
+    return [
+        schemas.DuplicatePair(a=summary(a), b=summary(b), score=score)
+        for a, b, score in pairs
+    ]
+
+
+@app.post(
+    "/ingredients/merge",
+    response_model=schemas.IngredientSummary,
+    dependencies=_AUTH,
+)
+def merge_ingredients_endpoint(
+    payload: schemas.IngredientMergeRequest, db: Session = Depends(get_db)
+) -> schemas.IngredientSummary:
+    try:
+        merged = crud.merge_ingredients(
+            db,
+            payload.source_id,
+            payload.target_id,
+            surviving_unit=payload.surviving_unit,
+            conversion_factor=payload.conversion_factor,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if merged is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return schemas.IngredientSummary(
+        id=merged.id,
+        name=merged.name,
+        season_months=merged.season_months or [],
+        unit=merged.unit,
+        categories=merged.categories or [],
+        recipe_count=_ingredient_recipe_count(db, merged.id),
+    )
 
 
 @app.post(
@@ -199,13 +286,14 @@ def create_ingredient(
     payload: schemas.IngredientCreate, db: Session = Depends(get_db)
 ) -> schemas.IngredientSummary:
     ingredient = crud.create_ingredient(
-        db, payload.name, payload.unit, payload.season_months
+        db, payload.name, payload.unit, payload.season_months, payload.categories
     )
     return schemas.IngredientSummary(
         id=ingredient.id,
         name=ingredient.name,
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
+        categories=ingredient.categories or [],
         recipe_count=0,
     )
 
@@ -226,18 +314,15 @@ def update_ingredient(
     ingredient.name = payload.name
     ingredient.season_months = payload.season_months
     ingredient.unit = payload.unit
+    ingredient.categories = payload.categories
     db.commit()
-    count = db.scalar(
-        select(func.count(models.RecipeIngredient.recipe_id)).where(
-            models.RecipeIngredient.ingredient_id == ingredient.id
-        )
-    )
     return schemas.IngredientSummary(
         id=ingredient.id,
         name=ingredient.name,
         season_months=ingredient.season_months or [],
         unit=ingredient.unit,
-        recipe_count=count or 0,
+        categories=ingredient.categories or [],
+        recipe_count=_ingredient_recipe_count(db, ingredient.id),
     )
 
 

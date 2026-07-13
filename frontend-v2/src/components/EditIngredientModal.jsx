@@ -1,15 +1,17 @@
 import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
+import CategorySelect from './CategorySelect'
 
 export default function EditIngredientModal({ ingredient, onClose, onSave }) {
   const [name, setName] = React.useState(ingredient?.name || '')
   const [unit, setUnit] = React.useState(ingredient?.unit || '')
   const [season, setSeason] = React.useState(ingredient?.season_months || [])
+  const [categories, setCategories] = React.useState(ingredient?.categories || [])
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    onSave?.({ name, unit, season })
+    onSave?.({ name, unit, season, categories })
   }
 
   return (
@@ -41,6 +43,10 @@ export default function EditIngredientModal({ ingredient, onClose, onSave }) {
           <div className="space-y-1">
             <label className="text-sm">Seasonality</label>
             <SeasonalitySelect value={season} onChange={setSeason} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm">Categories</label>
+            <CategorySelect value={categories} onChange={setCategories} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
