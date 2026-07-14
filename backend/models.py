@@ -114,6 +114,7 @@ class Recipe(Base):
     date_last_consumed = Column(Date)
     date_last_rejected = Column(Date)
     course = Column(String, nullable=False, default="main")
+    image_url = Column(String, nullable=True)
 
     # Relationship to ``RecipeIngredient`` association objects.
     ingredients = relationship(

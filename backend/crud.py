@@ -859,6 +859,7 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
         procedure=rec_info.get("procedure"),
         bulk_prep=rec_info.get("bulk_prep", False),
         course=rec_info.get("course", "main"),
+        image_url=rec_info.get("image_url"),
         score=rec_info.get("score"),
         date_last_consumed=date.fromisoformat(consumed) if consumed else None,
     )
@@ -1029,6 +1030,7 @@ def export_data(session: Optional[Session] = None) -> str:
                     "procedure": recipe.procedure,
                     "bulk_prep": recipe.bulk_prep,
                     "course": recipe.course,
+                    "image_url": recipe.image_url,
                     "score": recipe.score,
                     "date_last_consumed": (
                         recipe.date_last_consumed.isoformat()

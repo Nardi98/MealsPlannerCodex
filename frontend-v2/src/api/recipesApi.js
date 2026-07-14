@@ -8,6 +8,7 @@ function normaliseRecipe(recipe) {
     title: recipe.title,
     course: recipe.course,
     score: recipe.score,
+    image_url: recipe.image_url ?? null,
     hot: recipe.bulk_prep ?? false,
     tags: (recipe.tags || []).map((t) => (t.name ? t.name : t)),
     ingredients: (recipe.ingredients || []).map((ing) => ({
@@ -27,6 +28,7 @@ function serialiseRecipe(recipe) {
     servings_default: 1,
     procedure: recipe.procedure,
     bulk_prep: recipe.hot || false,
+    image_url: recipe.image_url || null,
     tags: recipe.tags || [],
     ingredients: (recipe.ingredients || []).map((ing) => ({
       id: ing.id,

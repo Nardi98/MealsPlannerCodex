@@ -1,23 +1,60 @@
 import React from 'react'
 import {
-  BookmarkIcon,
-  TagIcon,
   FunnelIcon,
   ChevronDownIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
-import { motion as Motion } from 'framer-motion'
-import { Card } from '../components/Card'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
+import { Card } from '../components/Card'
+import { Icon } from '../components/Icon'
+import { Modal } from '../components/Modal'
 import { NewRecipeModal } from '../components'
+import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ingredientsApi } from '../api/ingredientsApi'
 
+const sectionHeadingStyle = {
+  fontSize: 'var(--text-sm)',
+  fontWeight: 'var(--weight-semibold)',
+  marginBottom: 6,
+  color: 'var(--text-strong)',
+}
+
+function RecipeMedia({ recipe, rounded }) {
+  const color = courseColor[recipe.course] || 'var(--c-a3)'
+  if (recipe.image_url) {
+    return (
+      <img
+        src={recipe.image_url}
+        alt={`${recipe.title} photo`}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: rounded }}
+      />
+    )
+  }
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: rounded,
+        background: `linear-gradient(135deg, color-mix(in srgb, ${color} 24%, #fff), color-mix(in srgb, ${color} 8%, #fff))`,
+      }}
+    >
+      <Icon set="mdi" name={dishIcon(recipe)} size={48} color={color} />
+    </div>
+  )
+}
+
 export default function RecipesPage() {
   const [recipes, setRecipes] = React.useState([])
-  const [expanded, setExpanded] = React.useState(null)
+  const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [search, setSearch] = React.useState('')
@@ -49,8 +86,6 @@ export default function RecipesPage() {
     load()
   }, [])
 
-  const toggle = (id) => setExpanded(expanded === id ? null : id)
-
   const filteredRecipes = React.useMemo(
     () =>
       recipes.filter((r) => {
@@ -63,12 +98,7 @@ export default function RecipesPage() {
         )
         const matchesCourses =
           selectedCourses.length === 0 || selectedCourses.includes(r.course)
-        return (
-          matchesSearch &&
-          matchesTags &&
-          matchesIngredients &&
-          matchesCourses
-        )
+        return matchesSearch && matchesTags && matchesIngredients && matchesCourses
       }),
     [recipes, search, selectedTags, selectedIngredients, selectedCourses]
   )
@@ -78,18 +108,14 @@ export default function RecipesPage() {
     [recipes]
   )
 
-  const toggleTag = (tag) =>
-    setSelectedTags((t) =>
-      t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]
-    )
+  const openRecipe = filteredRecipes.find((r) => r.id === opened)
 
+  const toggleTag = (tag) =>
+    setSelectedTags((t) => (t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]))
   const toggleIngredient = (ing) =>
     setSelectedIngredients((ings) =>
-      ings.includes(ing)
-        ? ings.filter((x) => x !== ing)
-        : [...ings, ing]
+      ings.includes(ing) ? ings.filter((x) => x !== ing) : [...ings, ing]
     )
-
   const toggleCourse = (course) =>
     setSelectedCourses((cs) =>
       cs.includes(course) ? cs.filter((c) => c !== course) : [...cs, course]
@@ -118,15 +144,17 @@ export default function RecipesPage() {
       setRecipes((r) => r.filter((rec) => rec.id !== id))
     } catch (err) {
       console.error('Failed to delete recipe', err)
+    } finally {
+      setOpened(null)
     }
   }
 
   return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-[color:var(--text-subtle)]">
-          <BookmarkIcon className="h-5 w-5" /> Recipes
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
+          Recipes
+        </h1>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Button
@@ -138,92 +166,32 @@ export default function RecipesPage() {
             {showFilters && (
               <div
                 className="absolute z-10 mt-2 w-56 rounded-2xl border bg-white p-2"
-                style={{ borderColor: 'var(--border)' }}
+                style={{ borderColor: 'var(--border-default)' }}
               >
-                <div>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between text-sm"
-                    onClick={() => setCoursesOpen((o) => !o)}
-                  >
-                    Course
-                    <ChevronDownIcon
-                      className={`h-4 w-4 transition-transform ${
-                        coursesOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                  {coursesOpen && (
-                    <div className="mt-1 max-h-40 overflow-y-auto">
-                      {courseOptions.map((c) => (
-                        <label key={c} className="flex items-center gap-1 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedCourses.includes(c)}
-                            onChange={() => toggleCourse(c)}
-                          />
-                          {c}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between text-sm"
-                    onClick={() => setTagsOpen((o) => !o)}
-                  >
-                    Tags
-                    <ChevronDownIcon
-                      className={`h-4 w-4 transition-transform ${
-                        tagsOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                  {tagsOpen && (
-                    <div className="mt-1 max-h-40 overflow-y-auto">
-                      {tags.map((t) => (
-                        <label key={t} className="flex items-center gap-1 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedTags.includes(t)}
-                            onChange={() => toggleTag(t)}
-                          />
-                          {t}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="mt-2">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between text-sm"
-                    onClick={() => setIngredientsOpen((o) => !o)}
-                  >
-                    Ingredients
-                    <ChevronDownIcon
-                      className={`h-4 w-4 transition-transform ${
-                        ingredientsOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-                  {ingredientsOpen && (
-                    <div className="mt-1 max-h-40 overflow-y-auto">
-                      {ingredients.map((i) => (
-                        <label key={i} className="flex items-center gap-1 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={selectedIngredients.includes(i)}
-                            onChange={() => toggleIngredient(i)}
-                          />
-                          {i}
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <FilterGroup
+                  label="Course"
+                  open={coursesOpen}
+                  onToggle={() => setCoursesOpen((o) => !o)}
+                  options={courseOptions}
+                  selected={selectedCourses}
+                  onSelect={toggleCourse}
+                />
+                <FilterGroup
+                  label="Tags"
+                  open={tagsOpen}
+                  onToggle={() => setTagsOpen((o) => !o)}
+                  options={tags}
+                  selected={selectedTags}
+                  onSelect={toggleTag}
+                />
+                <FilterGroup
+                  label="Ingredients"
+                  open={ingredientsOpen}
+                  onToggle={() => setIngredientsOpen((o) => !o)}
+                  options={ingredients}
+                  selected={selectedIngredients}
+                  onSelect={toggleIngredient}
+                />
               </div>
             )}
           </div>
@@ -234,104 +202,181 @@ export default function RecipesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <Button
-            variant="a1"
+            variant="accent"
+            Icon={PlusIcon}
             onClick={() => {
               setEditing(null)
               setShowModal(true)
             }}
           >
-            + New recipe
+            New recipe
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3">
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: 16,
+        }}
+      >
         {filteredRecipes.map((r) => (
-          <Motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-            <div
-              className="rounded-2xl border p-3 bg-white cursor-pointer"
-              style={{ borderColor: 'var(--border)' }}
-              onClick={() => toggle(r.id)}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-medium">
-                    {r.title}
-                    <span className="ml-1 text-xs text-[color:var(--text-subtle)]">
-                      {(r.ingredients || []).length}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 text-xs text-[color:var(--text-subtle)]">
-                    {r.course} • {r.score != null ? r.score.toFixed(2) : '0'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {r.hot && (
-                    <Badge tone="a1">
-                      <img
-                        src="/assets/icons/bulk_icon.png"
-                        alt="bulk prep"
-                        className="h-3 w-3"
-                      />
-                      bulk
-                    </Badge>
-                  )}
-                  {(r.tags || []).map((t) => (
-                    <Badge key={t} tone="a3">
-                      <TagIcon className="h-3 w-3" />{t}
-                    </Badge>
-                  ))}
-                </div>
+          <Card
+            key={r.id}
+            onClick={() => setOpened(r.id)}
+            className="flex cursor-pointer flex-col overflow-hidden"
+            style={{ padding: 0 }}
+          >
+            <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1' }}>
+              <RecipeMedia recipe={r} />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  right: 8,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  pointerEvents: 'none',
+                }}
+              >
+                <span
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 26,
+                    height: 26,
+                    borderRadius: '50%',
+                    background: '#fff',
+                    boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                  }}
+                >
+                  <Icon
+                    set="mdi"
+                    name={dishIcon(r)}
+                    size={15}
+                    color={courseColor[r.course] || 'var(--c-a3)'}
+                  />
+                </span>
+                {r.hot && (
+                  <img
+                    src="/assets/icons/bulk_icon.png"
+                    alt="bulk prep"
+                    style={{ height: 20, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))' }}
+                  />
+                )}
               </div>
-
-              {expanded === r.id && (
-                <div className="mt-3">
-                  <div className="text-sm font-medium mb-1">Ingredients</div>
-                  <ul className="list-disc list-inside text-sm mb-2">
-                    {(r.ingredients || []).map((ing, idx) => (
-                      <li key={ing.id || idx}>
-                        {[ing.amount, ing.unit, ing.name || ing]
-                          .filter(Boolean)
-                          .join(' ')}
-                      </li>
-                    ))}
-                  </ul>
-                  {r.procedure && (
-                    <>
-                      <div className="text-sm font-medium mb-1">Procedure</div>
-                      <p className="text-sm mb-3">{r.procedure}</p>
-                    </>
-                  )}
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      size="sm"
-                      variant="a2"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setEditing(r)
-                        setShowModal(true)
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDelete(r.id)
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
-          </Motion.div>
+            <div className="flex flex-1 flex-col gap-1.5" style={{ padding: 12 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 'var(--weight-semibold)',
+                  fontSize: 'var(--text-sm)',
+                  color: 'var(--text-strong)',
+                  lineHeight: 1.3,
+                }}
+              >
+                {r.title}
+              </div>
+              <div
+                className="flex items-center gap-1"
+                style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}
+              >
+                {r.course} · {(r.ingredients || []).length} ingredients
+              </div>
+              <div className="mt-auto flex flex-wrap gap-1">
+                {(r.tags || []).slice(0, 2).map((t) => (
+                  <Badge key={t} tone="caramel">
+                    {t}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          </Card>
         ))}
       </div>
+
+      {openRecipe && (
+        <Modal title={openRecipe.title} onClose={() => setOpened(null)}>
+          <div className="flex flex-col gap-3">
+            <div style={{ width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}>
+              <RecipeMedia recipe={openRecipe} rounded="var(--radius-md)" />
+            </div>
+            <div
+              className="flex items-center gap-1.5"
+              style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}
+            >
+              <Icon
+                set="mdi"
+                name={dishIcon(openRecipe)}
+                size={16}
+                color={courseColor[openRecipe.course] || 'var(--c-a3)'}
+              />
+              {openRecipe.course}
+            </div>
+            {(openRecipe.hot || (openRecipe.tags || []).length > 0) && (
+              <div className="flex flex-wrap gap-1.5">
+                {openRecipe.hot && (
+                  <Badge tone="gold">
+                    <img src="/assets/icons/bulk_icon.png" alt="" style={{ height: 12 }} />
+                    bulk
+                  </Badge>
+                )}
+                {(openRecipe.tags || []).map((t) => (
+                  <Badge key={t} tone="caramel">
+                    {t}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div>
+              <div style={sectionHeadingStyle}>Ingredients</div>
+              <ul
+                style={{
+                  margin: '0 0 12px',
+                  paddingLeft: 18,
+                  fontSize: 'var(--text-sm)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                {(openRecipe.ingredients || []).map((ing, i) => (
+                  <li key={ing.id || i}>
+                    {[ing.amount, ing.unit, ing.name || ing].filter(Boolean).join(' ')}
+                  </li>
+                ))}
+              </ul>
+              {openRecipe.procedure && (
+                <>
+                  <div style={sectionHeadingStyle}>Procedure</div>
+                  <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                    {openRecipe.procedure}
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="accent"
+                onClick={() => {
+                  setEditing(openRecipe)
+                  setShowModal(true)
+                  setOpened(null)
+                }}
+              >
+                Edit
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => handleDelete(openRecipe.id)}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {showModal && (
         <NewRecipeModal
           onClose={() => {
@@ -342,7 +387,37 @@ export default function RecipesPage() {
           initialRecipe={editing}
         />
       )}
-    </Card>
+    </div>
   )
 }
 
+function FilterGroup({ label, open, onToggle, options, selected, onSelect }) {
+  return (
+    <div className="mt-2 first:mt-0">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between text-sm"
+        onClick={onToggle}
+      >
+        {label}
+        <ChevronDownIcon
+          className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-40 overflow-y-auto">
+          {options.map((o) => (
+            <label key={o} className="flex items-center gap-1 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.includes(o)}
+                onChange={() => onSelect(o)}
+              />
+              {o}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

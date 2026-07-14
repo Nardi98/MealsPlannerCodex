@@ -9,7 +9,7 @@ import {
   waitFor,
   cleanup,
 } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import RecipesPage from '../RecipesPage'
 import { recipesApi } from '../../api/recipesApi'
@@ -33,6 +33,11 @@ vi.mock('../../api/ingredientsApi', () => ({
     fetchAll: vi.fn(),
   },
 }))
+
+beforeEach(() => {
+  // The dish-glyph Icon fetches SVGs from a CDN; keep tests hermetic.
+  globalThis.fetch = vi.fn(() => Promise.reject(new Error('no network')))
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -137,4 +142,67 @@ test('filters recipes by course', async () => {
     expect(screen.getByText('Cake')).toBeInTheDocument()
     expect(screen.queryByText('Soup')).toBeNull()
   })
+})
+
+test('clicking a card opens a detail modal with ingredients and procedure', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Risotto',
+      course: 'main',
+      tags: [],
+      ingredients: [{ name: 'Rice', amount: 200, unit: 'g' }],
+      procedure: 'Stir slowly.',
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+
+  await screen.findByText('Procedure')
+  expect(screen.getByText('Stir slowly.')).toBeInTheDocument()
+  expect(screen.getByText(/Rice/)).toBeInTheDocument()
+})
+
+test('renders the recipe image when image_url is present', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Tacos', course: 'main', image_url: 'https://x/y.jpg', ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Tacos')
+  const img = screen.getByAltText('Tacos photo')
+  expect(img).toHaveAttribute('src', 'https://x/y.jpg')
+})
+
+test('shows a placeholder (no photo) when image_url is absent', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Tacos', course: 'main', ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Tacos')
+  expect(screen.queryByAltText('Tacos photo')).toBeNull()
+})
+
+test('deletes a recipe from the detail modal', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+  recipesApi.delete = vi.fn().mockResolvedValue(null)
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  fireEvent.click(await screen.findByText('Delete'))
+
+  await waitFor(() => expect(screen.queryByText('Risotto')).toBeNull())
+  expect(recipesApi.delete).toHaveBeenCalledWith(1)
 })

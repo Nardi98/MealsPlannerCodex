@@ -115,6 +115,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
     initialRecipe?.ingredients || [{ id: undefined, name: '', amount: '', unit: '' }]
   )
   const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
+  const [imageUrl, setImageUrl] = React.useState(initialRecipe?.image_url || '')
   const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
   const [ingredientOptions, setIngredientOptions] = React.useState([])
   const [addingIdx, setAddingIdx] = React.useState(null)
@@ -172,6 +173,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
           unit: ing.unit,
         })),
       procedure,
+      image_url: imageUrl.trim() || null,
       hot: bulkPrep,
     }
     onSave?.(recipe)
@@ -300,6 +302,15 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
               </div>
             ))}
             <Button type="button" variant="ghost" size="sm" onClick={addIngredient}>+ Add ingredient</Button>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm">Image URL</label>
+            <Input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://…"
+            />
           </div>
           <div className="space-y-1">
             <label className="text-sm">Procedure</label>

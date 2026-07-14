@@ -1,615 +1,256 @@
-
 # Meal Planner — Frontend Design Guide
-**Scope:** This guide specifies the *Recipes* page and site‑wide conventions so another AI (or dev) can reproduce the UI exactly as in our current demo.  
-**Out of scope (titles only):** Week Planner, Shopping List, Import/Export Database.
 
-> Stack: React + Tailwind (utility classes), framer-motion, @heroicons/react/24/outline.  
-> Style tokens are exposed as CSS variables (see below).
+**Scope:** This guide specifies the *Recipes* page and site-wide conventions after
+adopting the Claude Design **"meal-planner-app"** kit (project
+`9497737e-33b6-4af2-b052-2a9f4aa47b24`). It is the source of truth for the shell,
+the shared primitives, and the Recipes page.
 
----
+**Status of other pages:** Meal Plan, Ingredients, Shopping List, and Import/Export
+retain their **current implementation**. They inherit the new shell + tokens and
+keep working through backward-compatible primitives; they will be migrated to the
+new visual language in a later pass. The Shopping List spec at the end of this
+file still describes intended behavior and remains valid.
 
-## 0) Repo & File Layout (frontend-v2)
-```
-/src/
-  components/
-    Button.jsx
-    Badge.jsx
-    Card.jsx
-    Input.jsx
-    NavItem.jsx
-  pages/
-    RecipesPage.jsx        # this page (full spec below)
-    WeekPlannerPage.jsx    # (title only – empty)
-    ShoppingListPage.jsx   # (title only – empty)
-    ImportExportPage.jsx   # (title only – empty)
-  App.jsx                  # shell header + sidebar + router-ish state
-  tokens.js                # token defaults (optional)
-```
-
-You may keep everything in a single file for the demo (as we did), but when turning this into a project, split into the structure above.
+> Stack: React + Vite, Tailwind (utility classes) + CSS-variable tokens,
+> `@heroicons/react/24/outline`, a CDN-backed `Icon` for food glyphs.
+> Fonts: **Sora** (display) + **Work Sans** (body) via Google Fonts.
 
 ---
 
 ## 1) Design Tokens (CSS variables)
-Set these on a top-level container (or `:root`). They control color and borders across components.
 
+All tokens live in [`frontend-v2/src/index.css`](frontend-v2/src/index.css) `:root`.
+Components consume them via inline `style={{ ... 'var(--…)' }}` or arbitrary
+Tailwind classes (e.g. `text-[color:var(--text-subtle)]`). The base `--c-*` /
+`--text-*` values are also injected at runtime by
+[`tokens.js`](frontend-v2/src/tokens.js) (`useCssVars`) to allow theming.
+
+### Base palette (unchanged hex)
 ```css
-/* Required CSS variables */
-:root {
-  --c-white: #F8FAF9;
-  --c-pos:   #0C3A2D;
-  --c-neg:   #BD210F;
-  --c-a1:    #6D9773;
-  --c-a2:    #FFB902;
-  --c-a3:    #BB8A52;
-  --border:        #e2e8f0;
-  --text-strong:   #0C3A2D;
-  --text-muted:    #475569;
-  --text-subtle:   #64748b;
-}
+--c-white: #F8FAF9;   --c-pos: #0C3A2D;   --c-neg: #BD210F;
+--c-a1: #6D9773;      --c-a2: #FFB902;    --c-a3: #BB8A52;
+--border: #e2e8f0;
+--text-strong: #0C3A2D; --text-muted: #475569; --text-subtle: #64748b;
 ```
 
-If the host does not inject tokens, use these defaults in JS and spread them as inline `style` onto the root container.
+### Semantic aliases
+```css
+--surface-page: var(--c-white);   --surface-card: #FFFFFF;
+--surface-sidebar: var(--c-pos);  --surface-sunken: #EEF3EF;
+--border-default: var(--border);
+--text-on-dark: #F8FAF9;          --text-on-accent: #121212;
+--accent-primary: var(--c-a2);    --accent-secondary: var(--c-a1);
+--accent-tertiary: var(--c-a3);   --success: var(--c-pos);  --danger: var(--c-neg);
+--page-bg: #ECE6D9;   /* Bold theme warm-cream page background */
+```
 
-```jsx
-// tokens.js (optional)
-export const DEFAULT_TOKENS = {
-  white: '#F8FAF9', pos: '#0C3A2D', neg: '#BD210F',
-  a1: '#6D9773', a2: '#FFB902', a3: '#BB8A52',
-  border: '#e2e8f0', textStrong: '#0C3A2D',
-  textMuted: '#475569', textSubtle: '#64748b',
-};
-export function useCssVars(tokens = DEFAULT_TOKENS) {
-  return {
-    ['--c-white']: tokens.white, ['--c-pos']: tokens.pos, ['--c-neg']: tokens.neg,
-    ['--c-a1']: tokens.a1, ['--c-a2']: tokens.a2, ['--c-a3']: tokens.a3,
-    ['--border']: tokens.border, ['--text-strong']: tokens.textStrong,
-    ['--text-muted']: tokens.textMuted, ['--text-subtle']: tokens.textSubtle,
-  };
-}
+### Extended "category" palette
+Warm, earthy hues for tags, ingredient categories, course tints, and nav icons.
+**Never for core chrome.**
+```css
+--cat-terracotta: #D97B4F;  --cat-teal: #2F8F8A;  --cat-plum: #7A5A8C;
+--cat-berry: #C4436B;       --cat-olive: #8A9A5B; --cat-sky: #4F86C6;
+--cat-sun: var(--c-a2);     --cat-clay: var(--c-a3);
+--cat-forest: var(--c-pos); --cat-sage: var(--c-a1);
+```
+
+### Typography
+```css
+--font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;   /* headings, nav, buttons */
+--font-body:    'Work Sans', ui-sans-serif, system-ui, sans-serif; /* body, inputs, data */
+--text-xs: .75rem; --text-sm: .875rem; --text-base: 1rem; --text-lg: 1.125rem;
+--text-xl: 1.25rem; --text-2xl: 1.5rem; --text-3xl: 2rem;
+--weight-regular:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
+```
+`body` uses `--font-body`; `h1–h4` use `--font-display`.
+
+### Spacing, radius, shadow
+```css
+--space-1..12: 4/8/12/16/20/24/32/40/48px;
+--radius-sm:8px; --radius-md:12px /* inputs, buttons */; --radius-lg:16px /* cards, modals */;
+--radius-full:9999px /* chips, badges, avatars */;
+--sidebar-width:224px;
+--shadow-sm / --shadow-md / --shadow-lg;  /* green-tinted soft shadows */
 ```
 
 ---
 
-## 2) Site-Wide Layout
-- **Header:** left logo + product name; right search input + ghost button; user avatar stub.
-- **Sidebar:** vertical nav with rounded active item (filled `--c-a1`, white text). Items:
-  - Week planner
-  - Recipes (default active)
-  - Shopping list
-- **Content area:** Cards with soft borders and 2xl rounding. White backgrounds.
+## 2) Site-Wide Layout (Bold shell)
 
-Minimal shell (copy/paste):
+Implemented in [`frontend-v2/src/App.jsx`](frontend-v2/src/App.jsx). The whole app
+sits on the warm-cream `--page-bg` with `padding: 20`.
 
-```jsx
-import { SwatchIcon, CalendarDaysIcon, BookmarkIcon, ShoppingCartIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import React, { useState } from 'react';
-
-function NavItem({ active, Icon, label, onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left flex items-center gap-3 rounded-xl px-3 py-2 hover:opacity-95 ${active ? 'text-white' : 'text-[color:var(--text-strong)]'}`}
-      style={{ backgroundColor: active ? 'var(--c-a1)' : 'transparent' }}
-      type="button"
-    >
-      <Icon className="h-5 w-5" /><span className="text-sm font-medium">{label}</span>
-    </button>
-  );
-}
-
-export default function AppShell({ children }) {
-  const [active, setActive] = useState('recipes');
-
-  return (
-    <div className="min-h-screen" style={{ background: 'var(--c-white)', color: 'var(--text-strong)' }}>
-      <header className="border-b" style={{ borderColor: 'var(--border)' }}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <SwatchIcon className="h-6 w-6 text-[color:var(--c-a3)]" />
-            <span className="font-semibold">Meal Planner</span>
-            <span className="text-xs text-[color:var(--text-subtle)] ml-2">Demo UI — Updated Style</span>
-          </div>
-          <div className="hidden md:flex items-center gap-2">
-            <input className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)] w-64"
-                   placeholder="Search…" style={{ borderColor: 'var(--border)' }} />
-            <button className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm hover:opacity-95"
-                    style={{ color: 'var(--text-strong)' }}>Search</button>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-4 px-4 py-6 md:grid-cols-[16rem_1fr]">
-        <aside className="space-y-2">
-          <div className="rounded-2xl border bg-white p-4 shadow-sm" style={{ borderColor: 'var(--border)' }}>
-            <div className="grid grid-cols-1 gap-1">
-              <NavItem active={active==='planner'} onClick={()=>setActive('planner')} Icon={CalendarDaysIcon} label="Week planner" />
-              <NavItem active={active==='recipes'} onClick={()=>setActive('recipes')} Icon={BookmarkIcon} label="Recipes" />
-              <NavItem active={active==='list'}    onClick={()=>setActive('list')}    Icon={ShoppingCartIcon} label="Shopping list" />
-            </div>
-          </div>
-        </aside>
-        <section className="space-y-4">{children}</section>
-      </main>
-    </div>
-  );
-}
-```
+- **Header:** logo left; right = search `Input` (decorative) + round `--c-a3`
+  avatar stub. No bordered header — instead a subtle **gradient divider** line
+  under it (`linear-gradient(...,color-mix(--c-pos 22%),...)`).
+- **Sidebar:** a **dark forest-green (`--surface-sidebar`) rounded panel**, sticky,
+  `--shadow-md`, `width: var(--sidebar-width)`. White text (`--text-on-dark`,
+  Sora), **colored nav icons** per item, active item background
+  `rgba(255,255,255,0.16)`. Items → routes:
+  Recipes `/recipes` (berry), Meal Plan `/meal-plan` (gold), Ingredients
+  `/ingredients` (olive), Shopping List `/shopping-list` (teal),
+  Import/Export `/import-export` (plum).
+- **Content frame:** a white `--surface-page` panel, `--radius-lg`, `--shadow-lg`,
+  hairline `--border-default`, `padding: 24`, wrapping the routed page.
 
 ---
 
 ## 3) UI Primitives
-Use these EXACT props/variants so downstream code can copy/paste and be consistent.
 
-```jsx
-// Button.jsx
-export function Button({ variant='primary', size='md', Icon, children, className='', ...props }) {
-  const map = {
-    primary: { bg: 'var(--c-pos)', fg: '#fff' },
-    danger:  { bg: 'var(--c-neg)', fg: '#fff' },
-    a1:      { bg: 'var(--c-a1)', fg: '#fff' },
-    a2:      { bg: 'var(--c-a2)', fg: '#121212' },
-    ghost:   { bg: 'transparent', fg: 'var(--text-strong)', border: 'var(--border)' },
-  }[variant];
-  const sizeMap = { sm:'px-2 py-1 text-xs', md:'px-3 py-2 text-sm', lg:'px-4 py-2.5 text-sm' }[size];
+All in [`frontend-v2/src/components/`](frontend-v2/src/components/), re-exported from
+`components/index.js`.
 
-  return (
-    <button type="button"
-      className={`inline-flex items-center gap-2 rounded-2xl shadow-sm hover:opacity-95 border ${sizeMap} ${className}`}
-      style={{ backgroundColor: map?.bg, color: map?.fg, borderColor: map?.border || 'transparent' }}
-      {...props}>
-      {Icon && <Icon className="h-5 w-5" />}{children}
-    </button>
-  );
-}
-```
-
-```jsx
-// Badge.jsx
-export function Badge({ tone='a3', children }) {
-  const fg = `var(--c-${tone})`;
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-          style={{ backgroundColor: `color-mix(in srgb, ${fg} 14%, transparent)`, color: fg }}>
-      {children}
-    </span>
-  );
-}
-```
-
-```jsx
-// Card.jsx
-export function Card({ children, className='' }) {
-  return (
-    <div className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`} style={{ borderColor: 'var(--border)' }}>
-      {children}
-    </div>
-  );
-}
-```
-
-```jsx
-// Input.jsx
-export function Input({ className='', ...props }) {
-  return (
-    <input {...props}
-      className={`rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)] ${className}`}
-      style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}/>
-  );
-}
-```
+- **`Button`** — variants `primary` (forest), `accent` (mustard, dark text),
+  `secondary` (sage), `danger` (red), `ghost` (outline). Legacy aliases `a1`
+  (=secondary) and `a2` (=accent) are retained. Sizes `sm|md|lg`. `--radius-md`,
+  Sora. Icon passed as a **component** via the `Icon` prop.
+- **`Badge`** — pill; background = tone color at 16% opacity, full-strength text.
+  Tones accept legacy (`a1/a2/a3/pos/neg`), named (`forest/sage/gold/caramel/
+  danger`), and category (`terracotta/teal/plum/berry/olive/sky`).
+- **`Card`** — the single surface container: white, `--radius-lg`,
+  `--border-default`, `--shadow-sm`. Merges an incoming `style` prop.
+- **`Input`** — `--radius-md`, hairline border, mustard focus ring, Work Sans.
+  Merges `style`.
+- **`Icon`** — fetches + inlines raw SVG so `color` applies. `set="heroicons"`
+  (default, outline/solid) or `set="mdi"` (Material Design Icons via Iconify) for
+  **food/dish glyphs Heroicons lacks**. Loaded from CDN at runtime.
+- **`Modal`** — full-screen scrim (`rgba(12,58,45,.55)`) + centered white `Card`
+  with close button + title. Scrim click and close button both dismiss. Used by
+  the Recipes detail dialog; bespoke form modals keep their own markup.
 
 ---
 
 ## 4) Recipes Page — Exact Spec
 
-### 4.1 Page Header
-- Left: “Recipes” label with bookmark icon.
-- Right: search input (`placeholder="Search recipes…"`, width `w-56`) and “New recipe” button (`variant="a1"`).
+Implemented in [`frontend-v2/src/pages/RecipesPage.jsx`](frontend-v2/src/pages/RecipesPage.jsx),
+wired to the real API (`recipesApi`, `tagsApi`, `ingredientsApi`).
 
-```jsx
-import { BookmarkIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { Card } from '../components/Card';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
+### 4.1 Header
+- Left: **Recipes** title (`--text-2xl`, Sora).
+- Right: filter button (ghost, `FunnelIcon`, `aria-label="Filter"`) opening a
+  popover with collapsible **Course / Tags / Ingredients** checkbox groups;
+  search `Input` (`placeholder="Search recipes…"`); **New recipe** button
+  (`variant="accent"`, `PlusIcon`).
+- Filtering is client-side: title substring AND every selected tag AND every
+  selected ingredient AND course ∈ selected courses.
 
-export default function RecipesPage() {
-  return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-[color:var(--text-subtle)]">
-          <BookmarkIcon className="h-5 w-5" /> Recipes
-        </div>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Search recipes…" className="w-56" />
-          <Button variant="a1" Icon={PlusIcon}>New recipe</Button>
-        </div>
-      </div>
-      {/* cards go here */}
-    </Card>
-  );
-}
-```
+### 4.2 Card Grid
+- Responsive grid: `repeat(auto-fill, minmax(240px, 1fr))`, `gap: 16`.
+- Each card (white surface, `--radius-lg`, `--shadow-sm`, hairline border) is
+  **clickable** and opens the detail modal.
+- **Media area** (`aspect-ratio 1/1`):
+  - `<img alt="{title} photo">` when `recipe.image_url` is set;
+  - otherwise a **course-colored placeholder tile** — a gradient from
+    `courseColor[course]` with the **dish icon** centered.
+  - Top-left: round white chip with the dish `Icon` in the course color.
+  - Top-right: bulk-prep icon (`/assets/icons/bulk_icon.png`) when `recipe.hot`.
+- **Body:** title (Sora, semibold), `course · N ingredients` (`--text-xs`,
+  subtle), up to **2** tag `Badge`s (`tone="caramel"`).
 
-### 4.2 Card Layout (one per row)
-- Grid is **always single column**: `grid grid-cols-1 gap-3`.
-- Each card uses a soft border, rounded 2xl, white background.
-- The **entire card is clickable** and toggles expansion.
+### 4.3 Detail Modal (on click)
+Uses the shared `Modal`: 16:9 media (image or placeholder), course line with dish
+icon, bulk + tag badges, **Ingredients** list (`amount unit name`), **Procedure**,
+and right-aligned **Edit** (`accent`) / **Delete** (`danger`). Edit opens
+`NewRecipeModal` prefilled; Delete calls `recipesApi.delete`.
 
-### 4.3 Card Header (collapsed state)
-- Title: bold.
-- Meta line: `time • kcal`, `text-xs` and `--text-subtle` color.
-- Right side: tags as `Badge tone="a3"`; if “hot”, also show `Badge tone="a2"` with label `hot`.
+### 4.4 Dish iconography & course colors
+Defined in [`frontend-v2/src/constants/recipeIcons.js`](frontend-v2/src/constants/recipeIcons.js):
+- `courseColor`: main→terracotta, side→olive, first-course→sky, dessert→berry.
+- `dishIcon(recipe)`: title keyword override (pasta→noodles, soup/stew→pot,
+  salad→leaf, sandwich/toast→baguette) else `COURSE_ICONS[course]` else
+  `silverware-fork-knife`. Rendered with `Icon set="mdi"`.
 
-### 4.4 Expansion Behavior
-- Click anywhere on the card toggles (single-open pattern: only one expanded at a time).
-- Expanded content shows:
-  - **Ingredients**: bulleted list (`ul.list-disc.list-inside`).
-  - **Procedure**: paragraph text with comfortable line height.
-  - **Actions (right aligned):** **Edit** (yellow, `variant="a2"`) and **Delete** (red, `variant="danger"`).
-
-### 4.5 Reference Implementation (copy/paste)
-This is the canonical implementation used in the demo. Use it as-is.
-
-```jsx
-import { BookmarkIcon, TagIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { motion } from 'framer-motion';
-import { Card } from '../components/Card';
-import { Input } from '../components/Input';
-import { Button } from '../components/Button';
-import { Badge } from '../components/Badge';
-
-const demoRecipes = [
-  { id: 1, title: "Lemon Herb Chicken", time: "25 min", kcal: 480, tags: ["protein", "quick"], hot: true, ingredients:["Chicken breast","Lemon","Olive oil"], procedure:"Mix marinade, coat chicken, grill 25 min." },
-  { id: 2, title: "Mushroom Risotto", time: "40 min", kcal: 620, tags: ["vegetarian"], hot: false, ingredients:["Arborio rice","Mushrooms","Parmesan"], procedure:"Sauté mushrooms, cook rice with stock, finish with cheese." },
-  { id: 3, title: "Pasta Primavera", time: "20 min", kcal: 520, tags: ["pasta", "spring"], hot: false, ingredients:["Pasta","Zucchini","Carrots"], procedure:"Boil pasta, sauté vegetables, toss together." },
-  { id: 4, title: "Tofu Stir Fry", time: "18 min", kcal: 410, tags: ["vegan", "leftovers"], hot: true, ingredients:["Tofu","Soy sauce","Broccoli"], procedure:"Fry tofu, add vegetables, stir in sauce." },
-];
-
-export default function RecipesPage() {
-  const [expanded, setExpanded] = React.useState(null);
-  const toggle = (id) => setExpanded(expanded === id ? null : id);
-
-  return (
-    <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm text-[color:var(--text-subtle)]">
-          <BookmarkIcon className="h-5 w-5" /> Recipes
-        </div>
-        <div className="flex items-center gap-2">
-          <Input placeholder="Search recipes…" className="w-56" />
-          <Button variant="a1" Icon={PlusIcon}>New recipe</Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3">
-        {demoRecipes.map((r) => (
-          <motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-            <div
-              className="rounded-2xl border p-3 bg-white cursor-pointer"
-              style={{ borderColor: "var(--border)" }}
-              onClick={() => toggle(r.id)}
-            >
-              {/* Header */}
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="font-medium">{r.title}</div>
-                  <div className="mt-0.5 text-xs text-[color:var(--text-subtle)]">{r.time} • {r.kcal} kcal</div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {r.hot && <Badge tone="a2">hot</Badge>}
-                  {r.tags.map((t) => (
-                    <Badge key={t} tone="a3"><TagIcon className="h-3 w-3" />{t}</Badge>
-                  ))}
-                </div>
-              </div>
-
-              {/* Expanded content */}
-              {expanded === r.id && (
-                <div className="mt-3">
-                  <div className="text-sm font-medium mb-1">Ingredients</div>
-                  <ul className="list-disc list-inside text-sm mb-2">
-                    {r.ingredients.map((ing,i)=>(<li key={i}>{ing}</li>))}
-                  </ul>
-                  <div className="text-sm font-medium mb-1">Procedure</div>
-                  <p className="text-sm mb-3">{r.procedure}</p>
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="a2">Edit</Button>
-                    <Button size="sm" variant="danger">Delete</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-    </Card>
-  );
-}
-```
-
-**Notes:**
-- Expansion is **single-open** (tracked by a single `expanded` id).  
-- The card itself is the toggle target (`div` with `onClick`). If you prefer keyboard accessibility, wrap the header in a `button` and stop propagation on the action buttons when clicked.
-
-### 4.6 Motion
-- Use **framer-motion** only for the card’s fade/slide-in: `initial={{ opacity: 0, y: 6 }} → animate={{ opacity: 1, y: 0 }}` with `transition={{ duration: 0.2 }}`.
-- No expanding/collapsing animation is required (instant show/hide is fine).
+### 4.5 New/Edit recipe form
+`NewRecipeModal` includes an optional **Image URL** field, threaded through
+`recipesApi` (`serialiseRecipe`/`normaliseRecipe`) to the backend `image_url`.
 
 ---
 
-## 5) Accessibility & Interaction
-- Text colors use `--text-subtle` for secondary metadata.
-- Buttons must have accessible labels (the text content suffices here: “Edit”, “Delete”).
-- If replacing the clickable `div` with a `button`, add `aria-expanded={expanded===id}` and keyboard handlers.
-- Maintain 44px minimum tap targets where feasible.
+## 5) Backend note — `image_url`
+
+Recipes carry an optional `image_url` (`models.Recipe`, `schemas.RecipeIn/Out`,
+threaded through `crud` create/update/import/export). Absent → the Recipes UI
+renders the course-colored placeholder tile.
 
 ---
 
-## 6) “Website in General” Conventions
-- **Radii:** `rounded-2xl` for cards & buttons.
-- **Borders:** 1px using `--border` color.
-- **Shadows:** subtle `shadow-sm` only.
-- **Spacing:** container max width `max-w-7xl`, page padding `px-4 py-6`, grid gaps `gap-3`.
-- **Typography:** default Tailwind font stack; titles medium weight; meta `text-xs`.- **Badges:** use `tone="a2"` for status (e.g., **hot**), `tone="a3"` for tags.- **Buttons:** variants `primary`, `danger`, `a1`, `a2`, `ghost` with sizes `sm | md | lg`.- **One-column rule for Recipes:** always `grid-cols-1` at all breakpoints.
+## 6) "Website in General" Conventions
+- **Radii:** `--radius-lg` for cards & modals, `--radius-md` for inputs & buttons,
+  `--radius-full` for chips/badges/avatars.
+- **Borders:** 1px `--border-default`. **Shadows:** `--shadow-sm/md/lg` only.
+- **Surfaces:** white cards on the cream `--page-bg`; the green sidebar and the
+  framed content panel define the shell.
+- **Color discipline:** core chrome stays restrained (greens, golds, neutrals);
+  the category palette adds color only on tags, categories, course tints, nav icons.
+- **Typography:** Sora for titles/nav/buttons, Work Sans for body/inputs.
 
 ---
-
-## 7) Data Shapes (Temporary)
-Use these shapes for local/demo state until a backend exists.
-
-```ts
-type Recipe = {
-  id: number;
-  title: string;
-  time: string;       // e.g. "25 min"
-  kcal: number;
-  tags: string[];
-  hot: boolean;
-  ingredients: string[]; // for demo
-  procedure: string;
-};
-```
-
----
-
 
 # Shopping List Page — Exact Spec
 
-> Purpose: let users pick a date range, see covered days on compact calendars, select recipes, and export a deduplicated, checkable shopping list as `.txt`.
-
----
+> Purpose: pick a date range, see covered days on compact calendars, select
+> recipes, and export a deduplicated, checkable shopping list as `.txt`.
+> (Current implementation retained; will migrate to the new visual language later.)
 
 ## Layout Overview
-
 ```
 [ Page Header ]  — Title: “Shopping List” · Date inputs: Begin | End
-
 [ Calendars Row ] — 3 mini month grids (month of Begin date + next two)
-                    • Show day numbers only (no weekday headers)
-                    • Month name appears UNDER each grid (e.g., “September 2025”)
-                    • Days in the selected range show a green capsule under the number
-
 [ Two Columns ]
   Left:  Recipes (title + ingredient count)
   Right: Ingredients (deduped) + Export (only unchecked items)
 ```
 
----
-
-## Tokens & Colors (reuse existing variables)
-
-- Background: `--c-white`  
-- Text: `--text-strong` (main), `--text-muted` / `--text-subtle` (secondary)  
-- Accents: `--c-a1` (green), `--c-a2` (yellow), `--c-a3` (brown)  
-- Positive/Negative: `--c-pos` (dark green), `--c-neg` (red)
-
-**Range indicator color:** `--c-a1`.
-
----
-
 ## Page Header
+- Title: **Shopping List**. Two native date inputs: **Begin** and **End**.
+- Range is inclusive; if `start > end`, adjust the other end so `start <= end`.
 
-- Title: **Shopping List** (same style as other page titles).
-- Two native date inputs: **Begin date** and **End date**.
-- Behavior:
-  - Range is **inclusive** of both start and end.
-  - If a user sets `start > end`, automatically adjust the other end so `start <= end`.
-  - Selected range drives the calendar highlights below.
-
----
-
-## Calendars Row (Mini Calendars)
-
-- Render **three months**: month of Begin date, then +1 and +2 months.
-- Grid starts on **Monday** (`weekStartsOn: 1`).
-- Show **day numbers only** for in-month days; leave out-of-month cells blank.
-- **Month label under the grid**: `MMMM yyyy`.
-- **Range indicator**: green **capsule** under the day number when within range.  
-  Tailwind sizes: `h-1 w-6 rounded-full`; color: `background-color: var(--c-a1)`.
-
----
+## Calendars Row
+- Three months from the Begin date. Week starts Monday. Day numbers only.
+- Month label under each grid (`MMMM yyyy`).
+- **Range indicator:** green capsule under in-range days (`h-1 w-6 rounded-full`,
+  `background-color: var(--c-a1)`).
 
 ## Two Columns
+- **Left — Recipes:** title (bold) + ingredient count (subtle).
+- **Right — Ingredients:** **Export** button (`accent`/gold) in header; list built
+  by **deduplicating** across selected recipes (case-insensitive, trimmed). Each
+  row is clickable (line-through + filled square via `--c-a1`). Export downloads
+  `shopping-list_YYYYMMDD_YYYYMMDD.txt` with only unchecked items.
 
-### Left: Recipes
-- Card titled **Recipes**.
-- Each row: **recipe title** (bold) + **ingredient count** (`text-xs`, subtle color).
-- Source is the set of recipes the user is including for this shopping list.
-
-### Right: Ingredients
-- Card titled **Ingredients** with an **Export** button (variant `a2` — yellow) in the header.
-- Build the list by **deduplicating** ingredients across selected recipes (case-insensitive, trimmed).
-- Each row is **clickable**:
-  - Toggle **line-through** on label.
-  - Small square indicator at left fills with `--c-a1` when crossed.
-- **Export** downloads `shopping-list_YYYYMMDD_YYYYMMDD.txt` containing **only unchecked** items.
-
-**Export file layout:**
-```
-Shopping List (YYYY-MM-DD → YYYY-MM-DD)
-
-• Ingredient 1
-• Ingredient 2
-...
-```
-
----
-
-## Reference Snippets
-
-**Deduplicate ingredients**
+### Reference snippets
 ```jsx
 const buildShoppingList = (recipes) => {
-  const seen = new Set();
-  const list = [];
-  recipes.forEach((r) => {
-    r.ingredients.forEach((ing) => {
-      const key = ing.trim().toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        list.push({ id: key.replace(/[^a-z0-9]+/g, '-'), label: ing });
-      }
-    });
-  });
+  const seen = new Set(); const list = [];
+  recipes.forEach((r) => r.ingredients.forEach((ing) => {
+    const key = ing.trim().toLowerCase();
+    if (!seen.has(key)) { seen.add(key); list.push({ id: key.replace(/[^a-z0-9]+/g, '-'), label: ing }); }
+  }));
   return list;
 };
 ```
-
-**Export text (newline-safe join)**
 ```jsx
 import { format } from 'date-fns';
-
-const formatExportText = (shoppingItems, crossed, startDate, endDate) => {
-  const openItems = shoppingItems
-    .filter((i) => !crossed.has(i.id))
-    .map((i) => `• ${i.label}`);
-
-  return [
-    `Shopping List (${format(startDate, 'yyyy-MM-dd')} → ${format(endDate, 'yyyy-MM-dd')})`,
-    '',
-    ...openItems,
-  ].join('\n');
-};
+const formatExportText = (items, crossed, start, end) => [
+  `Shopping List (${format(start,'yyyy-MM-dd')} → ${format(end,'yyyy-MM-dd')})`, '',
+  ...items.filter((i) => !crossed.has(i.id)).map((i) => `• ${i.label}`),
+].join('\n');
 ```
 
-**Mini month grid with green capsule under in-range days**
-```jsx
-import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
-  addDays, isWithinInterval, isBefore
-} from 'date-fns';
-
-function MonthGrid({ baseDate, startDate, endDate }) {
-  const monthStart = startOfMonth(baseDate);
-  const monthEnd = endOfMonth(baseDate);
-  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-  const days = [];
-
-  for (let d = gridStart; !isBefore(gridEnd, d); d = addDays(d, 1)) {
-    const inCurrentMonth = d.getMonth() === baseDate.getMonth();
-    const inRange = startDate && endDate && isWithinInterval(d, { start: startDate, end: endDate });
-    days.push(
-      <div key={d.toISOString()} className="h-8 flex flex-col items-center justify-center text-sm">
-        <div className={`w-7 h-7 flex items-center justify-center rounded-full ${inCurrentMonth ? 'text-[color:var(--text-strong)]' : 'text-[color:var(--text-subtle)] opacity-60'}`}>
-          {inCurrentMonth ? d.getDate() : ''}
-        </div>
-        <div className="h-1 w-6 mt-0.5 rounded-full" style={{ backgroundColor: inRange ? 'var(--c-a1)' : 'transparent' }} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center">
-      <div className="grid grid-cols-7 gap-x-1 gap-y-2">{days}</div>
-      <div className="mt-2 text-sm font-medium text-[color:var(--text-strong)]">{format(baseDate, 'MMMM yyyy')}</div>
-    </div>
-  );
-}
-```
+## Accessibility
+- Ingredient rows keyboard-reachable (`role="button"`, `tabIndex=0`, Enter/Space,
+  `aria-pressed`). Date inputs have visible labels.
 
 ---
 
-## Accessibility & Interaction
-
-- Ingredient rows should be keyboard-reachable. If not using `<button>`, add `role="button"`, `tabIndex={0}`, and handle **Enter/Space** to toggle; expose `aria-pressed`.
-- Date inputs have visible labels and native semantics.
-
----
-
-## Dev Tests (console assertions)
-
-```js
-// Export excludes crossed items & uses newline join correctly
-const items = [{ id: 'milk', label: 'Milk' }, { id: 'bread', label: 'Bread' }];
-const crossed = new Set(['milk']);
-const text = formatExportText(items, crossed, new Date('2025-01-01'), new Date('2025-01-02'));
-console.assert(!text.includes('Milk'), 'Crossed-off items must not be exported');
-console.assert(text.split('\n')[2] === '• Bread', 'Open items should follow a blank line');
-
-// Deduping is case-insensitive
-const dedup = buildShoppingList([{ ingredients: ['Milk', 'milk ', 'MILK'] }]);
-console.assert(dedup.length === 1, 'Ingredients should be deduped case-insensitively');
-```
-
----
-
-## Done Checklist (Shopping List)
-
-- [ ] Title + two labeled date inputs.
-- [ ] Three mini calendars; **month names under** the grids.
-- [ ] **Green capsule** under in-range days (`h-1 w-6`, color `--c-a1`).
-- [ ] Left: recipes list; Right: **deduped** ingredients.
-- [ ] Clicking an ingredient toggles line-through and filled square.
-- [ ] Export `.txt` contains **only unchecked** items; filename includes `YYYYMMDD` dates.
-- [ ] All colors from tokens; borders use `--border`.
-
-
-
-## 8) Pages (titles only)
-Create files/routes with the following titles and **no content** (blank body):
-
-### Week Planner
-### Import/Export Database
-
----
-
-## 9) Done Checklist (copy this into PRs)
-- [ ] Tokens: container has all `--c-*` and `--text-*` CSS variables.
-- [ ] Header & Sidebar match spec; Recipes is default active.
-- [ ] Recipes page grid is single-column across breakpoints.
-- [ ] Recipe card: title + meta + tags; *hot* badge when applicable.
-- [ ] Clicking card expands ingredients + procedure; Edit (a2) & Delete (danger) on right.
-- [ ] Motion on mount only (fade/slide-in).
-- [ ] No “Plan/Remove” buttons exist on this page.
-
----
-
-## 10) Copy/Paste Mini Snippets
-```jsx
-// Right-aligned actions in a card footer
-<div className="flex justify-end gap-2">
-  <Button size="sm" variant="a2">Edit</Button>
-  <Button size="sm" variant="danger">Delete</Button>
-</div>
-```
-
-```jsx
-// Single-open expansion state
-const [expanded, setExpanded] = useState(null);
-const toggle = (id) => setExpanded(expanded === id ? null : id);
-```
-
-```jsx
-// Single-column grid for recipe cards
-<div className="grid grid-cols-1 gap-3">{/* cards */}</div>
-```
-
----
-
-## 11) Future Integration Notes (optional)
-- Wire “New recipe” to a modal or new route.
-- Replace `demoRecipes` with API data; keep the same property names to minimize refactors.
-- Edit/Delete should stop event propagation so clicking them doesn’t toggle the card.
-
+## 7) Done Checklist (copy into PRs)
+- [ ] `index.css` has the full token set (base + semantic + category + type +
+      spacing + shadow) and the Sora/Work Sans `@import`.
+- [ ] Bold shell: cream page, green sticky sidebar with colored icons, gradient
+      divider, framed white content panel.
+- [ ] Primitives updated & backward-compatible (Button accent/secondary + a1/a2,
+      Badge category tones, Card/Input merge `style`, new `Icon` + `Modal`).
+- [ ] Recipes: image-card grid (`auto-fill minmax(240px)`), placeholder tile when
+      no `image_url`, dish icon + bulk badge, click → detail modal with Edit/Delete.
+- [ ] `image_url` round-trips backend↔frontend; New/Edit form exposes it.
+- [ ] Other four pages still render inside the new shell.

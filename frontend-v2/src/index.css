@@ -1,8 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Work+Sans:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
+  /* ---- Base palette (unchanged hex) ---- */
   --c-white: #F8FAF9;
   --c-pos: #0C3A2D;
   --c-neg: #BD210F;
@@ -10,12 +13,93 @@
   --c-a2: #FFB902;
   --c-a3: #BB8A52;
   --border: #e2e8f0;
+
   --text-strong: #0C3A2D;
   --text-muted: #475569;
   --text-subtle: #64748b;
+
+  /* ---- Semantic aliases ---- */
+  --surface-page: var(--c-white);
+  --surface-card: #FFFFFF;
+  --surface-sidebar: var(--c-pos);
+  --surface-sunken: #EEF3EF;
+  --border-default: var(--border);
+  --text-on-dark: #F8FAF9;
+  --text-on-accent: #121212;
+
+  --accent-primary: var(--c-a2);
+  --accent-secondary: var(--c-a1);
+  --accent-tertiary: var(--c-a3);
+  --success: var(--c-pos);
+  --danger: var(--c-neg);
+
+  /* ---- Page shell (Bold theme) ---- */
+  --page-bg: #ECE6D9;
+
+  /* ---- Extended category palette ---- */
+  --cat-terracotta: #D97B4F;
+  --cat-teal: #2F8F8A;
+  --cat-plum: #7A5A8C;
+  --cat-berry: #C4436B;
+  --cat-olive: #8A9A5B;
+  --cat-sky: #4F86C6;
+  --cat-sun: var(--c-a2);
+  --cat-clay: var(--c-a3);
+  --cat-forest: var(--c-pos);
+  --cat-sage: var(--c-a1);
+
+  /* ---- Typography ---- */
+  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Work Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Spacing, radius & layout ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --container-max: 1280px;
+  --sidebar-width: 224px;
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 1px 2px 0 rgb(12 58 45 / 0.06), 0 1px 3px 0 rgb(12 58 45 / 0.05);
+  --shadow-md: 0 4px 10px -2px rgb(12 58 45 / 0.10), 0 2px 6px -2px rgb(12 58 45 / 0.06);
+  --shadow-lg: 0 12px 24px -6px rgb(12 58 45 / 0.16);
 }
 
 body {
-  background: var(--c-white);
+  background: var(--page-bg);
   color: var(--text-strong);
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
 }
