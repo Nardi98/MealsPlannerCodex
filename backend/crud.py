@@ -23,10 +23,15 @@ from models import (
     Tag,
     RecipeIngredient,
     UnitEnum,
+    User,
     recipe_tag_table,
 )
 
 __all__ = [
+    "create_user",
+    "get_user",
+    "get_user_by_email",
+    "get_user_by_google_sub",
     "create_recipe",
     "create_ingredient",
     "get_or_create_tag",
@@ -57,6 +62,45 @@ __all__ = [
     "export_data",
     "clear_data",
 ]
+
+
+def create_user(
+    session: Session,
+    *,
+    email: str,
+    hashed_password: Optional[str] = None,
+    display_name: Optional[str] = None,
+    auth_provider: str = "local",
+    google_sub: Optional[str] = None,
+) -> User:
+    """Create and persist a :class:`~models.User`."""
+    user = User(
+        email=email,
+        hashed_password=hashed_password,
+        display_name=display_name,
+        auth_provider=auth_provider,
+        google_sub=google_sub,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def get_user(session: Session, user_id: int) -> Optional[User]:
+    return session.get(User, user_id)
+
+
+def get_user_by_email(session: Session, email: str) -> Optional[User]:
+    return session.execute(
+        select(User).where(User.email == email)
+    ).scalar_one_or_none()
+
+
+def get_user_by_google_sub(session: Session, google_sub: str) -> Optional[User]:
+    return session.execute(
+        select(User).where(User.google_sub == google_sub)
+    ).scalar_one_or_none()
 
 
 def create_recipe(session: Session, **data: Any) -> Recipe:

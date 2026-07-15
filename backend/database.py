@@ -50,6 +50,15 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 
+def get_db():
+    """FastAPI dependency yielding a session, closed after the request."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def init_db() -> None:
     """Create database tables.
 

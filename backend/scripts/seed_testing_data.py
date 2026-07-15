@@ -36,8 +36,15 @@ from models import (  # noqa: E402
     Recipe,
     RecipeIngredient,
     Tag,
+    User,
     UnitEnum,
 )
+from auth_users import hash_password  # noqa: E402
+
+# Default seed account. In Step 1 data is still global; later steps assign
+# ownership of the seeded data to this user.
+DEMO_USER_EMAIL = "demo@mealplanner.test"
+DEMO_USER_PASSWORD = "demo1234"
 
 # ---------------------------------------------------------------------------
 # Ingredients: (name, unit, season_months, categories)  -- 56 entries
@@ -284,6 +291,15 @@ def reset_database() -> None:
 
 def populate(session) -> None:
     """Insert the full testing dataset into an empty database."""
+
+    session.add(
+        User(
+            email=DEMO_USER_EMAIL,
+            hashed_password=hash_password(DEMO_USER_PASSWORD),
+            display_name="Demo User",
+            auth_provider="local",
+        )
+    )
 
     tags: dict[str, Tag] = {}
     for name, penalize, is_system in TAGS:

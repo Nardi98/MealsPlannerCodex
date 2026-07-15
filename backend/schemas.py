@@ -18,6 +18,31 @@ def _validate_categories(value: List[str]) -> List[str]:
     return value
 
 
+class UserCreate(BaseModel):
+    email: str
+    password: str
+    display_name: Optional[str] = None
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    display_name: Optional[str] = None
+    auth_provider: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 class TagOut(BaseModel):
     id: int
     name: str

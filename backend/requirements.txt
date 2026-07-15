@@ -8,4 +8,7 @@ fastapi
 httpx
 uvicorn
 python-multipart
+passlib[bcrypt]
+bcrypt<4.1
+pyjwt
 boto3

@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    DateTime,
     Enum,
     Float,
     ForeignKey,
@@ -19,6 +20,7 @@ from sqlalchemy import (
     Table,
     Text,
     false,
+    func,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import TypeDecorator
@@ -79,6 +81,21 @@ CATEGORIES: tuple[str, ...] = (
     "Plant-based",
     "High-calorie",
 )
+
+
+class User(Base):
+    """An account owning its own recipes, ingredients, tags, and plans."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    # Null for OAuth-only accounts (e.g. Google sign-in).
+    hashed_password = Column(String, nullable=True)
+    display_name = Column(String)
+    auth_provider = Column(String, nullable=False, default="local")
+    google_sub = Column(String, nullable=True, unique=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
 
 
 # Association table linking recipes and tags for a many-to-many relationship.

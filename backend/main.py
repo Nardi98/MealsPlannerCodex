@@ -21,7 +21,8 @@ import storage
 from auth import require_api_key
 from mealplanner import planner
 from mealplanner.seed import seed_system_tags
-from database import SessionLocal, engine
+from database import SessionLocal, engine, get_db
+import auth_users
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
@@ -66,12 +67,39 @@ def favicon() -> Response:
     return Response(status_code=204)
 
 
-def get_db() -> Session:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+@app.post("/auth/register", response_model=schemas.UserOut, status_code=201)
+def register(
+    payload: schemas.UserCreate, db: Session = Depends(get_db)
+) -> models.User:
+    if crud.get_user_by_email(db, payload.email) is not None:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = crud.create_user(
+        db,
+        email=payload.email,
+        hashed_password=auth_users.hash_password(payload.password),
+        display_name=payload.display_name,
+    )
+    return user
+
+
+@app.post("/auth/login", response_model=schemas.Token)
+def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)) -> schemas.Token:
+    user = crud.get_user_by_email(db, payload.email)
+    if (
+        user is None
+        or user.hashed_password is None
+        or not auth_users.verify_password(payload.password, user.hashed_password)
+    ):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = auth_users.create_access_token(subject=str(user.id))
+    return schemas.Token(access_token=token)
+
+
+@app.get("/auth/me", response_model=schemas.UserOut)
+def read_me(
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> models.User:
+    return current_user
 
 
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
