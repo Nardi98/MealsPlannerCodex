@@ -161,8 +161,12 @@ Defined in [`frontend-v2/src/constants/recipeIcons.js`](frontend-v2/src/constant
   `silverware-fork-knife`. Rendered with `Icon set="mdi"`.
 
 ### 4.5 New/Edit recipe form
-`NewRecipeModal` includes an optional **Image URL** field, threaded through
-`recipesApi` (`serialiseRecipe`/`normaliseRecipe`) to the backend `image_url`.
+`NewRecipeModal` includes an optional **Recipe image** upload control
+(`<input type="file" accept="image/*">`). Choosing a file uploads it via
+`recipesApi.uploadImage` (which POSTs multipart to `/recipes/upload-image`),
+shows an *Uploading…* state, then a 64×64 rounded preview thumbnail with a
+**Remove** button. The resolved URL is threaded through `recipesApi`
+(`serialiseRecipe`/`normaliseRecipe`) to the backend `image_url`.
 
 ---
 
@@ -171,6 +175,13 @@ Defined in [`frontend-v2/src/constants/recipeIcons.js`](frontend-v2/src/constant
 Recipes carry an optional `image_url` (`models.Recipe`, `schemas.RecipeIn/Out`,
 threaded through `crud` create/update/import/export). Absent → the Recipes UI
 renders the course-colored placeholder tile.
+
+Uploaded images are stored via `backend/storage.py` — a Railway S3-compatible
+bucket in production (env vars `AWS_*`), falling back to a local `backend/media/`
+directory when `AWS_S3_BUCKET_NAME` is unset (local dev / CI). `POST
+/recipes/upload-image` persists the bytes and returns an absolute `image_url`
+pointing at `GET /recipes/images/{key}`, which streams the image back (so no
+public-bucket ACL is required). Uploads are capped at 5 MB and must be `image/*`.
 
 ---
 

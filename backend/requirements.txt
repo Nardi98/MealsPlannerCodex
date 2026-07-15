@@ -7,3 +7,5 @@ flake8
 fastapi
 httpx
 uvicorn
+python-multipart
+boto3

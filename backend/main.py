@@ -8,7 +8,7 @@ import random
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy import select, func
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, selectinload
 import crud
 import models
 import schemas
+import storage
 from auth import require_api_key
 from mealplanner import planner
 from mealplanner.seed import seed_system_tags
@@ -128,6 +129,33 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
 def create_recipe(payload: schemas.RecipeIn, db: Session = Depends(get_db)) -> schemas.RecipeOut:
     data = _payload_to_data(payload, db)
     return crud.create_recipe(db, **data)
+
+
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+@app.post("/recipes/upload-image", status_code=201, dependencies=_AUTH)
+async def upload_recipe_image(request: Request, file: UploadFile = File(...)) -> dict:
+    """Store an uploaded image and return an absolute URL that serves it back."""
+    data = await file.read()
+    if len(data) > _MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Image exceeds the 5 MB limit")
+    try:
+        key = storage.save_image(data, file.content_type or "")
+    except ValueError:
+        raise HTTPException(status_code=415, detail="Unsupported image type")
+    image_url = f"{str(request.base_url).rstrip('/')}/recipes/images/{key}"
+    return {"image_url": image_url}
+
+
+@app.get("/recipes/images/{key:path}")
+def serve_recipe_image(key: str) -> Response:
+    """Stream a previously uploaded image by its storage key."""
+    try:
+        data, content_type = storage.open_image(key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return Response(content=data, media_type=content_type)
 
 
 @app.put(

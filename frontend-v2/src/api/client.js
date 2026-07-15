@@ -19,7 +19,11 @@ function getApiKey() {
 
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
-  const defaultHeaders = { 'Content-Type': 'application/json' };
+  // Let the browser set the multipart boundary itself for FormData uploads;
+  // forcing application/json here would break the request.
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const defaultHeaders = isFormData ? {} : { 'Content-Type': 'application/json' };
   const apiKey = getApiKey();
   if (apiKey) defaultHeaders['X-API-Key'] = apiKey;
   const config = { ...options, headers: { ...defaultHeaders, ...(options.headers || {}) } };

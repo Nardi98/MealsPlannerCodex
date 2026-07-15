@@ -69,4 +69,10 @@ export const recipesApi = {
     return normaliseRecipe(res);
   },
   delete: (id) => request(`/recipes/${id}`, { method: 'DELETE' }),
+  uploadImage: async (file) => {
+    const body = new FormData();
+    body.append('file', file);
+    const res = await request('/recipes/upload-image', { method: 'POST', body });
+    return res.image_url;
+  },
 };

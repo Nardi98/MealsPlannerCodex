@@ -3,6 +3,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Input, Button, Badge } from './'
 import AddIngredientModal from './AddIngredientModal'
 import { ingredientsApi } from '../api/ingredientsApi'
+import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
@@ -116,9 +117,27 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   )
   const [procedure, setProcedure] = React.useState(initialRecipe?.procedure || '')
   const [imageUrl, setImageUrl] = React.useState(initialRecipe?.image_url || '')
+  const [uploading, setUploading] = React.useState(false)
+  const [uploadError, setUploadError] = React.useState('')
   const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
   const [ingredientOptions, setIngredientOptions] = React.useState([])
   const [addingIdx, setAddingIdx] = React.useState(null)
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError('')
+    setUploading(true)
+    try {
+      const url = await recipesApi.uploadImage(file)
+      setImageUrl(url)
+    } catch (err) {
+      console.error('Failed to upload image', err)
+      setUploadError('Upload failed. Please try again.')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const updateIngredient = (idx, field, val) => {
     setIngredients((ings) =>
@@ -304,13 +323,38 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
             <Button type="button" variant="ghost" size="sm" onClick={addIngredient}>+ Add ingredient</Button>
           </div>
           <div className="space-y-1">
-            <label className="text-sm">Image URL</label>
-            <Input
-              type="url"
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://…"
+            <label className="text-sm">Recipe image</label>
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Recipe image"
+              onChange={handleImageChange}
+              className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
             />
+            {uploading && (
+              <p className="text-sm" style={{ color: 'var(--text-soft)' }}>Uploading…</p>
+            )}
+            {uploadError && (
+              <p className="text-sm" style={{ color: 'var(--c-neg)' }}>{uploadError}</p>
+            )}
+            {imageUrl && !uploading && (
+              <div className="flex items-center gap-3 pt-1">
+                <img
+                  src={imageUrl}
+                  alt="Recipe image preview"
+                  className="h-16 w-16 rounded-xl object-cover"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setImageUrl('')}
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
           </div>
           <div className="space-y-1">
             <label className="text-sm">Procedure</label>
