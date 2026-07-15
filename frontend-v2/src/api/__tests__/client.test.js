@@ -1,12 +1,60 @@
 /**
  * @vitest-environment jsdom
  */
-import { request } from '../client'
+/**
+ * @vitest-environment jsdom
+ */
+import { request, setAuthToken, setUnauthorizedHandler } from '../client'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+  setAuthToken(null)
+  setUnauthorizedHandler(null)
+})
+
+test('attaches Authorization bearer header when a token is set', async () => {
+  setAuthToken('jwt-123')
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+  )
+
+  await request('/recipes')
+
+  const [, opts] = globalThis.fetch.mock.calls[0]
+  expect(opts.headers['Authorization']).toBe('Bearer jwt-123')
+})
+
+test('persists the token to localStorage so it survives a reload', async () => {
+  setAuthToken('jwt-abc')
+  expect(localStorage.getItem('auth_token')).toBe('jwt-abc')
+  setAuthToken(null)
+  expect(localStorage.getItem('auth_token')).toBe(null)
+})
+
+test('does not attach Authorization header when no token is set', async () => {
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+  )
+
+  await request('/recipes')
+
+  const [, opts] = globalThis.fetch.mock.calls[0]
+  expect('Authorization' in opts.headers).toBe(false)
+})
+
+test('invokes the unauthorized handler and clears the token on 401', async () => {
+  setAuthToken('jwt-expired')
+  const onUnauthorized = vi.fn()
+  setUnauthorizedHandler(onUnauthorized)
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve({ ok: false, status: 401, text: () => Promise.resolve('{"detail":"nope"}') })
+  )
+
+  await expect(request('/recipes')).rejects.toThrow()
+  expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  expect(localStorage.getItem('auth_token')).toBe(null)
 })
 
 test('attaches X-API-Key header when VITE_API_KEY is set', async () => {

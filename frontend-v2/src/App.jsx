@@ -7,12 +7,14 @@ import {
   BeakerIcon,
   ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline'
-import { Input } from './components'
+import { Input, ProfileMenu } from './components'
 import RecipesPage from './pages/RecipesPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
 import ImportExportPage from './pages/ImportExportPage'
+import LoginPage from './pages/LoginPage'
+import { AuthProvider, useAuth } from './auth/AuthContext'
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
@@ -111,7 +113,7 @@ function Shell() {
         />
         <div className="hidden md:flex items-center gap-3">
           <Input placeholder="Search…" style={{ width: 220 }} />
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--c-a3)' }} />
+          <ProfileMenu />
         </div>
       </header>
 
@@ -157,10 +159,31 @@ function Shell() {
   )
 }
 
+function Gate() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div
+        className="flex items-center justify-center"
+        style={{ minHeight: '100vh', color: 'var(--text-muted)' }}
+      >
+        Loading…
+      </div>
+    )
+  }
+
+  if (!user) return <LoginPage />
+
+  return <Shell />
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <Shell />
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Gate />
+      </BrowserRouter>
+    </AuthProvider>
   )
 }

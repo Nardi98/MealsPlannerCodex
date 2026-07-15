@@ -8,6 +8,34 @@ const API_BASE_URL =
       process.env.NEXT_PUBLIC_API_BASE_URL)) ||
   '';
 
+const TOKEN_KEY = 'auth_token';
+
+// Called when the backend rejects our credentials (401) so the app can drop the
+// session and route back to login. Registered by the auth layer at startup.
+let unauthorizedHandler = null;
+
+function setUnauthorizedHandler(handler) {
+  unauthorizedHandler = handler;
+}
+
+function getToken() {
+  try {
+    return (typeof localStorage !== 'undefined' && localStorage.getItem(TOKEN_KEY)) || null;
+  } catch {
+    return null;
+  }
+}
+
+function setAuthToken(token) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // Storage unavailable (e.g. private mode) — token simply won't persist.
+  }
+}
+
 function getApiKey() {
   return (
     (typeof import.meta !== 'undefined' &&
@@ -26,10 +54,16 @@ async function request(path, options = {}) {
   const defaultHeaders = isFormData ? {} : { 'Content-Type': 'application/json' };
   const apiKey = getApiKey();
   if (apiKey) defaultHeaders['X-API-Key'] = apiKey;
+  const token = getToken();
+  if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
   const config = { ...options, headers: { ...defaultHeaders, ...(options.headers || {}) } };
 
   const response = await fetch(url, config);
   if (!response.ok) {
+    if (response.status === 401) {
+      setAuthToken(null);
+      if (unauthorizedHandler) unauthorizedHandler();
+    }
     const text = await response.text();
     let data;
     try {
@@ -51,4 +85,4 @@ async function request(path, options = {}) {
   return response.json();
 }
 
-export { request };
+export { request, getToken, setAuthToken, setUnauthorizedHandler };
