@@ -133,6 +133,7 @@ def create_ingredient(
     unit: UnitEnum | None,
     season_months: List[int],
     categories: List[str] | None = None,
+    user_id: int | None = None,
 ) -> Ingredient:
     """Create and persist a new :class:`Ingredient`."""
 
@@ -141,6 +142,7 @@ def create_ingredient(
         unit=unit,
         season_months=season_months,
         categories=categories or [],
+        user_id=user_id,
     )
     session.add(ingredient)
     session.commit()
@@ -177,15 +179,18 @@ def find_similar_ingredients(
     *,
     exclude_id: int | None = None,
     threshold: float = 0.8,
+    user_id: int | None = None,
 ) -> List[Ingredient]:
     """Return ingredients whose name is similar to ``name``.
 
-    Results are sorted by descending similarity score.
+    Results are sorted by descending similarity score, scoped to ``user_id``
+    when given.
     """
 
     stmt = select(Ingredient)
     if exclude_id is not None:
         stmt = stmt.where(Ingredient.id != exclude_id)
+    stmt = _scope(stmt, Ingredient.user_id, user_id)
     candidates = session.execute(stmt).scalars().all()
     scored = [
         (other, _similarity(name, other.name)) for other in candidates
@@ -196,19 +201,18 @@ def find_similar_ingredients(
 
 
 def find_duplicate_pairs(
-    session: Session, *, threshold: float = 0.8
+    session: Session, *, threshold: float = 0.8, user_id: int | None = None
 ) -> List[Tuple[Ingredient, Ingredient, float]]:
     """Return every candidate duplicate pair of ingredients.
 
     Compares each unordered pair once and keeps those scoring at or above
-    ``threshold``, sorted by descending score.
+    ``threshold``, sorted by descending score, scoped to ``user_id`` when given.
     """
 
-    ingredients = (
-        session.execute(select(Ingredient).order_by(Ingredient.id))
-        .scalars()
-        .all()
+    stmt = _scope(
+        select(Ingredient).order_by(Ingredient.id), Ingredient.user_id, user_id
     )
+    ingredients = session.execute(stmt).scalars().all()
     pairs: List[Tuple[Ingredient, Ingredient, float]] = []
     for i in range(len(ingredients)):
         for j in range(i + 1, len(ingredients)):
@@ -226,6 +230,7 @@ def merge_ingredients(
     *,
     surviving_unit: UnitEnum | None = None,
     conversion_factor: float | None = None,
+    user_id: int | None = None,
 ) -> Ingredient | None:
     """Merge ``source_id`` into ``target_id`` within a single transaction.
 
@@ -241,7 +246,7 @@ def merge_ingredients(
 
     source = session.get(Ingredient, source_id)
     target = session.get(Ingredient, target_id)
-    if source is None or target is None:
+    if not _owned(source, user_id) or not _owned(target, user_id):
         return None
 
     source_lines = (
@@ -290,13 +295,39 @@ def merge_ingredients(
     return target
 
 
-def get_recipe(session: Session, recipe_id: int) -> Optional[Recipe]:
-    """Return a recipe by primary key or ``None`` if not found."""
+def _owned(obj: Any, user_id: int | None) -> bool:
+    """Return whether ``obj`` may be accessed by ``user_id``.
 
-    return session.get(Recipe, recipe_id)
+    When ``user_id`` is ``None`` no scoping is applied (used by lower-level
+    tests and the not-yet-scoped planner/import paths). Otherwise the object's
+    ``user_id`` must match, so cross-user access is denied.
+    """
+
+    return obj is not None and (user_id is None or obj.user_id == user_id)
 
 
-def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Recipe]:
+def _scope(stmt, column, user_id: int | None):
+    """Filter ``stmt`` to ``column == user_id`` unless ``user_id`` is ``None``.
+
+    The query-side counterpart of :func:`_owned`: ``None`` means "no scoping"
+    (lower-level tests and the not-yet-scoped planner/import paths).
+    """
+
+    return stmt if user_id is None else stmt.where(column == user_id)
+
+
+def get_recipe(
+    session: Session, recipe_id: int, user_id: int | None = None
+) -> Optional[Recipe]:
+    """Return a recipe by primary key, scoped to ``user_id`` when given."""
+
+    recipe = session.get(Recipe, recipe_id)
+    return recipe if _owned(recipe, user_id) else None
+
+
+def update_recipe(
+    session: Session, recipe_id: int, user_id: int | None = None, **data: Any
+) -> Optional[Recipe]:
     """Update fields on an existing recipe.
 
     Parameters
@@ -309,7 +340,7 @@ def update_recipe(session: Session, recipe_id: int, **data: Any) -> Optional[Rec
         Mapping of attribute names to their new values.
     """
 
-    recipe = session.get(Recipe, recipe_id)
+    recipe = get_recipe(session, recipe_id, user_id)
     if recipe is None:
         return None
     for attr, value in data.items():
@@ -345,13 +376,15 @@ def _update_recipe_ingredients(
         recipe.ingredients.remove(leftover)
 
 
-def delete_recipe(session: Session, recipe_id: int) -> bool:
-    """Delete a recipe by primary key.
+def delete_recipe(
+    session: Session, recipe_id: int, user_id: int | None = None
+) -> bool:
+    """Delete a recipe by primary key, scoped to ``user_id`` when given.
 
     Returns ``True`` if a recipe was deleted, ``False`` if the id was not
-    present in the database."""
+    present (or not owned by ``user_id``)."""
 
-    recipe = session.get(Recipe, recipe_id)
+    recipe = get_recipe(session, recipe_id, user_id)
     if recipe is None:
         return False
 
@@ -360,18 +393,21 @@ def delete_recipe(session: Session, recipe_id: int) -> bool:
     return True
 
 
-def get_or_create_tag(session: Session, name: str) -> Tag:
-    """Return a :class:`~models.Tag` with ``name``.
+def get_or_create_tag(
+    session: Session, name: str, user_id: int | None = None
+) -> Tag:
+    """Return a :class:`~models.Tag` with ``name`` owned by ``user_id``.
 
-    The tag is created and added to the session if it does not already exist.
-    The session is flushed so that tags added earlier in the transaction are
-    visible to the lookup query.
+    The tag is created and added to the session if it does not already exist
+    for that owner. The session is flushed so that tags added earlier in the
+    transaction are visible to the lookup query.
     """
 
     session.flush()
-    tag = session.execute(select(Tag).where(Tag.name == name)).scalar_one_or_none()
+    stmt = _scope(select(Tag).where(Tag.name == name), Tag.user_id, user_id)
+    tag = session.execute(stmt).scalar_one_or_none()
     if tag is None:
-        tag = Tag(name=name)
+        tag = Tag(name=name, user_id=user_id)
         session.add(tag)
     return tag
 
@@ -381,6 +417,7 @@ def get_or_create_ingredient(
     ingredient_id: int | None,
     name: str | None,
     unit: UnitEnum | None = None,
+    user_id: int | None = None,
 ) -> Ingredient:
     """Return an :class:`Ingredient` looked up by ``ingredient_id`` or ``name``.
 
@@ -394,27 +431,35 @@ def get_or_create_ingredient(
         raise ValueError("Ingredient requires an id or name")
     ingredient: Ingredient | None = None
     if ingredient_id is not None:
-        ingredient = session.get(Ingredient, ingredient_id)
+        ingredient = get_ingredient(session, ingredient_id, user_id)
     if ingredient is None and name is not None:
-        ingredient = session.execute(
-            select(Ingredient).where(Ingredient.name == name)
-        ).scalar_one_or_none()
+        stmt = _scope(
+            select(Ingredient).where(Ingredient.name == name),
+            Ingredient.user_id,
+            user_id,
+        )
+        ingredient = session.execute(stmt).scalar_one_or_none()
     if ingredient is None:
-        ingredient = Ingredient(name=name, unit=unit)
+        ingredient = Ingredient(name=name, unit=unit, user_id=user_id)
         session.add(ingredient)
     elif ingredient.unit is None and unit is not None:
         ingredient.unit = unit
     return ingredient
 
 
-def get_ingredient(session: Session, ingredient_id: int) -> Ingredient | None:
-    """Return an ingredient by primary key or ``None`` if not found."""
+def get_ingredient(
+    session: Session, ingredient_id: int, user_id: int | None = None
+) -> Ingredient | None:
+    """Return an ingredient by primary key, scoped to ``user_id`` when given."""
 
-    return session.get(Ingredient, ingredient_id)
+    ingredient = session.get(Ingredient, ingredient_id)
+    return ingredient if _owned(ingredient, user_id) else None
 
 
-def get_recipes_by_ingredient(session: Session, ingredient_id: int) -> List[Recipe]:
-    """Return all recipes that reference ``ingredient_id``."""
+def get_recipes_by_ingredient(
+    session: Session, ingredient_id: int, user_id: int | None = None
+) -> List[Recipe]:
+    """Return all recipes that reference ``ingredient_id`` (owner-scoped)."""
 
     stmt = (
         select(Recipe)
@@ -422,11 +467,16 @@ def get_recipes_by_ingredient(session: Session, ingredient_id: int) -> List[Reci
         .where(RecipeIngredient.ingredient_id == ingredient_id)
         .order_by(Recipe.title)
     )
+    stmt = _scope(stmt, Recipe.user_id, user_id)
     return session.execute(stmt).scalars().all()
 
 
 def delete_ingredient(
-    session: Session, ingredient_id: int, *, force: bool = False
+    session: Session,
+    ingredient_id: int,
+    *,
+    force: bool = False,
+    user_id: int | None = None,
 ) -> bool | None:
     """Delete an ingredient by id.
 
@@ -449,7 +499,7 @@ def delete_ingredient(
     """
 
     ingredient = session.get(Ingredient, ingredient_id)
-    if ingredient is None:
+    if not _owned(ingredient, user_id):
         return None
 
     if not force:
@@ -807,15 +857,20 @@ def remove_meal_side(
 
 
 def accept_recipe(
-    session: Session, title: str, consumed_date: date
+    session: Session, title: str, consumed_date: date, user_id: int | None = None
 ) -> Optional[Recipe]:
-    """Increment ``title``'s score and update ``date_last_consumed``."""
+    """Increment ``title``'s score and update ``date_last_consumed``.
+
+    Scoped to ``user_id`` when given so feedback only touches owned recipes.
+    """
 
     # ``scalar_one_or_none`` raises ``MultipleResultsFound`` if more than one
     # recipe shares the same title. While titles should ideally be unique,
     # user data might contain duplicates.  Fetch the first matching recipe
     # instead to gracefully handle such cases.
-    stmt = select(Recipe).where(Recipe.title == title)
+    stmt = _scope(
+        select(Recipe).where(Recipe.title == title), Recipe.user_id, user_id
+    )
     recipe = session.scalars(stmt).first()
     if recipe is None:
         return None
@@ -826,10 +881,14 @@ def accept_recipe(
     return recipe
 
 
-def reject_recipe(session: Session, title: str) -> Optional[Recipe]:
-    """Decrement ``title``'s score."""
+def reject_recipe(
+    session: Session, title: str, user_id: int | None = None
+) -> Optional[Recipe]:
+    """Decrement ``title``'s score (scoped to ``user_id`` when given)."""
 
-    stmt = select(Recipe).where(Recipe.title == title)
+    stmt = _scope(
+        select(Recipe).where(Recipe.title == title), Recipe.user_id, user_id
+    )
     recipe = session.scalars(stmt).first()
     if recipe is None:
         return None

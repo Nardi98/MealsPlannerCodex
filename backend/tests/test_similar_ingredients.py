@@ -7,13 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import crud
 from main import app
-from database import Base, engine
 from models import Ingredient, UnitEnum
 
-
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
 
 def test_find_similar_matches_plural(db_session) -> None:
@@ -41,9 +36,8 @@ def test_find_similar_respects_exclude_id(db_session) -> None:
     assert tomato.id not in [m.id for m in matches]
 
 
-def test_similar_endpoint() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_similar_endpoint(api_client) -> None:
+    client = api_client
     client.post("/ingredients", json={"name": "Tomato", "unit": "g"})
     res = client.get("/ingredients/similar", params={"name": "Tomatoes"})
     assert res.status_code == 200

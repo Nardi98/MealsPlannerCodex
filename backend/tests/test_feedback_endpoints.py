@@ -1,5 +1,6 @@
 from datetime import date
 
+import auth_users
 from fastapi.testclient import TestClient
 from main import app, get_db
 import crud
@@ -14,11 +15,19 @@ def override_get_db(session):
     return _override
 
 
+def _login(session):
+    """Create a user, wire it as the current user, and return it."""
+    user = crud.create_user(session, email="feedback@test.local", hashed_password="x")
+    app.dependency_overrides[auth_users.get_current_user] = lambda: user
+    return user
+
+
 def test_feedback_endpoints_return_unique_replacement(db_session):
     app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
-    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
+    uid = _login(db_session).id
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
+    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0, user_id=uid)
     crud.set_meal_plan(
         db_session,
         {
@@ -51,10 +60,11 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
 
 def test_reject_replacement_limited_to_main_courses(db_session):
     app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
+    uid = _login(db_session).id
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
     crud.create_recipe(
-        db_session, title="C", servings_default=1, course="dessert", score=0
+        db_session, title="C", servings_default=1, course="dessert", score=0, user_id=uid
     )
     crud.set_meal_plan(
         db_session,

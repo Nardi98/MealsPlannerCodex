@@ -29,8 +29,11 @@ models.Base.metadata.create_all(bind=engine)
 
 # Seed the curated system tags (with repetition-penalty flags) so tagging a
 # recipe with a known format tag transparently reuses the penalized system tag.
+# Tags are now per-user, so seed them for every existing account (new accounts
+# get their own set on registration — see Step 3c).
 with SessionLocal() as _session:
-    seed_system_tags(_session)
+    for _user in _session.execute(select(models.User)).scalars():
+        seed_system_tags(_session, _user.id)
 
 app = FastAPI()
 
@@ -103,31 +106,44 @@ def read_me(
 
 
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
-def read_recipes(db: Session = Depends(get_db)) -> List[schemas.RecipeOut]:
-    stmt = select(models.Recipe).options(
-        selectinload(models.Recipe.tags),
-        selectinload(models.Recipe.ingredients).selectinload(
-            models.RecipeIngredient.ingredient
-        ),
+def read_recipes(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> List[schemas.RecipeOut]:
+    stmt = (
+        select(models.Recipe)
+        .where(models.Recipe.user_id == current_user.id)
+        .options(
+            selectinload(models.Recipe.tags),
+            selectinload(models.Recipe.ingredients).selectinload(
+                models.RecipeIngredient.ingredient
+            ),
+        )
     )
     return db.execute(stmt).scalars().all()
 
 
 @app.get("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
-def read_recipe(recipe_id: int, db: Session = Depends(get_db)) -> schemas.RecipeOut:
-    recipe = crud.get_recipe(db, recipe_id)
+def read_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> schemas.RecipeOut:
+    recipe = crud.get_recipe(db, recipe_id, current_user.id)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
 
 
-def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
-    tags = [crud.get_or_create_tag(db, name) for name in payload.tags]
+def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> dict:
+    tags = [crud.get_or_create_tag(db, name, user_id) for name in payload.tags]
     ingredients: List[models.RecipeIngredient] = []
     for ing in payload.ingredients:
         if ing.id is None and not ing.name:
             continue
-        ingredient_obj = crud.get_or_create_ingredient(db, ing.id, ing.name, ing.unit)
+        ingredient_obj = crud.get_or_create_ingredient(
+            db, ing.id, ing.name, ing.unit, user_id
+        )
         ingredient_obj.season_months = ing.season_months or list(range(1, 13))
         ingredients.append(
             models.RecipeIngredient(
@@ -154,9 +170,13 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session) -> dict:
     status_code=201,
     dependencies=_AUTH,
 )
-def create_recipe(payload: schemas.RecipeIn, db: Session = Depends(get_db)) -> schemas.RecipeOut:
-    data = _payload_to_data(payload, db)
-    return crud.create_recipe(db, **data)
+def create_recipe(
+    payload: schemas.RecipeIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> schemas.RecipeOut:
+    data = _payload_to_data(payload, db, current_user.id)
+    return crud.create_recipe(db, user_id=current_user.id, **data)
 
 
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -192,10 +212,13 @@ def serve_recipe_image(key: str) -> Response:
     dependencies=_AUTH,
 )
 def update_recipe(
-    recipe_id: int, payload: schemas.RecipeIn, db: Session = Depends(get_db)
+    recipe_id: int,
+    payload: schemas.RecipeIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> schemas.RecipeOut:
-    data = _payload_to_data(payload, db)
-    recipe = crud.update_recipe(db, recipe_id, **data)
+    data = _payload_to_data(payload, db, current_user.id)
+    recipe = crud.update_recipe(db, recipe_id, current_user.id, **data)
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
@@ -206,16 +229,24 @@ def update_recipe(
     status_code=204,
     dependencies=_AUTH,
 )
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db)) -> Response:
-    deleted = crud.delete_recipe(db, recipe_id)
+def delete_recipe(
+    recipe_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> Response:
+    deleted = crud.delete_recipe(db, recipe_id, current_user.id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return Response(status_code=204)
 
 
 @app.get("/tags", response_model=List[schemas.TagOut])
-def read_tags(db: Session = Depends(get_db)) -> List[schemas.TagOut]:
-    return db.execute(select(models.Tag)).scalars().all()
+def read_tags(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
+) -> List[schemas.TagOut]:
+    stmt = select(models.Tag).where(models.Tag.user_id == current_user.id)
+    return db.execute(stmt).scalars().all()
 
 
 def _ingredient_recipe_count(db: Session, ingredient_id: int) -> int:
@@ -228,13 +259,16 @@ def _ingredient_recipe_count(db: Session, ingredient_id: int) -> int:
 
 @app.get("/ingredients", response_model=List[schemas.IngredientSummary])
 def search_ingredients(
-    search: str = "", db: Session = Depends(get_db)
+    search: str = "",
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.IngredientSummary]:
     stmt = (
         select(
             models.Ingredient,
             func.count(models.RecipeIngredient.recipe_id).label("recipe_count"),
         )
+        .where(models.Ingredient.user_id == current_user.id)
         .outerjoin(models.Ingredient.recipes)
         .group_by(models.Ingredient.id)
         .order_by(models.Ingredient.name)
@@ -263,8 +297,11 @@ def similar_ingredients(
     name: str,
     exclude_id: int | None = None,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.IngredientSummary]:
-    matches = crud.find_similar_ingredients(db, name, exclude_id=exclude_id)
+    matches = crud.find_similar_ingredients(
+        db, name, exclude_id=exclude_id, user_id=current_user.id
+    )
     return [
         schemas.IngredientSummary(
             id=ing.id,
@@ -283,9 +320,13 @@ def similar_ingredients(
     response_model=List[schemas.DuplicatePair],
 )
 def duplicate_ingredients(
-    threshold: float = 0.8, db: Session = Depends(get_db)
+    threshold: float = 0.8,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.DuplicatePair]:
-    pairs = crud.find_duplicate_pairs(db, threshold=threshold)
+    pairs = crud.find_duplicate_pairs(
+        db, threshold=threshold, user_id=current_user.id
+    )
 
     def summary(ing: models.Ingredient) -> schemas.IngredientSummary:
         return schemas.IngredientSummary(
@@ -309,7 +350,9 @@ def duplicate_ingredients(
     dependencies=_AUTH,
 )
 def merge_ingredients_endpoint(
-    payload: schemas.IngredientMergeRequest, db: Session = Depends(get_db)
+    payload: schemas.IngredientMergeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> schemas.IngredientSummary:
     try:
         merged = crud.merge_ingredients(
@@ -318,6 +361,7 @@ def merge_ingredients_endpoint(
             payload.target_id,
             surviving_unit=payload.surviving_unit,
             conversion_factor=payload.conversion_factor,
+            user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -340,10 +384,17 @@ def merge_ingredients_endpoint(
     dependencies=_AUTH,
 )
 def create_ingredient(
-    payload: schemas.IngredientCreate, db: Session = Depends(get_db)
+    payload: schemas.IngredientCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> schemas.IngredientSummary:
     ingredient = crud.create_ingredient(
-        db, payload.name, payload.unit, payload.season_months, payload.categories
+        db,
+        payload.name,
+        payload.unit,
+        payload.season_months,
+        payload.categories,
+        user_id=current_user.id,
     )
     return schemas.IngredientSummary(
         id=ingredient.id,
@@ -364,8 +415,9 @@ def update_ingredient(
     ingredient_id: int,
     payload: schemas.IngredientUpdate,
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> schemas.IngredientSummary:
-    ingredient = db.get(models.Ingredient, ingredient_id)
+    ingredient = crud.get_ingredient(db, ingredient_id, current_user.id)
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     ingredient.name = payload.name
@@ -388,12 +440,14 @@ def update_ingredient(
     response_model=List[schemas.RecipeSummary],
 )
 def ingredient_recipes(
-    ingredient_id: int, db: Session = Depends(get_db)
+    ingredient_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.RecipeSummary]:
-    ingredient = crud.get_ingredient(db, ingredient_id)
+    ingredient = crud.get_ingredient(db, ingredient_id, current_user.id)
     if ingredient is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
-    recipes = crud.get_recipes_by_ingredient(db, ingredient_id)
+    recipes = crud.get_recipes_by_ingredient(db, ingredient_id, current_user.id)
     return [schemas.RecipeSummary(id=r.id, title=r.title) for r in recipes]
 
 
@@ -403,9 +457,14 @@ def ingredient_recipes(
     dependencies=_AUTH,
 )
 def delete_ingredient(
-    ingredient_id: int, force: bool = False, db: Session = Depends(get_db)
+    ingredient_id: int,
+    force: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> Response:
-    deleted = crud.delete_ingredient(db, ingredient_id, force=force)
+    deleted = crud.delete_ingredient(
+        db, ingredient_id, force=force, user_id=current_user.id
+    )
     if deleted is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
     if deleted is False:
@@ -563,22 +622,28 @@ def delete_side_dish(
 
 @app.post("/feedback/accept", dependencies=_AUTH)
 def feedback_accept(
-    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+    payload: schemas.FeedbackIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> Dict[str, str]:
     """Record user acceptance of a recipe."""
 
-    if crud.accept_recipe(db, payload.title, payload.consumed_date) is None:
+    if crud.accept_recipe(
+        db, payload.title, payload.consumed_date, current_user.id
+    ) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"status": "ok"}
 
 
 @app.post("/feedback/reject", dependencies=_AUTH)
 def feedback_reject(
-    payload: schemas.FeedbackIn, db: Session = Depends(get_db)
+    payload: schemas.FeedbackIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> Dict[str, Optional[str]]:
     """Record user rejection of a recipe and suggest a replacement."""
 
-    if crud.reject_recipe(db, payload.title) is None:
+    if crud.reject_recipe(db, payload.title, current_user.id) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     existing = set(crud.list_planned_titles(db))
     existing.add(payload.title)

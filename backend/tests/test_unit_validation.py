@@ -5,17 +5,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from database import Base, engine
 
 
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
-
-def test_invalid_unit_rejected() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_invalid_unit_rejected(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Salad",
         "servings_default": 1,

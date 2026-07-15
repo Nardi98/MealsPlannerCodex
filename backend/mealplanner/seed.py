@@ -16,35 +16,13 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from models import Ingredient, Recipe, Tag, RecipeIngredient, UnitEnum
+import crud
+from models import Ingredient, Recipe, RecipeIngredient, UnitEnum
 
 
 # ---------------------------------------------------------------------------
 # Seeding helpers
 # ---------------------------------------------------------------------------
-
-def _get_or_create_tag(session: Session, name: str) -> Tag:
-    """Return a ``Tag`` with *name*, creating it if necessary.
-
-    Parameters
-    ----------
-    session:
-        Active SQLAlchemy session.
-    name:
-        Name of the tag to fetch or create.
-    """
-
-    # ``autoflush`` is disabled for the project's sessions which means pending
-    # objects won't be written to the database before queries are issued.  We
-    # explicitly flush so that a tag added earlier in the same transaction is
-    # visible to the ``SELECT`` below.
-    session.flush()
-    tag = session.execute(select(Tag).where(Tag.name == name)).scalar_one_or_none()
-    if tag is None:
-        tag = Tag(name=name)
-        session.add(tag)
-    return tag
-
 
 def _create_recipe(
     session: Session,
@@ -86,7 +64,7 @@ def _create_recipe(
         )
 
     for tag_name in tags:
-        recipe.tags.append(_get_or_create_tag(session, tag_name))
+        recipe.tags.append(crud.get_or_create_tag(session, tag_name))
 
 
 # Curated system tags. Format tags carry the repetition penalty; attribute
@@ -100,19 +78,20 @@ _NEUTRAL_SYSTEM_TAGS = [
 ]
 
 
-def seed_system_tags(session: Session) -> None:
-    """Idempotently upsert the curated system tags.
+def seed_system_tags(session: Session, user_id: int | None = None) -> None:
+    """Idempotently upsert the curated system tags for ``user_id``.
 
     Marks each tag ``is_system=True`` and sets ``penalize_repetition`` according
-    to whether it is a format tag. Pre-existing plain tags of the same name are
-    upgraded in place rather than duplicated. A ``commit`` is issued at the end.
+    to whether it is a format tag. Pre-existing plain tags of the same name (and
+    owner) are upgraded in place rather than duplicated. A ``commit`` is issued
+    at the end.
     """
 
     for name, penalize in (
         [(n, True) for n in _PENALIZED_SYSTEM_TAGS]
         + [(n, False) for n in _NEUTRAL_SYSTEM_TAGS]
     ):
-        tag = _get_or_create_tag(session, name)
+        tag = crud.get_or_create_tag(session, name, user_id)
         tag.is_system = True
         tag.penalize_repetition = penalize
 

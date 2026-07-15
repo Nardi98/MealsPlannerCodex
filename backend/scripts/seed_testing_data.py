@@ -292,25 +292,35 @@ def reset_database() -> None:
 def populate(session) -> None:
     """Insert the full testing dataset into an empty database."""
 
-    session.add(
-        User(
-            email=DEMO_USER_EMAIL,
-            hashed_password=hash_password(DEMO_USER_PASSWORD),
-            display_name="Demo User",
-            auth_provider="local",
-        )
+    demo_user = User(
+        email=DEMO_USER_EMAIL,
+        hashed_password=hash_password(DEMO_USER_PASSWORD),
+        display_name="Demo User",
+        auth_provider="local",
     )
+    session.add(demo_user)
+    # Flush so ``demo_user.id`` is available to stamp ownership on every row.
+    session.flush()
 
     tags: dict[str, Tag] = {}
     for name, penalize, is_system in TAGS:
-        tag = Tag(name=name, penalize_repetition=penalize, is_system=is_system)
+        tag = Tag(
+            name=name,
+            penalize_repetition=penalize,
+            is_system=is_system,
+            user_id=demo_user.id,
+        )
         session.add(tag)
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
     for name, unit, months, categories in INGREDIENTS:
         ing = Ingredient(
-            name=name, unit=unit, season_months=months, categories=categories
+            name=name,
+            unit=unit,
+            season_months=months,
+            categories=categories,
+            user_id=demo_user.id,
         )
         session.add(ing)
         ingredients[name] = ing
@@ -322,6 +332,7 @@ def populate(session) -> None:
             procedure=f"Prepare {title.lower()}.",
             course=course,
             bulk_prep=bulk,
+            user_id=demo_user.id,
         )
         for ing_name, qty, unit in ing_list:
             recipe.ingredients.append(

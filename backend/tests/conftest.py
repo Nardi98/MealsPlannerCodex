@@ -45,3 +45,37 @@ def db_session(engine):
         session.close()
         trans.rollback()
         connection.close()
+
+
+@pytest.fixture
+def api_client():
+    """A ``TestClient`` on a freshly reset real-engine DB with one logged-in user.
+
+    Route tests that exercise the now per-user recipe/ingredient/tag/feedback
+    endpoints need an authenticated caller whose owned rows live in the same DB
+    the routes query. This resets the schema, inserts a user, and overrides the
+    ``get_current_user`` dependency to return it.
+    """
+    import auth_users
+    import crud
+    from main import app
+    from database import SessionLocal, engine as app_engine
+
+    Base.metadata.drop_all(bind=app_engine)
+    Base.metadata.create_all(bind=app_engine)
+
+    session = SessionLocal()
+    try:
+        user = crud.create_user(
+            session, email="routes@test.local", hashed_password="x"
+        )
+    finally:
+        session.close()
+
+    app.dependency_overrides[auth_users.get_current_user] = lambda: user
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        client.current_user = user
+        yield client
+    app.dependency_overrides.clear()

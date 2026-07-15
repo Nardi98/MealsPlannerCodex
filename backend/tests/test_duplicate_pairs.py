@@ -7,13 +7,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import crud
 from main import app
-from database import Base, engine
 from models import Ingredient, UnitEnum
 
-
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
 
 def test_find_duplicate_pairs_returns_each_pair_once(db_session) -> None:
@@ -34,9 +29,8 @@ def test_find_duplicate_pairs_returns_each_pair_once(db_session) -> None:
     assert scores == sorted(scores, reverse=True)
 
 
-def test_duplicates_endpoint_shape() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_duplicates_endpoint_shape(api_client) -> None:
+    client = api_client
     client.post("/ingredients", json={"name": "Tomato", "unit": "g"})
     client.post("/ingredients", json={"name": "Tomatoes", "unit": "piece"})
     res = client.get("/ingredients/duplicates")
