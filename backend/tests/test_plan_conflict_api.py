@@ -1,30 +1,16 @@
-import os
 from datetime import date
-from fastapi.testclient import TestClient
 
 import crud
-from main import app, get_db
 from models import MealPlan, Meal
 
 
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-    return _override
-
-
-def test_post_meal_plan_conflict_requires_force(db_session):
-    r1 = crud.create_recipe(db_session, title="A", servings_default=1, course="main")
-    r2 = crud.create_recipe(db_session, title="B", servings_default=1, course="main")
+def test_post_meal_plan_conflict_requires_force(db_session, user, auth_client):
+    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
+    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", servings_default=1, course="main")
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     payload = {
         "plan_date": plan_date.isoformat(),
@@ -49,7 +35,5 @@ def test_post_meal_plan_conflict_requires_force(db_session):
         ]
     }
     assert db_session.query(MealPlan).count() == 1
-    meal = db_session.get(Meal, (plan_date, 1))
+    meal = db_session.get(Meal, (user.id, plan_date, 1))
     assert meal is not None and meal.recipe_id == r2.id
-
-    app.dependency_overrides.clear()

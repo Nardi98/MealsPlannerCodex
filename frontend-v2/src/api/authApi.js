@@ -11,5 +11,10 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  google: ({ credential }) =>
+    request('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    }),
   me: () => request('/auth/me'),
 };

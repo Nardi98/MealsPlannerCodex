@@ -36,15 +36,6 @@ function setAuthToken(token) {
   }
 }
 
-function getApiKey() {
-  return (
-    (typeof import.meta !== 'undefined' &&
-      import.meta.env &&
-      import.meta.env.VITE_API_KEY) ||
-    ''
-  );
-}
-
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
   // Let the browser set the multipart boundary itself for FormData uploads;
@@ -52,8 +43,6 @@ async function request(path, options = {}) {
   const isFormData =
     typeof FormData !== 'undefined' && options.body instanceof FormData;
   const defaultHeaders = isFormData ? {} : { 'Content-Type': 'application/json' };
-  const apiKey = getApiKey();
-  if (apiKey) defaultHeaders['X-API-Key'] = apiKey;
   const token = getToken();
   if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
   const config = { ...options, headers: { ...defaultHeaders, ...(options.headers || {}) } };

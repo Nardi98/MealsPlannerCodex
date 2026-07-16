@@ -38,6 +38,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    """The ID token issued by Google Identity Services on the client."""
+
+    credential: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

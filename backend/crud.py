@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal, Base
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
+from scoping import owned as _owned, scope as _scope
 from models import (
     CATEGORIES,
     Ingredient,
@@ -50,6 +51,7 @@ __all__ = [
     "delete_meal_plans",
     "remove_leftovers_for_source",
     "get_plan_settings",
+    "set_plan_settings",
     "mark_meal_accepted",
     "add_meal_side",
     "replace_meal_side",
@@ -61,6 +63,7 @@ __all__ = [
     "import_data",
     "export_data",
     "clear_data",
+    "meal_item",
 ]
 
 
@@ -295,27 +298,6 @@ def merge_ingredients(
     return target
 
 
-def _owned(obj: Any, user_id: int | None) -> bool:
-    """Return whether ``obj`` may be accessed by ``user_id``.
-
-    When ``user_id`` is ``None`` no scoping is applied (used by lower-level
-    tests and the not-yet-scoped planner/import paths). Otherwise the object's
-    ``user_id`` must match, so cross-user access is denied.
-    """
-
-    return obj is not None and (user_id is None or obj.user_id == user_id)
-
-
-def _scope(stmt, column, user_id: int | None):
-    """Filter ``stmt`` to ``column == user_id`` unless ``user_id`` is ``None``.
-
-    The query-side counterpart of :func:`_owned`: ``None`` means "no scoping"
-    (lower-level tests and the not-yet-scoped planner/import paths).
-    """
-
-    return stmt if user_id is None else stmt.where(column == user_id)
-
-
 def get_recipe(
     session: Session, recipe_id: int, user_id: int | None = None
 ) -> Optional[Recipe]:
@@ -517,7 +499,7 @@ def delete_ingredient(
 
 
 def set_meal_plan(
-    session: Session, plan: Dict[str, Iterable[Any]]
+    session: Session, plan: Dict[str, Iterable[Any]], user_id: int
 ) -> Dict[str, MealPlan]:
     """Create or replace meal plans for each day in ``plan``.
 
@@ -531,6 +513,10 @@ def set_meal_plan(
         object with ``main_id`` and optional ``side_ids`` attribute.
         The order of meals within each iterable determines the ``meal_number``
         for the created :class:`Meal` rows.
+    user_id:
+        Owner of the plan. Stamped on the :class:`MealPlan` (and cascaded to its
+        meals / sides) and used to scope the existing-plan lookup so days are
+        replaced per user.
     """
 
     plans: Dict[str, MealPlan] = {}
@@ -547,11 +533,15 @@ def set_meal_plan(
 
     for day, meals in sorted(plan.items(), key=_day_key):
         plan_date = day if isinstance(day, date) else date.fromisoformat(day)
-        stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
+        stmt = _scope(
+            select(MealPlan).where(MealPlan.plan_date == plan_date),
+            MealPlan.user_id,
+            user_id,
+        )
         meal_plan = session.execute(stmt).scalar_one_or_none()
         old_recipe_by_number: Dict[int, Optional[int]] = {}
         if meal_plan is None:
-            meal_plan = MealPlan(plan_date=plan_date)
+            meal_plan = MealPlan(plan_date=plan_date, user_id=user_id)
             session.add(meal_plan)
             session.flush()
         else:
@@ -600,9 +590,9 @@ def set_meal_plan(
 
         plans[day] = meal_plan
 
-    _assign_leftover_sources(entries, session=session)
+    _assign_leftover_sources(entries, session=session, user_id=user_id)
     for source_date, source_number in replaced_sources:
-        remove_leftovers_for_source(session, source_date, source_number)
+        remove_leftovers_for_source(session, source_date, source_number, user_id)
 
     session.commit()
     for meal_plan in plans.values():
@@ -611,17 +601,22 @@ def set_meal_plan(
 
 
 def remove_leftovers_for_source(
-    session: Session, source_date: date, source_meal: int
+    session: Session,
+    source_date: date,
+    source_meal: int,
+    user_id: int | None = None,
 ) -> int:
     """Delete every leftover meal linked to the given source meal.
 
-    Returns the number of leftover meals removed.
+    Returns the number of leftover meals removed. Scoped to ``user_id`` when
+    given so a source only clears its own account's leftovers.
     """
 
     stmt = select(Meal).where(
         Meal.leftover_source_date == source_date,
         Meal.leftover_source_meal == source_meal,
     )
+    stmt = _scope(stmt, Meal.user_id, user_id)
     leftovers = session.execute(stmt).scalars().all()
     for meal in leftovers:
         session.delete(meal)
@@ -630,11 +625,14 @@ def remove_leftovers_for_source(
 
 
 def _db_source_for(
-    session: Session, recipe_id: int, before_date: date
+    session: Session,
+    recipe_id: int,
+    before_date: date,
+    user_id: int | None = None,
 ) -> Optional[tuple]:
     """Most recent non-leftover meal of ``recipe_id`` planned before a date."""
 
-    row = session.execute(
+    stmt = (
         select(Meal.plan_date, Meal.meal_number)
         .where(
             Meal.recipe_id == recipe_id,
@@ -643,12 +641,15 @@ def _db_source_for(
         )
         .order_by(Meal.plan_date.desc(), Meal.meal_number.desc())
         .limit(1)
-    ).first()
+    )
+    row = session.execute(_scope(stmt, Meal.user_id, user_id)).first()
     return (row[0], row[1]) if row else None
 
 
 def _assign_leftover_sources(
-    entries: Iterable[tuple], session: Optional[Session] = None
+    entries: Iterable[tuple],
+    session: Optional[Session] = None,
+    user_id: int | None = None,
 ) -> None:
     """Link leftover meals to the source meal that produced them.
 
@@ -668,7 +669,7 @@ def _assign_leftover_sources(
         if is_leftover:
             source = last_source.get(recipe_id)
             if source is None and session is not None:
-                source = _db_source_for(session, recipe_id, plan_date)
+                source = _db_source_for(session, recipe_id, plan_date, user_id)
             if source is not None:
                 meal.leftover_source_date, meal.leftover_source_meal = source
         else:
@@ -676,13 +677,20 @@ def _assign_leftover_sources(
 
 
 def delete_meal_plans(
-    session: Session, start_date: date, end_date: date
+    session: Session,
+    start_date: date,
+    end_date: date,
+    user_id: int | None = None,
 ) -> int:
-    """Delete meal plans within ``start_date`` and ``end_date`` inclusive."""
+    """Delete meal plans within ``start_date`` and ``end_date`` inclusive.
+
+    Scoped to ``user_id`` when given so a caller only clears its own plans.
+    """
 
     stmt = select(MealPlan).where(
         MealPlan.plan_date.between(start_date, end_date)
     )
+    stmt = _scope(stmt, MealPlan.user_id, user_id)
     meal_plans = session.execute(stmt).scalars().all()
     deleted = len(meal_plans)
 
@@ -694,96 +702,127 @@ def delete_meal_plans(
     return deleted
 
 
+def meal_item(meal: Meal) -> Dict[str, Any]:
+    """Serialize a meal into the shape the plan/meal routes return.
+
+    Shared with ``main.py`` so the single-meal routes and :func:`get_plan`
+    cannot drift apart on the wire format.
+    """
+
+    return {
+        "recipe": meal.recipe.title,
+        "side_recipes": [
+            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
+        ],
+        "accepted": meal.accepted,
+        "leftover": meal.leftover,
+    }
+
+
 def get_plan(
     session: Session,
     plan_date: Optional[date] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    user_id: int | None = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch a plan from the database.
 
     The database is the single source of truth. When ``start_date`` and
     ``end_date`` are provided, all plans within the inclusive date range are
     returned; otherwise the plan for ``plan_date`` (defaulting to today) is
-    returned.
+    returned — an absent single day yields ``{}`` rather than an empty list.
+    Scoped to ``user_id`` when given.
     """
 
-    if start_date is not None and end_date is not None:
-        stmt = (
-            select(MealPlan)
-            .where(MealPlan.plan_date.between(start_date, end_date))
-            .order_by(MealPlan.plan_date)
-        )
-        meal_plans = session.execute(stmt).scalars().all()
-        result: Dict[str, List[Dict[str, Any]]] = {}
-        for meal_plan in meal_plans:
-            key = meal_plan.plan_date.isoformat()
-            items: List[Dict[str, Any]] = []
-            for meal in meal_plan.meals:
-                if meal.recipe is None:
-                    continue
-                items.append(
-                    {
-                        "recipe": meal.recipe.title,
-                        "side_recipes": [
-                            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-                        ],
-                        "accepted": meal.accepted,
-                        "leftover": meal.leftover,
-                    }
-                )
-            result[key] = items
-        return result
+    ranged = start_date is not None and end_date is not None
+    if ranged:
+        where = MealPlan.plan_date.between(start_date, end_date)
+    else:
+        where = MealPlan.plan_date == (plan_date or date.today())
 
-    if plan_date is None:
-        plan_date = date.today()
-
-    stmt = select(MealPlan).where(MealPlan.plan_date == plan_date)
-    meal_plan = session.execute(stmt).scalar_one_or_none()
-    if meal_plan is None:
-        return {}
-
-    key = meal_plan.plan_date.isoformat()
-    result: Dict[str, List[Dict[str, Any]]] = {key: []}
-    for meal in meal_plan.meals:
-        if meal.recipe is None:
-            continue
-        result[key].append(
-            {
-                "recipe": meal.recipe.title,
-                "side_recipes": [
-                    ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-                ],
-                "accepted": meal.accepted,
-                "leftover": meal.leftover,
-            }
-        )
-    return result
+    stmt = _scope(
+        select(MealPlan).where(where).order_by(MealPlan.plan_date),
+        MealPlan.user_id,
+        user_id,
+    )
+    return {
+        meal_plan.plan_date.isoformat(): [
+            meal_item(meal) for meal in meal_plan.meals if meal.recipe is not None
+        ]
+        for meal_plan in session.execute(stmt).scalars().all()
+    }
 
 
 def get_plan_settings(
     session: Session | None = None, user_id: int | None = None
 ) -> Dict[str, Any]:
-    """Return plan settings.
+    """Return plan settings for ``user_id`` merged over the shared defaults.
 
-    For now this returns a copy of :data:`DEFAULT_PLAN_SETTINGS`. The
-    ``session`` and ``user_id`` parameters are accepted so that a future
-    per-user settings feature can layer stored overrides on top of the
-    defaults without changing this call signature.
+    A copy of :data:`DEFAULT_PLAN_SETTINGS` is returned, with the user's stored
+    overrides (``User.plan_settings``) layered on top. When ``session`` or
+    ``user_id`` is ``None`` (lower-level callers) the plain defaults are
+    returned.
     """
 
-    return dict(DEFAULT_PLAN_SETTINGS)
+    settings = dict(DEFAULT_PLAN_SETTINGS)
+    if session is not None and user_id is not None:
+        user = session.get(User, user_id)
+        if user is not None:
+            settings.update(user.plan_settings or {})
+    return settings
+
+
+def set_plan_settings(
+    session: Session, user_id: int, overrides: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Persist ``overrides`` as ``user_id``'s plan settings and return the merge.
+
+    Only keys present in :data:`DEFAULT_PLAN_SETTINGS` are stored, so callers
+    cannot inject arbitrary settings. Returns the same shape as
+    :func:`get_plan_settings`.
+    """
+
+    user = session.get(User, user_id)
+    if user is None:
+        raise ValueError("Unknown user")
+    user.plan_settings = {
+        key: value
+        for key, value in overrides.items()
+        if key in DEFAULT_PLAN_SETTINGS
+    }
+    session.commit()
+    return get_plan_settings(session, user_id)
+
+
+def _get_meal(
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    user_id: int | None = None,
+) -> Optional[Meal]:
+    """Return a single meal by date/number, scoped to ``user_id`` when given."""
+
+    stmt = _scope(
+        select(Meal).where(
+            Meal.plan_date == plan_date, Meal.meal_number == meal_number
+        ),
+        Meal.user_id,
+        user_id,
+    )
+    return session.execute(stmt).scalar_one_or_none()
 
 
 def mark_meal_accepted(
-    session: Session, plan_date: date, meal_number: int, accepted: bool
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    accepted: bool,
+    user_id: int | None = None,
 ) -> Optional[Meal]:
     """Update the acceptance status of a specific meal."""
 
-    stmt = select(Meal).where(
-        Meal.plan_date == plan_date, Meal.meal_number == meal_number
-    )
-    meal = session.execute(stmt).scalar_one_or_none()
+    meal = _get_meal(session, plan_date, meal_number, user_id)
     if meal is None:
         return None
     meal.accepted = accepted
@@ -793,14 +832,15 @@ def mark_meal_accepted(
 
 
 def add_meal_side(
-    session: Session, plan_date: date, meal_number: int, side_id: int
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    side_id: int,
+    user_id: int | None = None,
 ) -> Optional[Meal]:
     """Append a side dish to an existing meal."""
 
-    stmt = select(Meal).where(
-        Meal.plan_date == plan_date, Meal.meal_number == meal_number
-    )
-    meal = session.execute(stmt).scalar_one_or_none()
+    meal = _get_meal(session, plan_date, meal_number, user_id)
     if meal is None:
         return None
 
@@ -812,14 +852,16 @@ def add_meal_side(
 
 
 def replace_meal_side(
-    session: Session, plan_date: date, meal_number: int, index: int, side_id: int
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    index: int,
+    side_id: int,
+    user_id: int | None = None,
 ) -> Optional[Meal]:
     """Replace a side dish at ``index`` for a meal."""
 
-    stmt = select(Meal).where(
-        Meal.plan_date == plan_date, Meal.meal_number == meal_number
-    )
-    meal = session.execute(stmt).scalar_one_or_none()
+    meal = _get_meal(session, plan_date, meal_number, user_id)
     if meal is None or index >= len(meal.sides):
         return None
 
@@ -836,14 +878,15 @@ def replace_meal_side(
 
 
 def remove_meal_side(
-    session: Session, plan_date: date, meal_number: int, index: int
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    index: int,
+    user_id: int | None = None,
 ) -> Optional[Meal]:
     """Remove a side dish at ``index`` from a meal."""
 
-    stmt = select(Meal).where(
-        Meal.plan_date == plan_date, Meal.meal_number == meal_number
-    )
-    meal = session.execute(stmt).scalar_one_or_none()
+    meal = _get_meal(session, plan_date, meal_number, user_id)
     if meal is None or index >= len(meal.sides):
         return None
 
@@ -899,7 +942,11 @@ def reject_recipe(
     return recipe
 
 
-def list_recipe_titles(session: Session, courses: Sequence[str] | None = None) -> List[str]:
+def list_recipe_titles(
+    session: Session,
+    courses: Sequence[str] | None = None,
+    user_id: int | None = None,
+) -> List[str]:
     """Return recipe titles from the database.
 
     Parameters
@@ -909,19 +956,23 @@ def list_recipe_titles(session: Session, courses: Sequence[str] | None = None) -
     courses:
         Optional sequence of course names. If provided, only recipes whose
         ``course`` attribute is one of these values will be returned.
+    user_id:
+        When given, only titles owned by that user are returned.
     """
 
     stmt = select(Recipe.title)
     if courses:
         stmt = stmt.where(Recipe.course.in_(courses))
+    stmt = _scope(stmt, Recipe.user_id, user_id)
     return session.scalars(stmt).all()
 
 
-def list_planned_titles(session: Session) -> set[str]:
-    """Return the distinct set of main-recipe titles across all persisted plans.
+def list_planned_titles(session: Session, user_id: int | None = None) -> set[str]:
+    """Return the distinct set of main-recipe titles across persisted plans.
 
     This replaces the former in-memory ``_PLAN_CACHE`` lookup used when
     suggesting rejection replacements: the DB is the single source of truth.
+    Scoped to ``user_id`` when given.
     """
 
     stmt = (
@@ -929,21 +980,42 @@ def list_planned_titles(session: Session) -> set[str]:
         .join(Meal, Meal.recipe_id == Recipe.id)
         .distinct()
     )
+    stmt = _scope(stmt, Recipe.user_id, user_id)
     return set(session.scalars(stmt).all())
 
 
-def clear_data(session: Session) -> None:
-    """Remove all application data from the database."""
+def clear_data(session: Session, user_id: int | None) -> None:
+    """Remove application data from the database.
 
-    session.execute(recipe_tag_table.delete())
-    session.query(Meal).delete()
-    session.query(MealPlan).delete()
-    session.query(RecipeIngredient).delete()
-    session.query(Ingredient).delete()
-    session.query(Tag).delete()
-    session.query(Recipe).delete()
+    Scoped to ``user_id`` so a caller only wipes its own recipes, ingredients,
+    tags, and plans; system tags are cleared too so a re-import / reset starts
+    empty. Passing ``None`` removes *every* user's rows — it has no default
+    precisely because forgetting the argument must not silently do that.
+    """
+
+    # Association / child rows are keyed by recipe rather than by owner, so they
+    # are matched through a subquery over the owned recipes (a correlated
+    # subquery, not a materialized id list, to keep it to one statement each).
+    owned_recipe_ids = _scope(select(Recipe.id), Recipe.user_id, user_id)
+    session.execute(
+        recipe_tag_table.delete().where(
+            recipe_tag_table.c.recipe_id.in_(owned_recipe_ids)
+        )
+    )
+    # ``synchronize_session=False`` skips the SELECT each DELETE would otherwise
+    # issue just to evict rows from the identity map: the ``commit`` below
+    # expires every object in the session anyway (``expire_on_commit`` is on),
+    # so nothing can be read back stale.
+    session.query(RecipeIngredient).filter(
+        RecipeIngredient.recipe_id.in_(owned_recipe_ids)
+    ).delete(synchronize_session=False)
+
+    # Meals and their sides cascade from MealPlan via the composite FK.
+    for model in (MealPlan, Ingredient, Tag, Recipe):
+        _scope(session.query(model), model.user_id, user_id).delete(
+            synchronize_session=False
+        )
     session.commit()
-    session.expunge_all()
 
 
 def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None) -> Recipe:
@@ -969,7 +1041,11 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
 
 
 def import_data(
-    file_obj: Any, session: Optional[Session] = None, mode: str = "overwrite"
+    file_obj: Any,
+    session: Optional[Session] = None,
+    mode: str = "overwrite",
+    *,
+    user_id: int | None,
 ) -> None:
     """Import data from the given uploaded file object.
 
@@ -984,6 +1060,11 @@ def import_data(
         Specifies how imported data should be handled. ``"overwrite"`` clears
         existing tables before import, while ``"merge"`` leaves existing data
         intact.
+    user_id:
+        Owner stamped on every imported recipe / ingredient / tag / plan. In
+        ``"overwrite"`` mode only that user's data is cleared first. Keyword-only
+        and without a default, so an unscoped import is always deliberate;
+        ``None`` cannot import meal plans (their ``user_id`` is not nullable).
     """
 
     close_session = False
@@ -1011,17 +1092,17 @@ def import_data(
 
     try:
         if mode == "overwrite":
-            clear_data(session)
+            clear_data(session, user_id)
 
         tag_map: Dict[int, Tag] = {}
         for tag_info in data.get("tags", []):
             tag_id = tag_info.get("id")
             if mode == "merge":
-                tag = get_or_create_tag(session, tag_info["name"])
+                tag = get_or_create_tag(session, tag_info["name"], user_id)
             else:
                 tag = session.get(Tag, tag_id) if tag_id is not None else None
                 if tag is None:
-                    tag = Tag(id=tag_id, name=tag_info["name"])
+                    tag = Tag(id=tag_id, name=tag_info["name"], user_id=user_id)
                     session.add(tag)
                 else:
                     tag.name = tag_info["name"]
@@ -1039,6 +1120,7 @@ def import_data(
                 and session.get(Recipe, rec_id) is None
             )
             recipe = _recipe_from_payload(rec_info, rec_id if keep_id else None)
+            recipe.user_id = user_id
             session.add(recipe)
             session.flush()
             if rec_id is not None:
@@ -1049,7 +1131,8 @@ def import_data(
                 if isinstance(months, str):
                     months = [int(m) for m in months.split(",") if m.strip()]
                 ingredient_obj = get_or_create_ingredient(
-                    session, ing_info.get("id"), ing_info.get("name")
+                    session, ing_info.get("id"), ing_info.get("name"),
+                    user_id=user_id,
                 )
                 if months is not None:
                     ingredient_obj.season_months = months
@@ -1071,9 +1154,9 @@ def import_data(
         imported_meals: List[tuple] = []
         for plan_info in data.get("meal_plans", []):
             pdate = date.fromisoformat(plan_info["plan_date"])
-            meal_plan = session.get(MealPlan, pdate)
+            meal_plan = session.get(MealPlan, (user_id, pdate))
             if meal_plan is None:
-                meal_plan = MealPlan(plan_date=pdate)
+                meal_plan = MealPlan(plan_date=pdate, user_id=user_id)
                 session.add(meal_plan)
             else:
                 meal_plan.meals.clear()
@@ -1094,7 +1177,7 @@ def import_data(
                      bool(meal_info.get("leftover", False)))
                 )
 
-        _assign_leftover_sources(imported_meals)
+        _assign_leftover_sources(imported_meals, user_id=user_id)
         session.commit()
     except Exception as exc:  # noqa: BLE001
         session.rollback()
@@ -1104,14 +1187,18 @@ def import_data(
             session.close()
 
 
-def export_data(session: Optional[Session] = None) -> str:
+def export_data(session: Optional[Session], user_id: int | None) -> str:
     """Export application data and return a serialized representation.
 
     Parameters
     ----------
     session:
-        Optional SQLAlchemy session. If omitted a new session is created using
+        SQLAlchemy session. If ``None`` a new session is created using
         :func:`~database.SessionLocal`.
+    user_id:
+        Only that user's recipes / tags / plans are exported. Has no default so
+        that exporting every user's data cannot happen by omission; pass ``None``
+        to do it deliberately.
     """
 
     close_session = False
@@ -1124,7 +1211,8 @@ def export_data(session: Optional[Session] = None) -> str:
 
     try:
         recipes_data = []
-        for recipe in session.execute(select(Recipe)).scalars().all():
+        recipe_stmt = _scope(select(Recipe), Recipe.user_id, user_id)
+        for recipe in session.execute(recipe_stmt).scalars().all():
             recipes_data.append(
                 {
                     "id": recipe.id,
@@ -1156,11 +1244,14 @@ def export_data(session: Optional[Session] = None) -> str:
 
         tags_data = [
             {"id": tag.id, "name": tag.name}
-            for tag in session.execute(select(Tag)).scalars().all()
+            for tag in session.execute(
+                _scope(select(Tag), Tag.user_id, user_id)
+            ).scalars().all()
         ]
 
         meal_plans_data = []
-        for plan in session.execute(select(MealPlan)).scalars().all():
+        plan_stmt = _scope(select(MealPlan), MealPlan.user_id, user_id)
+        for plan in session.execute(plan_stmt).scalars().all():
             meal_plans_data.append(
                 {
                     "plan_date": plan.plan_date.isoformat(),

@@ -13,6 +13,7 @@ from sqlalchemy import func, true
 from sqlalchemy.orm import Session, joinedload
 
 from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide, Tag
+from scoping import scope
 from .scoring import score_recipe, exploration_weight
 from .config import DEFAULT_PLAN_SETTINGS
 
@@ -72,63 +73,85 @@ def generate_plan(
     min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
+    user_id: int | None = None,
 ) -> Dict[str, List[str]] | List[Slot]:
     """Generate a meal plan.
 
     When ``return_slots`` is ``True`` a list of :class:`Slot` objects is
     returned instead of a mapping for callers that require detailed metadata.
+    When ``user_id`` is given every candidate query, history map, and penalized
+    tag lookup is scoped to that account so a plan only draws on its own data.
     """
 
     settings = {**DEFAULT_PLAN_SETTINGS, **(plan_settings or {})}
 
-    recipes = (
+    recipes = scope(
         session.query(Recipe)
         .options(
             joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
             joinedload(Recipe.tags),
         )
-        .filter(Recipe.course.in_(["main", "first-course"]))
-        .all()
-    )
+        .filter(Recipe.course.in_(["main", "first-course"])),
+        Recipe.user_id,
+        user_id,
+    ).all()
 
     last_planned: Dict[int, date] = dict(
-        session.query(Meal.recipe_id, func.max(Meal.plan_date))
-        .filter(Meal.leftover_source_date.is_(None))
-        .group_by(Meal.recipe_id)
+        scope(
+            session.query(Meal.recipe_id, func.max(Meal.plan_date))
+            .filter(Meal.leftover_source_date.is_(None))
+            .group_by(Meal.recipe_id),
+            Meal.user_id,
+            user_id,
+        )
     )
 
     # Last date each recipe was *proposed* (any outcome, incl. leftovers). Drives
     # the directed-exploration cooldown; updated with every pick within the run.
     last_proposed: Dict[int, date] = dict(
-        session.query(Meal.recipe_id, func.max(Meal.plan_date))
-        .group_by(Meal.recipe_id)
+        scope(
+            session.query(Meal.recipe_id, func.max(Meal.plan_date))
+            .group_by(Meal.recipe_id),
+            Meal.user_id,
+            user_id,
+        )
     )
 
     # History-seeded diversity maps: last real consumption date per ingredient
     # and per penalized tag, updated as picks are made within the run.
     ingredient_last_used: Dict[int, date] = dict(
-        session.query(RecipeIngredient.ingredient_id, func.max(Meal.plan_date))
-        .join(Meal, Meal.recipe_id == RecipeIngredient.recipe_id)
-        .filter(Meal.leftover_source_date.is_(None))
-        .group_by(RecipeIngredient.ingredient_id)
+        scope(
+            session.query(RecipeIngredient.ingredient_id, func.max(Meal.plan_date))
+            .join(Meal, Meal.recipe_id == RecipeIngredient.recipe_id)
+            .filter(Meal.leftover_source_date.is_(None))
+            .group_by(RecipeIngredient.ingredient_id),
+            Meal.user_id,
+            user_id,
+        )
     )
 
     penalized_tags: Set[str] = {
         name
-        for (name,) in session.query(Tag.name).filter(
-            Tag.penalize_repetition == true()
+        for (name,) in scope(
+            session.query(Tag.name).filter(Tag.penalize_repetition == true()),
+            Tag.user_id,
+            user_id,
         )
     }
 
     tag_last_used: Dict[str, date] = {}
     if penalized_tags:
         tag_last_used = dict(
-            session.query(Tag.name, func.max(Meal.plan_date))
-            .join(Recipe.tags)
-            .join(Meal, Meal.recipe_id == Recipe.id)
-            .filter(Meal.leftover_source_date.is_(None))
-            .filter(Tag.name.in_(penalized_tags))
-            .group_by(Tag.name)
+            scope(
+                session.query(Tag.name, func.max(Meal.plan_date))
+                .join(Recipe.tags)
+                .join(Meal, Meal.recipe_id == Recipe.id)
+                .filter(Meal.leftover_source_date.is_(None))
+                .filter(Tag.name.in_(penalized_tags))
+                .group_by(Tag.name),
+                Meal.user_id,
+                user_id,
+            )
         )
 
     slots: List[Slot] = []
@@ -316,10 +339,19 @@ def generate_side_dish(
     recency_weight: float = 1.0,
     tag_penalty_weight: float = 1.0,
     bulk_bonus_weight: float = 1.0,
+    user_id: int | None = None,
 ) -> Recipe:
-    """Select a single side dish using the planner's scoring logic."""
+    """Select a single side dish using the planner's scoring logic.
 
-    recipes = session.query(Recipe).filter(Recipe.course == "side").all()
+    Scoped to ``user_id`` when given, so only the caller's own side recipes and
+    side-dish history are considered.
+    """
+
+    recipes = scope(
+        session.query(Recipe).filter(Recipe.course == "side"),
+        Recipe.user_id,
+        user_id,
+    ).all()
     if avoid_titles:
         avoid_set = set(avoid_titles)
         recipes = [r for r in recipes if r.title not in avoid_set]
@@ -335,8 +367,11 @@ def generate_side_dish(
         raise ValueError("No side dishes available")
 
     last_planned: Dict[int, date] = dict(
-        session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date)).group_by(
-            MealSide.side_recipe_id
+        scope(
+            session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date))
+            .group_by(MealSide.side_recipe_id),
+            MealSide.user_id,
+            user_id,
         )
     )
 

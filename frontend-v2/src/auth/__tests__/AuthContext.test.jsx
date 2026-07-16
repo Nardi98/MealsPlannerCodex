@@ -9,7 +9,7 @@ import { authApi } from '../../api/authApi'
 import * as client from '../../api/client'
 
 vi.mock('../../api/authApi', () => ({
-  authApi: { login: vi.fn(), register: vi.fn(), me: vi.fn() },
+  authApi: { login: vi.fn(), register: vi.fn(), me: vi.fn(), google: vi.fn() },
 }))
 
 afterEach(() => {
@@ -29,12 +29,13 @@ function Probe() {
 }
 
 function Controls() {
-  const { login, register, logout } = useAuth()
+  const { login, register, logout, loginWithGoogle } = useAuth()
   return (
     <div>
       <button onClick={() => login({ email: 'a@b.c', password: 'pw' })}>login</button>
       <button onClick={() => register({ email: 'n@b.c', password: 'pw' })}>register</button>
       <button onClick={() => logout()}>logout</button>
+      <button onClick={() => loginWithGoogle('google-id-token')}>google</button>
     </div>
   )
 }
@@ -77,6 +78,22 @@ test('login stores the token and sets the user', async () => {
 
   expect(await screen.findByText('a@b.c')).toBeInTheDocument()
   expect(client.getToken()).toBe('new-jwt')
+})
+
+test('loginWithGoogle exchanges the ID token and sets the user', async () => {
+  authApi.google.mockResolvedValue({ access_token: 'google-jwt' })
+  authApi.me.mockResolvedValue({ id: 4, email: 'gina@gmail.com' })
+
+  renderAuth()
+  await screen.findByText('anonymous')
+
+  await act(async () => {
+    screen.getByText('google').click()
+  })
+
+  expect(await screen.findByText('gina@gmail.com')).toBeInTheDocument()
+  expect(authApi.google).toHaveBeenCalledWith({ credential: 'google-id-token' })
+  expect(client.getToken()).toBe('google-jwt')
 })
 
 test('logout clears the user and the token', async () => {

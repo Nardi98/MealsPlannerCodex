@@ -48,6 +48,70 @@ def db_session(engine):
 
 
 @pytest.fixture
+def user(db_session):
+    """A persisted account to own the rows a test creates.
+
+    Plans are per-user (``meal_plans.user_id`` is not nullable), so any test
+    touching a :class:`MealPlan` needs a real owner.
+    """
+    import crud
+
+    return crud.create_user(
+        db_session, email="owner@test.local", hashed_password="x"
+    )
+
+
+def db_client(session):
+    """Return a ``TestClient`` reading ``session`` with nobody logged in.
+
+    The counterpart of :func:`client_as`, for tests that exercise the
+    unauthenticated path. Callers are responsible for
+    ``app.dependency_overrides.clear()``.
+    """
+    from fastapi.testclient import TestClient
+    from main import app, get_db
+
+    def _db():
+        yield session
+
+    app.dependency_overrides[get_db] = _db
+    return TestClient(app)
+
+
+def client_as(session, user):
+    """Return a ``TestClient`` reading ``session`` and logged in as ``user``.
+
+    The overrides are global to ``app``, so calling this again re-points the
+    client at a different account — which is how the cross-user isolation tests
+    switch identities mid-test. Callers are responsible for
+    ``app.dependency_overrides.clear()``; the :func:`auth_client` fixture does
+    it for the single-user case.
+    """
+    import auth_users
+    from main import app
+
+    client = db_client(session)
+    app.dependency_overrides[auth_users.get_current_user] = lambda: user
+    return client
+
+
+@pytest.fixture
+def auth_client(db_session, user):
+    """A ``TestClient`` reading ``db_session`` and logged in as ``user``.
+
+    Unlike :func:`api_client` this shares the test's transaction, so rows the
+    test creates via ``db_session`` are visible to the routes and are rolled
+    back afterwards.
+    """
+    from main import app
+
+    try:
+        yield client_as(db_session, user)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def api_client():
     """A ``TestClient`` on a freshly reset real-engine DB with one logged-in user.
 

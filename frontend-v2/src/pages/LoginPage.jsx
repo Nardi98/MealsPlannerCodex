@@ -1,9 +1,10 @@
 import React from 'react'
 import { Button, Card, Input } from '../components'
+import GoogleSignInButton from '../components/GoogleSignInButton'
 import { useAuth } from '../auth/AuthContext'
 
 export default function LoginPage() {
-  const { login, register } = useAuth()
+  const { login, register, loginWithGoogle } = useAuth()
   const [mode, setMode] = React.useState('login') // 'login' | 'register'
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
@@ -25,6 +26,18 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleGoogleCredential = async (credential) => {
+    setError('')
+    setBusy(true)
+    try {
+      await loginWithGoogle(credential)
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -105,16 +118,7 @@ export default function LoginPage() {
           <div style={{ flex: 1, height: 1, background: 'var(--border-default)' }} />
         </div>
 
-        {/* Wired to Google Identity Services in Step 5. */}
-        <Button
-          type="button"
-          variant="ghost"
-          disabled
-          className="justify-center"
-          style={{ width: '100%' }}
-        >
-          Continue with Google
-        </Button>
+        <GoogleSignInButton onCredential={handleGoogleCredential} />
 
         <div style={{ textAlign: 'center', marginTop: 16, fontSize: 13 }}>
           <button

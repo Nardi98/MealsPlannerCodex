@@ -35,13 +35,24 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const login = React.useCallback(async (credentials) => {
-    const { access_token } = await authApi.login(credentials)
+  // Every sign-in path ends the same way: keep the issued token, then load the
+  // account it belongs to.
+  const startSession = React.useCallback(async ({ access_token }) => {
     setAuthToken(access_token)
     const u = await authApi.me()
     setUser(u)
     return u
   }, [])
+
+  const login = React.useCallback(
+    async (credentials) => startSession(await authApi.login(credentials)),
+    [startSession],
+  )
+
+  const loginWithGoogle = React.useCallback(
+    async (credential) => startSession(await authApi.google({ credential })),
+    [startSession],
+  )
 
   const register = React.useCallback(
     async (payload) => {
@@ -51,7 +62,10 @@ export function AuthProvider({ children }) {
     [login],
   )
 
-  const value = { user, loading, login, register, logout }
+  const value = React.useMemo(
+    () => ({ user, loading, login, register, logout, loginWithGoogle }),
+    [user, loading, login, register, logout, loginWithGoogle],
+  )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

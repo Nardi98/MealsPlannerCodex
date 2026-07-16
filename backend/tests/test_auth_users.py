@@ -1,19 +1,8 @@
 """Tests for user model, password hashing, JWT, and auth routes (Step 1)."""
-from fastapi.testclient import TestClient
-
 import auth_users
 import crud
-from main import app, get_db
-
-
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-
-    return _override
+from conftest import db_client
+from main import app
 
 
 # --- password hashing -------------------------------------------------------
@@ -51,8 +40,7 @@ def test_create_and_lookup_user_by_email(db_session):
 # --- routes -----------------------------------------------------------------
 
 def test_register_login_me_flow(db_session):
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = db_client(db_session)
     try:
         resp = client.post(
             "/auth/register",

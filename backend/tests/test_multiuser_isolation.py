@@ -5,24 +5,9 @@ test session and ``get_current_user`` overridden to a chosen user, so switching
 the override simulates a different logged-in account against shared storage.
 """
 
-from fastapi.testclient import TestClient
-
-import auth_users
 import crud
-from main import app, get_db
-
-
-def _override_db(session):
-    def _f():
-        yield session
-
-    return _f
-
-
-def _client(session, user):
-    app.dependency_overrides[get_db] = _override_db(session)
-    app.dependency_overrides[auth_users.get_current_user] = lambda: user
-    return TestClient(app)
+from conftest import client_as as _client, db_client
+from main import app
 
 
 def _recipe_payload(title, **over):
@@ -67,10 +52,8 @@ def test_recipes_are_private_per_user(db_session):
 
 
 def test_recipe_routes_require_authentication(db_session):
-    app.dependency_overrides[get_db] = _override_db(db_session)
     try:
-        client = TestClient(app)
-        assert client.get("/recipes").status_code == 401
+        assert db_client(db_session).get("/recipes").status_code == 401
     finally:
         app.dependency_overrides.clear()
 

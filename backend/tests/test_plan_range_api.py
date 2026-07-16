@@ -1,23 +1,11 @@
-import os
 from datetime import date, timedelta
-from fastapi.testclient import TestClient
 
 import crud
-from main import app, get_db
 
 
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-    return _override
-
-
-def test_get_plan_range(db_session):
-    r1 = crud.create_recipe(db_session, title="A", servings_default=1, course="main")
-    r2 = crud.create_recipe(db_session, title="B", servings_default=1, course="main")
+def test_get_plan_range(db_session, user, auth_client):
+    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
+    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", servings_default=1, course="main")
     start = date(2024, 1, 1)
     second = start + timedelta(days=1)
     crud.set_meal_plan(
@@ -26,11 +14,10 @@ def test_get_plan_range(db_session):
             start.isoformat(): [r1.id],
             second.isoformat(): [r2.id],
         },
+        user.id,
     )
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp = client.get(
         "/plan",
@@ -55,5 +42,3 @@ def test_get_plan_range(db_session):
             }
         ],
     }
-
-    app.dependency_overrides.clear()

@@ -6,7 +6,7 @@ import json
 import os
 import random
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,27 +18,35 @@ import crud
 import models
 import schemas
 import storage
-from auth import require_api_key
 from mealplanner import planner
 from mealplanner.seed import seed_system_tags
 from database import SessionLocal, engine, get_db
+from scoping import scope
 import auth_users
 
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
 
-# Seed the curated system tags (with repetition-penalty flags) so tagging a
-# recipe with a known format tag transparently reuses the penalized system tag.
-# Tags are now per-user, so seed them for every existing account (new accounts
-# get their own set on registration — see Step 3c).
+# Backfill the curated system tags for accounts that predate per-user tagging.
+# New accounts get their own set at registration (see ``_create_account``), so
+# this only has work to do for pre-existing users and is a no-op once they are
+# all caught up.
 with SessionLocal() as _session:
-    for _user in _session.execute(select(models.User)).scalars():
-        seed_system_tags(_session, _user.id)
+    _seeded = set(
+        _session.execute(
+            select(models.Tag.user_id).where(models.Tag.is_system.is_(True)).distinct()
+        ).scalars()
+    )
+    for _user_id in _session.execute(select(models.User.id)).scalars():
+        if _user_id not in _seeded:
+            seed_system_tags(_session, _user_id)
 
 app = FastAPI()
 
-# Applied to mutating routes so they honour ``API_KEY`` when configured.
-_AUTH = [Depends(require_api_key)]
+# The single authentication mechanism: every route that touches user-owned data
+# declares this, and scopes its queries to ``current_user.id``.
+CurrentUser = Annotated[models.User, Depends(auth_users.get_current_user)]
+Db = Annotated[Session, Depends(get_db)]
 
 # Restrict CORS to the configured frontend origin(s). ``ALLOWED_ORIGINS`` is a
 # comma-separated list; default to the local dev server. Credentials are only
@@ -72,21 +80,46 @@ def favicon() -> Response:
 
 @app.post("/auth/register", response_model=schemas.UserOut, status_code=201)
 def register(
-    payload: schemas.UserCreate, db: Session = Depends(get_db)
+    payload: schemas.UserCreate, db: Db
 ) -> models.User:
     if crud.get_user_by_email(db, payload.email) is not None:
         raise HTTPException(status_code=400, detail="Email already registered")
-    user = crud.create_user(
+    return _create_account(
         db,
         email=payload.email,
         hashed_password=auth_users.hash_password(payload.password),
         display_name=payload.display_name,
     )
+
+
+def _create_account(
+    db: Session,
+    *,
+    email: str,
+    hashed_password: str | None = None,
+    display_name: str | None = None,
+    auth_provider: str = "local",
+    google_sub: str | None = None,
+) -> models.User:
+    """Create a user and give it the starter data a fresh account needs.
+
+    New accounts start empty apart from their own copy of the curated system
+    tags, so tagging works out of the box without leaking another user's tags.
+    """
+    user = crud.create_user(
+        db,
+        email=email,
+        hashed_password=hashed_password,
+        display_name=display_name,
+        auth_provider=auth_provider,
+        google_sub=google_sub,
+    )
+    seed_system_tags(db, user.id)
     return user
 
 
 @app.post("/auth/login", response_model=schemas.Token)
-def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)) -> schemas.Token:
+def login(payload: schemas.LoginRequest, db: Db) -> schemas.Token:
     user = crud.get_user_by_email(db, payload.email)
     if (
         user is None
@@ -98,27 +131,66 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)) -> schem
     return schemas.Token(access_token=token)
 
 
+@app.post("/auth/google", response_model=schemas.Token)
+def login_with_google(
+    payload: schemas.GoogleLoginRequest, db: Db
+) -> schemas.Token:
+    """Exchange a Google ID token for one of our JWTs, creating the account if new."""
+    try:
+        claims = auth_users.verify_google_token(payload.credential)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=401, detail=f"Invalid Google credential: {exc}"
+        )
+
+    google_sub = claims["sub"]
+    email = claims["email"]
+    user = crud.get_user_by_google_sub(db, google_sub) or crud.get_user_by_email(
+        db, email
+    )
+    if user is None:
+        user = _create_account(
+            db,
+            email=email,
+            display_name=claims.get("name"),
+            auth_provider="google",
+            google_sub=google_sub,
+        )
+    elif user.google_sub is None:
+        # Claiming an existing account by email is only safe once Google has
+        # verified the address; otherwise anyone could sign up at Google with
+        # someone else's email and inherit their account.
+        if not claims.get("email_verified"):
+            raise HTTPException(
+                status_code=401, detail="Google email is not verified"
+            )
+        user.google_sub = google_sub
+        db.commit()
+    token = auth_users.create_access_token(subject=str(user.id))
+    return schemas.Token(access_token=token)
+
+
 @app.get("/auth/me", response_model=schemas.UserOut)
 def read_me(
-    current_user: models.User = Depends(auth_users.get_current_user),
+    current_user: CurrentUser,
 ) -> models.User:
     return current_user
 
 
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> List[schemas.RecipeOut]:
-    stmt = (
-        select(models.Recipe)
-        .where(models.Recipe.user_id == current_user.id)
-        .options(
+    stmt = scope(
+        select(models.Recipe).options(
             selectinload(models.Recipe.tags),
             selectinload(models.Recipe.ingredients).selectinload(
                 models.RecipeIngredient.ingredient
             ),
-        )
+        ),
+        models.Recipe.user_id,
+        current_user.id,
     )
     return db.execute(stmt).scalars().all()
 
@@ -126,8 +198,8 @@ def read_recipes(
 @app.get("/recipes/{recipe_id}", response_model=schemas.RecipeOut)
 def read_recipe(
     recipe_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.RecipeOut:
     recipe = crud.get_recipe(db, recipe_id, current_user.id)
     if recipe is None:
@@ -168,12 +240,11 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
     "/recipes",
     response_model=schemas.RecipeOut,
     status_code=201,
-    dependencies=_AUTH,
 )
 def create_recipe(
     payload: schemas.RecipeIn,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.RecipeOut:
     data = _payload_to_data(payload, db, current_user.id)
     return crud.create_recipe(db, user_id=current_user.id, **data)
@@ -182,8 +253,12 @@ def create_recipe(
 _MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 
-@app.post("/recipes/upload-image", status_code=201, dependencies=_AUTH)
-async def upload_recipe_image(request: Request, file: UploadFile = File(...)) -> dict:
+@app.post("/recipes/upload-image", status_code=201)
+async def upload_recipe_image(
+    request: Request,
+    current_user: CurrentUser,
+    file: UploadFile = File(...),
+) -> dict:
     """Store an uploaded image and return an absolute URL that serves it back."""
     data = await file.read()
     if len(data) > _MAX_IMAGE_BYTES:
@@ -209,13 +284,12 @@ def serve_recipe_image(key: str) -> Response:
 @app.put(
     "/recipes/{recipe_id}",
     response_model=schemas.RecipeOut,
-    dependencies=_AUTH,
 )
 def update_recipe(
     recipe_id: int,
     payload: schemas.RecipeIn,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.RecipeOut:
     data = _payload_to_data(payload, db, current_user.id)
     recipe = crud.update_recipe(db, recipe_id, current_user.id, **data)
@@ -227,12 +301,11 @@ def update_recipe(
 @app.delete(
     "/recipes/{recipe_id}",
     status_code=204,
-    dependencies=_AUTH,
 )
 def delete_recipe(
     recipe_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> Response:
     deleted = crud.delete_recipe(db, recipe_id, current_user.id)
     if not deleted:
@@ -242,10 +315,10 @@ def delete_recipe(
 
 @app.get("/tags", response_model=List[schemas.TagOut])
 def read_tags(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> List[schemas.TagOut]:
-    stmt = select(models.Tag).where(models.Tag.user_id == current_user.id)
+    stmt = scope(select(models.Tag), models.Tag.user_id, current_user.id)
     return db.execute(stmt).scalars().all()
 
 
@@ -259,19 +332,20 @@ def _ingredient_recipe_count(db: Session, ingredient_id: int) -> int:
 
 @app.get("/ingredients", response_model=List[schemas.IngredientSummary])
 def search_ingredients(
+    db: Db,
+    current_user: CurrentUser,
     search: str = "",
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.IngredientSummary]:
-    stmt = (
+    stmt = scope(
         select(
             models.Ingredient,
             func.count(models.RecipeIngredient.recipe_id).label("recipe_count"),
         )
-        .where(models.Ingredient.user_id == current_user.id)
         .outerjoin(models.Ingredient.recipes)
         .group_by(models.Ingredient.id)
-        .order_by(models.Ingredient.name)
+        .order_by(models.Ingredient.name),
+        models.Ingredient.user_id,
+        current_user.id,
     )
     if search:
         stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%")).limit(10)
@@ -295,9 +369,9 @@ def search_ingredients(
 )
 def similar_ingredients(
     name: str,
+    db: Db,
+    current_user: CurrentUser,
     exclude_id: int | None = None,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.IngredientSummary]:
     matches = crud.find_similar_ingredients(
         db, name, exclude_id=exclude_id, user_id=current_user.id
@@ -320,9 +394,9 @@ def similar_ingredients(
     response_model=List[schemas.DuplicatePair],
 )
 def duplicate_ingredients(
+    db: Db,
+    current_user: CurrentUser,
     threshold: float = 0.8,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> List[schemas.DuplicatePair]:
     pairs = crud.find_duplicate_pairs(
         db, threshold=threshold, user_id=current_user.id
@@ -347,12 +421,11 @@ def duplicate_ingredients(
 @app.post(
     "/ingredients/merge",
     response_model=schemas.IngredientSummary,
-    dependencies=_AUTH,
 )
 def merge_ingredients_endpoint(
     payload: schemas.IngredientMergeRequest,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.IngredientSummary:
     try:
         merged = crud.merge_ingredients(
@@ -381,12 +454,11 @@ def merge_ingredients_endpoint(
     "/ingredients",
     response_model=schemas.IngredientSummary,
     status_code=201,
-    dependencies=_AUTH,
 )
 def create_ingredient(
     payload: schemas.IngredientCreate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.IngredientSummary:
     ingredient = crud.create_ingredient(
         db,
@@ -409,13 +481,12 @@ def create_ingredient(
 @app.put(
     "/ingredients/{ingredient_id}",
     response_model=schemas.IngredientSummary,
-    dependencies=_AUTH,
 )
 def update_ingredient(
     ingredient_id: int,
     payload: schemas.IngredientUpdate,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.IngredientSummary:
     ingredient = crud.get_ingredient(db, ingredient_id, current_user.id)
     if ingredient is None:
@@ -441,8 +512,8 @@ def update_ingredient(
 )
 def ingredient_recipes(
     ingredient_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> List[schemas.RecipeSummary]:
     ingredient = crud.get_ingredient(db, ingredient_id, current_user.id)
     if ingredient is None:
@@ -454,13 +525,12 @@ def ingredient_recipes(
 @app.delete(
     "/ingredients/{ingredient_id}",
     status_code=204,
-    dependencies=_AUTH,
 )
 def delete_ingredient(
     ingredient_id: int,
+    db: Db,
+    current_user: CurrentUser,
     force: bool = False,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
 ) -> Response:
     deleted = crud.delete_ingredient(
         db, ingredient_id, force=force, user_id=current_user.id
@@ -480,35 +550,39 @@ def delete_ingredient(
 @app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
 @app.get("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
 def get_plan(
+    db: Db,
+    current_user: CurrentUser,
     plan_date: date | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-    db: Session = Depends(get_db),
 ) -> Dict[str, List[schemas.MealOut]]:
-    return crud.get_plan(db, plan_date, start_date, end_date)
+    return crud.get_plan(db, plan_date, start_date, end_date, current_user.id)
 
 
 @app.post(
     "/plan",
     response_model=Dict[str, List[schemas.MealOut]],
-    dependencies=_AUTH,
 )
 @app.post(
     "/meal-plans",
     response_model=Dict[str, List[schemas.MealOut]],
-    dependencies=_AUTH,
 )
 def set_plan(
     payload: schemas.MealPlanCreate,
+    db: Db,
+    current_user: CurrentUser,
     force: bool = False,
-    db: Session = Depends(get_db),
 ) -> Dict[str, List[schemas.MealOut]]:
     plan_dates = [
         day if isinstance(day, date) else date.fromisoformat(day)
         for day in payload.plan.keys()
     ]
-    stmt = select(models.MealPlan.plan_date).where(
-        models.MealPlan.plan_date.in_(plan_dates)
+    stmt = scope(
+        select(models.MealPlan.plan_date).where(
+            models.MealPlan.plan_date.in_(plan_dates)
+        ),
+        models.MealPlan.user_id,
+        current_user.id,
     )
     existing = db.execute(stmt).scalars().all()
     if existing and not force:
@@ -517,114 +591,118 @@ def set_plan(
 
         return JSONResponse(status_code=409, content={"conflicts": conflicts})
 
-    crud.set_meal_plan(db, payload.plan)
-    return crud.get_plan(db, payload.plan_date)
+    crud.set_meal_plan(db, payload.plan, current_user.id)
+    return crud.get_plan(db, payload.plan_date, user_id=current_user.id)
 
 
 @app.delete(
     "/plan",
     response_model=Dict[str, int],
-    dependencies=_AUTH,
 )
 @app.delete(
     "/meal-plans",
     response_model=Dict[str, int],
-    dependencies=_AUTH,
 )
 def delete_meal_plans(
+    db: Db,
+    current_user: CurrentUser,
     start_date: date = Query(..., description="Inclusive start date for deletion"),
     end_date: date = Query(..., description="Inclusive end date for deletion"),
-    db: Session = Depends(get_db),
 ) -> Dict[str, int]:
     if end_date < start_date:
         raise HTTPException(
             status_code=422, detail="end_date must not be before start_date"
         )
 
-    deleted = crud.delete_meal_plans(db, start_date, end_date)
+    deleted = crud.delete_meal_plans(db, start_date, end_date, current_user.id)
     return {"deleted": deleted}
 
 
 @app.get("/plan/settings", response_model=Dict[str, Any])
-def plan_settings(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """Return plan settings (currently the defaults; per-user overrides later)."""
+def plan_settings(
+    db: Db,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Return the caller's plan settings (defaults + their stored overrides)."""
 
-    return crud.get_plan_settings(db)
+    return crud.get_plan_settings(db, current_user.id)
+
+
+@app.put("/plan/settings", response_model=Dict[str, Any])
+def update_plan_settings(
+    payload: Dict[str, Any],
+    db: Db,
+    current_user: CurrentUser,
+) -> Dict[str, Any]:
+    """Persist the caller's plan-setting overrides and return the merged view."""
+
+    return crud.set_plan_settings(db, current_user.id, payload)
 
 
 @app.post(
     "/meal-plans/accept",
     response_model=schemas.MealOut,
-    dependencies=_AUTH,
 )
 def toggle_meal_acceptance(
-    payload: schemas.MealAcceptanceIn, db: Session = Depends(get_db)
+    payload: schemas.MealAcceptanceIn,
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.MealOut:
     meal = crud.mark_meal_accepted(
-        db, payload.plan_date, payload.meal_number, payload.accepted
+        db, payload.plan_date, payload.meal_number, payload.accepted,
+        current_user.id,
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(
-        recipe=meal.recipe.title,
-        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
-        accepted=meal.accepted,
-        leftover=meal.leftover,
-    )
+    return schemas.MealOut(**crud.meal_item(meal))
 
 
 @app.post(
     "/meal-plans/side",
     response_model=schemas.MealOut,
-    dependencies=_AUTH,
 )
 def upsert_side_dish(
-    payload: schemas.MealSideIn, db: Session = Depends(get_db)
+    payload: schemas.MealSideIn,
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.MealOut:
     if payload.index is None:
         meal = crud.add_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.side_id
+            db, payload.plan_date, payload.meal_number, payload.side_id,
+            current_user.id,
         )
     else:
         meal = crud.replace_meal_side(
-            db, payload.plan_date, payload.meal_number, payload.index, payload.side_id
+            db, payload.plan_date, payload.meal_number, payload.index,
+            payload.side_id, current_user.id,
         )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(
-        recipe=meal.recipe.title,
-        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
-        accepted=meal.accepted,
-        leftover=meal.leftover,
-    )
+    return schemas.MealOut(**crud.meal_item(meal))
 
 
 @app.delete(
     "/meal-plans/side",
     response_model=schemas.MealOut,
-    dependencies=_AUTH,
 )
 def delete_side_dish(
-    payload: schemas.MealSideRemoveIn, db: Session = Depends(get_db)
+    payload: schemas.MealSideRemoveIn,
+    db: Db,
+    current_user: CurrentUser,
 ) -> schemas.MealOut:
     meal = crud.remove_meal_side(
-        db, payload.plan_date, payload.meal_number, payload.index
+        db, payload.plan_date, payload.meal_number, payload.index, current_user.id
     )
     if meal is None or meal.recipe is None:
         raise HTTPException(status_code=404, detail="Meal not found")
-    return schemas.MealOut(
-        recipe=meal.recipe.title,
-        side_recipes=[ms.side_recipe.title for ms in meal.sides if ms.side_recipe],
-        accepted=meal.accepted,
-        leftover=meal.leftover,
-    )
+    return schemas.MealOut(**crud.meal_item(meal))
 
 
-@app.post("/feedback/accept", dependencies=_AUTH)
+@app.post("/feedback/accept")
 def feedback_accept(
     payload: schemas.FeedbackIn,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> Dict[str, str]:
     """Record user acceptance of a recipe."""
 
@@ -635,32 +713,41 @@ def feedback_accept(
     return {"status": "ok"}
 
 
-@app.post("/feedback/reject", dependencies=_AUTH)
+@app.post("/feedback/reject")
 def feedback_reject(
     payload: schemas.FeedbackIn,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth_users.get_current_user),
+    db: Db,
+    current_user: CurrentUser,
 ) -> Dict[str, Optional[str]]:
     """Record user rejection of a recipe and suggest a replacement."""
 
     if crud.reject_recipe(db, payload.title, current_user.id) is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    existing = set(crud.list_planned_titles(db))
+    existing = set(crud.list_planned_titles(db, current_user.id))
     existing.add(payload.title)
     available = list(
-        set(crud.list_recipe_titles(db, courses=["main", "first-course"])) - existing
+        set(
+            crud.list_recipe_titles(
+                db, courses=["main", "first-course"], user_id=current_user.id
+            )
+        )
+        - existing
     )
     replacement = random.choice(available) if available else None
     return {"replacement": replacement}
 
 
-@app.post("/meal-plans/generate", dependencies=_AUTH)
+@app.post("/meal-plans/generate")
 def generate_plan_endpoint(
-    payload: schemas.MealPlanGenerate, db: Session = Depends(get_db)
+    payload: schemas.MealPlanGenerate,
+    db: Db,
+    current_user: CurrentUser,
 ) -> Dict[str, List[Dict[str, object]]]:
     days = (payload.end - payload.start).days + 1
     slots = planner.generate_plan(
         db,
+        user_id=current_user.id,
+        plan_settings=crud.get_plan_settings(db, current_user.id),
         start=payload.start,
         days=days,
         meals_per_day=payload.meals_per_day,
@@ -686,13 +773,16 @@ def generate_plan_endpoint(
     return result
 
 
-@app.post("/side-dishes/generate", dependencies=_AUTH)
+@app.post("/side-dishes/generate")
 def generate_side_dish_endpoint(
-    payload: schemas.SideDishGenerate, db: Session = Depends(get_db)
+    payload: schemas.SideDishGenerate,
+    db: Db,
+    current_user: CurrentUser,
 ) -> Dict[str, object]:
     try:
         recipe = planner.generate_side_dish(
             db,
+            user_id=current_user.id,
             avoid_tags=payload.avoid_tags,
             reduce_tags=payload.reduce_tags,
             avoid_titles=payload.avoid_titles,
@@ -710,27 +800,36 @@ def generate_side_dish_endpoint(
 
 
 @app.get("/data/export")
-def export_data_endpoint(db: Session = Depends(get_db)) -> Response:
-    data = crud.export_data(db)
+def export_data_endpoint(
+    db: Db,
+    current_user: CurrentUser,
+) -> Response:
+    data = crud.export_data(db, current_user.id)
     return Response(content=data, media_type="application/json")
 
 
-@app.post("/data/import", dependencies=_AUTH)
+@app.post("/data/import")
 def import_data_endpoint(
     payload: Dict[str, Any],
+    db: Db,
+    current_user: CurrentUser,
     mode: str = "overwrite",
-    db: Session = Depends(get_db),
 ) -> Dict[str, str]:
     try:
-        crud.import_data(io.StringIO(json.dumps(payload)), db, mode=mode)
+        crud.import_data(
+            io.StringIO(json.dumps(payload)), db, mode=mode, user_id=current_user.id
+        )
     except ValueError as exc:  # pragma: no cover - value error path
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok"}
 
 
-@app.delete("/data", dependencies=_AUTH)
-def clear_data_endpoint(db: Session = Depends(get_db)) -> Dict[str, str]:
-    crud.clear_data(db)
+@app.delete("/data")
+def clear_data_endpoint(
+    db: Db,
+    current_user: CurrentUser,
+) -> Dict[str, str]:
+    crud.clear_data(db, current_user.id)
     return {"status": "ok"}
 
 

@@ -11,4 +11,5 @@ python-multipart
 passlib[bcrypt]
 bcrypt<4.1
 pyjwt
+google-auth
 boto3

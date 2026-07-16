@@ -1,7 +1,8 @@
 """User authentication: password hashing, JWT tokens, current-user dependency.
 
-This is the JWT/bearer-token auth for per-user accounts. It lives alongside the
-older shared ``API_KEY`` gate in ``auth.py`` (kept for backward compatibility).
+The app's only authentication mechanism. Every route touching user-owned data
+depends on :func:`get_current_user` (as ``main.CurrentUser``) and scopes its
+queries to that user's id.
 """
 from __future__ import annotations
 
@@ -53,6 +54,41 @@ def decode_token(token: str) -> Optional[str]:
     except jwt.PyJWTError:
         return None
     return payload.get("sub")
+
+
+_google_request = None
+
+
+def _google_transport():
+    """A reused HTTP transport for Google's cert endpoint.
+
+    Verification refetches Google's signing certs; a shared session keeps the
+    connection pooled instead of a fresh TLS handshake on every sign-in.
+    """
+    global _google_request
+    if _google_request is None:
+        # Imported lazily so the rest of auth works without the Google deps
+        # installed, and so startup does not pay for them.
+        from google.auth.transport import requests as google_requests
+
+        _google_request = google_requests.Request()
+    return _google_request
+
+
+def verify_google_token(credential: str) -> dict:
+    """Verify a Google ID token and return its claims.
+
+    Raises ``ValueError`` if ``GOOGLE_CLIENT_ID`` is unset or the token is not a
+    valid, unexpired token issued to this app.
+    """
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise ValueError("GOOGLE_CLIENT_ID is not configured")
+    from google.oauth2 import id_token as google_id_token
+
+    return google_id_token.verify_oauth2_token(
+        credential, _google_transport(), client_id
+    )
 
 
 def get_current_user(

@@ -8,9 +8,20 @@ import LoginPage from '../LoginPage'
 
 const login = vi.fn()
 const register = vi.fn()
+const loginWithGoogle = vi.fn()
 
 vi.mock('../../auth/AuthContext', () => ({
-  useAuth: () => ({ login, register }),
+  useAuth: () => ({ login, register, loginWithGoogle }),
+}))
+
+// The real button talks to Google's SDK; here we only care that the page hands
+// a returned credential to the auth context.
+vi.mock('../../components/GoogleSignInButton', () => ({
+  default: ({ onCredential }) => (
+    <button type="button" onClick={() => onCredential('google-id-token')}>
+      Continue with Google
+    </button>
+  ),
 }))
 
 afterEach(() => {
@@ -62,4 +73,22 @@ test('shows an error message when login fails', async () => {
 test('renders a Google sign-in button', () => {
   render(<LoginPage />)
   expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument()
+})
+
+test('signs in with the credential returned by Google', async () => {
+  loginWithGoogle.mockResolvedValue({})
+  render(<LoginPage />)
+
+  fireEvent.click(screen.getByRole('button', { name: /google/i }))
+
+  await waitFor(() => expect(loginWithGoogle).toHaveBeenCalledWith('google-id-token'))
+})
+
+test('shows an error when Google sign-in is rejected', async () => {
+  loginWithGoogle.mockRejectedValue(new Error('Invalid Google credential'))
+  render(<LoginPage />)
+
+  fireEvent.click(screen.getByRole('button', { name: /google/i }))
+
+  expect(await screen.findByText(/invalid google credential/i)).toBeInTheDocument()
 })

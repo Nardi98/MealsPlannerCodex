@@ -1,4 +1,3 @@
-import pytest
 import random
 from datetime import date, timedelta
 
@@ -54,7 +53,7 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
     assert plan["2024-01-01"] == ["Good"]
 
 
-def test_recency_weight(db_session):
+def test_recency_weight(db_session, user):
     fresh = Recipe(
         title="Fresh",
         servings_default=1,
@@ -74,10 +73,10 @@ def test_recency_weight(db_session):
 
     db_session.add_all(
         [
-            MealPlan(plan_date=date(2023, 12, 1)),
-            Meal(plan_date=date(2023, 12, 1), meal_number=1, recipe_id=fresh.id),
-            MealPlan(plan_date=date(2024, 1, 1)),
-            Meal(plan_date=date(2024, 1, 1), meal_number=1, recipe_id=recent.id),
+            MealPlan(user_id=user.id, plan_date=date(2023, 12, 1)),
+            Meal(user_id=user.id, plan_date=date(2023, 12, 1), meal_number=1, recipe_id=fresh.id),
+            MealPlan(user_id=user.id, plan_date=date(2024, 1, 1)),
+            Meal(user_id=user.id, plan_date=date(2024, 1, 1), meal_number=1, recipe_id=recent.id),
         ]
     )
     db_session.commit()
@@ -181,7 +180,7 @@ def test_exploration_favors_stale_recipes(db_session):
     assert counts["Stale"] > counts["Fresh"] * 3
 
 
-def test_exploration_excludes_recipe_within_cooldown(db_session):
+def test_exploration_excludes_recipe_within_cooldown(db_session, user):
     """A recipe proposed within the cooldown is never chosen on the explore branch."""
     start = date(2024, 6, 1)
     recent = Recipe(title="Recent", servings_default=1, score=1.0, course="main")
@@ -192,8 +191,8 @@ def test_exploration_excludes_recipe_within_cooldown(db_session):
 
     # ...but proposed only 3 days ago -> inside the 7-day cooldown.
     db_session.add_all([
-        MealPlan(plan_date=start - timedelta(days=3)),
-        Meal(plan_date=start - timedelta(days=3), meal_number=1, recipe_id=recent.id),
+        MealPlan(user_id=user.id, plan_date=start - timedelta(days=3)),
+        Meal(user_id=user.id, plan_date=start - timedelta(days=3), meal_number=1, recipe_id=recent.id),
     ])
     db_session.commit()
 
@@ -261,14 +260,14 @@ def test_generate_plan_respects_meals_per_day(db_session):
     assert len(plan["2024-01-01"]) == 2
 
 
-def test_generate_plan_gap_filter(db_session):
+def test_generate_plan_gap_filter(db_session, user):
     r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
     r2 = Recipe(title="R2", servings_default=1, score=1.0, course="main")
     db_session.add_all([r1, r2])
     db_session.commit()
 
     hist_date = date(2024, 1, 1)
-    plan = MealPlan(plan_date=hist_date)
+    plan = MealPlan(user_id=user.id, plan_date=hist_date)
     meal = Meal(meal_number=1, recipe=r1)
     plan.meals.append(meal)
     db_session.add(plan)
@@ -286,13 +285,13 @@ def test_generate_plan_gap_filter(db_session):
     assert schedule["2024-01-02"] == ["R2"]
 
 
-def test_generate_plan_gap_filter_fallback(db_session):
+def test_generate_plan_gap_filter_fallback(db_session, user):
     r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
     db_session.add(r1)
     db_session.commit()
 
     hist_date = date(2024, 1, 1)
-    plan = MealPlan(plan_date=hist_date)
+    plan = MealPlan(user_id=user.id, plan_date=hist_date)
     meal = Meal(meal_number=1, recipe=r1)
     plan.meals.append(meal)
     db_session.add(plan)
@@ -345,7 +344,7 @@ def test_ingredient_repetition_penalty_diverges_second_day(db_session):
     assert with_penalty["2024-06-02"] == ["Q"]
 
 
-def test_ingredient_history_influences_first_slot(db_session):
+def test_ingredient_history_influences_first_slot(db_session, user):
     """A recently consumed ingredient recorded in ``meals`` penalises slot 1."""
     shared = Ingredient(name="hist-veg")
     other = Ingredient(name="fresh-veg")
@@ -357,8 +356,8 @@ def test_ingredient_history_influences_first_slot(db_session):
 
     # Consumed yesterday, recording the shared ingredient in history.
     db_session.add_all([
-        MealPlan(plan_date=date(2024, 5, 31)),
-        Meal(plan_date=date(2024, 5, 31), meal_number=1, recipe_id=consumed.id),
+        MealPlan(user_id=user.id, plan_date=date(2024, 5, 31)),
+        Meal(user_id=user.id, plan_date=date(2024, 5, 31), meal_number=1, recipe_id=consumed.id),
     ])
     db_session.commit()
 

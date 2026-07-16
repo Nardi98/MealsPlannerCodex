@@ -155,6 +155,25 @@ Set the necessary environment variables before starting:
   `data/app.db`.
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
+- `JWT_SECRET` – signing key for the auth tokens (a dev-only default is used
+  when unset — always set this in production)
+- `GOOGLE_CLIENT_ID` – Google OAuth client ID, required by the backend to
+  verify ID tokens for "Sign in with Google"
+- `VITE_GOOGLE_CLIENT_ID` – the *same* client ID, given to the frontend at
+  build time so it can render the Google button. Without it the login page
+  offers email/password only.
+
+### Setting up "Sign in with Google"
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** of type *Web application*.
+2. Add your app's origin (e.g. `http://localhost:3000`) to **Authorized
+   JavaScript origins**.
+3. Set `GOOGLE_CLIENT_ID` (backend) and `VITE_GOOGLE_CLIENT_ID` (frontend) to
+   the generated client ID. Under Docker Compose, setting `GOOGLE_CLIENT_ID`
+   alone is enough — compose passes it through to both services. The client
+   *secret* is not needed: the browser obtains the ID token and the backend
+   only verifies it.
 
 Build steps:
 

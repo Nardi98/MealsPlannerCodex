@@ -17,7 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import crud
-from models import Ingredient, Recipe, RecipeIngredient, UnitEnum
+from models import Ingredient, Recipe, RecipeIngredient, Tag, UnitEnum
+from scoping import scope
 
 
 # ---------------------------------------------------------------------------
@@ -85,13 +86,24 @@ def seed_system_tags(session: Session, user_id: int | None = None) -> None:
     to whether it is a format tag. Pre-existing plain tags of the same name (and
     owner) are upgraded in place rather than duplicated. A ``commit`` is issued
     at the end.
+
+    The curated set is fetched in one query rather than per tag: this runs on
+    every registration (where it is a guaranteed miss for all of them) and on
+    startup for each existing account.
     """
 
-    for name, penalize in (
-        [(n, True) for n in _PENALIZED_SYSTEM_TAGS]
-        + [(n, False) for n in _NEUTRAL_SYSTEM_TAGS]
-    ):
-        tag = crud.get_or_create_tag(session, name, user_id)
+    curated = {name: True for name in _PENALIZED_SYSTEM_TAGS}
+    curated.update({name: False for name in _NEUTRAL_SYSTEM_TAGS})
+
+    session.flush()
+    stmt = scope(select(Tag).where(Tag.name.in_(curated)), Tag.user_id, user_id)
+    existing = {tag.name: tag for tag in session.execute(stmt).scalars()}
+
+    for name, penalize in curated.items():
+        tag = existing.get(name)
+        if tag is None:
+            tag = Tag(name=name, user_id=user_id)
+            session.add(tag)
         tag.is_system = True
         tag.penalize_repetition = penalize
 

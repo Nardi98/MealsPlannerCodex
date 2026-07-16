@@ -41,8 +41,9 @@ from models import (  # noqa: E402
 )
 from auth_users import hash_password  # noqa: E402
 
-# Default seed account. In Step 1 data is still global; later steps assign
-# ownership of the seeded data to this user.
+# Default seed account. Every seeded row below is owned by this user; it starts
+# on the shared ``DEFAULT_PLAN_SETTINGS`` (``User.plan_settings`` stays NULL
+# until the account overrides something).
 DEMO_USER_EMAIL = "demo@mealplanner.test"
 DEMO_USER_PASSWORD = "demo1234"
 

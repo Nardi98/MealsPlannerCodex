@@ -1,32 +1,18 @@
 from datetime import date
-import os
-from fastapi.testclient import TestClient
 
 import crud
-from main import app, get_db
 
 
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-    return _override
-
-
-def test_post_plan_with_side_recipe(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
+def test_post_plan_with_side_recipe(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main", user_id=user.id)
     plan_date = date(2024, 1, 1)
     payload = {
         "plan_date": plan_date.isoformat(),
         "plan": {plan_date.isoformat(): [{"main_id": main.id, "side_ids": [side.id]}]},
     }
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp = client.post("/meal-plans", json=payload)
     assert resp.status_code == 200
@@ -46,18 +32,15 @@ def test_post_plan_with_side_recipe(db_session):
     assert resp2.status_code == 200
     assert resp2.json() == expected
 
-    app.dependency_overrides.clear()
 
 
-def test_add_side_dish_endpoint(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main")
+def test_add_side_dish_endpoint(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main", user_id=user.id)
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp = client.post(
         "/meal-plans/side",
@@ -84,15 +67,14 @@ def test_add_side_dish_endpoint(db_session):
         ]
     }
 
-    app.dependency_overrides.clear()
 
 
-def test_replace_and_remove_side_dish_scores(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0)
+def test_replace_and_remove_side_dish_scores(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
     assert crud.get_recipe(db_session, side1.id).score == 0
     crud.replace_meal_side(db_session, plan_date, 1, 0, side2.id)
@@ -101,16 +83,14 @@ def test_replace_and_remove_side_dish_scores(db_session):
     assert crud.get_recipe(db_session, side2.id).score == 0
 
 
-def test_add_multiple_side_dishes(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side")
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side")
+def test_add_multiple_side_dishes(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", user_id=user.id)
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp1 = client.post(
         "/meal-plans/side",
@@ -136,22 +116,19 @@ def test_add_multiple_side_dishes(db_session):
         ]
     }
 
-    app.dependency_overrides.clear()
 
 
-def test_swap_specific_side_dish_endpoint(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0)
-    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0)
+def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
     crud.add_meal_side(db_session, plan_date, 1, side2.id)
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp = client.post(
         "/meal-plans/side",
@@ -175,21 +152,18 @@ def test_swap_specific_side_dish_endpoint(db_session):
     assert plan_resp.status_code == 200
     assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side1", "Side3"]
 
-    app.dependency_overrides.clear()
 
 
-def test_remove_side_dish_endpoint_no_score_change(db_session):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0)
+def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
-    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]})
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
     crud.add_meal_side(db_session, plan_date, 1, side2.id)
 
-    os.makedirs("data", exist_ok=True)
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    client = TestClient(app)
+    client = auth_client
 
     resp = client.request(
         "DELETE",
@@ -209,4 +183,3 @@ def test_remove_side_dish_endpoint_no_score_change(db_session):
     assert plan_resp.status_code == 200
     assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side1"]
 
-    app.dependency_overrides.clear()

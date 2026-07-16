@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     Integer,
     CheckConstraint,
+    JSON,
     PrimaryKeyConstraint,
     String,
     Table,
@@ -84,14 +85,19 @@ CATEGORIES: tuple[str, ...] = (
 )
 
 
-def _owner_fk_column() -> Column:
-    """A nullable, indexed ``user_id`` FK to ``users`` for an owned resource.
+def _owner_fk_column(*, index: bool = True) -> Column:
+    """A nullable ``user_id`` FK to ``users`` for an owned resource.
 
     Each mapped class needs its own ``Column`` instance, so this is a factory
     rather than a shared column.
+
+    Pass ``index=False`` where the table already declares a
+    ``UniqueConstraint("user_id", ...)``: that constraint's index leads with
+    ``user_id`` and already serves the ownership filter, so a standalone index
+    would just be a second B-tree to maintain on every write.
     """
 
-    return Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    return Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=index)
 
 
 class User(Base):
@@ -107,6 +113,9 @@ class User(Base):
     auth_provider = Column(String, nullable=False, default="local")
     google_sub = Column(String, nullable=True, unique=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+    # Per-user overrides layered on top of ``DEFAULT_PLAN_SETTINGS``. ``None``
+    # means "no overrides" (the account uses the shared defaults).
+    plan_settings = Column(JSON, nullable=True)
 
 
 # Association table linking recipes and tags for a many-to-many relationship.
@@ -160,7 +169,8 @@ class Ingredient(Base):
     __tablename__ = "ingredients"
 
     id = Column(Integer, primary_key=True)
-    user_id = _owner_fk_column()
+    # uq_ingredient_user_name already indexes (user_id, name).
+    user_id = _owner_fk_column(index=False)
     name = Column(String, nullable=False)
     season_months = Column(IntList)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
@@ -212,7 +222,8 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id = Column(Integer, primary_key=True)
-    user_id = _owner_fk_column()
+    # uq_tag_user_name already indexes (user_id, name).
+    user_id = _owner_fk_column(index=False)
     name = Column(String, nullable=False)
     penalize_repetition = Column(Boolean, nullable=False, server_default=false())
     is_system = Column(Boolean, nullable=False, server_default=false())
