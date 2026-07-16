@@ -24,7 +24,7 @@ from sqlalchemy import (
     false,
     func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.types import TypeDecorator
 
 from database import Base
@@ -100,6 +100,17 @@ def _owner_fk_column(*, index: bool = True) -> Column:
     return Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=index)
 
 
+def normalize_email(email: str) -> str:
+    """Return the canonical stored form of ``email``: trimmed and lowercased.
+
+    Every read and write funnels through here so stored values and lookup keys
+    always match. Addresses are treated as case-insensitive in full: only the
+    domain is formally case-insensitive, but no provider we target distinguishes
+    the local part, and folding it whole is what users expect.
+    """
+    return email.strip().lower()
+
+
 class User(Base):
     """An account owning its own recipes, ingredients, tags, and plans."""
 
@@ -116,6 +127,14 @@ class User(Base):
     # Per-user overrides layered on top of ``DEFAULT_PLAN_SETTINGS``. ``None``
     # means "no overrides" (the account uses the shared defaults).
     plan_settings = Column(JSON, nullable=True)
+
+    @validates("email")
+    def _canonicalise_email(self, key: str, value: str) -> str:
+        # On the model rather than in ``crud`` so that every write path obeys
+        # it, including the seed scripts that construct ``User`` directly. The
+        # unique index then enforces case-insensitive uniqueness by
+        # construction rather than by luck of lowercase literals.
+        return normalize_email(value)
 
 
 # Association table linking recipes and tags for a many-to-many relationship.

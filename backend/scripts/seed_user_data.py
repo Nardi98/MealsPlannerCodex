@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from sqlalchemy import select  # noqa: E402
 
+from crud import normalize_email  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import Ingredient, Recipe, RecipeIngredient, Tag, User  # noqa: E402
 from auth_users import hash_password  # noqa: E402
@@ -40,6 +41,7 @@ DEFAULT_PASSWORD = "demo1234"
 def get_or_create_user(session, email: str, password: str) -> User:
     """Return the user with ``email``, creating a local account if missing."""
 
+    email = normalize_email(email)
     user = session.execute(
         select(User).where(User.email == email)
     ).scalar_one_or_none()
@@ -131,6 +133,9 @@ def main() -> None:
     try:
         user = get_or_create_user(session, email, password)
         counts = populate_for_user(session, user)
+        # Report the stored address rather than the raw argument, so the
+        # operator sees which account was actually touched.
+        seeded_email = user.email
         total_r = session.query(Recipe).filter_by(user_id=user.id).count()
         total_i = session.query(Ingredient).filter_by(user_id=user.id).count()
         total_t = session.query(Tag).filter_by(user_id=user.id).count()
@@ -138,7 +143,7 @@ def main() -> None:
         session.close()
 
     print(
-        f"[seed_user_data] Populated {email!r} (added "
+        f"[seed_user_data] Populated {seeded_email!r} (added "
         f"{counts['recipes']} recipes, {counts['ingredients']} ingredients, "
         f"{counts['tags']} tags). Account now owns "
         f"{total_r} recipes, {total_i} ingredients, {total_t} tags."

@@ -113,6 +113,26 @@ def test_google_login_links_sub_to_existing_local_account(
     assert local.hashed_password == "hashed"
 
 
+def test_google_login_links_local_account_whose_email_differs_in_case(
+    client, db_session, monkeypatch
+):
+    """A shoutier claim is the same address — link it, don't fork the account."""
+    monkeypatch.setattr(
+        auth_users,
+        "verify_google_token",
+        lambda credential: fake_claims(email="Gina@Gmail.com"),
+    )
+    local = crud.create_user(
+        db_session, email="gina@gmail.com", hashed_password="hashed"
+    )
+
+    resp = client.post("/auth/google", json={"credential": "any-id-token"})
+
+    assert resp.status_code == 200
+    assert auth_users.decode_token(resp.json()["access_token"]) == str(local.id)
+    assert db_session.query(crud.User).count() == 1, "must not create a duplicate"
+
+
 def test_google_login_refuses_to_link_an_unverified_email(
     client, db_session, monkeypatch
 ):

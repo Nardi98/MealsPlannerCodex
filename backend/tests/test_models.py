@@ -3,6 +3,17 @@ from sqlalchemy import select
 from models import Recipe, Ingredient, RecipeIngredient, Tag, User
 
 
+def test_user_email_is_canonicalised_on_assignment(db_session):
+    """The invariant lives on the model, so direct ORM construction obeys it too."""
+    user = User(
+        email="  Direct.ORM@Example.COM ", hashed_password="x", auth_provider="local"
+    )
+    assert user.email == "direct.orm@example.com"
+
+    user.email = "Reassigned@Example.COM"
+    assert user.email == "reassigned@example.com"
+
+
 def test_recipe_insert_defaults(db_session):
     r = Recipe(title="Pasta", servings_default=2)
     db_session.add(r)

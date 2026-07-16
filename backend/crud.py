@@ -25,6 +25,7 @@ from models import (
     RecipeIngredient,
     UnitEnum,
     User,
+    normalize_email,
     recipe_tag_table,
 )
 
@@ -32,6 +33,7 @@ __all__ = [
     "create_user",
     "get_user",
     "get_user_by_email",
+    "normalize_email",
     "get_user_by_google_sub",
     "create_recipe",
     "create_ingredient",
@@ -78,6 +80,7 @@ def create_user(
 ) -> User:
     """Create and persist a :class:`~models.User`."""
     user = User(
+        # ``User`` canonicalises the address itself, so no folding is needed here.
         email=email,
         hashed_password=hashed_password,
         display_name=display_name,
@@ -96,7 +99,7 @@ def get_user(session: Session, user_id: int) -> Optional[User]:
 
 def get_user_by_email(session: Session, email: str) -> Optional[User]:
     return session.execute(
-        select(User).where(User.email == email)
+        select(User).where(User.email == normalize_email(email))
     ).scalar_one_or_none()
 
 
