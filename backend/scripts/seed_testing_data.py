@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import NamedTuple
 
 # Allow ``python scripts/seed_testing_data.py`` to resolve the top-level
 # ``database`` / ``models`` modules that live at the backend root.
@@ -36,8 +37,16 @@ from models import (  # noqa: E402
     Recipe,
     RecipeIngredient,
     Tag,
+    User,
     UnitEnum,
 )
+from auth_users import hash_password  # noqa: E402
+
+# Default seed account. Every seeded row below is owned by this user; it starts
+# on the shared ``DEFAULT_PLAN_SETTINGS`` (``User.plan_settings`` stays NULL
+# until the account overrides something).
+DEMO_USER_EMAIL = "demo@mealplanner.test"
+DEMO_USER_PASSWORD = "demo1234"
 
 # ---------------------------------------------------------------------------
 # Ingredients: (name, unit, season_months, categories)  -- 56 entries
@@ -129,11 +138,23 @@ TAGS: list[tuple[str, bool, bool]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Recipes: (title, servings, course, bulk_prep, ingredients, tags)
-#   ingredients: list of (ingredient_name, quantity, unit)
-# 44 entries (>= 40 required). Ingredient names must exist in INGREDIENTS.
+# Recipes. 44 entries (>= 40 required). Ingredient names must exist in
+# INGREDIENTS. Rows are a NamedTuple so consumers (notably
+# ``seed_user_data.py``) read fields by name and survive a field being added
+# here -- the schema mandate in CLAUDE.md makes that a routine edit.
 # ---------------------------------------------------------------------------
-RECIPES: list[tuple[str, int, str, bool, list[tuple[str, float, UnitEnum]], list[str]]] = [
+
+
+class SeedRecipe(NamedTuple):
+    title: str
+    servings: int
+    course: str
+    bulk_prep: bool
+    ingredients: list[tuple[str, float, UnitEnum]]
+    tags: list[str]
+
+
+RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
     ("Spaghetti Pomodoro", 2, "first-course", False,
      [("Spaghetti", 200, UnitEnum.G), ("Tomato", 300, UnitEnum.G),
       ("Garlic", 10, UnitEnum.G), ("Basil", 10, UnitEnum.G),
@@ -272,7 +293,7 @@ RECIPES: list[tuple[str, int, str, bool, list[tuple[str, float, UnitEnum]], list
     ("Tomato Basil Soup", 4, "first-course", True,
      [("Tomato", 500, UnitEnum.G), ("Basil", 15, UnitEnum.G),
       ("Onion", 80, UnitEnum.G)], ["soup", "vegan", "cheap"]),
-]
+]]
 
 
 def reset_database() -> None:
@@ -285,16 +306,35 @@ def reset_database() -> None:
 def populate(session) -> None:
     """Insert the full testing dataset into an empty database."""
 
+    demo_user = User(
+        email=DEMO_USER_EMAIL,
+        hashed_password=hash_password(DEMO_USER_PASSWORD),
+        display_name="Demo User",
+        auth_provider="local",
+    )
+    session.add(demo_user)
+    # Flush so ``demo_user.id`` is available to stamp ownership on every row.
+    session.flush()
+
     tags: dict[str, Tag] = {}
     for name, penalize, is_system in TAGS:
-        tag = Tag(name=name, penalize_repetition=penalize, is_system=is_system)
+        tag = Tag(
+            name=name,
+            penalize_repetition=penalize,
+            is_system=is_system,
+            user_id=demo_user.id,
+        )
         session.add(tag)
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
     for name, unit, months, categories in INGREDIENTS:
         ing = Ingredient(
-            name=name, unit=unit, season_months=months, categories=categories
+            name=name,
+            unit=unit,
+            season_months=months,
+            categories=categories,
+            user_id=demo_user.id,
         )
         session.add(ing)
         ingredients[name] = ing
@@ -306,6 +346,7 @@ def populate(session) -> None:
             procedure=f"Prepare {title.lower()}.",
             course=course,
             bulk_prep=bulk,
+            user_id=demo_user.id,
         )
         for ing_name, qty, unit in ing_list:
             recipe.ingredients.append(

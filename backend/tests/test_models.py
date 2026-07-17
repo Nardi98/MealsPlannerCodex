@@ -1,7 +1,17 @@
 import pytest
-from datetime import date
 from sqlalchemy import select
-from models import Recipe, Ingredient, RecipeIngredient, Tag
+from models import Recipe, Ingredient, RecipeIngredient, Tag, User
+
+
+def test_user_email_is_canonicalised_on_assignment(db_session):
+    """The invariant lives on the model, so direct ORM construction obeys it too."""
+    user = User(
+        email="  Direct.ORM@Example.COM ", hashed_password="x", auth_provider="local"
+    )
+    assert user.email == "direct.orm@example.com"
+
+    user.email = "Reassigned@Example.COM"
+    assert user.email == "reassigned@example.com"
 
 
 def test_recipe_insert_defaults(db_session):
@@ -83,7 +93,15 @@ def test_many_to_many_tags(db_session):
 
 
 def test_tag_name_unique_constraint(db_session):
-    db_session.add_all([Tag(name="pasta"), Tag(name="pasta")])
+    # Uniqueness is now scoped per user: two same-named tags owned by the same
+    # user collide, but different users may each own a "pasta" tag.
+    user = User(email="tags@x.test", hashed_password="x", auth_provider="local")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add_all([
+        Tag(name="pasta", user_id=user.id),
+        Tag(name="pasta", user_id=user.id),
+    ])
     with pytest.raises(Exception):  # IntegrityError once the 2nd insert hits
         db_session.commit()
     db_session.rollback()

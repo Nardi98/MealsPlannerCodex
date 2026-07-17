@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Meal Planner: a FastAPI + SQLite backend that generates learning-based weekly meal plans, paired with a Vite/React frontend (`frontend-v2/`). The planner scores recipes on preference, seasonality, recency, tags, and bulk-prep, and uses ε-greedy exploration. See `README.md` for the full feature spec and `MEAL_PLANNER_DESIGN_GUIDE.md` for the mandatory UI conventions.
+Meal Planner: a FastAPI + PostgreSQL backend that generates learning-based weekly meal plans, paired with a Vite/React frontend (`frontend-v2/`). The planner scores recipes on preference, seasonality, recency, tags, and bulk-prep, and uses ε-greedy exploration. See `README.md` for the full feature spec and `MEAL_PLANNER_DESIGN_GUIDE.md` for the mandatory UI conventions.
 
 ## Commands
 
@@ -48,7 +48,7 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 - `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans. (An earlier process-global in-memory cache `_PLAN_CACHE` / `_PLAN_SETTINGS` has been removed; see `list_planned_titles`'s comment noting it "replaces the former in-memory `_PLAN_CACHE`".)
 - `models.py` — SQLAlchemy models. `Meal` has composite PK `(plan_date, meal_number)` with a `CHECK meal_number IN (1,2)`. `IntList` TypeDecorator stores `list[int]` (e.g. `season_months`) as comma-separated strings. `MealSide` holds ordered side dishes per meal.
 - `schemas.py` — Pydantic request/response models.
-- `database.py` — engine + `SessionLocal` + `Base`; SQLite file at `backend/data/app.db` (absolute path derived from the module location). `main.py` calls `Base.metadata.create_all` on startup, so a fresh DB needs no migration step.
+- `database.py` — engine + `SessionLocal` + `Base`. The database is **PostgreSQL only**; `resolve_database_url()` reads the required `DATABASE_URL` env var (normalizing a bare `postgres://` scheme) and raises `RuntimeError` when it is unset — there is no fallback, so a misconfigured deploy fails loudly instead of silently using the wrong database. `main.py` calls `Base.metadata.create_all` on startup, so a fresh DB needs no migration step.
 
 ### Migrations
 **The real schema story is `Base.metadata.create_all` on startup** (`main.py`), so a fresh DB needs no migration step. There is **no active migration system** and `alembic` is not a dependency. During development, changing the schema means changing the model and starting against a fresh DB — nothing else. Real migrations will be adopted via `alembic init` (generating a fresh baseline from the models) when the project approaches production and must evolve a populated DB in place. `backend/migrations/README.md` holds a historical changelog of past schema changes; do **not** add new revision scripts.

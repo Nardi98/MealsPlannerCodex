@@ -6,17 +6,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from database import Base, engine
 
 
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
-
-def test_recipe_crud() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_recipe_crud(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Soup",
         "servings_default": 2,
@@ -53,9 +47,8 @@ def test_recipe_crud() -> None:
     assert all(r["id"] != recipe_id for r in res.json())
 
 
-def test_create_recipe_ignores_blank_ingredients() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_create_recipe_ignores_blank_ingredients(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Tea",
         "servings_default": 1,
@@ -72,9 +65,8 @@ def test_create_recipe_ignores_blank_ingredients() -> None:
     assert data["ingredients"][0]["name"] == "Water"
 
 
-def test_create_recipe_defaults_course_api() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_create_recipe_defaults_course_api(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Rice",
         "servings_default": 1,
@@ -85,9 +77,8 @@ def test_create_recipe_defaults_course_api() -> None:
     assert res.json()["course"] == "main"
 
 
-def test_recipe_persists_ingredient_season_months() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_recipe_persists_ingredient_season_months(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Veggies",
         "servings_default": 2,
@@ -107,9 +98,8 @@ def test_recipe_persists_ingredient_season_months() -> None:
     assert data["ingredients"][0]["season_months"] == [6, 7]
 
 
-def test_recipe_defaults_ingredient_season_months() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_recipe_defaults_ingredient_season_months(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Pepper Soup",
         "servings_default": 1,

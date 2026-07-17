@@ -3,33 +3,34 @@ import json
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import crud
+from conftest import reset_schema
+from database import Base
 from models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
 
 
-def _create_sample_data(session):
-    """Populate the database with a small set of objects for testing."""
-    tag = Tag(name="vegan")
-    recipe = Recipe(title="Soup", servings_default=2, course="main")
-    base = Ingredient(name="Water")
+def _create_sample_data(session, user):
+    """Populate the database with a small set of objects owned by ``user``."""
+    tag = Tag(name="vegan", user_id=user.id)
+    recipe = Recipe(title="Soup", servings_default=2, course="main", user_id=user.id)
+    base = Ingredient(name="Water", user_id=user.id)
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
-    plan = MealPlan(plan_date=date(2024, 1, 1))
+    plan = MealPlan(plan_date=date(2024, 1, 1), user_id=user.id)
     plan.meals.append(Meal(meal_number=1, recipe=recipe, accepted=True))
     session.add_all([tag, recipe, plan])
     session.commit()
 
 
-def test_round_trip_export_import(db_session):
-    _create_sample_data(db_session)
+def test_round_trip_export_import(db_session, user):
+    _create_sample_data(db_session, user)
 
-    exported = crud.export_data(db_session)
+    exported = crud.export_data(db_session, user.id)
 
     # Re-import into the same session; import_data should clear existing data first.
-    crud.import_data(io.StringIO(exported), db_session, mode="overwrite")
+    crud.import_data(io.StringIO(exported), db_session, mode="overwrite", user_id=user.id)
 
     assert db_session.query(Recipe).count() == 1
     assert db_session.query(Tag).count() == 1
@@ -51,11 +52,11 @@ def test_round_trip_export_import(db_session):
 def test_import_bad_data_raises(db_session):
     bad_file = io.StringIO("not json")
     with pytest.raises(ValueError):
-        crud.import_data(bad_file, db_session)
+        crud.import_data(bad_file, db_session, user_id=None)
 
 
-def test_import_merge_adds_data(db_session):
-    _create_sample_data(db_session)
+def test_import_merge_adds_data(db_session, user):
+    _create_sample_data(db_session, user)
 
     merge_payload = {
         "recipes": [
@@ -71,7 +72,9 @@ def test_import_merge_adds_data(db_session):
         "meal_plans": [],
     }
 
-    crud.import_data(io.StringIO(json.dumps(merge_payload)), db_session, mode="merge")
+    crud.import_data(
+        io.StringIO(json.dumps(merge_payload)), db_session, mode="merge", user_id=user.id
+    )
 
     titles = {r.title for r in db_session.query(Recipe).all()}
     assert titles == {"Soup", "Salad"}
@@ -79,12 +82,12 @@ def test_import_merge_adds_data(db_session):
     assert db_session.query(Tag).count() == 1
 
 
-def test_import_merge_existing_ids(db_session):
+def test_import_merge_existing_ids(db_session, user):
     """Importing an export in merge mode duplicates recipes with new ids."""
-    _create_sample_data(db_session)
-    exported = crud.export_data(db_session)
+    _create_sample_data(db_session, user)
+    exported = crud.export_data(db_session, user.id)
 
-    crud.import_data(io.StringIO(exported), db_session, mode="merge")
+    crud.import_data(io.StringIO(exported), db_session, mode="merge", user_id=user.id)
 
     recipes = db_session.query(Recipe).order_by(Recipe.id).all()
     assert len(recipes) == 2
@@ -104,16 +107,18 @@ def test_import_merge_tag_id_collision(db_session):
         "meal_plans": [],
     }
 
-    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="merge")
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
 
     tags = db_session.query(Tag).order_by(Tag.name).all()
     assert {t.name for t in tags} == {"vegan", "vegetarian"}
     assert len({t.id for t in tags}) == 2
 
 
-def test_export_includes_related_objects(db_session):
-    _create_sample_data(db_session)
-    exported = crud.export_data(db_session)
+def test_export_includes_related_objects(db_session, user):
+    _create_sample_data(db_session, user)
+    exported = crud.export_data(db_session, user.id)
     data = json.loads(exported)
 
     assert data["recipes"][0]["title"] == "Soup"
@@ -131,9 +136,9 @@ def test_export_includes_related_objects(db_session):
     assert meal_info["leftover"] is False
 
 
-def test_import_creates_tables_when_missing():
+def test_import_creates_tables_when_missing(engine):
     """import_data should initialise schema if tables are absent."""
-    engine = create_engine("sqlite:///:memory:", future=True)
+    Base.metadata.drop_all(bind=engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
     payload = {
@@ -150,9 +155,16 @@ def test_import_creates_tables_when_missing():
         "meal_plans": [],
     }
 
-    with Session() as session:
-        crud.import_data(io.StringIO(json.dumps(payload)), session, mode="overwrite")
-        assert session.query(Recipe).count() == 1
+    try:
+        with Session() as session:
+            crud.import_data(
+                io.StringIO(json.dumps(payload)), session, mode="overwrite", user_id=None
+            )
+            assert session.query(Recipe).count() == 1
+    finally:
+        # ``import_data`` commits, and the database is shared with every other
+        # test, so hand back a pristine schema.
+        reset_schema(engine)
 
 
 _FULL_RECIPE_PAYLOAD = {
@@ -180,13 +192,17 @@ def _assert_full_recipe(recipe):
 
 def test_import_merge_builds_all_recipe_fields(db_session):
     payload = {"recipes": [dict(_FULL_RECIPE_PAYLOAD)], "tags": [], "meal_plans": []}
-    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="merge")
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
     _assert_full_recipe(db_session.query(Recipe).one())
 
 
 def test_import_overwrite_new_builds_all_recipe_fields(db_session):
     payload = {"recipes": [dict(_FULL_RECIPE_PAYLOAD)], "tags": [], "meal_plans": []}
-    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="overwrite")
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="overwrite", user_id=None
+    )
     _assert_full_recipe(db_session.query(Recipe).one())
 
 
@@ -200,7 +216,9 @@ def test_import_overwrite_existing_builds_all_recipe_fields(db_session):
         "tags": [],
         "meal_plans": [],
     }
-    crud.import_data(io.StringIO(json.dumps(payload)), db_session, mode="overwrite")
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="overwrite", user_id=None
+    )
     _assert_full_recipe(db_session.query(Recipe).one())
 
 
@@ -209,10 +227,10 @@ def test_get_recipes_dead_stub_removed():
     assert not hasattr(crud, "get_recipes")
 
 
-def test_clear_data(db_session):
-    _create_sample_data(db_session)
+def test_clear_data(db_session, user):
+    _create_sample_data(db_session, user)
     assert db_session.query(Recipe).count() == 1
-    crud.clear_data(db_session)
+    crud.clear_data(db_session, user.id)
     assert db_session.query(Recipe).count() == 0
     assert db_session.query(Tag).count() == 0
     assert db_session.query(Ingredient).count() == 0

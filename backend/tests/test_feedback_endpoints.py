@@ -1,24 +1,19 @@
 from datetime import date
 
-from fastapi.testclient import TestClient
-from main import app, get_db
+from conftest import client_as
+from main import app
 import crud
 
 
-def override_get_db(session):
-    def _override():
-        try:
-            yield session
-        finally:
-            pass
-    return _override
-
-
 def test_feedback_endpoints_return_unique_replacement(db_session):
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
-    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0)
+    user = crud.create_user(
+        db_session, email="feedback@test.local", hashed_password="x"
+    )
+    client = client_as(db_session, user)
+    uid = user.id
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
+    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0, user_id=uid)
     crud.set_meal_plan(
         db_session,
         {
@@ -27,8 +22,8 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
                 {"main_id": c.id, "leftover": True},
             ]
         },
+        uid,
     )
-    client = TestClient(app)
 
     consumed = date(2024, 1, 1)
     resp = client.post(
@@ -50,17 +45,21 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
 
 
 def test_reject_replacement_limited_to_main_courses(db_session):
-    app.dependency_overrides[get_db] = override_get_db(db_session)
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0)
+    user = crud.create_user(
+        db_session, email="feedback@test.local", hashed_password="x"
+    )
+    client = client_as(db_session, user)
+    uid = user.id
+    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
     crud.create_recipe(
-        db_session, title="C", servings_default=1, course="dessert", score=0
+        db_session, title="C", servings_default=1, course="dessert", score=0, user_id=uid
     )
     crud.set_meal_plan(
         db_session,
         {"2024-01-01": [{"main_id": a.id, "leftover": False}]},
+        uid,
     )
-    client = TestClient(app)
 
     consumed = date(2024, 1, 1)
     resp = client.post(

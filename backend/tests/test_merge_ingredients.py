@@ -8,13 +8,8 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 import crud
 from main import app
-from database import Base, engine
 from models import Ingredient, Recipe, RecipeIngredient, UnitEnum
 
-
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
 
 def _make(session, name, unit, categories=None, season=None):
@@ -126,9 +121,8 @@ def test_merge_missing_returns_none(db_session) -> None:
     assert crud.merge_ingredients(db_session, ing.id, 9999) is None
 
 
-def test_merge_endpoint_404_and_400() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_merge_endpoint_404_and_400(api_client) -> None:
+    client = api_client
     a = client.post("/ingredients", json={"name": "Tomato", "unit": "g"}).json()
     res = client.post(
         "/ingredients/merge",

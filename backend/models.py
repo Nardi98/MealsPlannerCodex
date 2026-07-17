@@ -8,19 +8,23 @@ from sqlalchemy import (
     Boolean,
     Column,
     Date,
+    DateTime,
     Enum,
     Float,
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
     CheckConstraint,
+    JSON,
     PrimaryKeyConstraint,
     String,
     Table,
     Text,
+    UniqueConstraint,
     false,
+    func,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, validates
 from sqlalchemy.types import TypeDecorator
 
 from database import Base
@@ -81,6 +85,58 @@ CATEGORIES: tuple[str, ...] = (
 )
 
 
+def _owner_fk_column(*, index: bool = True) -> Column:
+    """A nullable ``user_id`` FK to ``users`` for an owned resource.
+
+    Each mapped class needs its own ``Column`` instance, so this is a factory
+    rather than a shared column.
+
+    Pass ``index=False`` where the table already declares a
+    ``UniqueConstraint("user_id", ...)``: that constraint's index leads with
+    ``user_id`` and already serves the ownership filter, so a standalone index
+    would just be a second B-tree to maintain on every write.
+    """
+
+    return Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=index)
+
+
+def normalize_email(email: str) -> str:
+    """Return the canonical stored form of ``email``: trimmed and lowercased.
+
+    Every read and write funnels through here so stored values and lookup keys
+    always match. Addresses are treated as case-insensitive in full: only the
+    domain is formally case-insensitive, but no provider we target distinguishes
+    the local part, and folding it whole is what users expect.
+    """
+    return email.strip().lower()
+
+
+class User(Base):
+    """An account owning its own recipes, ingredients, tags, and plans."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    # Null for OAuth-only accounts (e.g. Google sign-in).
+    hashed_password = Column(String, nullable=True)
+    display_name = Column(String)
+    auth_provider = Column(String, nullable=False, default="local")
+    google_sub = Column(String, nullable=True, unique=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    # Per-user overrides layered on top of ``DEFAULT_PLAN_SETTINGS``. ``None``
+    # means "no overrides" (the account uses the shared defaults).
+    plan_settings = Column(JSON, nullable=True)
+
+    @validates("email")
+    def _canonicalise_email(self, key: str, value: str) -> str:
+        # On the model rather than in ``crud`` so that every write path obeys
+        # it, including the seed scripts that construct ``User`` directly. The
+        # unique index then enforces case-insensitive uniqueness by
+        # construction rather than by luck of lowercase literals.
+        return normalize_email(value)
+
+
 # Association table linking recipes and tags for a many-to-many relationship.
 recipe_tag_table = Table(
     "recipe_tag",
@@ -106,6 +162,7 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id = Column(Integer, primary_key=True)
+    user_id = _owner_fk_column()
     title = Column(String, nullable=False)
     servings_default = Column(Integer, nullable=False)
     procedure = Column(Text)
@@ -131,13 +188,19 @@ class Ingredient(Base):
     __tablename__ = "ingredients"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
+    # uq_ingredient_user_name already indexes (user_id, name).
+    user_id = _owner_fk_column(index=False)
+    name = Column(String, nullable=False)
     season_months = Column(IntList)
     unit = Column(Enum(UnitEnum, name="unit_enum"))
     categories = Column(StrList, nullable=True)
 
     recipes = relationship(
         "RecipeIngredient", back_populates="ingredient", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_ingredient_user_name"),
     )
 
 
@@ -178,12 +241,18 @@ class Tag(Base):
     __tablename__ = "tags"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
+    # uq_tag_user_name already indexes (user_id, name).
+    user_id = _owner_fk_column(index=False)
+    name = Column(String, nullable=False)
     penalize_repetition = Column(Boolean, nullable=False, server_default=false())
     is_system = Column(Boolean, nullable=False, server_default=false())
 
     recipes = relationship(
         "Recipe", secondary=recipe_tag_table, back_populates="tags"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_tag_user_name"),
     )
 
 
@@ -192,10 +261,19 @@ class MealPlan(Base):
 
     __tablename__ = "meal_plans"
 
-    plan_date = Column(Date, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_date = Column(Date, nullable=False)
 
     meals = relationship(
         "Meal", back_populates="plan", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        PrimaryKeyConstraint("user_id", "plan_date"),
     )
 
 
@@ -204,9 +282,8 @@ class Meal(Base):
 
     __tablename__ = "meals"
 
-    plan_date = Column(
-        Date, ForeignKey("meal_plans.plan_date", ondelete="CASCADE"), nullable=False
-    )
+    user_id = Column(Integer, nullable=False)
+    plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
     recipe_id = Column(Integer, ForeignKey("recipes.id"))
     accepted = Column(Boolean, default=False)
@@ -226,7 +303,12 @@ class Meal(Base):
     )
 
     __table_args__ = (
-        PrimaryKeyConstraint("plan_date", "meal_number"),
+        PrimaryKeyConstraint("user_id", "plan_date", "meal_number"),
+        ForeignKeyConstraint(
+            ["user_id", "plan_date"],
+            ["meal_plans.user_id", "meal_plans.plan_date"],
+            ondelete="CASCADE",
+        ),
         CheckConstraint("meal_number IN (1,2)"),
         CheckConstraint(
             "(leftover_source_date IS NULL) = (leftover_source_meal IS NULL)",
@@ -253,6 +335,7 @@ class MealSide(Base):
 
     __tablename__ = "meal_side_dishes"
 
+    user_id = Column(Integer, nullable=False)
     plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
     position = Column(Integer, nullable=False)
@@ -262,10 +345,10 @@ class MealSide(Base):
     side_recipe = relationship("Recipe")
 
     __table_args__ = (
-        PrimaryKeyConstraint("plan_date", "meal_number", "position"),
+        PrimaryKeyConstraint("user_id", "plan_date", "meal_number", "position"),
         ForeignKeyConstraint(
-            ["plan_date", "meal_number"],
-            ["meals.plan_date", "meals.meal_number"],
+            ["user_id", "plan_date", "meal_number"],
+            ["meals.user_id", "meals.plan_date", "meals.meal_number"],
             ondelete="CASCADE",
         ),
     )

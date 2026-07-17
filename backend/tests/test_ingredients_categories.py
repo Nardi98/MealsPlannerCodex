@@ -5,17 +5,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from database import Base, engine
 
 
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
-
-def test_create_ingredient_roundtrips_categories() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_create_ingredient_roundtrips_categories(api_client) -> None:
+    client = api_client
     payload = {
         "name": "Spaghetti",
         "unit": "g",
@@ -27,9 +21,8 @@ def test_create_ingredient_roundtrips_categories() -> None:
     assert res.json()["categories"] == ["Grains & Pasta", "Carbs"]
 
 
-def test_update_ingredient_roundtrips_categories() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_update_ingredient_roundtrips_categories(api_client) -> None:
+    client = api_client
     res = client.post(
         "/ingredients",
         json={"name": "Lentils", "unit": "g", "season_months": [], "categories": []},
@@ -48,9 +41,8 @@ def test_update_ingredient_roundtrips_categories() -> None:
     assert res.json()["categories"] == ["Legumes", "Protein"]
 
 
-def test_create_rejects_unknown_category() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_create_rejects_unknown_category(api_client) -> None:
+    client = api_client
     res = client.post(
         "/ingredients",
         json={"name": "Mystery", "unit": "g", "categories": ["Not A Category"]},

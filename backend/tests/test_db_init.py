@@ -1,29 +1,14 @@
 import database as db
-from sqlalchemy import create_engine, inspect
-import models  # ensure models are registered with Base
+from sqlalchemy import inspect
+import models  # noqa: F401  ensure models are registered with Base
 
 
-def test_init_db_creates_tables_and_is_idempotent():
-    # Bind Base to a temporary in-memory SQLite engine
-    test_engine = create_engine("sqlite:///:memory:", future=True)
-    original_engine = db.engine
-    try:
-        db.engine = test_engine
-        db.Base.metadata.bind = test_engine
+def test_init_db_creates_tables_and_is_idempotent(engine):
+    """``init_db`` builds the schema and is safe to re-run."""
+    db.Base.metadata.drop_all(bind=engine)
 
-        # Initial initialization should create tables
+    for _ in range(2):  # the second call must be a no-op, not an error
         db.init_db()
-        inspector = inspect(test_engine)
-        assert inspector.has_table("recipes")
-        assert inspector.has_table("ingredients")
-        assert inspector.has_table("tags")
-
-        # Calling again should succeed and leave tables intact
-        db.init_db()
-        inspector = inspect(test_engine)
-        assert inspector.has_table("recipes")
-        assert inspector.has_table("ingredients")
-        assert inspector.has_table("tags")
-    finally:
-        db.engine = original_engine
-        db.Base.metadata.bind = original_engine
+        inspector = inspect(engine)
+        for table in ("recipes", "ingredients", "tags"):
+            assert inspector.has_table(table)

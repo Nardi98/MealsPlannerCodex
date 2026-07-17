@@ -16,10 +16,6 @@ __pycache__/
 venv/
 env/
 
-# SQLite databases (keep the data/ dir via .gitkeep, ignore the DB files)
-*.db
-backend/data/*.db
-
 # OS / editor cruft
 .DS_Store
 Thumbs.db

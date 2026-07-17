@@ -7,9 +7,9 @@ from crud import create_recipe, set_meal_plan, get_plan, mark_meal_accepted
 from models import MealPlan, Meal, Recipe
 
 
-def test_meal_plan_model_relationships(db_session):
-    recipe = create_recipe(db_session, title="Toast", servings_default=1, course="main")
-    plan = MealPlan(plan_date=date(2024, 1, 1))
+def test_meal_plan_model_relationships(db_session, user):
+    recipe = create_recipe(db_session, user_id=user.id, title="Toast", servings_default=1, course="main")
+    plan = MealPlan(user_id=user.id, plan_date=date(2024, 1, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
     db_session.add(plan)
@@ -20,13 +20,13 @@ def test_meal_plan_model_relationships(db_session):
     assert plan.meals[0].recipe_id == recipe.id
 
 
-def test_generate_and_persist_plan(db_session):
+def test_generate_and_persist_plan(db_session, user):
     for i in range(7):
-        create_recipe(db_session, title=f"Meal {i}", servings_default=1, course="main")
+        create_recipe(db_session, user_id=user.id, title=f"Meal {i}", servings_default=1, course="main")
     plan_date = date(2024, 5, 17)
 
     plan_titles = planner.generate_plan(
-        db_session, start=plan_date, days=1, meals_per_day=2
+        db_session, start=plan_date, days=1, meals_per_day=2, user_id=user.id
     )
     id_plan = {}
     for day, meals in plan_titles.items():
@@ -42,8 +42,8 @@ def test_generate_and_persist_plan(db_session):
             assert recipe_id is not None
             ids.append(recipe_id)
         id_plan[day] = ids
-    set_meal_plan(db_session, id_plan)
-    fetched = get_plan(db_session, plan_date)
+    set_meal_plan(db_session, id_plan, user.id)
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
     expected = {
         day: [
             {
@@ -62,15 +62,15 @@ def test_generate_and_persist_plan(db_session):
     for day, ids in id_plan.items():
         d = date.fromisoformat(day)
         for idx, rid in enumerate(ids, start=1):
-            meal = db_session.get(Meal, (d, idx))
+            meal = db_session.get(Meal, (user.id, d, idx))
             assert meal is not None and meal.recipe_id == rid and meal.meal_number == idx
 
 
-def test_duplicate_titles_do_not_break_plan(db_session):
+def test_duplicate_titles_do_not_break_plan(db_session, user):
     """Generating a plan works even if recipe titles are duplicated."""
-    create_recipe(db_session, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, user_id=user.id, title="Dup", servings_default=1, course="main")
     # duplicate title intentionally
-    create_recipe(db_session, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, user_id=user.id, title="Dup", servings_default=1, course="main")
 
     plan_date = date(2024, 5, 18)
     plan_titles = {plan_date.isoformat(): ["Dup"]}
@@ -89,8 +89,8 @@ def test_duplicate_titles_do_not_break_plan(db_session):
             assert recipe_id is not None
             ids.append(recipe_id)
         id_plan[day] = ids
-    set_meal_plan(db_session, id_plan)
-    fetched = get_plan(db_session, plan_date)
+    set_meal_plan(db_session, id_plan, user.id)
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
     expected = {
         day: [
             {
@@ -108,17 +108,17 @@ def test_duplicate_titles_do_not_break_plan(db_session):
     for day, ids in id_plan.items():
         d = date.fromisoformat(day)
         for idx, rid in enumerate(ids, start=1):
-            meal = db_session.get(Meal, (d, idx))
+            meal = db_session.get(Meal, (user.id, d, idx))
             assert meal is not None and meal.recipe_id == rid
 
 
-def test_mark_meal_accepted(db_session):
-    r = create_recipe(db_session, title="Meal", servings_default=1, course="main")
+def test_mark_meal_accepted(db_session, user):
+    r = create_recipe(db_session, user_id=user.id, title="Meal", servings_default=1, course="main")
     plan_date = date(2024, 5, 19)
-    set_meal_plan(db_session, {plan_date.isoformat(): [r.id]})
-    meal = mark_meal_accepted(db_session, plan_date, 1, True)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r.id]}, user.id)
+    meal = mark_meal_accepted(db_session, plan_date, 1, True, user.id)
     assert meal is not None and meal.accepted is True
-    fetched = get_plan(db_session, plan_date)
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
     assert fetched == {
         plan_date.isoformat(): [
             {
@@ -129,19 +129,20 @@ def test_mark_meal_accepted(db_session):
             }
         ]
     }
-    stored = db_session.get(Meal, (plan_date, 1))
+    stored = db_session.get(Meal, (user.id, plan_date, 1))
     assert stored is not None and stored.accepted is True
 
 
-def test_meal_with_side_recipe(db_session):
-    main = create_recipe(db_session, title="Main", servings_default=1, course="main")
-    side = create_recipe(db_session, title="Side", servings_default=1, course="main")
+def test_meal_with_side_recipe(db_session, user):
+    main = create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
+    side = create_recipe(db_session, user_id=user.id, title="Side", servings_default=1, course="main")
     plan_date = date(2024, 9, 1)
     set_meal_plan(
         db_session,
         {plan_date.isoformat(): [{"main_id": main.id, "side_ids": [side.id]}]},
+        user.id,
     )
-    fetched = get_plan(db_session, plan_date)
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
     assert fetched == {
         plan_date.isoformat(): [
             {
@@ -152,7 +153,7 @@ def test_meal_with_side_recipe(db_session):
             }
         ]
     }
-    meal = db_session.get(Meal, (plan_date, 1))
+    meal = db_session.get(Meal, (user.id, plan_date, 1))
     assert (
         meal is not None
         and meal.recipe_id == main.id
@@ -161,9 +162,9 @@ def test_meal_with_side_recipe(db_session):
     )
 
 
-def test_leftover_persistence(db_session):
+def test_leftover_persistence(db_session, user):
     """A leftover is persisted as a link to its source meal on an earlier day."""
-    main = create_recipe(db_session, title="Main", servings_default=1, course="main")
+    main = create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
     source_date = date(2024, 9, 2)
     leftover_date = date(2024, 9, 3)
     set_meal_plan(
@@ -172,23 +173,24 @@ def test_leftover_persistence(db_session):
             source_date.isoformat(): [{"main_id": main.id, "leftover": False}],
             leftover_date.isoformat(): [{"main_id": main.id, "leftover": True}],
         },
+        user.id,
     )
     fetched = get_plan(
-        db_session, start_date=source_date, end_date=leftover_date
+        db_session, start_date=source_date, end_date=leftover_date, user_id=user.id
     )
     assert fetched[source_date.isoformat()][0]["leftover"] is False
     assert fetched[leftover_date.isoformat()][0]["leftover"] is True
 
-    leftover = db_session.get(Meal, (leftover_date, 1))
+    leftover = db_session.get(Meal, (user.id, leftover_date, 1))
     assert leftover is not None and leftover.leftover is True
     assert leftover.leftover_source_date == source_date
     assert leftover.leftover_source_meal == 1
 
 
-def test_delete_plan_cascades_meals(db_session):
+def test_delete_plan_cascades_meals(db_session, user):
     """Deleting a meal plan should remove associated meals."""
-    recipe = create_recipe(db_session, title="Stew", servings_default=2, course="main")
-    plan = MealPlan(plan_date=date(2024, 6, 1))
+    recipe = create_recipe(db_session, user_id=user.id, title="Stew", servings_default=2, course="main")
+    plan = MealPlan(user_id=user.id, plan_date=date(2024, 6, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
     db_session.add(plan)
@@ -198,16 +200,16 @@ def test_delete_plan_cascades_meals(db_session):
     db_session.delete(plan)
     db_session.commit()
 
-    assert db_session.get(MealPlan, pdate) is None
-    remaining = db_session.get(Meal, (pdate, 1))
+    assert db_session.get(MealPlan, (user.id, pdate)) is None
+    remaining = db_session.get(Meal, (user.id, pdate, 1))
     assert remaining is None
 
 
-def test_delete_plan_removes_all_meals(db_session):
+def test_delete_plan_removes_all_meals(db_session, user):
     """Deleting a plan removes all related meal entries."""
-    recipe1 = create_recipe(db_session, title="Soup", servings_default=1, course="main")
-    recipe2 = create_recipe(db_session, title="Salad", servings_default=1, course="main")
-    plan = MealPlan(plan_date=date(2024, 8, 2))
+    recipe1 = create_recipe(db_session, user_id=user.id, title="Soup", servings_default=1, course="main")
+    recipe2 = create_recipe(db_session, user_id=user.id, title="Salad", servings_default=1, course="main")
+    plan = MealPlan(user_id=user.id, plan_date=date(2024, 8, 2))
     plan.meals.extend(
         [
             Meal(meal_number=1, recipe=recipe1, accepted=False),
@@ -221,29 +223,29 @@ def test_delete_plan_removes_all_meals(db_session):
     db_session.delete(plan)
     db_session.commit()
 
-    assert db_session.get(MealPlan, pdate) is None
+    assert db_session.get(MealPlan, (user.id, pdate)) is None
     meals = db_session.execute(select(Meal).where(Meal.plan_date == pdate)).scalars().all()
     assert meals == []
 
 
-def test_set_meal_plan_overwrites_existing(db_session):
-    r1 = create_recipe(db_session, title="Old", servings_default=1, course="main")
-    r2 = create_recipe(db_session, title="New", servings_default=1, course="main")
+def test_set_meal_plan_overwrites_existing(db_session, user):
+    r1 = create_recipe(db_session, user_id=user.id, title="Old", servings_default=1, course="main")
+    r2 = create_recipe(db_session, user_id=user.id, title="New", servings_default=1, course="main")
     plan_date = date(2024, 7, 1)
-    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
-    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]})
+    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]}, user.id)
     assert db_session.query(MealPlan).count() == 1
-    meal = db_session.get(Meal, (plan_date, 1))
+    meal = db_session.get(Meal, (user.id, plan_date, 1))
     assert meal is not None and meal.recipe_id == r2.id
 
 
-def test_overwriting_plan_resets_acceptance(db_session):
+def test_overwriting_plan_resets_acceptance(db_session, user):
     """Replacing an existing plan clears previous acceptance status."""
-    r1 = create_recipe(db_session, title="Old", servings_default=1, course="main")
-    r2 = create_recipe(db_session, title="New", servings_default=1, course="main")
+    r1 = create_recipe(db_session, user_id=user.id, title="Old", servings_default=1, course="main")
+    r2 = create_recipe(db_session, user_id=user.id, title="New", servings_default=1, course="main")
     plan_date = date(2024, 7, 2)
-    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]})
-    mark_meal_accepted(db_session, plan_date, 1, True)
-    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]})
-    meal = db_session.get(Meal, (plan_date, 1))
+    set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
+    mark_meal_accepted(db_session, plan_date, 1, True, user.id)
+    set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]}, user.id)
+    meal = db_session.get(Meal, (user.id, plan_date, 1))
     assert meal is not None and meal.recipe_id == r2.id and meal.accepted is False

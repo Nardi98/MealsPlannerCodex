@@ -30,7 +30,14 @@ function RecipeMedia({ recipe, rounded }) {
       <img
         src={recipe.image_url}
         alt={`${recipe.title} photo`}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: rounded }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          borderRadius: rounded,
+        }}
       />
     )
   }
@@ -38,6 +45,8 @@ function RecipeMedia({ recipe, rounded }) {
     <div
       aria-hidden="true"
       style={{
+        position: 'absolute',
+        inset: 0,
         width: '100%',
         height: '100%',
         display: 'flex',
@@ -302,7 +311,9 @@ export default function RecipesPage() {
       {openRecipe && (
         <Modal title={openRecipe.title} onClose={() => setOpened(null)}>
           <div className="flex flex-col gap-3">
-            <div style={{ width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}>
+            <div
+              style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}
+            >
               <RecipeMedia recipe={openRecipe} rounded="var(--radius-md)" />
             </div>
             <div

@@ -57,7 +57,7 @@
 
 - **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
 - **Frontend:** React.
-- **Database:** PostgreSQL with SQLAlchemy ORM (falls back to a local SQLite file when `DATABASE_URL` is unset).
+- **Database:** PostgreSQL with SQLAlchemy ORM (`DATABASE_URL` is required).
 - **Version control:** Git.
 
 ### UI
@@ -113,9 +113,7 @@ meal-planner/
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-├── migrations/                # schema-change changelog (no active migrations)
-└── data/
-    └── app.db                 # sqlite database (created on first run)
+└── migrations/                # schema-change changelog (no active migrations)
 ```
 
 ## 📦 Requirements
@@ -126,9 +124,12 @@ meal-planner/
 fastapi
 uvicorn
 SQLAlchemy
+psycopg2-binary
 pandas
 python-dateutil
 ```
+
+A running PostgreSQL instance is required; `docker-compose.yml` provisions one.
 
 ### Frontend
 
@@ -146,15 +147,67 @@ Use Docker Compose to build and run both services:
 docker-compose up --build
 ```
 
+Every compose run wipes the database and repopulates it with the testing
+dataset (`scripts/seed_testing_data.py`), which owns a single `demo@mealplanner.test`
+account.
+
+### Seeding the demo profiles
+
+`scripts/seed_user_data.py` is the non-destructive counterpart: it never resets
+the schema and only adds rows to the accounts it targets. With no arguments it
+seeds two profiles, creating the accounts if they do not exist yet:
+
+| Account | Password | Data |
+| --- | --- | --- |
+| `alessandro.nardi1998@gmail.com` | `demo1234` | the whole catalogue (44 recipes) |
+| `veggie.demo@example.com` | `demo1234` | vegetarian/vegan recipes only (28) |
+
+Each profile only receives the ingredients and tags its own recipes reference,
+so both accounts stay coherent. Re-running is safe — nothing is duplicated.
+
+Run it against the compose stack (the backend container must be up):
+
+```bash
+docker-compose exec backend python scripts/seed_user_data.py
+```
+
+To populate one specific account instead, pass an email and optionally a
+password. An email matching a profile above gets that profile's data; any other
+email gets the full catalogue:
+
+```bash
+docker-compose exec backend python scripts/seed_user_data.py someone@example.com hunter2
+```
+
 Set the necessary environment variables before starting:
 
-- `DATABASE_URL` – SQLAlchemy connection string for the database. Set to a
-  PostgreSQL URL (e.g. `postgresql://user:pass@host:5432/mealsdb`); Railway
-  injects this automatically. A bare `postgres://` scheme is normalized to
-  `postgresql://`. When unset, the backend falls back to a local SQLite file at
-  `data/app.db`.
+- `DATABASE_URL` – **required.** SQLAlchemy connection string for the
+  PostgreSQL database (e.g. `postgresql://user:pass@host:5432/mealsdb`);
+  Railway injects this automatically. A bare `postgres://` scheme is normalized
+  to `postgresql://`. There is no fallback: the backend refuses to start when it
+  is unset, so a misconfigured deployment fails loudly instead of silently
+  serving the wrong database.
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
+- `JWT_SECRET` – signing key for the auth tokens (a dev-only default is used
+  when unset — always set this in production)
+- `GOOGLE_CLIENT_ID` – Google OAuth client ID, required by the backend to
+  verify ID tokens for "Sign in with Google"
+- `VITE_GOOGLE_CLIENT_ID` – the *same* client ID, given to the frontend at
+  build time so it can render the Google button. Without it the login page
+  offers email/password only.
+
+### Setting up "Sign in with Google"
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** of type *Web application*.
+2. Add your app's origin (e.g. `http://localhost:3000`) to **Authorized
+   JavaScript origins**.
+3. Set `GOOGLE_CLIENT_ID` (backend) and `VITE_GOOGLE_CLIENT_ID` (frontend) to
+   the generated client ID. Under Docker Compose, setting `GOOGLE_CLIENT_ID`
+   alone is enough — compose passes it through to both services. The client
+   *secret* is not needed: the browser obtains the ID token and the backend
+   only verifies it.
 
 Build steps:
 

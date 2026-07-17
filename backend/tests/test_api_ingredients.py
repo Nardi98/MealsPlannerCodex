@@ -5,17 +5,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from database import Base, engine
 
 
-def _reset_db() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
 
-
-def test_create_ingredient() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_create_ingredient(api_client) -> None:
+    client = api_client
     payload = {"name": "Cabbage", "unit": "kg", "season_months": [1, 2]}
     res = client.post("/ingredients", json=payload)
     assert res.status_code == 201
@@ -26,9 +20,8 @@ def test_create_ingredient() -> None:
     assert data["recipe_count"] == 0
 
 
-def test_search_ingredients() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_search_ingredients(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Pasta",
         "servings_default": 2,
@@ -56,9 +49,8 @@ def test_search_ingredients() -> None:
     assert "Salt" not in details
 
 
-def test_list_all_ingredients() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_list_all_ingredients(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Soup",
         "servings_default": 2,
@@ -84,9 +76,8 @@ def test_list_all_ingredients() -> None:
     assert units == {"Water": "l", "Carrot": "piece", "Salt": "g"}
 
 
-def test_update_ingredient() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_update_ingredient(api_client) -> None:
+    client = api_client
     payload = {
         "title": "Tea",
         "servings_default": 1,
@@ -114,9 +105,8 @@ def test_update_ingredient() -> None:
     assert data["unit"] == "ml"
 
 
-def test_ingredient_recipe_lookup_and_delete() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_ingredient_recipe_lookup_and_delete(api_client) -> None:
+    client = api_client
 
     # Create two recipes sharing an ingredient and one unique recipe
     payload1 = {
@@ -187,9 +177,8 @@ def test_ingredient_recipe_lookup_and_delete() -> None:
     assert res.status_code == 404
 
 
-def test_force_delete_removes_references() -> None:
-    _reset_db()
-    client = TestClient(app)
+def test_force_delete_removes_references(api_client) -> None:
+    client = api_client
 
     payload = {
         "title": "Soup",

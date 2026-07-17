@@ -1,16 +1,21 @@
 """Tests for the recipe image upload + serving routes (local-fallback mode)."""
 import pytest
-from fastapi.testclient import TestClient
 
 import storage
 from main import app
 
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client(tmp_path, monkeypatch, db_session, user):
+    """An authenticated client: uploading is a write, so it needs an account."""
     monkeypatch.delenv("AWS_S3_BUCKET_NAME", raising=False)
     monkeypatch.setattr(storage, "MEDIA_DIR", tmp_path)
-    return TestClient(app)
+    from conftest import client_as
+
+    try:
+        yield client_as(db_session, user)
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_upload_returns_absolute_image_url(client):
@@ -57,12 +62,3 @@ def test_upload_rejects_oversized_file(client):
 def test_serve_missing_image_returns_404(client):
     res = client.get("/recipes/images/recipes/missing.png")
     assert res.status_code == 404
-
-
-def test_upload_requires_api_key_when_configured(client, monkeypatch):
-    monkeypatch.setenv("API_KEY", "secret")
-    res = client.post(
-        "/recipes/upload-image",
-        files={"file": ("pic.png", b"pngbytes", "image/png")},
-    )
-    assert res.status_code == 401
