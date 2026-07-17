@@ -185,6 +185,9 @@ def read_recipes(
     stmt = scope(
         select(models.Recipe).options(
             selectinload(models.Recipe.tags),
+            # RecipeOut exposes favorite_side_ids, so without this the
+            # serialiser lazy-loads the pairing once per recipe.
+            selectinload(models.Recipe.favorite_sides),
             selectinload(models.Recipe.ingredients).selectinload(
                 models.RecipeIngredient.ingredient
             ),
@@ -205,6 +208,46 @@ def read_recipe(
     if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe
+
+
+def _resolve_favorite_sides(
+    payload: schemas.RecipeIn, db: Session, user_id: int
+) -> List[models.Recipe]:
+    """Load the caller's own side recipes named by ``payload.favorite_side_ids``.
+
+    Rejects anything the caller doesn't own or that isn't a side dish, so a
+    stale or hand-crafted id can't quietly pair a main with a main. The same
+    rule is applied leniently on the import path (``crud.import_data``), which
+    drops bad pairings rather than failing a whole file.
+    """
+    side_ids = list(dict.fromkeys(payload.favorite_side_ids))  # dedupe, keep order
+    if not side_ids:
+        return []
+    if not models.takes_favorite_sides(payload.course):
+        raise HTTPException(
+            status_code=400,
+            detail=f"A {payload.course!r} recipe is not served with a side dish",
+        )
+    stmt = scope(
+        select(models.Recipe).where(models.Recipe.id.in_(side_ids)),
+        models.Recipe.user_id,
+        user_id,
+    )
+    found = {r.id: r for r in db.execute(stmt).scalars()}
+    resolved: List[models.Recipe] = []
+    for side_id in side_ids:
+        side = found.get(side_id)
+        if side is None:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown favorite side: {side_id}"
+            )
+        if not models.is_side_dish(side):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Recipe {side.title!r} is not a side dish",
+            )
+        resolved.append(side)
+    return resolved
 
 
 def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> dict:
@@ -233,6 +276,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
         "image_url": payload.image_url,
         "tags": tags,
         "ingredients": ingredients,
+        "favorite_sides": _resolve_favorite_sides(payload, db, user_id),
     }
 
 
@@ -768,7 +812,12 @@ def generate_plan_endpoint(
         if recipe is None:
             raise HTTPException(status_code=404, detail="Recipe not found")
         result.setdefault(slot.date.isoformat(), []).append(
-            {"id": recipe.id, "title": recipe.title, "leftover": slot.leftover}
+            {
+                "id": recipe.id,
+                "title": recipe.title,
+                "leftover": slot.leftover,
+                "side_ids": slot.side_ids,
+            }
         )
     return result
 

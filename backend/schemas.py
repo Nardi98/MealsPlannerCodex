@@ -136,6 +136,9 @@ class RecipeIn(BaseModel):
     image_url: Optional[str] = None
     tags: List[str] = []
     ingredients: List[IngredientIn] = []
+    # Sides this main is habitually served with; the planner attaches one of
+    # them automatically. Only meaningful for main / first-course recipes.
+    favorite_side_ids: List[int] = []
 
 
 class RecipeOut(BaseModel):
@@ -150,6 +153,8 @@ class RecipeOut(BaseModel):
     date_last_consumed: Optional[date] = None
     ingredients: List[IngredientOut] = []
     tags: List[TagOut] = []
+    # Read off ``Recipe.favorite_side_ids``, which flattens the relationship.
+    favorite_side_ids: List[int] = []
 
     model_config = ConfigDict(from_attributes=True)
 

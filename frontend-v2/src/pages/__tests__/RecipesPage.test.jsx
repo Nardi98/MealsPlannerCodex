@@ -19,6 +19,7 @@ import { ingredientsApi } from '../../api/ingredientsApi'
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: {
     fetchAll: vi.fn(),
+    update: vi.fn(),
   },
 }))
 
@@ -189,6 +190,109 @@ test('shows a placeholder (no photo) when image_url is absent', async () => {
   render(<RecipesPage />)
   await screen.findByText('Tacos')
   expect(screen.queryByAltText('Tacos photo')).toBeNull()
+})
+
+// --- Favorite sides, curated from the detail modal -------------------------
+
+const ROAST = {
+  id: 1,
+  title: 'Roast Chicken',
+  course: 'main',
+  tags: [],
+  ingredients: [],
+  procedure: 'Roast it.',
+  favorite_side_ids: [],
+}
+const POTATOES = {
+  id: 2, title: 'Mashed Potatoes', course: 'side', tags: [], ingredients: [],
+}
+const BROCCOLI = {
+  id: 3, title: 'Steamed Broccoli', course: 'side', tags: [], ingredients: [],
+}
+
+const openDetail = async (recipes, title = 'Roast Chicken') => {
+  recipesApi.fetchAll.mockResolvedValue(recipes)
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText(title))
+  return screen.findByText('Procedure')
+}
+
+test('the detail modal offers favorite sides under the procedure', async () => {
+  await openDetail([ROAST, POTATOES, BROCCOLI])
+
+  expect(screen.getByText('Favorite sides')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /add a side/i }))
+  expect(screen.getByRole('option', { name: 'Mashed Potatoes' })).toBeInTheDocument()
+  // Only sides are offered.
+  expect(screen.queryByRole('option', { name: 'Roast Chicken' })).toBeNull()
+})
+
+test('a side dish is not offered favorite sides of its own', async () => {
+  await openDetail([{ ...POTATOES, procedure: 'Mash.' }], 'Mashed Potatoes')
+
+  expect(screen.queryByText('Favorite sides')).toBeNull()
+})
+
+test('a first course is not offered favorite sides', async () => {
+  // Favorite sides are a main-dish feature only.
+  await openDetail(
+    [
+      {
+        id: 4, title: 'Risotto', course: 'first-course',
+        tags: [], ingredients: [], procedure: 'Stir.',
+      },
+      POTATOES,
+    ],
+    'Risotto'
+  )
+
+  expect(screen.queryByText('Favorite sides')).toBeNull()
+})
+
+test('picking a side saves it immediately without an explicit save', async () => {
+  recipesApi.update.mockImplementation((id, recipe) =>
+    Promise.resolve({ ...ROAST, ...recipe, id })
+  )
+  await openDetail([ROAST, POTATOES, BROCCOLI])
+
+  fireEvent.click(screen.getByRole('button', { name: /add a side/i }))
+  fireEvent.click(screen.getByRole('option', { name: 'Steamed Broccoli' }))
+
+  await waitFor(() => expect(recipesApi.update).toHaveBeenCalledTimes(1))
+  const [id, payload] = recipesApi.update.mock.calls[0]
+  expect(id).toBe(1)
+  expect(payload.favorite_side_ids).toEqual([3])
+  // The rest of the recipe must ride along, or serialiseRecipe wipes it.
+  expect(payload).toMatchObject({ title: 'Roast Chicken', procedure: 'Roast it.' })
+  expect(await screen.findByTestId('favorite-side-chip-3')).toBeInTheDocument()
+})
+
+test('removing a side saves the shortened list', async () => {
+  recipesApi.update.mockImplementation((id, recipe) =>
+    Promise.resolve({ ...ROAST, ...recipe, id })
+  )
+  await openDetail([{ ...ROAST, favorite_side_ids: [2, 3] }, POTATOES, BROCCOLI])
+
+  fireEvent.click(screen.getByRole('button', { name: /remove mashed potatoes/i }))
+
+  await waitFor(() => expect(recipesApi.update).toHaveBeenCalledTimes(1))
+  expect(recipesApi.update.mock.calls[0][1].favorite_side_ids).toEqual([3])
+})
+
+test('a failed save reverts the picker instead of lying', async () => {
+  recipesApi.update.mockRejectedValue(new Error('boom'))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  await openDetail([ROAST, POTATOES, BROCCOLI])
+
+  fireEvent.click(screen.getByRole('button', { name: /add a side/i }))
+  fireEvent.click(screen.getByRole('option', { name: 'Steamed Broccoli' }))
+
+  await waitFor(() => expect(recipesApi.update).toHaveBeenCalled())
+  await waitFor(() =>
+    expect(screen.queryByTestId('favorite-side-chip-3')).toBeNull()
+  )
 })
 
 test('deletes a recipe from the detail modal', async () => {

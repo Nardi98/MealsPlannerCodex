@@ -84,6 +84,28 @@ def user(db_session):
     )
 
 
+@pytest.fixture
+def make_recipe(db_session, user):
+    """Factory for a persisted recipe owned by the ``user`` fixture.
+
+    ``servings_default`` is not nullable, so every caller has to supply it;
+    defaulting it here keeps the tests about the behaviour under test.
+    """
+    import crud
+
+    def _make(title, course="main", **overrides):
+        return crud.create_recipe(
+            db_session,
+            title=title,
+            course=course,
+            servings_default=overrides.pop("servings_default", 2),
+            user_id=user.id,
+            **overrides,
+        )
+
+    return _make
+
+
 def db_client(session):
     """Return a ``TestClient`` reading ``session`` with nobody logged in.
 

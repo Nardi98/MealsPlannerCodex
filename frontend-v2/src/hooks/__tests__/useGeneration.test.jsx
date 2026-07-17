@@ -48,6 +48,46 @@ test('generate with no conflicts calls generate, create and updates plan', async
   await waitFor(() => expect(result.current.message).toBe('Plan generated successfully.'))
 })
 
+test('the favorite sides chosen during generation are persisted onto the meal', async () => {
+  mealPlansApi.generate.mockResolvedValue({
+    '2026-01-05': [{ id: 1, title: 'Roast', leftover: false, side_ids: [7] }],
+  })
+  const { result } = renderHook(() => useGeneration({ setPlan: vi.fn() }))
+
+  act(() => {
+    result.current.setForm((f) => ({ ...f, start: '2026-01-05', end: '2026-01-05' }))
+  })
+  await act(async () => {
+    await result.current.handleGenerate(submit)
+  })
+
+  expect(mealPlansApi.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      plan: { '2026-01-05': [{ main_id: 1, side_ids: [7], leftover: false }] },
+    }),
+  )
+})
+
+test('a generated meal with no favorite sides persists an empty side list', async () => {
+  mealPlansApi.generate.mockResolvedValue({
+    '2026-01-05': [{ id: 1, title: 'Steak', leftover: false }],
+  })
+  const { result } = renderHook(() => useGeneration({ setPlan: vi.fn() }))
+
+  act(() => {
+    result.current.setForm((f) => ({ ...f, start: '2026-01-05', end: '2026-01-05' }))
+  })
+  await act(async () => {
+    await result.current.handleGenerate(submit)
+  })
+
+  expect(mealPlansApi.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      plan: { '2026-01-05': [{ main_id: 1, side_ids: [], leftover: false }] },
+    }),
+  )
+})
+
 test('generate with existing days opens the overwrite modal and defers generation', async () => {
   mealPlansApi.fetchRange.mockResolvedValueOnce({
     '2026-01-05': [{ recipe: 'Existing', accepted: false }],

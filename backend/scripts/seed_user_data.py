@@ -42,6 +42,7 @@ from scripts.seed_testing_data import (  # noqa: E402
     RECIPES,
     TAGS,
     SeedRecipe,
+    link_favorite_sides,
 )
 
 DEFAULT_EMAIL = "alessandro.nardi1998@gmail.com"
@@ -143,6 +144,7 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
             counts["ingredients"] += 1
         ingredients[name] = ing
 
+    owned_recipes: dict[str, Recipe] = {}
     for title, servings, course, bulk, ing_list, tag_list in recipes:
         exists = session.execute(
             select(Recipe).where(
@@ -150,6 +152,7 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
             )
         ).scalar_one_or_none()
         if exists is not None:
+            owned_recipes[title] = exists
             continue
         recipe = Recipe(
             title=title,
@@ -168,8 +171,11 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
         for tag_name in tag_list:
             recipe.tags.append(tags[tag_name])
         session.add(recipe)
+        owned_recipes[title] = recipe
         counts["recipes"] += 1
 
+    # Only this user's recipes are in scope, so pairings never cross accounts.
+    link_favorite_sides(owned_recipes)
     session.commit()
     return counts
 

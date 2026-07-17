@@ -145,6 +145,25 @@ TAGS: list[tuple[str, bool, bool]] = [
 # ---------------------------------------------------------------------------
 
 
+def link_favorite_sides(recipes_by_title: dict[str, "Recipe"]) -> None:
+    """Wire up :data:`FAVORITE_SIDES` across the recipes actually inserted.
+
+    Runs after every recipe exists, since a pairing points at another recipe.
+    Titles absent from ``recipes_by_title`` are skipped rather than raising: a
+    profile seeding a subset of the catalogue (the vegetarian one drops the meat
+    mains) must still end up with a coherent set of pairings.
+    """
+    for main_title, side_titles in FAVORITE_SIDES.items():
+        main = recipes_by_title.get(main_title)
+        if main is None:
+            continue
+        main.favorite_sides = [
+            recipes_by_title[side_title]
+            for side_title in side_titles
+            if side_title in recipes_by_title
+        ]
+
+
 class SeedRecipe(NamedTuple):
     title: str
     servings: int
@@ -152,6 +171,27 @@ class SeedRecipe(NamedTuple):
     bulk_prep: bool
     ingredients: list[tuple[str, float, UnitEnum]]
     tags: list[str]
+
+
+# The sides each main is habitually served with. Kept beside ``RECIPES`` rather
+# than as another tuple field so the pairings stay readable and adding one
+# doesn't mean touching every recipe row. Titles are resolved against whatever
+# recipes a given seed actually inserts, so a profile owning a slice of the
+# catalogue simply gets fewer pairings.
+FAVORITE_SIDES: dict[str, tuple[str, ...]] = {
+    "Roast Chicken": ("Roasted Vegetables", "Mashed Potatoes"),
+    "Pork Loin Roast": ("Mashed Potatoes", "Steamed Broccoli"),
+    "Grilled Chicken Breast": ("Greek Salad", "Steamed Broccoli"),
+    "Grilled Salmon": ("Garlic Green Beans", "Steamed Broccoli"),
+    "Beef Stew": ("Mashed Potatoes",),
+    "Beef Chili": ("Coleslaw",),
+    "Sausage and Peppers": ("Mashed Potatoes", "Coleslaw"),
+    "Eggplant Parmigiana": ("Caprese Salad", "Greek Salad"),
+    "Stuffed Bell Peppers": ("Greek Salad", "Roasted Vegetables"),
+    "Chicken Curry": ("Sweet Potato Mash",),
+    "Chickpea Curry": ("Sweet Potato Mash", "Steamed Broccoli"),
+    "Black Bean Tacos": ("Coleslaw",),
+}
 
 
 RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
@@ -339,6 +379,7 @@ def populate(session) -> None:
         session.add(ing)
         ingredients[name] = ing
 
+    recipes_by_title: dict[str, Recipe] = {}
     for title, servings, course, bulk, ing_list, tag_list in RECIPES:
         recipe = Recipe(
             title=title,
@@ -357,7 +398,9 @@ def populate(session) -> None:
         for tag_name in tag_list:
             recipe.tags.append(tags[tag_name])
         session.add(recipe)
+        recipes_by_title[title] = recipe
 
+    link_favorite_sides(recipes_by_title)
     session.commit()
 
 

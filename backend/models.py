@@ -146,6 +146,53 @@ recipe_tag_table = Table(
 )
 
 
+# The sides a main dish is habitually served with. Directional (a main names its
+# sides, never the reverse) and unordered: the planner picks one at random.
+# Unlike ``MealSide`` -- which records what a *planned meal* actually got -- this
+# is recipe-scoped and outlives any plan. ``CASCADE`` on both sides means
+# deleting either recipe silently drops the pairing.
+#
+# No ``user_id`` here, matching ``recipe_tag_table``: both endpoints already
+# carry an owner, so the column would be denormalised and could contradict them.
+# The routes check that main and side share the caller's ownership.
+recipe_favorite_side_table = Table(
+    "recipe_favorite_sides",
+    Base.metadata,
+    Column(
+        "main_recipe_id",
+        ForeignKey("recipes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "side_recipe_id",
+        ForeignKey("recipes.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+# ``Recipe.course`` is free-text (no enum yet), so the values the domain
+# actually uses are named here rather than spelled out at each call site.
+SIDE_COURSE = "side"
+MAIN_COURSE = "main"
+# The courses the planner draws main-slot candidates from. Deliberately wider
+# than ``COURSES_WITH_FAVORITE_SIDES``: a first course is planned like a main
+# but is not served with a side dish.
+MAIN_COURSES = (MAIN_COURSE, "first-course")
+# Only a main dish is served with a side.
+COURSES_WITH_FAVORITE_SIDES = (MAIN_COURSE,)
+
+
+def is_side_dish(recipe: "Recipe") -> bool:
+    """Whether ``recipe`` may be used as another recipe's favorite side."""
+    return recipe.course == SIDE_COURSE
+
+
+def takes_favorite_sides(course: str) -> bool:
+    """Whether ``course`` is served with a side dish."""
+    return course in COURSES_WITH_FAVORITE_SIDES
+
+
 class UnitEnum(str, PyEnum):
     """Allowed measurement units for ingredients."""
 
@@ -180,6 +227,17 @@ class Recipe(Base):
     tags = relationship(
         "Tag", secondary=recipe_tag_table, back_populates="recipes"
     )
+    favorite_sides = relationship(
+        "Recipe",
+        secondary=recipe_favorite_side_table,
+        primaryjoin=id == recipe_favorite_side_table.c.main_recipe_id,
+        secondaryjoin=id == recipe_favorite_side_table.c.side_recipe_id,
+    )
+
+    @property
+    def favorite_side_ids(self) -> list[int]:
+        """The favorite sides flattened to ids, as the API exposes them."""
+        return [side.id for side in self.favorite_sides]
 
 
 class Ingredient(Base):
@@ -285,7 +343,10 @@ class Meal(Base):
     user_id = Column(Integer, nullable=False)
     plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
-    recipe_id = Column(Integer, ForeignKey("recipes.id"))
+    # SET NULL, not CASCADE: deleting the recipe empties the slot rather than
+    # silently deleting the planned meal around it. ``crud.get_plan`` already
+    # skips meals whose recipe is gone.
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"))
     accepted = Column(Boolean, default=False)
     # A meal is a leftover iff it links back to the source meal that produced
     # it. The two columns are all-or-nothing (see the CHECK constraint below);
@@ -339,7 +400,15 @@ class MealSide(Base):
     plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
     position = Column(Integer, nullable=False)
-    side_recipe_id = Column(Integer, ForeignKey("recipes.id"), nullable=False)
+    # Deleting a recipe is a user-facing action that must not be blocked by a
+    # plan referencing it: the side simply drops off the meal. CASCADE rather
+    # than SET NULL because a side row with no recipe has nothing to say.
+    # Note this leaves a gap in ``position`` -- see ``crud.add_meal_side``.
+    side_recipe_id = Column(
+        Integer,
+        ForeignKey("recipes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
 
     meal = relationship("Meal", back_populates="sides")
     side_recipe = relationship("Recipe")

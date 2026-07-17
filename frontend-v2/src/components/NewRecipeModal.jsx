@@ -106,6 +106,10 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
   )
 }
 
+// Only a main dish is served with a side. Mirrors the backend's
+// COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
+const COURSES_WITH_SIDES = ['main']
+
 export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const [title, setTitle] = React.useState(initialRecipe?.title || '')
   const [course, setCourse] = React.useState(initialRecipe?.course || '')
@@ -122,6 +126,14 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const [bulkPrep, setBulkPrep] = React.useState(initialRecipe?.hot || false)
   const [ingredientOptions, setIngredientOptions] = React.useState([])
   const [addingIdx, setAddingIdx] = React.useState(null)
+  // Favorite sides are curated from the recipe view (RecipesPage), not here.
+  // This form still has to round-trip them, because serialiseRecipe sends the
+  // whole recipe on PUT -- dropping the field would wipe the pairings on every
+  // edit. They are cleared only when the recipe stops being a dish that takes
+  // sides, which the backend rejects outright.
+  const favoriteSideIds = COURSES_WITH_SIDES.includes(course)
+    ? initialRecipe?.favorite_side_ids || []
+    : []
 
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0]
@@ -194,6 +206,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
       procedure,
       image_url: imageUrl.trim() || null,
       hot: bulkPrep,
+      favorite_side_ids: favoriteSideIds,
     }
     onSave?.(recipe)
     onClose?.()
@@ -225,12 +238,18 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <h2 className="text-lg font-medium">New Recipe</h2>
           <div className="space-y-1">
-            <label className="text-sm">Title</label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} required />
+            <label className="text-sm" htmlFor="recipe-title">Title</label>
+            <Input
+              id="recipe-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-1">
-            <label className="text-sm">Course</label>
+            <label className="text-sm" htmlFor="recipe-course">Course</label>
             <select
+              id="recipe-course"
               value={course}
               onChange={(e) => setCourse(e.target.value)}
               required

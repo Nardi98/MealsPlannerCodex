@@ -18,6 +18,7 @@ function normaliseRecipe(recipe) {
       unit: ing.unit ?? '',
     })),
     procedure: recipe.procedure || '',
+    favorite_side_ids: recipe.favorite_side_ids || [],
   };
 }
 
@@ -30,6 +31,7 @@ function serialiseRecipe(recipe) {
     bulk_prep: recipe.hot || false,
     image_url: recipe.image_url || null,
     tags: recipe.tags || [],
+    favorite_side_ids: recipe.favorite_side_ids || [],
     ingredients: (recipe.ingredients || []).map((ing) => ({
       id: ing.id,
       name: ing.name,

@@ -10,11 +10,15 @@ import { Badge } from '../components/Badge'
 import { Card } from '../components/Card'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
-import { NewRecipeModal } from '../components'
+import { FavoriteSidesSelect, NewRecipeModal } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ingredientsApi } from '../api/ingredientsApi'
+
+// Only a main dish is served with a side. Mirrors the backend's
+// COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
+const COURSES_WITH_SIDES = ['main']
 
 const sectionHeadingStyle = {
   fontSize: 'var(--text-sm)',
@@ -144,6 +148,43 @@ export default function RecipesPage() {
     } finally {
       setShowModal(false)
       setEditing(null)
+    }
+  }
+
+  // The sides a dish can be paired with, and whether it takes any at all. The
+  // picker is only offered for courses that take sides, so a recipe can never
+  // reach its own entry here.
+  const sideOptions = React.useMemo(
+    () =>
+      recipes
+        .filter((r) => r.course === 'side')
+        .map((r) => ({ id: r.id, title: r.title })),
+    [recipes]
+  )
+  const takesFavoriteSides = COURSES_WITH_SIDES.includes(openRecipe?.course)
+
+  // Curating sides from the read-only detail view saves on each click, so the
+  // list updates optimistically and rolls back if the write fails -- otherwise
+  // the UI would show a pairing the server never stored.
+  const handleFavoriteSidesChange = async (nextIds) => {
+    const recipe = openRecipe
+    if (!recipe) return
+    const previous = recipe.favorite_side_ids || []
+    const apply = (ids) =>
+      setRecipes((rs) =>
+        rs.map((r) => (r.id === recipe.id ? { ...r, favorite_side_ids: ids } : r))
+      )
+    apply(nextIds)
+    try {
+      // serialiseRecipe sends the whole recipe, so spread the rest of it in.
+      const updated = await recipesApi.update(recipe.id, {
+        ...recipe,
+        favorite_side_ids: nextIds,
+      })
+      setRecipes((rs) => rs.map((r) => (r.id === recipe.id ? updated : r)))
+    } catch (err) {
+      console.error('Failed to update favorite sides', err)
+      apply(previous)
     }
   }
 
@@ -368,6 +409,25 @@ export default function RecipesPage() {
                 </>
               )}
             </div>
+            {takesFavoriteSides && (
+              <div>
+                <div style={sectionHeadingStyle}>Favorite sides</div>
+                <p
+                  style={{
+                    margin: '0 0 8px',
+                    fontSize: 'var(--text-xs)',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  One of these is added automatically when this dish is planned.
+                </p>
+                <FavoriteSidesSelect
+                  options={sideOptions}
+                  selected={openRecipe.favorite_side_ids || []}
+                  onChange={handleFavoriteSidesChange}
+                />
+              </div>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 size="sm"

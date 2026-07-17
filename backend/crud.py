@@ -25,8 +25,10 @@ from models import (
     RecipeIngredient,
     UnitEnum,
     User,
+    is_side_dish,
     normalize_email,
     recipe_tag_table,
+    takes_favorite_sides,
 )
 
 __all__ = [
@@ -847,7 +849,10 @@ def add_meal_side(
     if meal is None:
         return None
 
-    position = len(meal.sides) + 1
+    # Derive from the highest position rather than the count: deleting a side
+    # *recipe* cascades its rows away without renumbering, so the positions can
+    # have gaps (1, 3) and ``len + 1`` would collide with an existing key.
+    position = max((s.position for s in meal.sides), default=0) + 1
     meal.sides.append(MealSide(position=position, side_recipe_id=side_id))
     session.commit()
     session.refresh(meal)
@@ -1158,6 +1163,27 @@ def import_data(
                 if tag is not None:
                     recipe.tags.append(tag)
 
+        # Favorite sides point at other recipes, so they can only be wired up
+        # once every recipe above exists and its id is known. Payload ids are
+        # remapped through ``recipe_id_map``. Import is lenient by design (as it
+        # already is for tags): a pairing naming a missing recipe, or one that
+        # isn't a side dish, is dropped rather than failing the whole file --
+        # but it is never stored, so ``main.py``'s rule holds on every path.
+        for rec_info in data.get("recipes", []):
+            side_ids = rec_info.get("favorite_side_ids")
+            if not side_ids or not takes_favorite_sides(
+                rec_info.get("course", "main")
+            ):
+                continue
+            main_id = recipe_id_map.get(rec_info.get("id"), rec_info.get("id"))
+            main = session.get(Recipe, main_id) if main_id is not None else None
+            if main is None:
+                continue
+            for side_id in side_ids:
+                side = session.get(Recipe, recipe_id_map.get(side_id, side_id))
+                if side is not None and is_side_dish(side):
+                    main.favorite_sides.append(side)
+
         imported_meals: List[tuple] = []
         for plan_info in data.get("meal_plans", []):
             pdate = date.fromisoformat(plan_info["plan_date"])
@@ -1246,6 +1272,7 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                         for ri in recipe.ingredients
                     ],
                     "tags": [tag.id for tag in recipe.tags],
+                    "favorite_side_ids": recipe.favorite_side_ids,
                 }
             )
 

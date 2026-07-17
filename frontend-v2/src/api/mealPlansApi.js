@@ -35,6 +35,9 @@ export const mealPlansApi = {
           id: m.id,
           title: m.title,
           leftover: Boolean(m.leftover),
+          // The main's favorite side, picked by the planner. Empty when the
+          // main has no favorites.
+          side_ids: m.side_ids || [],
         })),
       ]),
     );

@@ -6,13 +6,22 @@ from datetime import date, timedelta
 import logging
 import random
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Sequence, Set
 
 from sqlalchemy import func, true
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
-from models import Ingredient, Recipe, RecipeIngredient, Meal, MealSide, Tag
+from models import (
+    MAIN_COURSES,
+    Ingredient,
+    Recipe,
+    RecipeIngredient,
+    Meal,
+    MealSide,
+    Tag,
+    takes_favorite_sides,
+)
 from scoping import scope
 from .scoring import score_recipe, exploration_weight
 from .config import DEFAULT_PLAN_SETTINGS
@@ -31,6 +40,7 @@ class Slot:
     selection_mode: str | None = None
     candidate_rank: int | None = None
     soft_hold_recipe_id: int | None = None
+    side_ids: List[int] = field(default_factory=list)
 
 
 def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
@@ -51,6 +61,25 @@ def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, obje
         "ingredient_ids": [ri.ingredient_id for ri in recipe.ingredients],
         "tags": [t.name for t in recipe.tags],
     }
+
+
+def pick_favorite_side(
+    recipe: Recipe, rng: random.Random | None = None
+) -> int | None:
+    """Return the id of one of ``recipe``'s favorite sides, chosen uniformly.
+
+    ``None`` when the recipe has no favorites -- or isn't a course that takes
+    one -- which leaves the meal bare for the user to fill in by hand: the
+    behaviour that predates favorites. The course check also means a first
+    course carrying a stale pairing (from before sides became main-only) is
+    ignored rather than acted on.
+    """
+    if not takes_favorite_sides(recipe.course):
+        return None
+    favorites = getattr(recipe, "favorite_sides", None) or []
+    if not favorites:
+        return None
+    return (rng or random).choice(favorites).id
 
 
 def generate_plan(
@@ -74,6 +103,7 @@ def generate_plan(
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
     user_id: int | None = None,
+    rng: random.Random | None = None,
 ) -> Dict[str, List[str]] | List[Slot]:
     """Generate a meal plan.
 
@@ -90,8 +120,11 @@ def generate_plan(
         .options(
             joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
             joinedload(Recipe.tags),
+            # pick_favorite_side reads this per slot; without it each candidate
+            # main lazy-loads its pairing during planning.
+            selectinload(Recipe.favorite_sides),
         )
-        .filter(Recipe.course.in_(["main", "first-course"])),
+        .filter(Recipe.course.in_(MAIN_COURSES)),
         Recipe.user_id,
         user_id,
     ).all()
@@ -161,6 +194,11 @@ def generate_plan(
             slots.append(Slot(date=current, meal_number=meal_number))
 
     leftovers: List[Dict[str, object]] = []
+    # Side chosen for each recipe's current cooking batch, so its leftovers can
+    # reuse it. A later fresh cook of the same recipe overwrites the entry and
+    # therefore draws again. This mirrors, at generation time, the source ->
+    # leftover link that ``crud._assign_leftover_sources`` persists later.
+    batch_sides: Dict[int, int | None] = {}
 
     for idx, slot in enumerate(slots):
         _apply_soft_holds(slots, idx, leftovers, settings)
@@ -230,6 +268,13 @@ def generate_plan(
         chosen = scored[choice_idx][0]
         slot.recipe = chosen
         slot.leftover = slot.soft_hold_recipe_id == getattr(chosen, "id", None)
+
+        if slot.leftover:
+            # Reheating what was cooked earlier: the side came with it.
+            side_id = batch_sides.get(chosen.id)
+        else:
+            side_id = batch_sides[chosen.id] = pick_favorite_side(chosen, rng)
+        slot.side_ids = [] if side_id is None else [side_id]
 
         # Proposing a recipe (leftover or not) starts its exploration cooldown.
         last_proposed[chosen.id] = slot.date

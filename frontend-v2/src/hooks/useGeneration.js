@@ -62,7 +62,7 @@ export function useGeneration({ setPlan }) {
             day,
             meals.map((m) => ({
               main_id: m.id,
-              side_ids: [],
+              side_ids: m.side_ids || [],
               leftover: m.leftover,
             })),
           ]),
