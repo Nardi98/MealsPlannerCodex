@@ -1,29 +1,36 @@
 """Tests for env-driven database URL resolution in ``database.py``."""
 
+import pytest
+
 import database
 
 
-def test_defaults_to_sqlite_when_env_unset(monkeypatch):
+def test_raises_when_database_url_unset(monkeypatch):
+    """No fallback: an unset DATABASE_URL must fail loudly, not guess.
+
+    On Railway a missing variable reference would otherwise boot the app on a
+    throwaway local database that silently drops every write on redeploy.
+    """
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    url, connect_args = database.resolve_database_url()
-    assert url.startswith("sqlite:///")
-    assert url.endswith("app.db")
-    assert connect_args == {"check_same_thread": False}
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        database.resolve_database_url()
 
 
 def test_uses_env_database_url_when_set(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql://user:pass@host:5432/mealsdb"
     )
-    url, connect_args = database.resolve_database_url()
-    assert url == "postgresql://user:pass@host:5432/mealsdb"
-    assert connect_args == {}
+    assert (
+        database.resolve_database_url()
+        == "postgresql://user:pass@host:5432/mealsdb"
+    )
 
 
 def test_normalizes_bare_postgres_scheme(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgres://user:pass@host:5432/mealsdb"
     )
-    url, connect_args = database.resolve_database_url()
-    assert url == "postgresql://user:pass@host:5432/mealsdb"
-    assert connect_args == {}
+    assert (
+        database.resolve_database_url()
+        == "postgresql://user:pass@host:5432/mealsdb"
+    )

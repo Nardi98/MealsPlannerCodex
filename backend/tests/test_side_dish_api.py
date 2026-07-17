@@ -154,6 +154,49 @@ def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
 
 
 
+def test_remove_first_of_multiple_side_dishes(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
+    crud.add_meal_side(db_session, plan_date, 1, side1.id)
+    crud.add_meal_side(db_session, plan_date, 1, side2.id)
+    crud.add_meal_side(db_session, plan_date, 1, side3.id)
+
+    client = auth_client
+
+    resp = client.request(
+        "DELETE",
+        "/meal-plans/side",
+        json={"plan_date": plan_date.isoformat(), "meal_number": 1, "index": 0},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["side_recipes"] == ["Side2", "Side3"]
+
+    plan_resp = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    assert plan_resp.status_code == 200
+    assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side2", "Side3"]
+
+
+def test_remove_middle_side_dish_renumbers_positions(db_session, user, auth_client):
+    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
+    plan_date = date(2024, 1, 1)
+    crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
+    crud.add_meal_side(db_session, plan_date, 1, side1.id)
+    crud.add_meal_side(db_session, plan_date, 1, side2.id)
+    crud.add_meal_side(db_session, plan_date, 1, side3.id)
+
+    meal = crud.remove_meal_side(db_session, plan_date, 1, 1)
+
+    assert [s.side_recipe.title for s in meal.sides] == ["Side1", "Side3"]
+    assert [s.position for s in meal.sides] == [1, 2]
+
+
 def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client):
     main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
     side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)

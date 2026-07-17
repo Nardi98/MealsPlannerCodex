@@ -7,7 +7,7 @@ _Generated 2026-07-06. Covers the backend (`backend/`) and frontend (`frontend-v
 ## Part 1 — Where the project is right now
 
 ### What it is
-A **learning-based weekly meal planner**. A FastAPI + SQLite backend generates meal
+A **learning-based weekly meal planner**. A FastAPI + PostgreSQL backend generates meal
 plans by scoring recipes; a Vite/React (React 19) frontend drives the UI. The planner
 scores each recipe on preference, seasonality, recency, tags and bulk-prep, and uses
 ε-greedy exploration to occasionally pick non-optimal recipes so the user's taste model
@@ -72,10 +72,9 @@ Ordered roughly by how much they'll hurt you. The 🔴 items I'd fix before addi
    sets `allow_origins=["*"]` together with `allow_credentials=True`. That combination is
    rejected by browsers and is a security smell — lock origins to the real frontend URL.
 
-3. **The SQLite database is committed to git.** `backend/data/app.db` is tracked
-   (`git ls-files` confirms) and shows up modified on nearly every run, so real/seed data
-   is in version control and every test run dirties the tree. Add it to `.gitignore` and
-   `git rm --cached` it.
+3. ~~**The SQLite database is committed to git.**~~ ✅ **Resolved.** The file was
+   untracked and gitignored, and SQLite has since been removed entirely: the app is
+   PostgreSQL-only and `DATABASE_URL` is required, with no local-file fallback.
 
 ### 🔴 Correctness bugs hiding in the planner/scoring core
 
@@ -163,7 +162,8 @@ Ordered roughly by how much they'll hurt you. The 🔴 items I'd fix before addi
 
 ## Recommended order of attack for a "solid ground"
 
-1. **Stop the bleeding (½ day):** untrack `app.db`, add auth or bind to localhost, fix CORS.
+1. **Stop the bleeding (½ day):** ~~untrack `app.db`~~ (done — SQLite is gone), add auth
+   or bind to localhost, fix CORS.
 2. **Fix the silent planner bugs (#4, #5, #6):** these change actual output — do them
    test-first so you lock in the intended seasonality/recency behavior.
 3. **Replace prints with logging (#7)** and reconcile the docstrings/constants.

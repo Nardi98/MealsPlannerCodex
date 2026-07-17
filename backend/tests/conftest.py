@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Ensure the repository root is on the Python path when tests are executed via
@@ -13,24 +12,48 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from database import Base
-import models  # ensures tables are registered
-
 # The suite runs against PostgreSQL for parity with production (Railway). Point
-# ``TEST_DATABASE_URL`` at a disposable Postgres database; CI and docker-compose
-# provide one. Falls back to a local default matching the compose service.
+# ``TEST_DATABASE_URL`` at a disposable Postgres database -- the schema is dropped
+# and rebuilt, so never aim it at one holding real data. CI provides one; the
+# default matches CI's.
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql://user:pass@localhost:5432/mealsdb_test",
 )
 
+# ``database`` resolves DATABASE_URL at import time and has no fallback, so it
+# must be set before the import below (hence the ``noqa: E402``). Assign rather
+# than ``setdefault``: these tests drop every table, so an ambient DATABASE_URL
+# pointing at a real database must never win over TEST_DATABASE_URL.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
+from database import Base  # noqa: E402
+import models  # noqa: E402  ensures tables are registered
+
+
+def reset_schema(bind):
+    """Drop and rebuild every table on ``bind``.
+
+    The whole suite shares one Postgres database, so any test that *commits*
+    (rather than relying on ``db_session``'s rollback) must call this afterwards
+    or its rows leak into unrelated tests.
+    """
+    Base.metadata.drop_all(bind=bind)
+    Base.metadata.create_all(bind=bind)
+
 
 @pytest.fixture(scope="session")
 def engine():
-    eng = create_engine(TEST_DATABASE_URL, future=True)
-    # Reset any stale schema from a previous run, then build a clean one.
-    Base.metadata.drop_all(bind=eng)
-    Base.metadata.create_all(bind=eng)
+    """The application's own engine, pointed at ``TEST_DATABASE_URL`` above.
+
+    Reusing it rather than building a second one keeps the suite on a single
+    connection pool -- two pools on one database means ``reset_schema``'s
+    ``DROP TABLE`` can block on connections the other pool is holding.
+    """
+    from database import engine as eng
+
+    # Clear stale schema from a previous run, then build a clean one. Runs once.
+    reset_schema(eng)
     return eng
 
 @pytest.fixture
@@ -112,21 +135,22 @@ def auth_client(db_session, user):
 
 
 @pytest.fixture
-def api_client():
-    """A ``TestClient`` on a freshly reset real-engine DB with one logged-in user.
+def api_client(engine):
+    """A ``TestClient`` on the real-engine DB with one logged-in user.
 
     Route tests that exercise the now per-user recipe/ingredient/tag/feedback
     endpoints need an authenticated caller whose owned rows live in the same DB
-    the routes query. This resets the schema, inserts a user, and overrides the
-    ``get_current_user`` dependency to return it.
+    the routes query. This inserts a user and overrides the ``get_current_user``
+    dependency to return it.
+
+    Unlike :func:`auth_client` this commits, so it resets the schema on the way
+    out; the schema is already clean on the way in (the ``engine`` fixture builds
+    it, and every committing test cleans up after itself).
     """
     import auth_users
     import crud
     from main import app
-    from database import SessionLocal, engine as app_engine
-
-    Base.metadata.drop_all(bind=app_engine)
-    Base.metadata.create_all(bind=app_engine)
+    from database import SessionLocal
 
     session = SessionLocal()
     try:
@@ -139,7 +163,10 @@ def api_client():
     app.dependency_overrides[auth_users.get_current_user] = lambda: user
     from fastapi.testclient import TestClient
 
-    with TestClient(app) as client:
-        client.current_user = user
-        yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            client.current_user = user
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+        reset_schema(engine)

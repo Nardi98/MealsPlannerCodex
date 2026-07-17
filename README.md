@@ -57,7 +57,7 @@
 
 - **Backend:** Python 3.13+ with FastAPI served via `uvicorn`.
 - **Frontend:** React.
-- **Database:** PostgreSQL with SQLAlchemy ORM (falls back to a local SQLite file when `DATABASE_URL` is unset).
+- **Database:** PostgreSQL with SQLAlchemy ORM (`DATABASE_URL` is required).
 - **Version control:** Git.
 
 ### UI
@@ -113,9 +113,7 @@ meal-planner/
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-├── migrations/                # schema-change changelog (no active migrations)
-└── data/
-    └── app.db                 # sqlite database (created on first run)
+└── migrations/                # schema-change changelog (no active migrations)
 ```
 
 ## 📦 Requirements
@@ -126,9 +124,12 @@ meal-planner/
 fastapi
 uvicorn
 SQLAlchemy
+psycopg2-binary
 pandas
 python-dateutil
 ```
+
+A running PostgreSQL instance is required; `docker-compose.yml` provisions one.
 
 ### Frontend
 
@@ -148,11 +149,12 @@ docker-compose up --build
 
 Set the necessary environment variables before starting:
 
-- `DATABASE_URL` – SQLAlchemy connection string for the database. Set to a
-  PostgreSQL URL (e.g. `postgresql://user:pass@host:5432/mealsdb`); Railway
-  injects this automatically. A bare `postgres://` scheme is normalized to
-  `postgresql://`. When unset, the backend falls back to a local SQLite file at
-  `data/app.db`.
+- `DATABASE_URL` – **required.** SQLAlchemy connection string for the
+  PostgreSQL database (e.g. `postgresql://user:pass@host:5432/mealsdb`);
+  Railway injects this automatically. A bare `postgres://` scheme is normalized
+  to `postgresql://`. There is no fallback: the backend refuses to start when it
+  is unset, so a misconfigured deployment fails loudly instead of silently
+  serving the wrong database.
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 - `JWT_SECRET` – signing key for the auth tokens (a dev-only default is used

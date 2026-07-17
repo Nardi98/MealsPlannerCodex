@@ -1,4 +1,4 @@
-"""Populate ``data/app.db`` with a dataset for exercising diversity penalties.
+"""Populate the configured database with a dataset for exercising diversity penalties.
 
 Run from ``backend/``::
 

@@ -894,6 +894,10 @@ def remove_meal_side(
         return None
 
     meal.sides.pop(index)
+    # ``position`` is part of the primary key, and the unit of work emits
+    # UPDATEs before DELETEs. Flush the removal first so renumbering the
+    # survivors cannot collide with the row being deleted.
+    session.flush()
     for pos, side in enumerate(meal.sides, start=1):
         side.position = pos
 

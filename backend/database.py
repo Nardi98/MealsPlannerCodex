@@ -3,43 +3,38 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Absolute path to the local SQLite fallback file, under the backend's ``data``
-# directory. Built from the module location so tests and the app behave the same
-# regardless of the current working directory.
-_BASE_DIR = Path(__file__).resolve().parent
-_SQLITE_FALLBACK_URL = f"sqlite:///{_BASE_DIR / 'data' / 'app.db'}"
 
+def resolve_database_url() -> str:
+    """Resolve the PostgreSQL SQLAlchemy URL from the environment.
 
-def resolve_database_url() -> tuple[str, dict]:
-    """Resolve the SQLAlchemy URL and engine ``connect_args`` from the env.
-
-    Honors the ``DATABASE_URL`` environment variable (which Railway injects),
-    falling back to a local SQLite file when it is unset. Railway sometimes
-    emits the bare ``postgres://`` scheme, which SQLAlchemy rejects, so it is
-    normalized to ``postgresql://``. SQLite-only ``connect_args`` are applied
-    only when the resolved URL is SQLite.
+    Requires the ``DATABASE_URL`` environment variable, which Railway injects
+    from the Postgres service. There is deliberately no fallback: a missing
+    variable is a deployment error, and guessing a URL would let the app serve
+    traffic against the wrong database. Railway sometimes emits the bare
+    ``postgres://`` scheme, which SQLAlchemy rejects, so it is normalized.
     """
 
-    url = os.environ.get("DATABASE_URL") or _SQLITE_FALLBACK_URL
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL must be set to a PostgreSQL URL "
+            "(e.g. postgresql://user:pass@host:5432/mealsdb)"
+        )
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
-
-    if url.startswith("sqlite"):
-        return url, {"check_same_thread": False}
-    return url, {}
+    return url
 
 
 # SQLAlchemy database URL for the application.
-DATABASE_URL, _CONNECT_ARGS = resolve_database_url()
+DATABASE_URL = resolve_database_url()
 
 # Create the core SQLAlchemy engine and session factory. ``future=True`` enables
 # 2.0 style usage which is what this project is targeting.
-engine = create_engine(DATABASE_URL, future=True, connect_args=_CONNECT_ARGS)
+engine = create_engine(DATABASE_URL, future=True)
 
 SessionLocal = sessionmaker(
     bind=engine, autoflush=False, autocommit=False, future=True
