@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import NamedTuple
 
 # Allow ``python scripts/seed_testing_data.py`` to resolve the top-level
 # ``database`` / ``models`` modules that live at the backend root.
@@ -137,11 +138,23 @@ TAGS: list[tuple[str, bool, bool]] = [
 ]
 
 # ---------------------------------------------------------------------------
-# Recipes: (title, servings, course, bulk_prep, ingredients, tags)
-#   ingredients: list of (ingredient_name, quantity, unit)
-# 44 entries (>= 40 required). Ingredient names must exist in INGREDIENTS.
+# Recipes. 44 entries (>= 40 required). Ingredient names must exist in
+# INGREDIENTS. Rows are a NamedTuple so consumers (notably
+# ``seed_user_data.py``) read fields by name and survive a field being added
+# here -- the schema mandate in CLAUDE.md makes that a routine edit.
 # ---------------------------------------------------------------------------
-RECIPES: list[tuple[str, int, str, bool, list[tuple[str, float, UnitEnum]], list[str]]] = [
+
+
+class SeedRecipe(NamedTuple):
+    title: str
+    servings: int
+    course: str
+    bulk_prep: bool
+    ingredients: list[tuple[str, float, UnitEnum]]
+    tags: list[str]
+
+
+RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
     ("Spaghetti Pomodoro", 2, "first-course", False,
      [("Spaghetti", 200, UnitEnum.G), ("Tomato", 300, UnitEnum.G),
       ("Garlic", 10, UnitEnum.G), ("Basil", 10, UnitEnum.G),
@@ -280,7 +293,7 @@ RECIPES: list[tuple[str, int, str, bool, list[tuple[str, float, UnitEnum]], list
     ("Tomato Basil Soup", 4, "first-course", True,
      [("Tomato", 500, UnitEnum.G), ("Basil", 15, UnitEnum.G),
       ("Onion", 80, UnitEnum.G)], ["soup", "vegan", "cheap"]),
-]
+]]
 
 
 def reset_database() -> None:

@@ -147,6 +147,38 @@ Use Docker Compose to build and run both services:
 docker-compose up --build
 ```
 
+Every compose run wipes the database and repopulates it with the testing
+dataset (`scripts/seed_testing_data.py`), which owns a single `demo@mealplanner.test`
+account.
+
+### Seeding the demo profiles
+
+`scripts/seed_user_data.py` is the non-destructive counterpart: it never resets
+the schema and only adds rows to the accounts it targets. With no arguments it
+seeds two profiles, creating the accounts if they do not exist yet:
+
+| Account | Password | Data |
+| --- | --- | --- |
+| `alessandro.nardi1998@gmail.com` | `demo1234` | the whole catalogue (44 recipes) |
+| `veggie.demo@example.com` | `demo1234` | vegetarian/vegan recipes only (28) |
+
+Each profile only receives the ingredients and tags its own recipes reference,
+so both accounts stay coherent. Re-running is safe — nothing is duplicated.
+
+Run it against the compose stack (the backend container must be up):
+
+```bash
+docker-compose exec backend python scripts/seed_user_data.py
+```
+
+To populate one specific account instead, pass an email and optionally a
+password. An email matching a profile above gets that profile's data; any other
+email gets the full catalogue:
+
+```bash
+docker-compose exec backend python scripts/seed_user_data.py someone@example.com hunter2
+```
+
 Set the necessary environment variables before starting:
 
 - `DATABASE_URL` – **required.** SQLAlchemy connection string for the
