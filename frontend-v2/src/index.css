@@ -136,3 +136,34 @@ h1, h2, h3, h4 {
 @media (prefers-reduced-motion: reduce) {
   .segu-bar { transition: none; }
 }
+
+/* react-day-picker theme -> Meal Planner design tokens.
+   Double-class selectors (.rdp-root.rdp-root) raise specificity so these
+   win regardless of whether react-day-picker's style.css loads after this
+   file. */
+.rdp-root.rdp-root {
+  --rdp-accent-color: var(--c-pos);
+  --rdp-accent-background-color: color-mix(in srgb, var(--c-a1) 30%, white);
+  --rdp-day_button-border-radius: var(--radius-md);
+  --rdp-selected-border: 2px solid var(--c-pos);
+  --rdp-font-family: var(--font-body);
+  color: var(--text-strong);
+  font-family: var(--font-body);
+  margin: 0;
+}
+.rdp-root .rdp-day_button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--c-a2);
+}
+.rdp-root .rdp-range_middle {
+  background-color: color-mix(in srgb, var(--c-a1) 30%, white);
+}
+.rdp-root .rdp-range_middle .rdp-day_button {
+  background-color: transparent;
+  color: var(--text-strong);
+}
+.rdp-root .rdp-range_start .rdp-day_button,
+.rdp-root .rdp-range_end .rdp-day_button {
+  background-color: var(--c-pos);
+  color: #fff;
+}

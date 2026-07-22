@@ -1,5 +1,5 @@
 import React from 'react'
-import { Card, Input, Button, MonthGrid, MergeIngredientsModal } from '../components'
+import { Card, Button, MonthGrid, DateRangePicker, MergeIngredientsModal } from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 import { buildShoppingList, formatExportText } from '../utils/shoppingList'
@@ -101,34 +101,15 @@ export default function ShoppingListPage() {
           </p>
         </div>
         <div className="flex items-end gap-2">
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Begin date</span>
-            <Input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                const value = e.target.value
-                setStartDate(value)
-                if (endDate && new Date(value) > new Date(endDate)) {
-                  setEndDate(value)
-                }
-              }}
-            />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">End date</span>
-            <Input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                const value = e.target.value
-                setEndDate(value)
-                if (startDate && new Date(value) < new Date(startDate)) {
-                  setStartDate(value)
-                }
-              }}
-            />
-          </label>
+          <DateRangePicker
+            label="Date range"
+            start={startDate}
+            end={endDate}
+            onChange={({ start, end }) => {
+              setStartDate(start)
+              setEndDate(end)
+            }}
+          />
         </div>
       </div>
       <Card className="px-8 py-6">

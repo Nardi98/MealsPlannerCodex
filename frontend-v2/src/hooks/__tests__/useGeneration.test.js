@@ -1,6 +1,11 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { describe, expect, test } from 'vitest'
+import { renderHook, act } from '@testing-library/react'
 import {
   buildGenerateParams,
+  useGeneration,
   LEFTOVER_PRESETS,
   SEASONALITY_PRESETS,
   RECENCY_PRESETS,
@@ -70,5 +75,16 @@ describe('buildGenerateParams', () => {
     expect(Object.keys(LEFTOVER_PRESETS)).toEqual(['fresh', 'some', 'lots'])
     expect(Object.keys(SEASONALITY_PRESETS)).toEqual(['ignore', 'prefer', 'strict'])
     expect(Object.keys(RECENCY_PRESETS)).toEqual(['low', 'medium', 'high'])
+  })
+})
+
+describe('useGeneration', () => {
+  test('handleRangeChange updates both form.start and form.end', () => {
+    const { result } = renderHook(() => useGeneration({ setPlan: () => {} }))
+    act(() => {
+      result.current.handleRangeChange({ start: '2024-03-04', end: '2024-03-10' })
+    })
+    expect(result.current.form.start).toBe('2024-03-04')
+    expect(result.current.form.end).toBe('2024-03-10')
   })
 })

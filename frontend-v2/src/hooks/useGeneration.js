@@ -81,6 +81,9 @@ export function useGeneration({ setPlan }) {
   const handlePresetChange = (name, value) =>
     setForm((f) => ({ ...f, [name]: value }))
 
+  const handleRangeChange = ({ start, end }) =>
+    setForm((f) => ({ ...f, start, end }))
+
   const handleAvoidChange = (selected) =>
     setForm((f) => ({ ...f, avoid_tags: selected }))
   const handleReduceChange = (selected) =>
@@ -209,6 +212,7 @@ export function useGeneration({ setPlan }) {
     setForm,
     handleChange,
     handlePresetChange,
+    handleRangeChange,
     handleAvoidChange,
     handleReduceChange,
     handleGenerate,

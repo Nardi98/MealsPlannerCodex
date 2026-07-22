@@ -11,6 +11,7 @@ import {
 import { Card } from './Card'
 import { Button } from './Button'
 import { Input } from './Input'
+import DateRangePicker from './DateRangePicker'
 import SegmentedControl from './SegmentedControl'
 import TagSelector from './TagSelector'
 
@@ -60,6 +61,7 @@ export default function GenerationForm({
   message,
   error,
   onChange,
+  onRangeChange,
   onPresetChange,
   onAvoidChange,
   onReduceChange,
@@ -69,14 +71,12 @@ export default function GenerationForm({
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Start date</span>
-            <Input type="date" name="start" value={form.start} onChange={onChange} />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">End date</span>
-            <Input type="date" name="end" value={form.end} onChange={onChange} />
-          </label>
+          <DateRangePicker
+            label="Plan dates"
+            start={form.start}
+            end={form.end}
+            onChange={onRangeChange}
+          />
           <label className="flex flex-col text-sm">
             <span className="mb-1">Meals per day</span>
             <Input
