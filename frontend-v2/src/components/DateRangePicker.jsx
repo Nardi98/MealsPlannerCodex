@@ -70,7 +70,7 @@ export default function DateRangePicker({
 
   return (
     <div className="relative" ref={ref}>
-      {label && <span className="mb-1 block text-sm">{label}</span>}
+      {label && <span className="mb-2 block font-bold text-base">{label}</span>}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

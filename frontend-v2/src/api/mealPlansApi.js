@@ -63,6 +63,11 @@ export const mealPlansApi = {
         accepted,
       }),
     }),
+  swap: (a, b) =>
+    request('/meal-plans/swap', {
+      method: 'POST',
+      body: JSON.stringify({ a, b }),
+    }),
   addSide: (planDate, mealNumber, sideId, leftover = false) =>
     request('/meal-plans/side', {
       method: 'POST',

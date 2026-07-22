@@ -48,8 +48,8 @@ export default function SegmentedControl({ label, options, value, onChange }) {
 
   return (
     <div className="flex flex-col text-sm">
-      {label && <span className="mb-1">{label}</span>}
-      <div className="segu" role="tablist" aria-label={label}>
+      {label && <span className="mb-2 font-bold text-base">{label}</span>}
+      <div className="segu w-3/4 self-center" role="tablist" aria-label={label}>
         <div className="segu-track" aria-hidden="true" />
         <div className="segu-bar" style={barStyle} aria-hidden="true" />
         {options.map((opt, index) => {

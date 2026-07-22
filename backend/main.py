@@ -703,6 +703,23 @@ def toggle_meal_acceptance(
     return schemas.MealOut(**crud.meal_item(meal))
 
 
+@app.post("/meal-plans/swap")
+def swap_meals(
+    payload: schemas.MealSwapIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> dict:
+    result = crud.swap_meals(
+        db,
+        (payload.a.plan_date, payload.a.meal_number),
+        (payload.b.plan_date, payload.b.meal_number),
+        current_user.id,
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return {"ok": True}
+
+
 @app.post(
     "/meal-plans/side",
     response_model=schemas.MealOut,

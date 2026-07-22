@@ -1,7 +1,11 @@
 import React from 'react'
 import { Card } from './Card'
 import { Button } from './Button'
-import { CheckIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import {
+  CheckIcon,
+  XMarkIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline'
 
 /**
  * The week calendar grid: lunch/dinner rows for the current week, per-cell
@@ -17,19 +21,28 @@ export default function MealPlanCalendar({
   onAccept,
   onReject,
   onChangeWeek,
+  onArmSwap,
+  armedCell,
 }) {
   const renderCell = (d, idx) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
+    const armed =
+      armedCell && armedCell.date === iso && armedCell.mealIndex === idx
     const acceptedStyle = meal?.accepted
       ? {
           backgroundColor: 'rgba(12, 58, 45, 0.15)',
           color: 'var(--text-strong)',
         }
       : {}
+    // An armed cell (yellow) wins over the accepted/today tints.
+    const armedStyle = armed
+      ? { backgroundColor: 'rgba(255, 185, 2, 0.25)', color: 'var(--text-strong)' }
+      : {}
     return (
       <div
         key={`${idx}-${iso}`}
+        data-cell
         className="relative border p-2 h-24 cursor-pointer"
         onClick={() => onSelectCell({ date: iso, mealIndex: idx })}
         style={
@@ -40,8 +53,9 @@ export default function MealPlanCalendar({
                 ...(meal?.accepted
                   ? acceptedStyle
                   : { backgroundColor: 'rgba(187, 138, 82, 0.15)' }),
+                ...armedStyle,
               }
-            : { borderColor: 'var(--border)', ...acceptedStyle }
+            : { borderColor: 'var(--border)', ...acceptedStyle, ...armedStyle }
         }
       >
         {meal ? (
@@ -59,24 +73,35 @@ export default function MealPlanCalendar({
             {meal.side_recipes && meal.side_recipes.length > 0 && (
               <div className="mt-1 text-xs">{meal.side_recipes.join(', ')}</div>
             )}
-            {!meal.accepted && (
-              <div className="absolute bottom-1 right-1 flex space-x-1">
-                <XMarkIcon
-                  className="h-4 w-4 text-[color:var(--c-neg)] cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onReject({ date: iso, mealIndex: idx })
-                  }}
-                />
-                <CheckIcon
-                  className="h-4 w-4 text-[color:var(--c-pos)] cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onAccept({ date: iso, mealIndex: idx })
-                  }}
-                />
-              </div>
-            )}
+            <div className="absolute bottom-1 right-1 flex space-x-1">
+              <ArrowsRightLeftIcon
+                role="button"
+                aria-label="Swap meal"
+                className="h-4 w-4 text-[color:var(--c-a2)] cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onArmSwap({ date: iso, mealIndex: idx })
+                }}
+              />
+              {!meal.accepted && (
+                <>
+                  <XMarkIcon
+                    className="h-4 w-4 text-[color:var(--c-neg)] cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onReject({ date: iso, mealIndex: idx })
+                    }}
+                  />
+                  <CheckIcon
+                    className="h-4 w-4 text-[color:var(--c-pos)] cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onAccept({ date: iso, mealIndex: idx })
+                    }}
+                  />
+                </>
+              )}
+            </div>
           </>
         ) : (
           <div className="text-sm text-[color:var(--text-subtle)]">—</div>

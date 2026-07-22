@@ -24,6 +24,8 @@ export default function MealPlanPage() {
     handleAccept,
     handleReject,
     handleSwap,
+    armedCell,
+    armSwap,
   } = useMealPlan({ setError: (msg) => generation.setError(msg) })
 
   const generation = useGeneration({ setPlan })
@@ -73,6 +75,8 @@ export default function MealPlanPage() {
         onAccept={acceptCell}
         onReject={rejectCell}
         onChangeWeek={changeWeek}
+        onArmSwap={armSwap}
+        armedCell={armedCell}
       />
       <GenerationForm
         form={generation.form}

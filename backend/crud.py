@@ -836,6 +836,97 @@ def mark_meal_accepted(
     return meal
 
 
+def _recompute_leftovers_for_recipe(
+    session: Session,
+    recipe_id: int,
+    user_id: int | None = None,
+) -> None:
+    """Re-derive leftover links for every meal of ``recipe_id``.
+
+    A recipe with any leftover is a bulk group: its earliest occurrence is the
+    freshly-prepared source and every later occurrence is a leftover linked back
+    to it. A recipe with no leftovers is left untouched (independent fresh
+    meals). Called after a swap moves an occurrence across dates so a leftover
+    never precedes its source.
+    """
+
+    stmt = _scope(
+        select(Meal)
+        .where(Meal.recipe_id == recipe_id)
+        .order_by(Meal.plan_date, Meal.meal_number),
+        Meal.user_id,
+        user_id,
+    )
+    meals = session.execute(stmt).scalars().all()
+    if not any(m.leftover for m in meals):
+        return
+    source = meals[0]
+    source.leftover_source_date = None
+    source.leftover_source_meal = None
+    for meal in meals[1:]:
+        meal.leftover_source_date = source.plan_date
+        meal.leftover_source_meal = source.meal_number
+    session.flush()
+
+
+def swap_meals(
+    session: Session,
+    a: Tuple[Any, int],
+    b: Tuple[Any, int],
+    user_id: int | None = None,
+) -> Optional[Tuple[Meal, Meal]]:
+    """Exchange the recipe and side dishes between two filled meal slots.
+
+    ``a`` and ``b`` are ``(plan_date, meal_number)`` pairs (date or ISO string).
+    Each slot keeps its own ``accepted`` flag; only recipe + ordered sides move.
+    Returns ``None`` when either slot is missing or empty. Afterwards leftover
+    links are re-derived for both recipes so the earliest occurrence stays the
+    freshly-prepared source.
+    """
+
+    def _coerce(pos: Tuple[Any, int]) -> Tuple[date, int]:
+        day, number = pos
+        return (day if isinstance(day, date) else date.fromisoformat(day), number)
+
+    da, na = _coerce(a)
+    db_, nb = _coerce(b)
+    ma = _get_meal(session, da, na, user_id)
+    mb = _get_meal(session, db_, nb, user_id)
+    if ma is None or mb is None or ma.recipe_id is None or mb.recipe_id is None:
+        return None
+
+    a_sides = [s.side_recipe_id for s in ma.sides]
+    b_sides = [s.side_recipe_id for s in mb.sides]
+    recipe_a, recipe_b = ma.recipe_id, mb.recipe_id
+
+    ma.recipe_id, mb.recipe_id = recipe_b, recipe_a
+    # Leftover-ness belongs to the recipe content, so its link travels with the
+    # recipe; _recompute_leftovers_for_recipe then fixes chronological ordering.
+    ma.leftover_source_date, mb.leftover_source_date = (
+        mb.leftover_source_date,
+        ma.leftover_source_date,
+    )
+    ma.leftover_source_meal, mb.leftover_source_meal = (
+        mb.leftover_source_meal,
+        ma.leftover_source_meal,
+    )
+    ma.sides = [
+        MealSide(position=i + 1, side_recipe_id=sid) for i, sid in enumerate(b_sides)
+    ]
+    mb.sides = [
+        MealSide(position=i + 1, side_recipe_id=sid) for i, sid in enumerate(a_sides)
+    ]
+    session.flush()
+
+    for recipe_id in {recipe_a, recipe_b}:
+        _recompute_leftovers_for_recipe(session, recipe_id, user_id)
+
+    session.commit()
+    session.refresh(ma)
+    session.refresh(mb)
+    return ma, mb
+
+
 def add_meal_side(
     session: Session,
     plan_date: date,

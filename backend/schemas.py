@@ -238,6 +238,20 @@ class MealAcceptanceIn(BaseModel):
     accepted: bool
 
 
+class MealPosition(BaseModel):
+    """A single meal slot addressed by date and meal number."""
+
+    plan_date: date
+    meal_number: int
+
+
+class MealSwapIn(BaseModel):
+    """Payload for swapping two meals' positions."""
+
+    a: MealPosition
+    b: MealPosition
+
+
 class MealSideIn(BaseModel):
     """Payload for adding or replacing a side dish."""
 

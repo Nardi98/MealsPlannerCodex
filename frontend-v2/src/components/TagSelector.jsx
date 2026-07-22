@@ -32,17 +32,19 @@ export default function TagSelector({ label, tags = [], selected = [], onChange 
   }, [open])
 
   return (
-    <div className="flex flex-col text-sm col-span-2 relative" ref={ref}>
-      {label && <span className="mb-1">{label}</span>}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="border rounded p-2 flex justify-between items-center"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        <span>{display}</span>
-        <ChevronDownIcon className="h-4 w-4" />
-      </button>
+    <div className="flex flex-col text-sm h-full relative" ref={ref}>
+      {label && <span className="mb-2 font-bold text-base">{label}</span>}
+      <div className="flex-1 flex flex-col justify-center">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="border rounded p-2 flex justify-between items-center"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          <span>{display}</span>
+          <ChevronDownIcon className="h-4 w-4" />
+        </button>
+      </div>
       {open && (
         <div
           className="absolute top-full left-0 z-10 mt-1 w-full bg-white border rounded shadow max-h-60 overflow-y-auto"

@@ -76,8 +76,8 @@ export default function GenerationForm({
 }) {
   return (
     <Card>
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+      <form onSubmit={onSubmit} className="space-y-8">
+        <div className="grid grid-cols-3 gap-x-6 gap-y-12">
           <DateRangePicker
             label="Plan dates"
             start={form.start}
@@ -91,7 +91,7 @@ export default function GenerationForm({
             onChange={(v) => onPresetChange('meals_per_day', v)}
           />
           <label className="flex flex-col text-sm">
-            <span className="mb-1">Recommendation style</span>
+            <span className="mb-2 font-bold text-base">Recommendation style</span>
             <Input
               type="range"
               name="epsilon"
@@ -110,7 +110,7 @@ export default function GenerationForm({
             </div>
           </label>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-4 gap-x-6 gap-y-12">
           <div className="col-span-2">
             <SegmentedControl
               label="Leftovers"
@@ -135,18 +135,22 @@ export default function GenerationForm({
               onChange={(v) => onPresetChange('recency', v)}
             />
           </div>
-          <TagSelector
-            label="Avoid tags"
-            tags={tags}
-            selected={form.avoid_tags}
-            onChange={onAvoidChange}
-          />
-          <TagSelector
-            label="Reduce tags"
-            tags={tags}
-            selected={form.reduce_tags}
-            onChange={onReduceChange}
-          />
+          <div className="col-span-1">
+            <TagSelector
+              label="Avoid tags"
+              tags={tags}
+              selected={form.avoid_tags}
+              onChange={onAvoidChange}
+            />
+          </div>
+          <div className="col-span-1">
+            <TagSelector
+              label="Reduce tags"
+              tags={tags}
+              selected={form.reduce_tags}
+              onChange={onReduceChange}
+            />
+          </div>
         </div>
         {message && (
           <div className="text-sm" style={{ color: 'var(--c-pos)' }}>

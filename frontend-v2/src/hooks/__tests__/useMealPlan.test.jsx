@@ -13,6 +13,7 @@ vi.mock('../../api/mealPlansApi', () => ({
     fetchRange: vi.fn(),
     create: vi.fn(),
     accept: vi.fn(),
+    swap: vi.fn(),
   },
 }))
 vi.mock('../../api/feedbackApi', () => ({
@@ -36,6 +37,7 @@ beforeEach(() => {
   })
   mealPlansApi.create.mockResolvedValue()
   mealPlansApi.accept.mockResolvedValue()
+  mealPlansApi.swap.mockResolvedValue()
   feedbackApi.acceptRecipe.mockResolvedValue()
 })
 
@@ -113,6 +115,64 @@ test('rejecting a meal refetches the week to reflect server-side changes', async
 
   await waitFor(() => expect(mealPlansApi.fetchRange).toHaveBeenCalledTimes(2))
   expect(result.current.plan[startIso][0].recipe).toBe('Replacement')
+})
+
+test('arming a cell sets armedCell without calling swap', async () => {
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+
+  expect(result.current.armedCell).toEqual({ date: startIso, mealIndex: 0 })
+  expect(mealPlansApi.swap).not.toHaveBeenCalled()
+})
+
+test('arming the same cell again cancels (disarms)', async () => {
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+
+  expect(result.current.armedCell).toBeNull()
+  expect(mealPlansApi.swap).not.toHaveBeenCalled()
+})
+
+test('arming a second cell swaps the two meals and refetches', async () => {
+  const day2 = new Date(startIso)
+  day2.setDate(day2.getDate() + 1)
+  const day2Iso = day2.toISOString().slice(0, 10)
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'A', side_recipes: [], accepted: false, leftover: false }],
+      [day2Iso]: [{ recipe: 'B', side_recipes: [], accepted: false, leftover: false }],
+    })
+    .mockResolvedValueOnce({
+      [startIso]: [{ recipe: 'B', side_recipes: [], accepted: false, leftover: false }],
+      [day2Iso]: [{ recipe: 'A', side_recipes: [], accepted: false, leftover: false }],
+    })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[day2Iso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: day2Iso, mealIndex: 0 })
+  })
+
+  expect(mealPlansApi.swap).toHaveBeenCalledWith(
+    { plan_date: startIso, meal_number: 1 },
+    { plan_date: day2Iso, meal_number: 1 },
+  )
+  expect(result.current.armedCell).toBeNull()
+  await waitFor(() => expect(result.current.plan[startIso][0].recipe).toBe('B'))
 })
 
 test('rejecting a bulk source re-extracts its leftover slots as fresh meals', async () => {

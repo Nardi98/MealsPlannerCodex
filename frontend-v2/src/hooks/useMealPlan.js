@@ -48,6 +48,8 @@ export function useMealPlan({ setError }) {
   const today = React.useMemo(() => new Date(), [])
   const [viewStart, setViewStart] = React.useState(() => startOfWeek(today))
   const [plan, setPlan] = React.useState({})
+  // The cell currently armed for a position swap (yellow), or null.
+  const [armedCell, setArmedCell] = React.useState(null)
 
   const weekDays = React.useMemo(
     () =>
@@ -81,6 +83,15 @@ export function useMealPlan({ setError }) {
       d.setDate(d.getDate() + delta * 7)
       return d
     })
+  }
+
+  // Reload the visible week so server-side cascade effects (recomputed leftover
+  // links, cross-day changes) are reflected.
+  const refetchWeek = async () => {
+    const viewEnd = new Date(viewStart)
+    viewEnd.setDate(viewEnd.getDate() + 6)
+    const refreshed = await mealPlansApi.fetchRange(fmt(viewStart), fmt(viewEnd))
+    setPlan(refreshed || {})
   }
 
   const handleAccept = async (cell) => {
@@ -175,11 +186,7 @@ export function useMealPlan({ setError }) {
 
       try {
         await persistDays(date, daysMap)
-        // Refetch the visible week so server-side cascade effects are reflected.
-        const viewEnd = new Date(viewStart)
-        viewEnd.setDate(viewEnd.getDate() + 6)
-        const refreshed = await mealPlansApi.fetchRange(fmt(viewStart), fmt(viewEnd))
-        setPlan(refreshed || {})
+        await refetchWeek()
       } catch (apiErr) {
         console.error('Failed to persist rejected meal', apiErr)
       }
@@ -212,6 +219,32 @@ export function useMealPlan({ setError }) {
     }
   }
 
+  // Position-swap flow: first press arms a cell (yellow); pressing the same cell
+  // again cancels; pressing a different filled cell swaps the two meals and
+  // refetches the week so recomputed leftover flags/icons are reflected.
+  const armSwap = async (cell) => {
+    if (!cell) return
+    const meal = plan[cell.date]?.[cell.mealIndex]
+    if (!meal) return
+    if (!armedCell) {
+      setArmedCell(cell)
+      return
+    }
+    if (armedCell.date === cell.date && armedCell.mealIndex === cell.mealIndex) {
+      setArmedCell(null)
+      return
+    }
+    const toPos = (c) => ({ plan_date: c.date, meal_number: c.mealIndex + 1 })
+    const from = armedCell
+    setArmedCell(null)
+    try {
+      await mealPlansApi.swap(toPos(from), toPos(cell))
+      await refetchWeek()
+    } catch (err) {
+      console.error('Failed to swap meals', err)
+    }
+  }
+
   return {
     today,
     viewStart,
@@ -224,5 +257,7 @@ export function useMealPlan({ setError }) {
     handleAccept,
     handleReject,
     handleSwap,
+    armedCell,
+    armSwap,
   }
 }
