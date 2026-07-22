@@ -7,6 +7,8 @@ import {
   ArrowPathRoundedSquareIcon,
   AdjustmentsHorizontalIcon,
   Squares2X2Icon,
+  Square2StackIcon,
+  StopIcon,
 } from '@heroicons/react/24/outline'
 import { Card } from './Card'
 import { Button } from './Button'
@@ -43,6 +45,11 @@ const SEASONALITY_OPTIONS = [
   { value: 'strict', label: 'Strictly', sub: 'seasonal', icon: svg(CheckBadgeIcon) },
 ]
 
+const MEALS_OPTIONS = [
+  { value: 1, label: '1', sub: 'meal', icon: svg(StopIcon) },
+  { value: 2, label: '2', sub: 'meals', icon: svg(Square2StackIcon) },
+]
+
 const RECENCY_OPTIONS = [
   { value: 'low', label: 'Repeat', sub: 'freely', icon: svg(ArrowPathRoundedSquareIcon) },
   { value: 'medium', label: 'Some', sub: 'variety', icon: svg(AdjustmentsHorizontalIcon) },
@@ -70,25 +77,40 @@ export default function GenerationForm({
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <DateRangePicker
             label="Plan dates"
             start={form.start}
             end={form.end}
             onChange={onRangeChange}
           />
+          <SegmentedControl
+            label="Meals per day"
+            options={MEALS_OPTIONS}
+            value={Number(form.meals_per_day)}
+            onChange={(v) => onPresetChange('meals_per_day', v)}
+          />
           <label className="flex flex-col text-sm">
-            <span className="mb-1">Meals per day</span>
+            <span className="mb-1">Recommendation style</span>
             <Input
-              type="number"
-              name="meals_per_day"
-              min="1"
-              max="2"
-              step="1"
-              value={form.meals_per_day}
+              type="range"
+              name="epsilon"
+              min="0"
+              max="1"
+              step="0.01"
+              value={form.epsilon}
               onChange={onChange}
             />
+            <div
+              className="flex justify-between text-xs mt-1"
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              <span>Favorite food</span>
+              <span>Random selection</span>
+            </div>
           </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <SegmentedControl
               label="Leftovers"
@@ -113,25 +135,6 @@ export default function GenerationForm({
               onChange={(v) => onPresetChange('recency', v)}
             />
           </div>
-          <label className="flex flex-col text-sm col-span-2">
-            <span className="mb-1">Recommendation style</span>
-            <Input
-              type="range"
-              name="epsilon"
-              min="0"
-              max="1"
-              step="0.01"
-              value={form.epsilon}
-              onChange={onChange}
-            />
-            <div
-              className="flex justify-between text-xs mt-1"
-              style={{ color: 'var(--text-subtle)' }}
-            >
-              <span>Favorite food</span>
-              <span>Random selection</span>
-            </div>
-          </label>
           <TagSelector
             label="Avoid tags"
             tags={tags}
