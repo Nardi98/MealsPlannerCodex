@@ -212,3 +212,42 @@ def test_registration_seeds_system_tags_for_the_new_user(db_session):
         assert crud.list_recipe_titles(db_session, user_id=new_id) == []
     finally:
         app.dependency_overrides.clear()
+
+
+def test_registration_seeds_starter_ingredients_per_user(db_session):
+    """Each new account gets its own copy of the starter ingredient library."""
+    from sqlalchemy import func, select
+
+    from models import Ingredient
+    from mealplanner.seed import SYSTEM_INGREDIENTS
+
+    def _ingredient_count(user_id):
+        return db_session.execute(
+            select(func.count())
+            .select_from(Ingredient)
+            .where(Ingredient.user_id == user_id)
+        ).scalar_one()
+
+    try:
+        client = db_client(db_session)
+        first = client.post(
+            "/auth/register",
+            json={"email": "starter-a@x.com", "password": "pw123456"},
+        ).json()["id"]
+        second = client.post(
+            "/auth/register",
+            json={"email": "starter-b@x.com", "password": "pw123456"},
+        ).json()["id"]
+
+        assert _ingredient_count(first) == len(SYSTEM_INGREDIENTS)
+        assert _ingredient_count(second) == len(SYSTEM_INGREDIENTS)
+
+        # A known ingredient exists for the new user, fully populated.
+        potato = db_session.execute(
+            select(Ingredient).where(
+                Ingredient.name == "Potato", Ingredient.user_id == first
+            )
+        ).scalar_one()
+        assert potato.categories and potato.season_months
+    finally:
+        app.dependency_overrides.clear()

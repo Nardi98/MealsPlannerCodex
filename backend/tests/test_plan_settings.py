@@ -29,3 +29,10 @@ def test_plan_settings_endpoint_persists_overrides(auth_client):
     assert resp.json()["LEFTOVER_REPEAT_DEFAULT"] == 4
     # The override survives a subsequent read.
     assert auth_client.get("/plan/settings").json()["LEFTOVER_REPEAT_DEFAULT"] == 4
+
+
+def test_plan_settings_round_trips_tag_penalty_weight(auth_client):
+    resp = auth_client.put("/plan/settings", json={"tag_penalty_weight": 2.0})
+    assert resp.status_code == 200
+    assert resp.json()["tag_penalty_weight"] == 2.0
+    assert auth_client.get("/plan/settings").json()["tag_penalty_weight"] == 2.0

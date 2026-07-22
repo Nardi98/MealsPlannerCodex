@@ -11,6 +11,8 @@ the ``Tag`` table has a uniqueness constraint on ``name``).
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Iterable
 
 from sqlalchemy import select
@@ -19,6 +21,13 @@ from sqlalchemy.orm import Session
 import crud
 from models import Ingredient, Recipe, RecipeIngredient, Tag, UnitEnum
 from scoping import scope
+
+# Curated starter ingredient library handed to every new account so the app is
+# usable without adding ingredients one by one. Loaded once at import from a
+# JSON fixture that non-coders can extend. Each entry is
+# ``{"name", "unit", "season_months": [int], "categories": [str]}``.
+_SYSTEM_INGREDIENTS_PATH = Path(__file__).resolve().parent.parent / "data" / "system_ingredients.json"
+SYSTEM_INGREDIENTS: list[dict] = json.loads(_SYSTEM_INGREDIENTS_PATH.read_text(encoding="utf-8"))
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +119,42 @@ def seed_system_tags(session: Session, user_id: int | None = None) -> None:
     session.commit()
 
 
+def seed_system_ingredients(session: Session, user_id: int | None = None) -> None:
+    """Idempotently give ``user_id`` its own copy of the starter ingredients.
+
+    Each new account gets a full per-user copy of :data:`SYSTEM_INGREDIENTS`
+    (there is no shared catalogue and no ``is_system`` marker on ``Ingredient`` --
+    the ``(user_id, name)`` uniqueness constraint alone makes this safe to re-run).
+    Names the user already owns are skipped, so this never duplicates rows and
+    never clobbers ingredients the user has since edited. A ``commit`` is issued
+    at the end, mirroring :func:`seed_system_tags`.
+    """
+
+    session.flush()
+    names = [entry["name"] for entry in SYSTEM_INGREDIENTS]
+    stmt = scope(
+        select(Ingredient.name).where(Ingredient.name.in_(names)),
+        Ingredient.user_id,
+        user_id,
+    )
+    existing = set(session.execute(stmt).scalars())
+
+    for entry in SYSTEM_INGREDIENTS:
+        if entry["name"] in existing:
+            continue
+        session.add(
+            Ingredient(
+                name=entry["name"],
+                unit=UnitEnum(entry["unit"]),
+                season_months=entry["season_months"],
+                categories=entry["categories"],
+                user_id=user_id,
+            )
+        )
+
+    session.commit()
+
+
 def seed_sample_data(session: Session) -> None:
     """Populate the database with a small set of example data.
 
@@ -146,4 +191,9 @@ def seed_sample_data(session: Session) -> None:
     session.commit()
 
 
-__all__ = ["seed_sample_data", "seed_system_tags"]
+__all__ = [
+    "SYSTEM_INGREDIENTS",
+    "seed_sample_data",
+    "seed_system_ingredients",
+    "seed_system_tags",
+]

@@ -1,13 +1,58 @@
 import React from 'react'
+import {
+  SparklesIcon,
+  GlobeAltIcon,
+  SunIcon,
+  CheckBadgeIcon,
+  ArrowPathRoundedSquareIcon,
+  AdjustmentsHorizontalIcon,
+  Squares2X2Icon,
+} from '@heroicons/react/24/outline'
 import { Card } from './Card'
 import { Button } from './Button'
 import { Input } from './Input'
+import SegmentedControl from './SegmentedControl'
 import TagSelector from './TagSelector'
 
+// eslint-disable-next-line no-unused-vars -- `Icon` is rendered as a JSX component
+const svg = (Icon) => <Icon className="seg-svg" aria-hidden="true" />
+const png = (src, alt) => (
+  <img className="segu-ico" src={src} alt={alt} aria-hidden="true" />
+)
+
+const LEFTOVER_OPTIONS = [
+  { value: 'fresh', label: 'Everything', sub: 'fresh', icon: svg(SparklesIcon) },
+  {
+    value: 'some',
+    label: 'Some',
+    sub: 'leftovers',
+    icon: png('/assets/icons/left_overs_icon.png', 'leftovers'),
+  },
+  {
+    value: 'lots',
+    label: 'Cook',
+    sub: 'in bulk',
+    icon: png('/assets/icons/bulk_icon.png', 'cook in bulk'),
+  },
+]
+
+const SEASONALITY_OPTIONS = [
+  { value: 'ignore', label: "Don't care", sub: 'about seasons', icon: svg(GlobeAltIcon) },
+  { value: 'prefer', label: 'Prefer', sub: 'seasonal', icon: svg(SunIcon) },
+  { value: 'strict', label: 'Strictly', sub: 'seasonal', icon: svg(CheckBadgeIcon) },
+]
+
+const RECENCY_OPTIONS = [
+  { value: 'low', label: 'Repeat', sub: 'freely', icon: svg(ArrowPathRoundedSquareIcon) },
+  { value: 'medium', label: 'Some', sub: 'variety', icon: svg(AdjustmentsHorizontalIcon) },
+  { value: 'high', label: 'Maximise', sub: 'variety', icon: svg(Squares2X2Icon) },
+]
+
 /**
- * The plan-generation form (dates, weights, ε, leftovers, tag filters) plus its
- * success/error messages. Presentational — form state and handlers come from
- * the `useGeneration` hook via props.
+ * The plan-generation form. Weights are chosen through preset segmented rows
+ * (leftovers, seasonality, variety) rather than raw numbers; the ε slider is
+ * reframed as a Favorite food ↔ Random selection dial. Presentational — state
+ * and handlers come from the `useGeneration` hook via props.
  */
 export default function GenerationForm({
   form,
@@ -15,6 +60,7 @@ export default function GenerationForm({
   message,
   error,
   onChange,
+  onPresetChange,
   onAvoidChange,
   onReduceChange,
   onSubmit,
@@ -22,7 +68,7 @@ export default function GenerationForm({
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col text-sm">
             <span className="mb-1">Start date</span>
             <Input type="date" name="start" value={form.start} onChange={onChange} />
@@ -43,8 +89,32 @@ export default function GenerationForm({
               onChange={onChange}
             />
           </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">ε ({form.epsilon})</span>
+          <div className="col-span-2">
+            <SegmentedControl
+              label="Leftovers"
+              options={LEFTOVER_OPTIONS}
+              value={form.leftovers}
+              onChange={(v) => onPresetChange('leftovers', v)}
+            />
+          </div>
+          <div className="col-span-2">
+            <SegmentedControl
+              label="Seasonality"
+              options={SEASONALITY_OPTIONS}
+              value={form.seasonality}
+              onChange={(v) => onPresetChange('seasonality', v)}
+            />
+          </div>
+          <div className="col-span-2">
+            <SegmentedControl
+              label="Variety"
+              options={RECENCY_OPTIONS}
+              value={form.recency}
+              onChange={(v) => onPresetChange('recency', v)}
+            />
+          </div>
+          <label className="flex flex-col text-sm col-span-2">
+            <span className="mb-1">Recommendation style</span>
             <Input
               type="range"
               name="epsilon"
@@ -54,37 +124,13 @@ export default function GenerationForm({
               value={form.epsilon}
               onChange={onChange}
             />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Seasonality weight</span>
-            <Input type="number" step="0.1" name="seasonality_weight" value={form.seasonality_weight} onChange={onChange} />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Recency weight</span>
-            <Input type="number" step="0.1" name="recency_weight" value={form.recency_weight} onChange={onChange} />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Tag penalty weight</span>
-            <Input type="number" step="0.1" name="tag_penalty_weight" value={form.tag_penalty_weight} onChange={onChange} />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Bulk bonus weight</span>
-            <Input type="number" step="0.1" name="bulk_bonus_weight" value={form.bulk_bonus_weight} onChange={onChange} />
-          </label>
-          <label className="flex flex-col text-sm">
-            <span className="mb-1">Keep days</span>
-            <Input type="number" name="keep_days" min="0" value={form.keep_days} onChange={onChange} />
-          </label>
-          <label className="flex items-center gap-2 col-span-2 text-sm">
-            <input
-              type="checkbox"
-              name="bulk_leftovers"
-              checked={form.bulk_leftovers}
-              onChange={onChange}
-              className="h-4 w-4 rounded border"
-              style={{ borderColor: 'var(--border)' }}
-            />
-            <span style={{ color: 'var(--text-strong)' }}>Bulk leftovers</span>
+            <div
+              className="flex justify-between text-xs mt-1"
+              style={{ color: 'var(--text-subtle)' }}
+            >
+              <span>Favorite food</span>
+              <span>Random selection</span>
+            </div>
           </label>
           <TagSelector
             label="Avoid tags"

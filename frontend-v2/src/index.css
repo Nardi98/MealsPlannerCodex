@@ -103,3 +103,36 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
 }
+
+/* ---- Sliding segmented control (SegmentedControl.jsx) ---- */
+.segu { position: relative; display: flex; gap: 4px; padding: 0 2px; }
+.segu-btn {
+  flex: 1; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 6px 4px 16px;
+  border: 0; background: transparent; cursor: pointer;
+  transition: opacity .15s, transform .1s;
+}
+.segu-btn:hover  { opacity: .82; }
+.segu-btn:active { transform: scale(.97); }
+.segu-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 185, 2, .4);
+  border-radius: var(--radius-md, 8px);
+}
+.segu-btn:disabled { opacity: .4; cursor: not-allowed; }
+.segu-track {
+  position: absolute; left: 2px; right: 2px; bottom: 0;
+  height: 3px; border-radius: 999px; background: var(--surface-sunken);
+}
+.segu-bar {
+  position: absolute; bottom: 0; left: 2px; z-index: 3;
+  height: 3px; border-radius: 999px; background: var(--c-a2);
+  transition: transform .34s cubic-bezier(.32, .72, 0, 1);
+}
+.segu-ico { width: 28px; height: 28px; object-fit: contain; }
+.seg-svg { width: 28px; height: 28px; color: var(--c-a1); }
+.seg-lbl { font: 600 12.5px/1.2 var(--font-display); color: var(--c-pos); text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .segu-bar { transition: none; }
+}

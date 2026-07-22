@@ -20,3 +20,9 @@ env/
 .DS_Store
 Thumbs.db
 
+# Skills / plugins / agent scaffolding (local only)
+.agents/
+.claude/skills/
+skills-lock.json
+PRODUCT.md
+

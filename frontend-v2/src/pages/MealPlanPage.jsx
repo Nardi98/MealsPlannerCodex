@@ -80,6 +80,7 @@ export default function MealPlanPage() {
         message={generation.message}
         error={generation.error}
         onChange={generation.handleChange}
+        onPresetChange={generation.handlePresetChange}
         onAvoidChange={generation.handleAvoidChange}
         onReduceChange={generation.handleReduceChange}
         onSubmit={generation.handleGenerate}

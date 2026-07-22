@@ -2,13 +2,15 @@ import React from 'react'
 // Aliased to a capitalized name so the lint config (no eslint-plugin-react)
 // recognizes the JSX usage below.
 import { AnimatePresence, motion as Motion } from 'framer-motion'
-import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { ArrowRightOnRectangleIcon, Cog6ToothIcon } from '@heroicons/react/24/outline'
 import Avatar from './Avatar'
+import PreferencesModal from './PreferencesModal'
 import { useAuth } from '../auth/AuthContext'
 
 export default function ProfileMenu() {
   const { user, logout } = useAuth()
   const [open, setOpen] = React.useState(false)
+  const [showPreferences, setShowPreferences] = React.useState(false)
   const ref = React.useRef(null)
 
   // Close the dropdown when clicking anywhere outside it.
@@ -74,20 +76,22 @@ export default function ProfileMenu() {
               type="button"
               onClick={() => {
                 setOpen(false)
+                setShowPreferences(true)
+              }}
+              className="flex items-center gap-2"
+              style={menuItemStyle}
+            >
+              <Cog6ToothIcon className="h-5 w-5" />
+              Preferences
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
                 logout()
               }}
               className="flex items-center gap-2"
-              style={{
-                width: '100%',
-                padding: '8px 10px',
-                background: 'none',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                color: 'var(--text-strong)',
-                fontSize: 14,
-                fontFamily: 'var(--font-body)',
-              }}
+              style={menuItemStyle}
             >
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
               Log out
@@ -95,6 +99,21 @@ export default function ProfileMenu() {
           </Motion.div>
         )}
       </AnimatePresence>
+      {showPreferences && (
+        <PreferencesModal onClose={() => setShowPreferences(false)} />
+      )}
     </div>
   )
+}
+
+const menuItemStyle = {
+  width: '100%',
+  padding: '8px 10px',
+  background: 'none',
+  border: 'none',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+  color: 'var(--text-strong)',
+  fontSize: 14,
+  fontFamily: 'var(--font-body)',
 }

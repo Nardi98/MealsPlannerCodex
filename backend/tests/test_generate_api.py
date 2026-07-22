@@ -1,5 +1,6 @@
 
 import crud
+import main
 
 
 def test_generate_endpoint_returns_plan(db_session, user, auth_client):
@@ -16,3 +17,25 @@ def test_generate_endpoint_returns_plan(db_session, user, auth_client):
     assert isinstance(data["2024-01-01"][0]["id"], int)
     assert data["2024-01-01"][0]["title"].startswith("Meal")
     assert data["2024-01-01"][0]["leftover"] is False
+
+
+def test_generate_endpoint_sources_tag_penalty_weight_from_profile(
+    auth_client, monkeypatch
+):
+    # Persist a profile tag-penalty weight that differs from the request default.
+    auth_client.put("/plan/settings", json={"tag_penalty_weight": 2.0})
+
+    captured = {}
+
+    def fake_generate_plan(*args, **kwargs):
+        captured["tag_penalty_weight"] = kwargs.get("tag_penalty_weight")
+        return []
+
+    monkeypatch.setattr(main.planner, "generate_plan", fake_generate_plan)
+
+    response = auth_client.post(
+        "/meal-plans/generate",
+        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+    )
+    assert response.status_code == 200
+    assert captured["tag_penalty_weight"] == 2.0

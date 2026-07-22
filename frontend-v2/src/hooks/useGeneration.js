@@ -2,6 +2,42 @@ import React from 'react'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { startOfWeek, fmt } from './useMealPlan'
 
+// Leftover preset -> the backend leftover/bulk knobs it stands for. Fresh means
+// "cook every meal" (no leftovers); Lots leans hard on batch-cooked reuse.
+export const LEFTOVER_PRESETS = {
+  fresh: { bulk_leftovers: false, bulk_bonus_weight: 0, keep_days: 0 },
+  some: { bulk_leftovers: true, bulk_bonus_weight: 1, keep_days: 3 },
+  lots: { bulk_leftovers: true, bulk_bonus_weight: 2, keep_days: 5 },
+}
+
+// Seasonality preset -> seasonality_weight (0 ignores seasons, higher favours them).
+export const SEASONALITY_PRESETS = { ignore: 0, prefer: 1, strict: 3 }
+
+// Recency preset -> recency_weight (how strongly recently-eaten recipes are avoided).
+export const RECENCY_PRESETS = { low: 0.5, medium: 1, high: 2 }
+
+/**
+ * Map the preset-based form state to the flat weight payload the generate
+ * endpoint expects. `tag_penalty_weight` is intentionally omitted: it is now a
+ * per-user profile setting sourced by the backend, not a per-plan knob.
+ */
+export const buildGenerateParams = (form) => {
+  const leftover = LEFTOVER_PRESETS[form.leftovers] ?? LEFTOVER_PRESETS.some
+  return {
+    start: form.start,
+    end: form.end,
+    meals_per_day: Number(form.meals_per_day) || 1,
+    epsilon: Number(form.epsilon),
+    seasonality_weight: SEASONALITY_PRESETS[form.seasonality] ?? SEASONALITY_PRESETS.prefer,
+    recency_weight: RECENCY_PRESETS[form.recency] ?? RECENCY_PRESETS.medium,
+    bulk_bonus_weight: leftover.bulk_bonus_weight,
+    bulk_leftovers: leftover.bulk_leftovers,
+    keep_days: leftover.keep_days,
+    avoid_tags: form.avoid_tags,
+    reduce_tags: form.reduce_tags,
+  }
+}
+
 const defaultForm = () => {
   const start = startOfWeek(new Date())
   const end = startOfWeek(new Date())
@@ -11,12 +47,9 @@ const defaultForm = () => {
     end: fmt(end),
     meals_per_day: 2,
     epsilon: 0.25,
-    seasonality_weight: 1,
-    recency_weight: 1,
-    tag_penalty_weight: 1,
-    bulk_bonus_weight: 1,
-    keep_days: 3,
-    bulk_leftovers: true,
+    leftovers: 'some',
+    seasonality: 'prefer',
+    recency: 'medium',
     avoid_tags: [],
     reduce_tags: [],
   }
@@ -36,14 +69,17 @@ export function useGeneration({ setPlan }) {
   const [pendingGeneration, setPendingGeneration] = React.useState(null)
 
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
-    let val = type === 'checkbox' ? checked : value
+    const { name, value } = e.target
+    let val = value
     if (name === 'meals_per_day') {
       const num = Number(value)
       val = isNaN(num) ? 1 : Math.max(1, num)
     }
     setForm((f) => ({ ...f, [name]: val }))
   }
+
+  const handlePresetChange = (name, value) =>
+    setForm((f) => ({ ...f, [name]: value }))
 
   const handleAvoidChange = (selected) =>
     setForm((f) => ({ ...f, avoid_tags: selected }))
@@ -110,20 +146,7 @@ export function useGeneration({ setPlan }) {
         setError('End date cannot be before start date')
         return
       }
-      const params = {
-        start: form.start,
-        end: form.end,
-        meals_per_day: Number(form.meals_per_day) || 1,
-        epsilon: Number(form.epsilon),
-        seasonality_weight: Number(form.seasonality_weight),
-        recency_weight: Number(form.recency_weight),
-        tag_penalty_weight: Number(form.tag_penalty_weight),
-        bulk_bonus_weight: Number(form.bulk_bonus_weight),
-        bulk_leftovers: Boolean(form.bulk_leftovers),
-        avoid_tags: form.avoid_tags,
-        reduce_tags: form.reduce_tags,
-        keep_days: Number(form.keep_days),
-      }
+      const params = buildGenerateParams(form)
       const range = { start: form.start, end: form.end }
       const config = { params, range }
       setPendingGeneration(config)
@@ -185,6 +208,7 @@ export function useGeneration({ setPlan }) {
     form,
     setForm,
     handleChange,
+    handlePresetChange,
     handleAvoidChange,
     handleReduceChange,
     handleGenerate,

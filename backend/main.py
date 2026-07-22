@@ -19,7 +19,7 @@ import models
 import schemas
 import storage
 from mealplanner import planner
-from mealplanner.seed import seed_system_tags
+from mealplanner.seed import seed_system_ingredients, seed_system_tags
 from database import SessionLocal, engine, get_db
 from scoping import scope
 import auth_users
@@ -103,8 +103,9 @@ def _create_account(
 ) -> models.User:
     """Create a user and give it the starter data a fresh account needs.
 
-    New accounts start empty apart from their own copy of the curated system
-    tags, so tagging works out of the box without leaking another user's tags.
+    New accounts start with their own copy of the curated system tags and the
+    starter ingredient library, so tagging and recipe entry work out of the box
+    without leaking another user's data.
     """
     user = crud.create_user(
         db,
@@ -115,6 +116,7 @@ def _create_account(
         google_sub=google_sub,
     )
     seed_system_tags(db, user.id)
+    seed_system_ingredients(db, user.id)
     return user
 
 
@@ -788,10 +790,16 @@ def generate_plan_endpoint(
     current_user: CurrentUser,
 ) -> Dict[str, List[Dict[str, object]]]:
     days = (payload.end - payload.start).days + 1
+    settings = crud.get_plan_settings(db, current_user.id)
+    # The tag-penalty weight is a per-user profile setting, not a per-plan knob,
+    # so it comes from the stored settings; the request field is only a fallback.
+    tag_penalty_weight = settings.get(
+        "tag_penalty_weight", payload.tag_penalty_weight
+    )
     slots = planner.generate_plan(
         db,
         user_id=current_user.id,
-        plan_settings=crud.get_plan_settings(db, current_user.id),
+        plan_settings=settings,
         start=payload.start,
         days=days,
         meals_per_day=payload.meals_per_day,
@@ -802,7 +810,7 @@ def generate_plan_endpoint(
         reduce_tags=payload.reduce_tags,
         seasonality_weight=payload.seasonality_weight,
         recency_weight=payload.recency_weight,
-        tag_penalty_weight=payload.tag_penalty_weight,
+        tag_penalty_weight=tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
         return_slots=True,
     )

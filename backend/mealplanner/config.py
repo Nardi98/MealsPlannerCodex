@@ -8,6 +8,8 @@ DEFAULT_PLAN_SETTINGS: Dict[str, Any] = {
     # Existing planner options
     "bulk_leftovers": True,
     "keep_days": 7,
+    # Scoring weight persisted per user (edited from the profile, not per plan).
+    "tag_penalty_weight": 1.0,
     # New leftover and scheduling parameters
     "LEFTOVER_REPEAT_DEFAULT": 1,
     "LEFTOVER_REPEAT_BY_RECIPE": {},
