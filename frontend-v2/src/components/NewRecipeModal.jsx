@@ -302,6 +302,9 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
           </div>
           <div className="space-y-2">
             <label className="text-sm">Ingredients</label>
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              Enter the ingredients for a single serving of the recipe.
+            </p>
             {ingredients.map((ing, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <IngredientDropdown
