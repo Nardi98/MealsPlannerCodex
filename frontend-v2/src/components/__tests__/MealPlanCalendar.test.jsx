@@ -48,6 +48,26 @@ test('clicking the swap control arms that cell', () => {
   expect(onArmSwap).toHaveBeenCalledWith({ date: iso, mealIndex: 0 })
 })
 
+test('while armed, clicking a second square completes the swap (not select)', () => {
+  const onArmSwap = vi.fn()
+  const onSelectCell = vi.fn()
+  renderCalendar({
+    onArmSwap,
+    onSelectCell,
+    armedCell: { date: iso, mealIndex: 0 },
+  })
+  fireEvent.click(screen.getByText('Dinner B').closest('div[data-cell]'))
+  expect(onArmSwap).toHaveBeenCalledWith({ date: iso, mealIndex: 1 })
+  expect(onSelectCell).not.toHaveBeenCalled()
+})
+
+test('with nothing armed, clicking a square selects it (opens modal)', () => {
+  const onSelectCell = vi.fn()
+  renderCalendar({ onSelectCell, armedCell: null })
+  fireEvent.click(screen.getByText('Dinner B').closest('div[data-cell]'))
+  expect(onSelectCell).toHaveBeenCalledWith({ date: iso, mealIndex: 1 })
+})
+
 test('the armed cell is tinted yellow', () => {
   renderCalendar({ armedCell: { date: iso, mealIndex: 0 } })
   const armed = screen.getByText('Lunch A').closest('div[data-cell]')

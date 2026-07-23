@@ -44,7 +44,11 @@ export default function MealPlanCalendar({
         key={`${idx}-${iso}`}
         data-cell
         className="relative border p-2 h-24 cursor-pointer"
-        onClick={() => onSelectCell({ date: iso, mealIndex: idx })}
+        onClick={() =>
+          armedCell
+            ? onArmSwap({ date: iso, mealIndex: idx })
+            : onSelectCell({ date: iso, mealIndex: idx })
+        }
         style={
           isToday(d)
             ? {
