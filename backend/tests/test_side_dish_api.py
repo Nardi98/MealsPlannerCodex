@@ -23,6 +23,8 @@ def test_post_plan_with_side_recipe(db_session, user, auth_client):
                 "side_recipes": ["Side"],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }
@@ -52,6 +54,8 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
         "side_recipes": ["Side"],
         "accepted": False,
         "leftover": False,
+        "meal_number": 1,
+        "people": 2,
     }
 
     resp2 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
@@ -63,6 +67,8 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
                 "side_recipes": ["Side"],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }
@@ -112,6 +118,8 @@ def test_add_multiple_side_dishes(db_session, user, auth_client):
                 "side_recipes": ["Side1", "Side2"],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }
@@ -145,6 +153,8 @@ def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
         "side_recipes": ["Side1", "Side3"],
         "accepted": False,
         "leftover": False,
+        "meal_number": 1,
+        "people": 2,
     }
     assert crud.get_recipe(db_session, side2.id).score == -1
 
@@ -219,6 +229,8 @@ def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client
         "side_recipes": ["Side1"],
         "accepted": False,
         "leftover": False,
+        "meal_number": 1,
+        "people": 2,
     }
     assert crud.get_recipe(db_session, side2.id).score == 0
 

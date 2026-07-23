@@ -19,6 +19,8 @@ def test_toggle_meal_acceptance(db_session, user, auth_client):
         "side_recipes": [],
         "accepted": True,
         "leftover": False,
+        "meal_number": 1,
+        "people": 2,
     }
 
     resp2 = client.get("/plan", params={"plan_date": "2024-01-01"})
@@ -30,6 +32,8 @@ def test_toggle_meal_acceptance(db_session, user, auth_client):
                 "side_recipes": [],
                 "accepted": True,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }

@@ -31,6 +31,8 @@ def test_get_plan_range(db_session, user, auth_client):
                 "side_recipes": [],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ],
         second.isoformat(): [
@@ -39,6 +41,8 @@ def test_get_plan_range(db_session, user, auth_client):
                 "side_recipes": [],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ],
     }

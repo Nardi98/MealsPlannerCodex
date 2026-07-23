@@ -29,6 +29,7 @@ class UserOut(BaseModel):
     email: str
     display_name: Optional[str] = None
     auth_provider: str
+    default_people: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -228,6 +229,8 @@ class MealOut(BaseModel):
     side_recipes: List[str] = Field(default_factory=list)
     accepted: bool
     leftover: bool = False
+    meal_number: int
+    people: int
 
 
 class MealAcceptanceIn(BaseModel):
@@ -236,6 +239,22 @@ class MealAcceptanceIn(BaseModel):
     plan_date: date
     meal_number: int
     accepted: bool
+
+
+class MealPeopleIn(BaseModel):
+    """Payload for setting how many people a single meal is cooked for."""
+
+    plan_date: date
+    meal_number: int
+    people: int = Field(ge=1)
+
+
+class DefaultPeopleIn(BaseModel):
+    """Payload for setting the user's default people count over a date range."""
+
+    people: int = Field(ge=1)
+    start_date: date
+    end_date: date
 
 
 class MealPosition(BaseModel):

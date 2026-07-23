@@ -29,6 +29,11 @@ from sqlalchemy.types import TypeDecorator
 
 from database import Base
 
+# Number of people a meal is cooked for when no per-user default is known.
+# Shared by the model column defaults, the plan-build path, and imports so the
+# fallback lives in one place.
+DEFAULT_PEOPLE = 2
+
 
 class IntList(TypeDecorator):
     """Store ``list[int]`` values as comma separated strings."""
@@ -127,6 +132,11 @@ class User(Base):
     # Per-user overrides layered on top of ``DEFAULT_PLAN_SETTINGS``. ``None``
     # means "no overrides" (the account uses the shared defaults).
     plan_settings = Column(JSON, nullable=True)
+    # Default number of people the shopping list scales each meal for. New
+    # meals inherit this; the shopping list can override it per meal.
+    default_people = Column(
+        Integer, nullable=False, server_default="2", default=DEFAULT_PEOPLE
+    )
 
     @validates("email")
     def _canonicalise_email(self, key: str, value: str) -> str:
@@ -348,6 +358,12 @@ class Meal(Base):
     # skips meals whose recipe is gone.
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"))
     accepted = Column(Boolean, default=False)
+    # Number of people this meal is cooked for; the shopping list multiplies the
+    # recipe's (and its sides') ingredient amounts by it. Sides scale with their
+    # parent meal, so they carry no people column of their own.
+    people = Column(
+        Integer, nullable=False, server_default="2", default=DEFAULT_PEOPLE
+    )
     # A meal is a leftover iff it links back to the source meal that produced
     # it. The two columns are all-or-nothing (see the CHECK constraint below);
     # ``leftover`` is derived from their presence rather than stored separately.

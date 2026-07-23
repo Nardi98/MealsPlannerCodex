@@ -351,6 +351,7 @@ def populate(session) -> None:
         hashed_password=hash_password(DEMO_USER_PASSWORD),
         display_name="Demo User",
         auth_provider="local",
+        default_people=2,
     )
     session.add(demo_user)
     # Flush so ``demo_user.id`` is available to stamp ownership on every row.

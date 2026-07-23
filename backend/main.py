@@ -179,6 +179,28 @@ def read_me(
     return current_user
 
 
+@app.put("/auth/me/default-people", response_model=schemas.UserOut)
+def set_default_people(
+    payload: schemas.DefaultPeopleIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> models.User:
+    """Set the user's default people count and apply it to the given range.
+
+    Overwrites ``Meal.people`` for every meal in ``[start_date, end_date]`` and
+    stores ``people`` as the default for future meals.
+    """
+    crud.set_default_people(
+        db,
+        payload.people,
+        payload.start_date,
+        payload.end_date,
+        current_user.id,
+    )
+    db.refresh(current_user)
+    return current_user
+
+
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(
     db: Db,
@@ -696,6 +718,24 @@ def toggle_meal_acceptance(
 ) -> schemas.MealOut:
     meal = crud.mark_meal_accepted(
         db, payload.plan_date, payload.meal_number, payload.accepted,
+        current_user.id,
+    )
+    if meal is None or meal.recipe is None:
+        raise HTTPException(status_code=404, detail="Meal not found")
+    return schemas.MealOut(**crud.meal_item(meal))
+
+
+@app.post(
+    "/meal-plans/people",
+    response_model=schemas.MealOut,
+)
+def set_meal_people(
+    payload: schemas.MealPeopleIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> schemas.MealOut:
+    meal = crud.set_meal_people(
+        db, payload.plan_date, payload.meal_number, payload.people,
         current_user.id,
     )
     if meal is None or meal.recipe is None:

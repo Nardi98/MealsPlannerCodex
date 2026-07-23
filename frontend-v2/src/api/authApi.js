@@ -17,4 +17,13 @@ export const authApi = {
       body: JSON.stringify({ credential }),
     }),
   me: () => request('/auth/me'),
+  setDefaultPeople: ({ people, startDate, endDate }) =>
+    request('/auth/me/default-people', {
+      method: 'PUT',
+      body: JSON.stringify({
+        people,
+        start_date: startDate,
+        end_date: endDate,
+      }),
+    }),
 };

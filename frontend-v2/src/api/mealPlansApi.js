@@ -68,6 +68,15 @@ export const mealPlansApi = {
       method: 'POST',
       body: JSON.stringify({ a, b }),
     }),
+  setPeople: (planDate, mealNumber, people) =>
+    request('/meal-plans/people', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        people,
+      }),
+    }),
   addSide: (planDate, mealNumber, sideId, leftover = false) =>
     request('/meal-plans/side', {
       method: 'POST',

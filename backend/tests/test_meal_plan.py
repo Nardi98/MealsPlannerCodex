@@ -51,8 +51,10 @@ def test_generate_and_persist_plan(db_session, user):
                 "side_recipes": [],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": idx,
+                "people": 2,
             }
-            for title in meals
+            for idx, title in enumerate(meals, start=1)
         ]
         for day, meals in plan_titles.items()
     }
@@ -98,8 +100,10 @@ def test_duplicate_titles_do_not_break_plan(db_session, user):
                 "side_recipes": [],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": idx,
+                "people": 2,
             }
-            for title in meals
+            for idx, title in enumerate(meals, start=1)
         ]
         for day, meals in plan_titles.items()
     }
@@ -126,6 +130,8 @@ def test_mark_meal_accepted(db_session, user):
                 "side_recipes": [],
                 "accepted": True,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }
@@ -150,6 +156,8 @@ def test_meal_with_side_recipe(db_session, user):
                 "side_recipes": [side.title],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }

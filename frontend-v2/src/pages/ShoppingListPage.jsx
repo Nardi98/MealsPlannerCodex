@@ -1,8 +1,20 @@
 import React from 'react'
-import { Card, Button, MonthGrid, DateRangePicker, MergeIngredientsModal } from '../components'
+import { format } from 'date-fns'
+import {
+  Card,
+  Button,
+  Input,
+  MonthGrid,
+  DateRangePicker,
+  MergeIngredientsModal,
+} from '../components'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
+import { authApi } from '../api/authApi'
 import { buildShoppingList, formatExportText } from '../utils/shoppingList'
+
+// Meal slots are numbered 1/2; the shopping list reads them back as dayparts.
+const MEAL_SLOT = { 1: 'Lunch', 2: 'Dinner' }
 
 export default function ShoppingListPage() {
   const [startDate, setStartDate] = React.useState(() =>
@@ -13,11 +25,28 @@ export default function ShoppingListPage() {
     d.setDate(d.getDate() + ((7 - d.getDay()) % 7))
     return d.toISOString().slice(0, 10)
   })
-  const [recipes, setRecipes] = React.useState([])
+  // Each occurrence is one planned meal (main + its sides) with the number of
+  // people it is cooked for; the same recipe on two days yields two occurrences.
+  const [occurrences, setOccurrences] = React.useState([])
+  const [recipesByTitle, setRecipesByTitle] = React.useState(() => new Map())
+  const [people, setPeople] = React.useState(2)
   const [crossed, setCrossed] = React.useState(new Set())
   const [merging, setMerging] = React.useState(false)
 
-  const ingredients = React.useMemo(() => buildShoppingList(recipes), [recipes])
+  // Each occurrence contributes its main and every side, all scaled by the
+  // meal's own people count (sides scale with their parent meal).
+  const ingredients = React.useMemo(() => {
+    const items = []
+    occurrences.forEach((o) => {
+      const main = recipesByTitle.get(o.mainTitle)
+      if (main) items.push({ people: o.people, ingredients: main.ingredients })
+      o.sideTitles.forEach((title) => {
+        const side = recipesByTitle.get(title)
+        if (side) items.push({ people: o.people, ingredients: side.ingredients })
+      })
+    })
+    return buildShoppingList(items)
+  }, [occurrences, recipesByTitle])
 
   const start = startDate ? new Date(startDate) : null
   const end = endDate ? new Date(endDate) : null
@@ -41,11 +70,11 @@ export default function ShoppingListPage() {
 
   const months = React.useMemo(() => {
     if (!startDate) return []
-    const start = new Date(startDate)
-    const base = new Date(start.getFullYear(), start.getMonth(), 1)
+    const base = new Date(startDate)
+    const first = new Date(base.getFullYear(), base.getMonth(), 1)
     return Array.from({ length: 3 }, (_, i) => {
-      const d = new Date(base)
-      d.setMonth(base.getMonth() + i)
+      const d = new Date(first)
+      d.setMonth(first.getMonth() + i)
       return d
     })
   }, [startDate])
@@ -53,38 +82,89 @@ export default function ShoppingListPage() {
   const handleLoad = React.useCallback(async () => {
     try {
       const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
-      const counts = new Map()
-      Object.values(data || {}).forEach((meals) => {
+      const list = []
+      Object.entries(data || {}).forEach(([day, meals]) => {
         meals.forEach((m) => {
-          const title = m.recipe
-          if (!m.leftover) {
-            counts.set(title, (counts.get(title) || 0) + 1)
-          }
-          for (const t of m.side_recipes || []) {
-            counts.set(t, (counts.get(t) || 0) + 1)
-          }
+          list.push({
+            planDate: day,
+            mealNumber: m.meal_number,
+            people: m.people,
+            leftover: m.leftover,
+            mainTitle: m.recipe,
+            sideTitles: m.side_recipes || [],
+          })
         })
       })
-      const all = await recipesApi.fetchAll()
-      const list = []
-      all.forEach((r) => {
-        const count = counts.get(r.title) || 0
-        for (let i = 0; i < count; i++) {
-          list.push(r)
-        }
-      })
-      setRecipes(list)
+      list.sort(
+        (a, b) =>
+          a.planDate.localeCompare(b.planDate) || a.mealNumber - b.mealNumber,
+      )
+      setOccurrences(list)
       setCrossed(new Set())
     } catch (err) {
       console.error('Failed to load shopping list', err)
     }
   }, [startDate, endDate])
 
+  // The recipe catalog is independent of the selected range, so fetch it once.
+  React.useEffect(() => {
+    recipesApi
+      .fetchAll()
+      .then((all) => setRecipesByTitle(new Map(all.map((r) => [r.title, r]))))
+      .catch((err) => console.error('Failed to load recipes', err))
+  }, [])
+
+  // Seed the global People box from the user's saved default.
+  React.useEffect(() => {
+    authApi
+      .me()
+      .then((me) => {
+        if (me?.default_people) setPeople(me.default_people)
+      })
+      .catch((err) => console.error('Failed to load user', err))
+  }, [])
+
   React.useEffect(() => {
     if (startDate && endDate) {
       handleLoad()
     }
   }, [startDate, endDate, handleLoad])
+
+  // Persist the global people count and overwrite every in-range meal. The
+  // occurrences on screen are exactly that range, so update them in place
+  // rather than refetching.
+  const commitGlobalPeople = async (value) => {
+    const next = Math.max(1, Math.round(value) || 1)
+    setPeople(next)
+    setOccurrences((prev) => prev.map((o) => ({ ...o, people: next })))
+    try {
+      await authApi.setDefaultPeople({
+        people: next,
+        startDate,
+        endDate: endDate || startDate,
+      })
+    } catch (err) {
+      console.error('Failed to set default people', err)
+    }
+  }
+
+  // Adjust a single meal's people count and persist it.
+  const changeMealPeople = async (occ, delta) => {
+    const next = Math.max(1, occ.people + delta)
+    if (next === occ.people) return
+    setOccurrences((prev) =>
+      prev.map((o) =>
+        o.planDate === occ.planDate && o.mealNumber === occ.mealNumber
+          ? { ...o, people: next }
+          : o,
+      ),
+    )
+    try {
+      await mealPlansApi.setPeople(occ.planDate, occ.mealNumber, next)
+    } catch (err) {
+      console.error('Failed to set meal people', err)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -103,6 +183,7 @@ export default function ShoppingListPage() {
         <div className="flex items-end gap-2">
           <DateRangePicker
             label="Date range"
+            align="right"
             start={startDate}
             end={endDate}
             onChange={({ start, end }) => {
@@ -110,6 +191,17 @@ export default function ShoppingListPage() {
               setEndDate(end)
             }}
           />
+          <label className="block">
+            <span className="mb-2 block font-bold text-base">People</span>
+            <Input
+              type="number"
+              min={1}
+              className="w-24"
+              value={people}
+              onChange={(e) => setPeople(e.target.value)}
+              onBlur={(e) => commitGlobalPeople(Number(e.target.value))}
+            />
+          </label>
         </div>
       </div>
       <Card className="px-8 py-6">
@@ -135,15 +227,43 @@ export default function ShoppingListPage() {
             </h2>
           </div>
           <ul className="space-y-2">
-            {recipes.map((r, i) => (
+            {occurrences.map((o) => (
               <li
-                key={`${r.id}-${i}`}
-                className="border rounded-xl p-3"
+                key={`${o.planDate}-${o.mealNumber}`}
+                className="border rounded-xl p-3 flex items-center justify-between gap-3"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <div>{r.title}</div>
-                <div className="text-xs text-[color:var(--text-subtle)]">
-                  {(r.ingredients || []).length} ingredients
+                <div>
+                  <div className="text-xs text-[color:var(--text-subtle)]">
+                    {format(new Date(o.planDate), 'EEE d MMM')} ·{' '}
+                    {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
+                    {o.leftover ? ' · leftover' : ''}
+                  </div>
+                  <div>{o.mainTitle}</div>
+                  {o.sideTitles.length > 0 && (
+                    <div className="text-xs text-[color:var(--text-subtle)]">
+                      + {o.sideTitles.join(', ')}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    variant="a2"
+                    onClick={() => changeMealPeople(o, -1)}
+                    aria-label="Fewer people"
+                  >
+                    –
+                  </Button>
+                  <span className="w-6 text-center tabular-nums">
+                    {o.people}
+                  </span>
+                  <Button
+                    variant="a2"
+                    onClick={() => changeMealPeople(o, 1)}
+                    aria-label="More people"
+                  >
+                    +
+                  </Button>
                 </div>
               </li>
             ))}
@@ -208,4 +328,3 @@ export default function ShoppingListPage() {
     </div>
   )
 }
-

@@ -31,6 +31,8 @@ def test_post_meal_plan_conflict_requires_force(db_session, user, auth_client):
                 "side_recipes": [],
                 "accepted": False,
                 "leftover": False,
+                "meal_number": 1,
+                "people": 2,
             }
         ]
     }

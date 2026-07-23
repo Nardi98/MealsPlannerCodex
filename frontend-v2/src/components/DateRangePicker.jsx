@@ -22,6 +22,7 @@ export default function DateRangePicker({
   onChange,
   label,
   placeholder = 'Select dates',
+  align = 'left',
 }) {
   const [open, setOpen] = React.useState(false)
   const [anchor, setAnchor] = React.useState(null)
@@ -87,7 +88,9 @@ export default function DateRangePicker({
       </button>
       {open && (
         <div
-          className="absolute z-50 mt-2 border bg-white p-2 shadow-lg"
+          className={`absolute z-50 mt-2 border bg-white p-2 shadow-lg${
+            align === 'right' ? ' right-0' : ''
+          }`}
           style={{
             borderRadius: 'var(--radius-lg)',
             borderColor: 'var(--border-default)',

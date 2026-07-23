@@ -16,6 +16,7 @@ from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from scoping import owned as _owned, scope as _scope
 from models import (
     CATEGORIES,
+    DEFAULT_PEOPLE,
     Ingredient,
     MealPlan,
     Meal,
@@ -525,6 +526,10 @@ def set_meal_plan(
     """
 
     plans: Dict[str, MealPlan] = {}
+    # New meals inherit the owner's default people count; the shopping list can
+    # override it per meal afterwards.
+    owner = session.get(User, user_id)
+    default_people = owner.default_people if owner is not None else DEFAULT_PEOPLE
     # Built meals paired with their leftover hint, fed to _assign_leftover_sources
     # once every day is rebuilt so cross-day links resolve in date order.
     entries: List[tuple] = []
@@ -579,6 +584,7 @@ def set_meal_plan(
                 meal_number=index,
                 recipe_id=main_id,
                 accepted=False,
+                people=default_people,
                 sides=[
                     MealSide(position=i + 1, side_recipe_id=sid)
                     for i, sid in enumerate(side_ids)
@@ -721,6 +727,8 @@ def meal_item(meal: Meal) -> Dict[str, Any]:
         ],
         "accepted": meal.accepted,
         "leftover": meal.leftover,
+        "meal_number": meal.meal_number,
+        "people": meal.people,
     }
 
 
@@ -834,6 +842,59 @@ def mark_meal_accepted(
     session.commit()
     session.refresh(meal)
     return meal
+
+
+def set_meal_people(
+    session: Session,
+    plan_date: date,
+    meal_number: int,
+    people: int,
+    user_id: int | None = None,
+) -> Optional[Meal]:
+    """Set how many people a specific meal is cooked for.
+
+    The shopping list scales this meal's ingredients (and its sides') by
+    ``people``. Returns ``None`` when the slot is missing.
+    """
+
+    meal = _get_meal(session, plan_date, meal_number, user_id)
+    if meal is None:
+        return None
+    meal.people = people
+    session.commit()
+    session.refresh(meal)
+    return meal
+
+
+def set_default_people(
+    session: Session,
+    people: int,
+    start_date: date,
+    end_date: date,
+    user_id: int,
+) -> int:
+    """Set the user's default people count and apply it to a date range.
+
+    Persists ``people`` as ``User.default_people`` (the default for future
+    meals) and overwrites ``Meal.people`` for every meal of ``user_id`` whose
+    ``plan_date`` falls in ``[start_date, end_date]`` inclusive. Meals outside
+    the range keep their own value. Returns the number of meals updated.
+    """
+
+    user = session.get(User, user_id)
+    if user is None:
+        raise ValueError("Unknown user")
+    user.default_people = people
+    stmt = _scope(
+        select(Meal).where(Meal.plan_date.between(start_date, end_date)),
+        Meal.user_id,
+        user_id,
+    )
+    meals = session.execute(stmt).scalars().all()
+    for meal in meals:
+        meal.people = people
+    session.commit()
+    return len(meals)
 
 
 def _recompute_leftovers_for_recipe(
@@ -1275,6 +1336,10 @@ def import_data(
                 if side is not None and is_side_dish(side):
                     main.favorite_sides.append(side)
 
+        # A meal without a stored people count inherits the owner's default,
+        # matching the plan-build path rather than a bare literal.
+        owner = session.get(User, user_id) if user_id is not None else None
+        owner_people = owner.default_people if owner is not None else DEFAULT_PEOPLE
         imported_meals: List[tuple] = []
         for plan_info in data.get("meal_plans", []):
             pdate = date.fromisoformat(plan_info["plan_date"])
@@ -1294,6 +1359,7 @@ def import_data(
                     meal_number=meal_info["meal_number"],
                     recipe_id=rid,
                     accepted=meal_info.get("accepted", False),
+                    people=meal_info.get("people", owner_people),
                 )
                 meal_plan.meals.append(meal)
                 imported_meals.append(
@@ -1387,6 +1453,7 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                             "recipe_id": meal.recipe_id,
                             "accepted": meal.accepted,
                             "leftover": meal.leftover,
+                            "people": meal.people,
                         }
                         for meal in plan.meals
                     ],
