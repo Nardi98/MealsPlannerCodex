@@ -16,10 +16,11 @@ export const ingredientsApi = {
   remove: (id, force = false) =>
     request(`/ingredients/${id}?force=${force}`, { method: 'DELETE' }),
   recipes: (id) => request(`/ingredients/${id}/recipes`),
-  similar: (name, excludeId) =>
+  similar: (name, excludeId, threshold) =>
     request(
       `/ingredients/similar?name=${encodeURIComponent(name)}` +
-        (excludeId ? `&exclude_id=${excludeId}` : '')
+        (excludeId ? `&exclude_id=${excludeId}` : '') +
+        (threshold != null ? `&threshold=${threshold}` : '')
     ),
   duplicates: () => request('/ingredients/duplicates'),
   merge: (payload) =>

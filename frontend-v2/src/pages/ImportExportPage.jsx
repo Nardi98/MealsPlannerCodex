@@ -5,6 +5,7 @@ import {
   Input,
   OverwriteConfirmModal,
   MergeConflictModal,
+  ImportRecipeModal,
 } from '../components'
 import { dataApi } from '../api/dataApi'
 import { recipesApi } from '../api/recipesApi'
@@ -18,6 +19,8 @@ export default function ImportExportPage() {
   const [mergeConflicts, setMergeConflicts] = React.useState(null)
   const [existingRecipes, setExistingRecipes] = React.useState([])
   const [existingIngredients, setExistingIngredients] = React.useState([])
+  const [showImportRecipe, setShowImportRecipe] = React.useState(false)
+  const [importedTitle, setImportedTitle] = React.useState('')
   const fileInputRef = React.useRef(null)
 
   const handleExport = async () => {
@@ -199,6 +202,24 @@ export default function ImportExportPage() {
         </select>
         {parsedData && <Button onClick={handleImport}>Import</Button>}
       </Card>
+
+      <Card className="space-y-3">
+        <div>
+          <h2 className="text-lg font-medium" style={{ color: 'var(--text-strong)' }}>
+            Import a recipe from the web
+          </h2>
+          <p className="text-sm text-[color:var(--text-subtle)]">
+            Turn a recipe from another website into an importable one with the help
+            of a chatbot.
+          </p>
+        </div>
+        {importedTitle && (
+          <p className="text-sm" style={{ color: 'var(--c-pos)' }}>
+            Added “{importedTitle}”.
+          </p>
+        )}
+        <Button onClick={() => setShowImportRecipe(true)}>Import a recipe</Button>
+      </Card>
       </div>
       {showOverwriteModal && (
         <OverwriteConfirmModal
@@ -211,6 +232,15 @@ export default function ImportExportPage() {
           conflicts={mergeConflicts}
           onCancel={() => setMergeConflicts(null)}
           onConfirm={confirmMerge}
+        />
+      )}
+      {showImportRecipe && (
+        <ImportRecipeModal
+          onClose={() => setShowImportRecipe(false)}
+          onCreated={(created) => {
+            setImportedTitle(created?.title || '')
+            setShowImportRecipe(false)
+          }}
         />
       )}
     </>

@@ -10,7 +10,7 @@ import { Badge } from '../components/Badge'
 import { Card } from '../components/Card'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
-import { FavoriteSidesSelect, NewRecipeModal } from '../components'
+import { FavoriteSidesSelect, ImportRecipeModal, NewRecipeModal } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -69,6 +69,7 @@ export default function RecipesPage() {
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
+  const [showImport, setShowImport] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [search, setSearch] = React.useState('')
   const [showFilters, setShowFilters] = React.useState(false)
@@ -251,6 +252,12 @@ export default function RecipesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <Button
+            variant="ghost"
+            onClick={() => setShowImport(true)}
+          >
+            Import from web
+          </Button>
           <Button
             variant="accent"
             Icon={PlusIcon}
@@ -456,6 +463,16 @@ export default function RecipesPage() {
           }}
           onSave={handleSave}
           initialRecipe={editing}
+        />
+      )}
+
+      {showImport && (
+        <ImportRecipeModal
+          onClose={() => setShowImport(false)}
+          onCreated={(created) => {
+            setRecipes((r) => [...r, created])
+            setShowImport(false)
+          }}
         />
       )}
     </div>

@@ -440,9 +440,10 @@ def similar_ingredients(
     db: Db,
     current_user: CurrentUser,
     exclude_id: int | None = None,
+    threshold: float = 0.8,
 ) -> List[schemas.IngredientSummary]:
     matches = crud.find_similar_ingredients(
-        db, name, exclude_id=exclude_id, user_id=current_user.id
+        db, name, exclude_id=exclude_id, threshold=threshold, user_id=current_user.id
     )
     return [
         schemas.IngredientSummary(
