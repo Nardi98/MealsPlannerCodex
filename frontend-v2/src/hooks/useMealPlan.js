@@ -78,6 +78,9 @@ export function useMealPlan({ setError }) {
   }, [viewStart])
 
   const changeWeek = (delta) => {
+    // A pending arm belongs to the week it was set in; leaving that week would
+    // make the next click swap across mismatched positions, so drop it here.
+    setArmedCell(null)
     setViewStart((s) => {
       const d = new Date(s)
       d.setDate(d.getDate() + delta * 7)
@@ -232,6 +235,13 @@ export function useMealPlan({ setError }) {
     }
     if (armedCell.date === cell.date && armedCell.mealIndex === cell.mealIndex) {
       setArmedCell(null)
+      return
+    }
+    // Re-validate the armed cell still holds a meal (it may have been emptied or
+    // scrolled out of view since arming); if it is gone, re-arm the clicked cell
+    // rather than swap against a stale position.
+    if (!plan[armedCell.date]?.[armedCell.mealIndex]) {
+      setArmedCell(cell)
       return
     }
     const toPos = (c) => ({ plan_date: c.date, meal_number: c.mealIndex + 1 })

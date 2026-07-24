@@ -904,11 +904,20 @@ def _recompute_leftovers_for_recipe(
 ) -> None:
     """Re-derive leftover links for every meal of ``recipe_id``.
 
-    A recipe with any leftover is a bulk group: its earliest occurrence is the
-    freshly-prepared source and every later occurrence is a leftover linked back
-    to it. A recipe with no leftovers is left untouched (independent fresh
-    meals). Called after a swap moves an occurrence across dates so a leftover
-    never precedes its source.
+    A swap can move an occurrence across dates, leaving a leftover before its
+    source or pointing at a stale slot. This restores consistency while keeping
+    each meal's fresh/leftover role stable:
+
+    * the *number* of leftovers is preserved (a swap moves occurrences around,
+      it never cooks or un-cooks a batch);
+    * the earliest occurrence is always a fresh source, so a leftover can never
+      precede every source;
+    * already-valid leftovers keep their leftover role, and independently-fresh
+      occurrences (e.g. a second cook-batch of the same recipe) stay fresh --
+      each leftover links back to the nearest *earlier* fresh source, so two
+      separate batches are not merged into one chain.
+
+    A recipe with no leftovers is left untouched.
     """
 
     stmt = _scope(
@@ -919,14 +928,32 @@ def _recompute_leftovers_for_recipe(
         user_id,
     )
     meals = session.execute(stmt).scalars().all()
-    if not any(m.leftover for m in meals):
+    leftover_count = sum(1 for m in meals if m.leftover)
+    if leftover_count == 0:
         return
-    source = meals[0]
-    source.leftover_source_date = None
-    source.leftover_source_meal = None
-    for meal in meals[1:]:
-        meal.leftover_source_date = source.plan_date
-        meal.leftover_source_meal = source.meal_number
+
+    # Keep the leftover role on exactly ``leftover_count`` occurrences: prefer the
+    # slots already marked leftover, then the earliest remaining ones. Index 0 is
+    # always a fresh source (a leftover can never precede every source), so it is
+    # never eligible. A stable sort by "not currently leftover" floats the current
+    # leftovers to the front, so the first ``leftover_count`` are the ones to keep.
+    candidates = sorted(range(1, len(meals)), key=lambda i: not meals[i].leftover)
+    leftover_positions = set(candidates[:leftover_count])
+
+    # Reuse the shared linking rule (leftover -> nearest earlier fresh source):
+    # clear stale links, then let _assign_leftover_sources re-derive them from the
+    # chosen roles so that invariant lives in exactly one place.
+    for meal in meals:
+        meal.leftover_source_date = None
+        meal.leftover_source_meal = None
+    _assign_leftover_sources(
+        [
+            (meal, meal.plan_date, meal.meal_number, recipe_id, i in leftover_positions)
+            for i, meal in enumerate(meals)
+        ],
+        session=session,
+        user_id=user_id,
+    )
     session.flush()
 
 
@@ -971,6 +998,14 @@ def swap_meals(
         mb.leftover_source_meal,
         ma.leftover_source_meal,
     )
+    # ``MealSide.position`` is part of the composite PK, and the new rows reuse
+    # the same ``(plan_date, meal_number, position)`` keys as the old ones. Flush
+    # the removals before inserting the replacements so the unit of work cannot
+    # emit an INSERT that collides with a not-yet-deleted row (mirrors the
+    # defensive flush in ``remove_meal_side``).
+    ma.sides = []
+    mb.sides = []
+    session.flush()
     ma.sides = [
         MealSide(position=i + 1, side_recipe_id=sid) for i, sid in enumerate(b_sides)
     ]
