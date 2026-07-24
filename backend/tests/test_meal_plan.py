@@ -257,3 +257,40 @@ def test_overwriting_plan_resets_acceptance(db_session, user):
     set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]}, user.id)
     meal = db_session.get(Meal, (user.id, plan_date, 1))
     assert meal is not None and meal.recipe_id == r2.id and meal.accepted is False
+
+
+def test_get_plan_orders_meals_by_meal_number(db_session, user):
+    """get_plan positions meals by meal_number regardless of DB insertion order.
+
+    The frontend renders plan[date][0] as Lunch (meal_number 1) and
+    plan[date][1] as Dinner (meal_number 2), so the returned array index must
+    map to the slot even when the dinner row was persisted before the lunch row.
+    """
+    lunch = create_recipe(db_session, user_id=user.id, title="Lunch", servings_default=1, course="main")
+    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", servings_default=1, course="main")
+    plan_date = date(2024, 8, 1)
+    plan = MealPlan(user_id=user.id, plan_date=plan_date)
+    # Append dinner (meal_number 2) BEFORE lunch (meal_number 1) on purpose.
+    plan.meals.append(Meal(meal_number=2, recipe=dinner, accepted=False))
+    plan.meals.append(Meal(meal_number=1, recipe=lunch, accepted=False))
+    db_session.add(plan)
+    db_session.commit()
+
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
+    titles = [m["recipe"] for m in fetched[plan_date.isoformat()]]
+    assert titles == ["Lunch", "Dinner"]
+
+
+def test_get_plan_keeps_dinner_in_second_slot_when_lunch_missing(db_session, user):
+    """A day with only a dinner keeps it at array index 1 (Dinner row)."""
+    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", servings_default=1, course="main")
+    plan_date = date(2024, 8, 2)
+    plan = MealPlan(user_id=user.id, plan_date=plan_date)
+    plan.meals.append(Meal(meal_number=2, recipe=dinner, accepted=False))
+    db_session.add(plan)
+    db_session.commit()
+
+    fetched = get_plan(db_session, plan_date, user_id=user.id)
+    day = fetched[plan_date.isoformat()]
+    assert day[0] is None
+    assert day[1]["recipe"] == "Dinner"

@@ -760,11 +760,28 @@ def get_plan(
         user_id,
     )
     return {
-        meal_plan.plan_date.isoformat(): [
-            meal_item(meal) for meal in meal_plan.meals if meal.recipe is not None
-        ]
+        meal_plan.plan_date.isoformat(): _plan_day_slots(meal_plan)
         for meal_plan in session.execute(stmt).scalars().all()
     }
+
+
+def _plan_day_slots(meal_plan: MealPlan) -> List[Optional[Dict[str, Any]]]:
+    """Serialize a day's meals into a positional array indexed by meal_number.
+
+    Index ``i`` holds the meal with ``meal_number == i + 1`` (``None`` when that
+    slot is empty), so the frontend's fixed Lunch (index 0) / Dinner (index 1)
+    rows always line up with the authoritative ``meal_number`` regardless of the
+    order rows come back from the database. Meals without a recipe are dropped.
+    """
+
+    filled = {
+        meal.meal_number: meal_item(meal)
+        for meal in meal_plan.meals
+        if meal.recipe is not None
+    }
+    if not filled:
+        return []
+    return [filled.get(number) for number in range(1, max(filled) + 1)]
 
 
 def get_plan_settings(

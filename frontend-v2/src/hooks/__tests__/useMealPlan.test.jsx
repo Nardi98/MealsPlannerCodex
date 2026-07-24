@@ -175,6 +175,46 @@ test('arming a second cell swaps the two meals and refetches', async () => {
   await waitFor(() => expect(result.current.plan[startIso][0].recipe).toBe('B'))
 })
 
+test('swap uses each meal\'s own meal_number, not its array index', async () => {
+  const day2 = new Date(startIso)
+  day2.setDate(day2.getDate() + 1)
+  const day2Iso = day2.toISOString().slice(0, 10)
+  // startIso's only meal sits at array index 0 but is the Dinner (meal_number 2)
+  // — e.g. its Lunch slot is empty. The swap must target meal_number 2, not 1.
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [startIso]: [{ recipe: 'Dinner', meal_number: 2, side_recipes: [], accepted: false, leftover: false }],
+    [day2Iso]: [{ recipe: 'Lunch', meal_number: 1, side_recipes: [], accepted: false, leftover: false }],
+  })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[day2Iso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: day2Iso, mealIndex: 0 })
+  })
+
+  expect(mealPlansApi.swap).toHaveBeenCalledWith(
+    { plan_date: startIso, meal_number: 2 },
+    { plan_date: day2Iso, meal_number: 1 },
+  )
+})
+
+test('accepting a meal uses its own meal_number, not its array index', async () => {
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [startIso]: [{ recipe: 'Dinner', meal_number: 2, side_recipes: [], accepted: false, leftover: false }],
+  })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.handleAccept({ date: startIso, mealIndex: 0 })
+  })
+
+  expect(mealPlansApi.accept).toHaveBeenCalledWith(startIso, 2, true)
+})
+
 const isoPlus = (base, days) => {
   const d = new Date(base)
   d.setDate(d.getDate() + days)

@@ -13,17 +13,25 @@ export const startOfWeek = (base) => {
 
 export const fmt = (d) => d.toISOString().split('T')[0]
 
+// The meal's authoritative slot number (Lunch=1, Dinner=2). The backend serves
+// each day as a positional array indexed by meal_number, so the array index
+// normally matches, but a meal carries its own meal_number — prefer it so a
+// mis-ordered or gapped day never targets the wrong slot on the server.
+const mealNumberOf = (meal, mealIndex) => meal?.meal_number ?? mealIndex + 1
+
 // Persist one or more days' meals in a single request, forcing an overwrite if
 // any day already exists. `anchorDate` names the plan_date the response echoes.
 const persistDays = async (anchorDate, daysMap) => {
   const recipes = await recipesApi.fetchAll()
   const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
   const serialise = (dayMeals) =>
-    dayMeals.map((m) => ({
-      main_id: titleToId[m.recipe],
-      side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
-      leftover: m.leftover,
-    }))
+    dayMeals
+      .filter(Boolean)
+      .map((m) => ({
+        main_id: titleToId[m.recipe],
+        side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
+        leftover: m.leftover,
+      }))
   const plan = Object.fromEntries(
     Object.entries(daysMap).map(([day, meals]) => [day, serialise(meals)])
   )
@@ -104,7 +112,7 @@ export function useMealPlan({ setError }) {
     if (!meal) return
     const { recipe: mainTitle, side_recipes: sides = [] } = meal
     try {
-      await mealPlansApi.accept(date, mealIndex + 1, true)
+      await mealPlansApi.accept(date, mealNumberOf(meal, mealIndex), true)
       await Promise.all([
         feedbackApi.acceptRecipe(mainTitle, date),
         ...sides.map((s) => feedbackApi.acceptRecipe(s, date)),
@@ -153,7 +161,7 @@ export function useMealPlan({ setError }) {
       if (!meal.leftover) {
         Object.entries(plan).forEach(([d, meals]) => {
           meals.forEach((m, i) => {
-            if (m.leftover && m.recipe === meal.recipe && !(d === date && i === mealIndex)) {
+            if (m?.leftover && m.recipe === meal.recipe && !(d === date && i === mealIndex)) {
               batch.push({ date: d, mealIndex: i, meal: m })
             }
           })
@@ -244,7 +252,10 @@ export function useMealPlan({ setError }) {
       setArmedCell(cell)
       return
     }
-    const toPos = (c) => ({ plan_date: c.date, meal_number: c.mealIndex + 1 })
+    const toPos = (c) => ({
+      plan_date: c.date,
+      meal_number: mealNumberOf(plan[c.date]?.[c.mealIndex], c.mealIndex),
+    })
     const from = armedCell
     setArmedCell(null)
     try {

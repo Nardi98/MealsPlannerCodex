@@ -337,7 +337,10 @@ class MealPlan(Base):
     plan_date = Column(Date, nullable=False)
 
     meals = relationship(
-        "Meal", back_populates="plan", cascade="all, delete-orphan"
+        "Meal",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="Meal.meal_number",
     )
 
     __table_args__ = (
