@@ -98,6 +98,23 @@ test('confirming creates new ingredients then opens the pre-filled editor', asyn
   )
 })
 
+test('defaults a row to "use existing" when a similar ingredient is suggested', async () => {
+  ingredientsApi.similar.mockImplementation((name) =>
+    Promise.resolve(
+      name === 'Pasta' ? [{ id: 5, name: 'Pastina', unit: 'g' }] : []
+    )
+  )
+  render(<ImportRecipeModal onClose={() => {}} onCreated={() => {}} />)
+  pasteAndContinue(payload)
+
+  await screen.findByText(/matches existing/i)
+  // "Pasta" (2nd row) has a suggestion, so its "use existing" is pre-selected
+  // and it does not fall back to the create-new unit selector.
+  const useExisting = screen.getAllByRole('radio', { name: /use existing/i })
+  expect(useExisting[1]).toBeChecked()
+  expect(screen.queryByLabelText(/pasta unit/i)).toBeNull()
+})
+
 test('suggests a similar existing ingredient and links it instead of creating one', async () => {
   // "Pasta" has no exact match but is similar to the existing "Pastina".
   ingredientsApi.fetchAll.mockResolvedValue([

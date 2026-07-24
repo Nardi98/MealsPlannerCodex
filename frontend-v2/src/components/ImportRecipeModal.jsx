@@ -21,9 +21,11 @@ function buildRows(ingredients, existing, suggestionsByIndex) {
   return ingredients.map((ing, i) => {
     const match = byName.get(ing.name.toLowerCase())
     const suggestions = suggestionsByIndex[i] || []
+    // Default to reusing an ingredient whenever there's an exact match or a
+    // similar candidate; only fall back to creating one when nothing matches.
     return {
       amount: ing.amount,
-      mode: match ? 'existing' : 'new',
+      mode: match || suggestions.length ? 'existing' : 'new',
       matched: Boolean(match),
       existingId: match ? match.id : suggestions[0]?.id,
       name: ing.name,
