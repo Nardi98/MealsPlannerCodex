@@ -175,6 +175,110 @@ test('arming a second cell swaps the two meals and refetches', async () => {
   await waitFor(() => expect(result.current.plan[startIso][0].recipe).toBe('B'))
 })
 
+const isoPlus = (base, days) => {
+  const d = new Date(base)
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+test('multiple sequential arm->swap cycles each call swap once and clear the arm', async () => {
+  const d2 = isoPlus(startIso, 1)
+  const d3 = isoPlus(startIso, 2)
+  const d4 = isoPlus(startIso, 3)
+  const week = {
+    [startIso]: [{ recipe: 'A', side_recipes: [], accepted: false, leftover: false }],
+    [d2]: [{ recipe: 'B', side_recipes: [], accepted: false, leftover: false }],
+    [d3]: [{ recipe: 'C', side_recipes: [], accepted: false, leftover: false }],
+    [d4]: [{ recipe: 'D', side_recipes: [], accepted: false, leftover: false }],
+  }
+  mealPlansApi.fetchRange.mockResolvedValue(week)
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[d4]).toBeDefined())
+
+  // Cycle 1: swap A (startIso) with C (d3).
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: d3, mealIndex: 0 })
+  })
+  expect(result.current.armedCell).toBeNull()
+  expect(mealPlansApi.swap).toHaveBeenNthCalledWith(
+    1,
+    { plan_date: startIso, meal_number: 1 },
+    { plan_date: d3, meal_number: 1 },
+  )
+
+  // Cycle 2: swap B (d2) with D (d4).
+  await act(async () => {
+    await result.current.armSwap({ date: d2, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: d4, mealIndex: 0 })
+  })
+  expect(result.current.armedCell).toBeNull()
+  expect(mealPlansApi.swap).toHaveBeenNthCalledWith(
+    2,
+    { plan_date: d2, meal_number: 1 },
+    { plan_date: d4, meal_number: 1 },
+  )
+  expect(mealPlansApi.swap).toHaveBeenCalledTimes(2)
+})
+
+test('a failed swap clears the armed cell', async () => {
+  const d2 = isoPlus(startIso, 1)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [startIso]: [{ recipe: 'A', side_recipes: [], accepted: false, leftover: false }],
+    [d2]: [{ recipe: 'B', side_recipes: [], accepted: false, leftover: false }],
+  })
+  mealPlansApi.swap.mockRejectedValueOnce(new Error('boom'))
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[d2]).toBeDefined())
+
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  await act(async () => {
+    await result.current.armSwap({ date: d2, mealIndex: 0 })
+  })
+
+  // Even though the swap rejected, the arm must not stay stuck on.
+  expect(result.current.armedCell).toBeNull()
+})
+
+test('changing the week clears a stale armed cell instead of swapping across weeks', async () => {
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [startIso]: [{ recipe: 'A', side_recipes: [], accepted: false, leftover: false }],
+  })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  // Arm a cell, then navigate to another week.
+  await act(async () => {
+    await result.current.armSwap({ date: startIso, mealIndex: 0 })
+  })
+  expect(result.current.armedCell).toEqual({ date: startIso, mealIndex: 0 })
+
+  const nextWeekIso = isoPlus(startIso, 7)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [nextWeekIso]: [{ recipe: 'Z', side_recipes: [], accepted: false, leftover: false }],
+  })
+  await act(async () => {
+    result.current.changeWeek(1)
+  })
+  await waitFor(() => expect(result.current.plan[nextWeekIso]).toBeDefined())
+
+  // The stale arm from the previous week must be gone.
+  expect(result.current.armedCell).toBeNull()
+
+  // Clicking a cell in the new week now just arms it -- no cross-week swap fires.
+  await act(async () => {
+    await result.current.armSwap({ date: nextWeekIso, mealIndex: 0 })
+  })
+  expect(mealPlansApi.swap).not.toHaveBeenCalled()
+  expect(result.current.armedCell).toEqual({ date: nextWeekIso, mealIndex: 0 })
+})
+
 test('rejecting a bulk source re-extracts its leftover slots as fresh meals', async () => {
   recipesApi.fetchAll.mockResolvedValue([
     { id: 1, title: 'Bulk' },
