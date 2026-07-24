@@ -6,12 +6,14 @@ import {
   GenerationForm,
 } from '../components'
 import { tagsApi } from '../api/tagsApi'
+import { ingredientsApi } from '../api/ingredientsApi'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useGeneration } from '../hooks/useGeneration'
 import { useSideDishes } from '../hooks/useSideDishes'
 
 export default function MealPlanPage() {
   const [tags, setTags] = React.useState([])
+  const [ingredients, setIngredients] = React.useState([])
   const [activeCell, setActiveCell] = React.useState(null)
 
   const {
@@ -48,6 +50,18 @@ export default function MealPlanPage() {
     loadTags()
   }, [])
 
+  React.useEffect(() => {
+    async function loadIngredients() {
+      try {
+        const data = await ingredientsApi.fetchAll()
+        setIngredients(data)
+      } catch (err) {
+        console.error('Failed to load ingredients', err)
+      }
+    }
+    loadIngredients()
+  }, [])
+
   const closeCell = () => setActiveCell(null)
 
   const acceptCell = async (cell = activeCell) => {
@@ -81,6 +95,7 @@ export default function MealPlanPage() {
       <GenerationForm
         form={generation.form}
         tags={tags}
+        ingredients={ingredients}
         message={generation.message}
         error={generation.error}
         onChange={generation.handleChange}
@@ -88,6 +103,7 @@ export default function MealPlanPage() {
         onPresetChange={generation.handlePresetChange}
         onAvoidChange={generation.handleAvoidChange}
         onReduceChange={generation.handleReduceChange}
+        onFridgeChange={generation.handleFridgeChange}
         onSubmit={generation.handleGenerate}
       />
       {generation.showOverwriteModal && (

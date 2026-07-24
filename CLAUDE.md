@@ -79,5 +79,5 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 -the last step of each plan has to run the /simplify skill
 
 ## Instruction 
-
+- ask all the questions needed to correctly understand the scope of changes don't assume any user decision 
 - call me sir when adressing me.

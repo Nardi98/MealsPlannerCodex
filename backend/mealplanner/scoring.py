@@ -44,6 +44,7 @@ RECENCY_MAX_PENALTY = 30.0        # strength of the penalty when planned today
 HALF_LIFE_DAYS = 4.0              # penalty halves every this many days
 SEASONALITY_BONUS_SCALE = 10.0    # magnitude of a fully in/out-of-season recipe
 BULK_PREP_BONUS = 10.0            # bonus applied to bulk-prep recipes
+FRIDGE_BONUS_SCALE = 12.0         # bonus when a recipe uses an on-hand fridge ingredient
 DEFAULT_TAG_PENALTY = 3.0         # default penalty for a matching reduce-tag
 
 # Ingredient repetition: short timescale, small magnitude so seasonality can win.
@@ -149,6 +150,19 @@ def bulk_bonus(recipe: RecipeDict) -> float:
     """Small bonus if the recipe is marked as bulk-prep."""
 
     return BULK_PREP_BONUS if recipe.get("bulk_prep") else 0.0
+
+
+def fridge_bonus(
+    recipe: RecipeDict,
+    fridge_ingredient_ids: Iterable[int],
+    scale: float = FRIDGE_BONUS_SCALE,
+) -> float:
+    """Bonus when the recipe uses any ingredient the user has in the fridge."""
+
+    wanted = fridge_ingredient_ids or ()
+    if not wanted:
+        return 0.0
+    return scale if any(i in wanted for i in recipe.get("ingredient_ids", [])) else 0.0
 
 
 def tag_penalty(
@@ -297,6 +311,7 @@ def score_recipe(
     bulk_bonus_weight: float = 1.0,
     ingredient_repeat_weight: float = 1.0,
     tag_repeat_weight: float = 1.0,
+    fridge_ingredient_ids: Iterable[int] | None = None,
     reduce_tags: Iterable[str] | None = None,
     ingredient_last_used: Dict[int, date] | None = None,
     tag_last_used: Dict[str, date] | None = None,
@@ -369,6 +384,7 @@ def score_recipe(
     total += seasonality_weight * seasonality_bonus(recipe, planning_date)
     total += recency_weight * recency_penalty(recipe, planning_date)
     total += bulk_bonus_weight * bulk_bonus(recipe)
+    total += fridge_bonus(recipe, fridge_ingredient_ids or [])
     total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
     total += ingredient_repeat_weight * ingredient_repetition_penalty(
         recipe, planning_date, ingredient_last_used or {}
@@ -383,6 +399,7 @@ __all__ = [
     "seasonality_bonus",
     "recency_penalty",
     "bulk_bonus",
+    "fridge_bonus",
     "tag_penalty",
     "ingredient_repetition_penalty",
     "tag_repetition_penalty",
@@ -390,6 +407,7 @@ __all__ = [
     "score_recipe",
     "SEASONALITY_BONUS_SCALE",
     "BULK_PREP_BONUS",
+    "FRIDGE_BONUS_SCALE",
     "DEFAULT_TAG_PENALTY",
     "INGREDIENT_REPEAT_MAX_PENALTY",
     "INGREDIENT_REPEAT_HALF_LIFE_DAYS",

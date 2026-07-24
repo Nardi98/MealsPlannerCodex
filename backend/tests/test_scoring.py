@@ -19,6 +19,8 @@ from mealplanner.scoring import (
     TAG_REPEAT_MAX_PENALTY,
     TAG_REPEAT_HALF_LIFE_DAYS,
     exploration_weight,
+    fridge_bonus,
+    FRIDGE_BONUS_SCALE,
     EXPLORE_COOLDOWN_DAYS,
     EXPLORE_NEW_RECIPE_STALENESS_DAYS,
     EXPLORE_DAMP_SCALE,
@@ -337,6 +339,39 @@ def test_tag_repetition_penalty_format_tag_decays():
     assert same_day == pytest.approx(-TAG_REPEAT_MAX_PENALTY)
     assert later == pytest.approx(expected_later)
     assert same_day < later < 0
+
+
+# ---------------------------------------------------------------------------
+# Fridge bonus
+# ---------------------------------------------------------------------------
+
+def test_fridge_bonus_overlap_returns_scale():
+    recipe = {"ingredient_ids": [1, 2, 3]}
+    assert fridge_bonus(recipe, {2, 9}) == pytest.approx(FRIDGE_BONUS_SCALE)
+
+
+def test_fridge_bonus_no_overlap_is_zero():
+    recipe = {"ingredient_ids": [1, 2, 3]}
+    assert fridge_bonus(recipe, {9, 10}) == pytest.approx(0.0)
+
+
+def test_fridge_bonus_empty_set_is_zero():
+    recipe = {"ingredient_ids": [1, 2, 3]}
+    assert fridge_bonus(recipe, set()) == pytest.approx(0.0)
+
+
+def test_score_recipe_fridge_boost_raises_score():
+    today = date(2024, 6, 1)
+    recipe = {
+        "score": 1.0,
+        "ingredients": [{"season_months": [6]}],
+        "ingredient_ids": [1, 2],
+        "date_last_planned": date(2024, 4, 1),
+        "bulk_prep": False,
+    }
+    without = score_recipe(recipe, today)
+    with_fridge = score_recipe(recipe, today, fridge_ingredient_ids={2})
+    assert with_fridge == pytest.approx(without + FRIDGE_BONUS_SCALE)
 
 
 def test_score_recipe_backward_compatible_without_maps():

@@ -19,6 +19,31 @@ def test_generate_endpoint_returns_plan(db_session, user, auth_client):
     assert data["2024-01-01"][0]["leftover"] is False
 
 
+def test_generate_endpoint_forwards_fridge_ingredients(auth_client, monkeypatch):
+    captured = {}
+
+    def fake_generate_plan(*args, **kwargs):
+        captured["fridge_ingredients"] = kwargs.get("fridge_ingredients")
+        return []
+
+    monkeypatch.setattr(main.planner, "generate_plan", fake_generate_plan)
+
+    response = auth_client.post(
+        "/meal-plans/generate",
+        json={
+            "start": "2024-01-01",
+            "end": "2024-01-01",
+            "meals_per_day": 1,
+            "fridge": [
+                {"ingredient_id": 5, "count": 2},
+                {"ingredient_id": 7, "count": 1},
+            ],
+        },
+    )
+    assert response.status_code == 200
+    assert captured["fridge_ingredients"] == {5: 2, 7: 1}
+
+
 def test_generate_endpoint_sources_tag_penalty_weight_from_profile(
     auth_client, monkeypatch
 ):

@@ -71,6 +71,15 @@ describe('buildGenerateParams', () => {
     expect(buildGenerateParams({ ...baseForm, recency: 'high' }).recency_weight).toBe(2)
   })
 
+  test('includes fridge selections in the payload', () => {
+    const fridge = [{ ingredient_id: 5, count: 2 }]
+    expect(buildGenerateParams({ ...baseForm, fridge }).fridge).toEqual(fridge)
+  })
+
+  test('defaults fridge to an empty array when absent', () => {
+    expect(buildGenerateParams(baseForm).fridge).toEqual([])
+  })
+
   test('preset tables expose the expected keys', () => {
     expect(Object.keys(LEFTOVER_PRESETS)).toEqual(['fresh', 'some', 'lots'])
     expect(Object.keys(SEASONALITY_PRESETS)).toEqual(['ignore', 'prefer', 'strict'])
@@ -86,5 +95,14 @@ describe('useGeneration', () => {
     })
     expect(result.current.form.start).toBe('2024-03-04')
     expect(result.current.form.end).toBe('2024-03-10')
+  })
+
+  test('handleFridgeChange replaces the fridge selection', () => {
+    const { result } = renderHook(() => useGeneration({ setPlan: () => {} }))
+    expect(result.current.form.fridge).toEqual([])
+    act(() => {
+      result.current.handleFridgeChange([{ ingredient_id: 3, count: 1 }])
+    })
+    expect(result.current.form.fridge).toEqual([{ ingredient_id: 3, count: 1 }])
   })
 })

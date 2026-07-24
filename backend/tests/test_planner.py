@@ -53,6 +53,47 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
     assert plan["2024-01-01"] == ["Good"]
 
 
+def test_fridge_ingredient_boosts_recipe(db_session):
+    """A fridge ingredient promotes a lower-base recipe that uses it."""
+    plain = Recipe(title="Plain", servings_default=1, score=1.5, course="main")
+    fridgey = Recipe(title="Fridgey", servings_default=1, score=1.0, course="main")
+    onion = Ingredient(name="onion")
+    fridgey.ingredients = [RecipeIngredient(ingredient=onion, recipe=fridgey)]
+    db_session.add_all([plain, fridgey])
+    db_session.commit()
+    start = date(2024, 1, 1)
+
+    without = generate_plan(
+        db_session, start, days=1, meals_per_day=1, epsilon=0.0, recency_weight=0.0
+    )
+    assert without["2024-01-01"] == ["Plain"]
+
+    with_fridge = generate_plan(
+        db_session, start, days=1, meals_per_day=1, epsilon=0.0, recency_weight=0.0,
+        fridge_ingredients={onion.id: 1},
+    )
+    assert with_fridge["2024-01-01"] == ["Fridgey"]
+
+
+def test_fridge_boost_consumed_after_count_reached(db_session):
+    """A count-1 fridge selection only boosts one slot; then it stops."""
+    plain = Recipe(title="Plain", servings_default=1, score=1.5, course="main")
+    fridgey = Recipe(title="Fridgey", servings_default=1, score=1.0, course="main")
+    onion = Ingredient(name="onion")
+    fridgey.ingredients = [RecipeIngredient(ingredient=onion, recipe=fridgey)]
+    db_session.add_all([plain, fridgey])
+    db_session.commit()
+    start = date(2024, 1, 1)
+
+    plan = generate_plan(
+        db_session, start, days=2, meals_per_day=1, epsilon=0.0, recency_weight=0.0,
+        min_recipe_gap=0, fridge_ingredients={onion.id: 1},
+    )
+    # Day 1 boosted -> Fridgey; boost consumed -> day 2 falls back to Plain.
+    assert plan["2024-01-01"] == ["Fridgey"]
+    assert plan["2024-01-02"] == ["Plain"]
+
+
 def test_recency_weight(db_session, user):
     fresh = Recipe(
         title="Fresh",

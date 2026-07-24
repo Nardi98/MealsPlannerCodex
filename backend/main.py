@@ -854,6 +854,7 @@ def generate_plan_endpoint(
     tag_penalty_weight = settings.get(
         "tag_penalty_weight", payload.tag_penalty_weight
     )
+    fridge_ingredients = {item.ingredient_id: item.count for item in payload.fridge}
     slots = planner.generate_plan(
         db,
         user_id=current_user.id,
@@ -870,6 +871,7 @@ def generate_plan_endpoint(
         recency_weight=payload.recency_weight,
         tag_penalty_weight=tag_penalty_weight,
         bulk_bonus_weight=payload.bulk_bonus_weight,
+        fridge_ingredients=fridge_ingredients,
         return_slots=True,
     )
     result: Dict[str, List[Dict[str, object]]] = {}

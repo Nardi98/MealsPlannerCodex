@@ -35,6 +35,7 @@ export const buildGenerateParams = (form) => {
     keep_days: leftover.keep_days,
     avoid_tags: form.avoid_tags,
     reduce_tags: form.reduce_tags,
+    fridge: form.fridge ?? [],
   }
 }
 
@@ -52,6 +53,7 @@ const defaultForm = () => {
     recency: 'medium',
     avoid_tags: [],
     reduce_tags: [],
+    fridge: [],
   }
 }
 
@@ -88,6 +90,8 @@ export function useGeneration({ setPlan }) {
     setForm((f) => ({ ...f, avoid_tags: selected }))
   const handleReduceChange = (selected) =>
     setForm((f) => ({ ...f, reduce_tags: selected }))
+  const handleFridgeChange = (fridge) =>
+    setForm((f) => ({ ...f, fridge }))
 
   const executeGeneration = async (config) => {
     if (!config) return false
@@ -215,6 +219,7 @@ export function useGeneration({ setPlan }) {
     handleRangeChange,
     handleAvoidChange,
     handleReduceChange,
+    handleFridgeChange,
     handleGenerate,
     message,
     error,

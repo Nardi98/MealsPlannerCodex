@@ -20,6 +20,7 @@ const baseForm = {
   recency: 'medium',
   avoid_tags: [],
   reduce_tags: [],
+  fridge: [],
 }
 
 const renderForm = (props = {}) =>
@@ -34,6 +35,8 @@ const renderForm = (props = {}) =>
       onPresetChange={() => {}}
       onAvoidChange={() => {}}
       onReduceChange={() => {}}
+      onFridgeChange={() => {}}
+      ingredients={[]}
       onSubmit={(e) => e.preventDefault()}
       {...props}
     />
@@ -60,4 +63,24 @@ test('selecting a meals-per-day option calls onPresetChange with the numeric val
   renderForm({ onPresetChange })
   fireEvent.click(screen.getByRole('tab', { name: /1 meal/i }))
   expect(onPresetChange).toHaveBeenCalledWith('meals_per_day', 1)
+})
+
+test('shows Settings and Your Fridge tabs with Settings active first', () => {
+  renderForm()
+  expect(screen.getByRole('tab', { name: /^settings$/i })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: /your fridge/i })).toBeInTheDocument()
+  // Fridge content is hidden until the tab is selected.
+  expect(screen.queryByPlaceholderText(/search ingredients/i)).not.toBeInTheDocument()
+})
+
+test('switching to the fridge tab reveals the ingredient picker', () => {
+  renderForm()
+  fireEvent.click(screen.getByRole('tab', { name: /your fridge/i }))
+  expect(screen.getByPlaceholderText(/search ingredients/i)).toBeInTheDocument()
+})
+
+test('the generate button is available regardless of the active tab', () => {
+  renderForm()
+  fireEvent.click(screen.getByRole('tab', { name: /your fridge/i }))
+  expect(screen.getByRole('button', { name: /generate plan/i })).toBeInTheDocument()
 })

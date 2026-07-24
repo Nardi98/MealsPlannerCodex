@@ -173,10 +173,18 @@ class MealPlanCreate(BaseModel):
     keep_days: int | None = None
 
 
+class FridgeItem(BaseModel):
+    """An ingredient the user has on hand, with how many slots should use it."""
+
+    ingredient_id: int
+    count: int = Field(default=1, ge=1)
+
+
 class MealPlanGenerate(BaseModel):
     start: date
     end: date
     meals_per_day: int
+    fridge: List[FridgeItem] = []
     epsilon: float = 0.0
     avoid_tags: List[str] = []
     reduce_tags: List[str] = []

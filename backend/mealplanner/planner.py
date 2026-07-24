@@ -99,6 +99,7 @@ def generate_plan(
     bulk_bonus_weight: float = 1.0,
     ingredient_repeat_weight: float = 1.0,
     tag_repeat_weight: float = 1.0,
+    fridge_ingredients: Dict[int, int] | None = None,
     min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
@@ -200,6 +201,13 @@ def generate_plan(
     # leftover link that ``crud._assign_leftover_sources`` persists later.
     batch_sides: Dict[int, int | None] = {}
 
+    # Mutable count of each fridge ingredient still wanting a slot. Recipes using
+    # a still-wanted ingredient get a scoring boost; each use (fresh or leftover)
+    # decrements the count until it stops boosting.
+    fridge_remaining: Dict[int, int] = {
+        int(k): int(v) for k, v in (fridge_ingredients or {}).items() if int(v) > 0
+    }
+
     for idx, slot in enumerate(slots):
         _apply_soft_holds(slots, idx, leftovers, settings)
 
@@ -228,6 +236,7 @@ def generate_plan(
                 bulk_bonus_weight=bulk_bonus_weight,
                 ingredient_repeat_weight=ingredient_repeat_weight,
                 tag_repeat_weight=tag_repeat_weight,
+                fridge_ingredient_ids=fridge_remaining.keys(),
                 reduce_tags=reduce_tags or [],
                 ingredient_last_used=ingredient_last_used,
                 tag_last_used=tag_last_used,
@@ -283,6 +292,13 @@ def generate_plan(
         # date regardless of leftover status, so update the diversity maps.
         for ri in chosen.ingredients:
             ingredient_last_used[ri.ingredient_id] = slot.date
+            # Using a fridge ingredient (fresh cook or leftover day) consumes one
+            # unit of its requested count; once exhausted it's dropped so it no
+            # longer boosts scores.
+            if ri.ingredient_id in fridge_remaining:
+                fridge_remaining[ri.ingredient_id] -= 1
+                if fridge_remaining[ri.ingredient_id] <= 0:
+                    del fridge_remaining[ri.ingredient_id]
         for t in chosen.tags:
             if t.name in penalized_tags:
                 tag_last_used[t.name] = slot.date

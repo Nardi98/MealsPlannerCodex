@@ -16,6 +16,12 @@ import { Input } from './Input'
 import DateRangePicker from './DateRangePicker'
 import SegmentedControl from './SegmentedControl'
 import TagSelector from './TagSelector'
+import FridgeSelector from './FridgeSelector'
+
+const TABS = [
+  { value: 'settings', label: 'Settings' },
+  { value: 'fridge', label: 'Your Fridge' },
+]
 
 // eslint-disable-next-line no-unused-vars -- `Icon` is rendered as a JSX component
 const svg = (Icon) => <Icon className="seg-svg" aria-hidden="true" />
@@ -65,6 +71,7 @@ const RECENCY_OPTIONS = [
 export default function GenerationForm({
   form,
   tags,
+  ingredients,
   message,
   error,
   onChange,
@@ -72,11 +79,41 @@ export default function GenerationForm({
   onPresetChange,
   onAvoidChange,
   onReduceChange,
+  onFridgeChange,
   onSubmit,
 }) {
+  const [activeTab, setActiveTab] = React.useState('settings')
   return (
     <Card>
       <form onSubmit={onSubmit} className="space-y-8">
+        <div
+          role="tablist"
+          aria-label="Plan settings sections"
+          className="flex gap-6 border-b"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          {TABS.map((tab) => {
+            const selected = activeTab === tab.value
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveTab(tab.value)}
+                className="-mb-px border-b-2 pb-2 text-sm font-bold transition-colors"
+                style={{
+                  borderColor: selected ? 'var(--c-a2)' : 'transparent',
+                  color: selected ? 'var(--c-a2)' : 'var(--text-subtle)',
+                }}
+              >
+                {tab.label}
+              </button>
+            )
+          })}
+        </div>
+        {activeTab === 'settings' && (
+        <div className="space-y-8">
         <div className="grid grid-cols-3 gap-x-6 gap-y-12">
           <DateRangePicker
             label="Plan dates"
@@ -152,6 +189,15 @@ export default function GenerationForm({
             />
           </div>
         </div>
+        </div>
+        )}
+        {activeTab === 'fridge' && (
+          <FridgeSelector
+            ingredients={ingredients}
+            value={form.fridge}
+            onChange={onFridgeChange}
+          />
+        )}
         {message && (
           <div className="text-sm" style={{ color: 'var(--c-pos)' }}>
             {message}
@@ -162,7 +208,7 @@ export default function GenerationForm({
             {error}
           </div>
         )}
-        <Button type="submit">Generate plan</Button>
+        <Button type="submit" className="mt-2">Generate plan</Button>
       </form>
     </Card>
   )
