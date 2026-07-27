@@ -23,6 +23,7 @@ test('exportDatabase requests /data/export', async () => {
   const [url, opts] = globalThis.fetch.mock.calls[0]
   expect(url).toContain('/data/export')
   expect(opts).toEqual({
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
   })
   expect(result).toEqual(mockData)
@@ -44,6 +45,7 @@ test('importDatabase posts payload with mode', async () => {
   expect(url).toContain('/data/import?mode=merge')
   expect(opts).toEqual({
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify(payload),
     headers: { 'Content-Type': 'application/json' },
   })

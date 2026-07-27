@@ -19,6 +19,7 @@ test('acceptRecipe posts title and consumed_date', async () => {
   expect(url).toContain('/feedback/accept')
   expect(opts).toEqual({
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({ title: 'Test', consumed_date: '2024-01-01' }),
     headers: { 'Content-Type': 'application/json' },
   })
@@ -39,6 +40,7 @@ test('rejectRecipe posts title and consumed_date', async () => {
   expect(url).toContain('/feedback/reject')
   expect(opts).toEqual({
     method: 'POST',
+    credentials: 'include',
     body: JSON.stringify({ title: 'Bad', consumed_date: '2024-01-02' }),
     headers: { 'Content-Type': 'application/json' },
   })
