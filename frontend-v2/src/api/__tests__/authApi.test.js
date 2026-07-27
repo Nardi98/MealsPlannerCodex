@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { authApi } from '../authApi'
+import { authApi, validatePassword } from '../authApi'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => {
@@ -58,4 +58,69 @@ test('me fetches the current user from /auth/me', async () => {
   const [url] = globalThis.fetch.mock.calls[0]
   expect(url).toContain('/auth/me')
   expect(result.email).toBe('a@b.c')
+})
+
+test('refresh posts to /auth/refresh', async () => {
+  mockJson({ access_token: 'fresh', token_type: 'bearer' })
+
+  const result = await authApi.refresh()
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/auth/refresh')
+  expect(opts.method).toBe('POST')
+  expect(result.access_token).toBe('fresh')
+})
+
+test('logout posts to /auth/logout', async () => {
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve({ ok: true, status: 204, text: () => Promise.resolve('') })
+  )
+
+  await authApi.logout()
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/auth/logout')
+  expect(opts.method).toBe('POST')
+})
+
+test('verifyEmail posts the token to /auth/verify-email', async () => {
+  mockJson({ ok: true })
+
+  await authApi.verifyEmail('verify-token')
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/auth/verify-email')
+  expect(JSON.parse(opts.body)).toEqual({ token: 'verify-token' })
+})
+
+test('forgotPassword posts the email to /auth/forgot-password', async () => {
+  mockJson({ ok: true })
+
+  await authApi.forgotPassword('a@b.c')
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/auth/forgot-password')
+  expect(JSON.parse(opts.body)).toEqual({ email: 'a@b.c' })
+})
+
+test('resetPassword posts token and new_password to /auth/reset-password', async () => {
+  mockJson({ ok: true })
+
+  await authApi.resetPassword('reset-token', 'NewPass1')
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/auth/reset-password')
+  expect(JSON.parse(opts.body)).toEqual({ token: 'reset-token', new_password: 'NewPass1' })
+})
+
+test('validatePassword accepts a policy-compliant password', () => {
+  expect(validatePassword('Abcdef12')).toBe(null)
+})
+
+test('validatePassword rejects short, weak, or oversized passwords', () => {
+  expect(validatePassword('Ab1')).toMatch(/at least 8/i)
+  expect(validatePassword('abcdefg1')).toMatch(/uppercase/i)
+  expect(validatePassword('ABCDEFG1')).toMatch(/lowercase/i)
+  expect(validatePassword('Abcdefgh')).toMatch(/digit/i)
+  expect(validatePassword('A1' + 'a'.repeat(71))).toMatch(/72 bytes/i)
 })

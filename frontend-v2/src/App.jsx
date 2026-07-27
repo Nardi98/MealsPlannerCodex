@@ -14,6 +14,9 @@ import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
 import ImportExportPage from './pages/ImportExportPage'
 import LoginPage from './pages/LoginPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 
 const NAV = [
@@ -173,7 +176,18 @@ function Gate() {
     )
   }
 
-  if (!user) return <LoginPage />
+  if (!user) {
+    // The verify/reset flows are reached from emailed links while logged out, so
+    // they must be routable before authentication; everything else falls to login.
+    return (
+      <Routes>
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    )
+  }
 
   return <Shell />
 }
