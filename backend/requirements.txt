@@ -13,3 +13,5 @@ bcrypt<4.1
 pyjwt
 google-auth
 boto3
+slowapi
+pydantic[email]

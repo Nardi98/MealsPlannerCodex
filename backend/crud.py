@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 import difflib
 import json
 import re
@@ -22,6 +22,7 @@ from models import (
     Meal,
     MealSide,
     Recipe,
+    RefreshToken,
     Tag,
     RecipeIngredient,
     UnitEnum,
@@ -34,10 +35,15 @@ from models import (
 
 __all__ = [
     "create_user",
+    "set_email_verified",
     "get_user",
     "get_user_by_email",
     "normalize_email",
     "get_user_by_google_sub",
+    "create_refresh_token",
+    "get_refresh_token",
+    "revoke_refresh_token",
+    "revoke_all_refresh_tokens",
     "create_recipe",
     "create_ingredient",
     "get_or_create_tag",
@@ -80,6 +86,7 @@ def create_user(
     display_name: Optional[str] = None,
     auth_provider: str = "local",
     google_sub: Optional[str] = None,
+    email_verified: bool = False,
 ) -> User:
     """Create and persist a :class:`~models.User`."""
     user = User(
@@ -89,8 +96,19 @@ def create_user(
         display_name=display_name,
         auth_provider=auth_provider,
         google_sub=google_sub,
+        email_verified=email_verified,
     )
     session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+def set_email_verified(
+    session: Session, user: User, verified: bool = True
+) -> User:
+    """Mark ``user``'s email address as (un)verified and persist it."""
+    user.email_verified = verified
     session.commit()
     session.refresh(user)
     return user
@@ -110,6 +128,48 @@ def get_user_by_google_sub(session: Session, google_sub: str) -> Optional[User]:
     return session.execute(
         select(User).where(User.google_sub == google_sub)
     ).scalar_one_or_none()
+
+
+def create_refresh_token(
+    session: Session, *, user_id: int, jti: str, expires_at: datetime
+) -> RefreshToken:
+    """Persist a server-side record of an issued refresh token."""
+    token = RefreshToken(user_id=user_id, jti=jti, expires_at=expires_at)
+    session.add(token)
+    session.commit()
+    session.refresh(token)
+    return token
+
+
+def get_refresh_token(session: Session, jti: str) -> Optional[RefreshToken]:
+    """Return the stored refresh token with ``jti``, or ``None``."""
+    return session.execute(
+        select(RefreshToken).where(RefreshToken.jti == jti)
+    ).scalar_one_or_none()
+
+
+def revoke_refresh_token(session: Session, token: RefreshToken) -> None:
+    """Revoke a single refresh token so it can no longer be rotated."""
+    token.revoked = True
+    session.commit()
+
+
+def revoke_all_refresh_tokens(session: Session, user_id: int) -> int:
+    """Revoke every outstanding refresh token for ``user_id``.
+
+    Used on password reset so that stealing an old session cannot outlive the
+    credential change. Returns the number of tokens revoked.
+    """
+    tokens = session.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked.is_(False),
+        )
+    ).scalars().all()
+    for token in tokens:
+        token.revoked = True
+    session.commit()
+    return len(tokens)
 
 
 def create_recipe(session: Session, **data: Any) -> Recipe:

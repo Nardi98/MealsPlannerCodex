@@ -88,6 +88,8 @@ def get_or_create_user(session, email: str, password: str) -> User:
             hashed_password=hash_password(password),
             display_name=email.split("@")[0],
             auth_provider="local",
+            # Seeded local accounts are pre-verified so they can log in at once.
+            email_verified=True,
         )
         session.add(user)
         session.flush()
