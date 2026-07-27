@@ -5,16 +5,20 @@ import io
 import json
 import os
 import random
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, Response
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
 import crud
+import mailer
 import models
 import schemas
 import storage
@@ -42,6 +46,82 @@ with SessionLocal() as _session:
             seed_system_tags(_session, _user_id)
 
 app = FastAPI()
+
+# Rate limiting for the authentication endpoints, keyed by client IP. The limit
+# string is configurable (``AUTH_RATE_LIMIT``) and the whole limiter can be
+# switched off (``RATE_LIMIT_ENABLED=0``) so the test suite is not throttled by
+# shared in-process counters. Brute-force / enumeration attempts against the
+# ``/auth/*`` write endpoints hit this first.
+AUTH_RATE_LIMIT = os.environ.get("AUTH_RATE_LIMIT", "10/minute")
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=os.environ.get("RATE_LIMIT_ENABLED", "1") != "0",
+)
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Response:
+    return Response("Too Many Requests", status_code=429)
+
+
+# Configuration for the auth flows read at request time.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
+REFRESH_COOKIE_NAME = "refresh_token"
+REFRESH_COOKIE_PATH = "/auth"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        REFRESH_COOKIE_NAME,
+        token,
+        max_age=auth_users.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        samesite="lax",
+        secure=COOKIE_SECURE,
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+
+
+def _issue_session(db: Session, response: Response, user: models.User) -> schemas.Token:
+    """Mint an access token and a rotating refresh cookie for ``user``."""
+    refresh, jti, expires_at = auth_users.create_refresh_token(str(user.id))
+    crud.create_refresh_token(db, user_id=user.id, jti=jti, expires_at=expires_at)
+    _set_refresh_cookie(response, refresh)
+    return schemas.Token(access_token=auth_users.create_access_token(str(user.id)))
+
+
+def _send_verification_email(email: str, user_id: int) -> None:
+    _send_token_email(
+        email, user_id, "verify", auth_users.VERIFY_TOKEN_EXPIRE_MINUTES,
+        path="/verify-email", subject="Verify your email",
+        blurb="Confirm your Meal Planner account",
+    )
+
+
+def _send_reset_email(email: str, user_id: int) -> None:
+    _send_token_email(
+        email, user_id, "reset", auth_users.RESET_TOKEN_EXPIRE_MINUTES,
+        path="/reset-password", subject="Reset your password",
+        blurb="Reset your Meal Planner password",
+    )
+
+
+def _send_token_email(
+    email: str, user_id: int, token_type: str, expires_minutes: int,
+    *, path: str, subject: str, blurb: str,
+) -> None:
+    """Email a ``{FRONTEND_URL}{path}?token=...`` link for a signed auth token."""
+    token = auth_users.create_email_token(str(user_id), token_type, expires_minutes)
+    mailer.send_email(
+        to=email, subject=subject, body=f"{blurb}: {FRONTEND_URL}{path}?token={token}"
+    )
+
 
 # The single authentication mechanism: every route that touches user-owned data
 # declares this, and scopes its queries to ``current_user.id``.
@@ -78,17 +158,45 @@ def favicon() -> Response:
     return Response(status_code=204)
 
 
-@app.post("/auth/register", response_model=schemas.UserOut, status_code=201)
+@app.post("/auth/register", response_model=auth_users.UserOut, status_code=201)
+@limiter.limit(AUTH_RATE_LIMIT)
 def register(
-    payload: schemas.UserCreate, db: Db
-) -> models.User:
-    if crud.get_user_by_email(db, payload.email) is not None:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    return _create_account(
-        db,
-        email=payload.email,
-        hashed_password=auth_users.hash_password(payload.password),
+    request: Request, payload: schemas.UserCreate, db: Db
+) -> auth_users.UserOut:
+    """Register a new, unverified local account and email a verification link.
+
+    The response is deliberately non-committal about whether the address was
+    already taken: a duplicate registration neither errors nor reveals the
+    existing account, so the endpoint cannot be used to enumerate users. The
+    password is hashed on every path so both branches cost the same time.
+    """
+    try:
+        auth_users.validate_password(payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    hashed = auth_users.hash_password(payload.password)
+    existing = crud.get_user_by_email(db, payload.email)
+    if existing is None:
+        user = _create_account(
+            db,
+            email=payload.email,
+            hashed_password=hashed,
+            display_name=payload.display_name,
+        )
+        _send_verification_email(user.email, user.id)
+        user_id = user.id
+    else:
+        # Neutral path: never confirm the address exists, never resend.
+        user_id = existing.id
+
+    return auth_users.UserOut(
+        id=user_id,
+        email=models.normalize_email(payload.email),
         display_name=payload.display_name,
+        auth_provider="local",
+        default_people=models.DEFAULT_PEOPLE,
+        email_verified=False,
     )
 
 
@@ -100,6 +208,7 @@ def _create_account(
     display_name: str | None = None,
     auth_provider: str = "local",
     google_sub: str | None = None,
+    email_verified: bool = False,
 ) -> models.User:
     """Create a user and give it the starter data a fresh account needs.
 
@@ -114,6 +223,7 @@ def _create_account(
         display_name=display_name,
         auth_provider=auth_provider,
         google_sub=google_sub,
+        email_verified=email_verified,
     )
     seed_system_tags(db, user.id)
     seed_system_ingredients(db, user.id)
@@ -121,21 +231,27 @@ def _create_account(
 
 
 @app.post("/auth/login", response_model=schemas.Token)
-def login(payload: schemas.LoginRequest, db: Db) -> schemas.Token:
+@limiter.limit(AUTH_RATE_LIMIT)
+def login(
+    request: Request, response: Response, payload: schemas.LoginRequest, db: Db
+) -> schemas.Token:
     user = crud.get_user_by_email(db, payload.email)
-    if (
-        user is None
-        or user.hashed_password is None
-        or not auth_users.verify_password(payload.password, user.hashed_password)
-    ):
+    if user is None or user.hashed_password is None:
+        # Run a dummy verify so a missing account is indistinguishable, by
+        # timing, from a wrong password (no account-enumeration oracle).
+        auth_users.verify_password(payload.password, auth_users.DUMMY_PASSWORD_HASH)
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    token = auth_users.create_access_token(subject=str(user.id))
-    return schemas.Token(access_token=token)
+    if not auth_users.verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Email address not verified")
+    return _issue_session(db, response, user)
 
 
 @app.post("/auth/google", response_model=schemas.Token)
+@limiter.limit(AUTH_RATE_LIMIT)
 def login_with_google(
-    payload: schemas.GoogleLoginRequest, db: Db
+    request: Request, response: Response, payload: schemas.GoogleLoginRequest, db: Db
 ) -> schemas.Token:
     """Exchange a Google ID token for one of our JWTs, creating the account if new."""
     try:
@@ -151,12 +267,21 @@ def login_with_google(
         db, email
     )
     if user is None:
+        # Creating an account from a Google identity is only safe once Google has
+        # verified the address, exactly as for the link path below; otherwise a
+        # Google sign-up with someone else's unverified email would seed an
+        # account under an address the caller does not control.
+        if not claims.get("email_verified"):
+            raise HTTPException(
+                status_code=401, detail="Google email is not verified"
+            )
         user = _create_account(
             db,
             email=email,
             display_name=claims.get("name"),
             auth_provider="google",
             google_sub=google_sub,
+            email_verified=True,
         )
     elif user.google_sub is None:
         # Claiming an existing account by email is only safe once Google has
@@ -168,11 +293,108 @@ def login_with_google(
             )
         user.google_sub = google_sub
         db.commit()
-    token = auth_users.create_access_token(subject=str(user.id))
-    return schemas.Token(access_token=token)
+    return _issue_session(db, response, user)
 
 
-@app.get("/auth/me", response_model=schemas.UserOut)
+@app.post("/auth/refresh", response_model=schemas.Token)
+@limiter.limit(AUTH_RATE_LIMIT)
+def refresh_session(request: Request, response: Response, db: Db) -> schemas.Token:
+    """Rotate the refresh cookie and return a fresh access token.
+
+    The presented refresh token is revoked and replaced (rotation), so a stolen
+    cookie is single-use. Missing, malformed, revoked, or expired tokens all
+    yield ``401``.
+    """
+    unauthorized = HTTPException(status_code=401, detail="Invalid refresh token")
+    token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if not token:
+        raise unauthorized
+    payload = auth_users.decode_refresh_token(token)
+    if payload is None:
+        raise unauthorized
+    stored = crud.get_refresh_token(db, payload["jti"])
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if stored is None or stored.revoked or stored.expires_at < now:
+        raise unauthorized
+
+    crud.revoke_refresh_token(db, stored)
+    user = crud.get_user(db, stored.user_id)
+    if user is None:
+        raise unauthorized
+    return _issue_session(db, response, user)
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(request: Request, db: Db) -> Response:
+    """Revoke the presented refresh token and clear the cookie."""
+    response = Response(status_code=204)
+    token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if token:
+        payload = auth_users.decode_refresh_token(token)
+        if payload is not None:
+            stored = crud.get_refresh_token(db, payload["jti"])
+            if stored is not None and not stored.revoked:
+                crud.revoke_refresh_token(db, stored)
+    _clear_refresh_cookie(response)
+    return response
+
+
+@app.post("/auth/verify-email")
+@limiter.limit(AUTH_RATE_LIMIT)
+def verify_email(
+    request: Request, payload: auth_users.VerifyEmailRequest, db: Db
+) -> dict:
+    """Mark the account named by a valid verification token as verified."""
+    subject = auth_users.decode_email_token(payload.token, "verify")
+    user = crud.get_user(db, int(subject)) if subject is not None else None
+    if user is None:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification token"
+        )
+    crud.set_email_verified(db, user, True)
+    return {"detail": "Email verified"}
+
+
+@app.post("/auth/forgot-password")
+@limiter.limit(AUTH_RATE_LIMIT)
+def forgot_password(
+    request: Request, payload: auth_users.ForgotPasswordRequest, db: Db
+) -> dict:
+    """Email a reset link if the address maps to a local account.
+
+    Always returns the same neutral ``200`` so the endpoint cannot be used to
+    discover which addresses have accounts.
+    """
+    user = crud.get_user_by_email(db, payload.email)
+    if user is not None and user.hashed_password is not None:
+        _send_reset_email(user.email, user.id)
+    return {"detail": "If that account exists, a reset email has been sent"}
+
+
+@app.post("/auth/reset-password")
+@limiter.limit(AUTH_RATE_LIMIT)
+def reset_password(
+    request: Request, payload: auth_users.ResetPasswordRequest, db: Db
+) -> dict:
+    """Set a new password from a valid reset token and revoke all sessions."""
+    subject = auth_users.decode_email_token(payload.token, "reset")
+    user = crud.get_user(db, int(subject)) if subject is not None else None
+    if user is None:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired reset token"
+        )
+    try:
+        auth_users.validate_password(payload.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    user.hashed_password = auth_users.hash_password(payload.new_password)
+    db.commit()
+    # A password change must not leave old refresh sessions alive.
+    crud.revoke_all_refresh_tokens(db, user.id)
+    return {"detail": "Password updated"}
+
+
+@app.get("/auth/me", response_model=auth_users.UserOut)
 def read_me(
     current_user: CurrentUser,
 ) -> models.User:
