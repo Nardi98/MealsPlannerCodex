@@ -4,9 +4,14 @@ from __future__ import annotations
 from datetime import date
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from models import CATEGORIES, UnitEnum
+
+# bcrypt truncates anything past 72 bytes, so passwords longer than that are
+# rejected rather than silently trimmed.
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_BYTES = 72
 
 
 def _validate_categories(value: List[str]) -> List[str]:
@@ -18,10 +23,37 @@ def _validate_categories(value: List[str]) -> List[str]:
     return value
 
 
+def validate_password(pw: str) -> str:
+    """Enforce password length (8-72 bytes) and complexity requirements.
+
+    Length is measured in UTF-8 bytes because bcrypt caps input at 72 bytes.
+    Complexity requires at least one uppercase, one lowercase, and one digit.
+    Returns the password unchanged when valid; raises ``ValueError`` otherwise.
+    """
+
+    if len(pw) < PASSWORD_MIN_LENGTH:
+        raise ValueError(
+            f"Password must be at least {PASSWORD_MIN_LENGTH} characters long"
+        )
+    if len(pw.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise ValueError(
+            f"Password must be at most {PASSWORD_MAX_BYTES} bytes long"
+        )
+    if not any(c.isupper() for c in pw):
+        raise ValueError("Password must contain an uppercase letter")
+    if not any(c.islower() for c in pw):
+        raise ValueError("Password must contain a lowercase letter")
+    if not any(c.isdigit() for c in pw):
+        raise ValueError("Password must contain a digit")
+    return pw
+
+
 class UserCreate(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     display_name: Optional[str] = None
+
+    _check_password = field_validator("password")(validate_password)
 
 
 class UserOut(BaseModel):
@@ -30,13 +62,29 @@ class UserOut(BaseModel):
     display_name: Optional[str] = None
     auth_provider: str
     default_people: int
+    email_verified: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: EmailStr
     password: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    _check_password = field_validator("new_password")(validate_password)
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str
 
 
 class GoogleLoginRequest(BaseModel):
