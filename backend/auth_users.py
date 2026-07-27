@@ -15,12 +15,10 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 import crud
 import models
-import schemas
 from database import get_db
 
 
@@ -58,8 +56,6 @@ RESET_TOKEN_EXPIRE_MINUTES = int(
     os.environ.get("RESET_TOKEN_EXPIRE_MINUTES", "60")
 )
 
-MIN_PASSWORD_LENGTH = 8
-
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # A precomputed hash of a throwaway password. Login runs ``verify_password``
@@ -69,41 +65,6 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 DUMMY_PASSWORD_HASH = _pwd_context.hash("dummy-password-for-timing")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
-
-
-# --- request/response schemas ----------------------------------------------
-# NOTE: these mirror the auth contract that would normally live in
-# ``schemas.py`` (owned by another agent). They are defined here to avoid
-# editing that file; the reusable ``UserCreate`` / ``LoginRequest`` /
-# ``GoogleLoginRequest`` / ``Token`` schemas are imported from ``schemas``.
-
-
-class UserOut(schemas.UserOut):
-    """``schemas.UserOut`` plus the account's email-verification state."""
-
-    email_verified: bool = False
-
-
-class ForgotPasswordRequest(BaseModel):
-    email: str
-
-
-class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
-
-
-class VerifyEmailRequest(BaseModel):
-    token: str
-
-
-def validate_password(password: str) -> str:
-    """Return ``password`` if it meets policy, else raise ``ValueError``."""
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise ValueError(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
-    return password
 
 
 def hash_password(password: str) -> str:

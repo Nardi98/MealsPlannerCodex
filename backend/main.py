@@ -158,11 +158,11 @@ def favicon() -> Response:
     return Response(status_code=204)
 
 
-@app.post("/auth/register", response_model=auth_users.UserOut, status_code=201)
+@app.post("/auth/register", response_model=schemas.UserOut, status_code=201)
 @limiter.limit(AUTH_RATE_LIMIT)
 def register(
     request: Request, payload: schemas.UserCreate, db: Db
-) -> auth_users.UserOut:
+) -> schemas.UserOut:
     """Register a new, unverified local account and email a verification link.
 
     The response is deliberately non-committal about whether the address was
@@ -170,11 +170,6 @@ def register(
     existing account, so the endpoint cannot be used to enumerate users. The
     password is hashed on every path so both branches cost the same time.
     """
-    try:
-        auth_users.validate_password(payload.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
-
     hashed = auth_users.hash_password(payload.password)
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
@@ -190,7 +185,7 @@ def register(
         # Neutral path: never confirm the address exists, never resend.
         user_id = existing.id
 
-    return auth_users.UserOut(
+    return schemas.UserOut(
         id=user_id,
         email=models.normalize_email(payload.email),
         display_name=payload.display_name,
@@ -342,7 +337,7 @@ def logout(request: Request, db: Db) -> Response:
 @app.post("/auth/verify-email")
 @limiter.limit(AUTH_RATE_LIMIT)
 def verify_email(
-    request: Request, payload: auth_users.VerifyEmailRequest, db: Db
+    request: Request, payload: schemas.VerifyEmailRequest, db: Db
 ) -> dict:
     """Mark the account named by a valid verification token as verified."""
     subject = auth_users.decode_email_token(payload.token, "verify")
@@ -358,7 +353,7 @@ def verify_email(
 @app.post("/auth/forgot-password")
 @limiter.limit(AUTH_RATE_LIMIT)
 def forgot_password(
-    request: Request, payload: auth_users.ForgotPasswordRequest, db: Db
+    request: Request, payload: schemas.ForgotPasswordRequest, db: Db
 ) -> dict:
     """Email a reset link if the address maps to a local account.
 
@@ -374,7 +369,7 @@ def forgot_password(
 @app.post("/auth/reset-password")
 @limiter.limit(AUTH_RATE_LIMIT)
 def reset_password(
-    request: Request, payload: auth_users.ResetPasswordRequest, db: Db
+    request: Request, payload: schemas.ResetPasswordRequest, db: Db
 ) -> dict:
     """Set a new password from a valid reset token and revoke all sessions."""
     subject = auth_users.decode_email_token(payload.token, "reset")
@@ -383,10 +378,6 @@ def reset_password(
         raise HTTPException(
             status_code=400, detail="Invalid or expired reset token"
         )
-    try:
-        auth_users.validate_password(payload.new_password)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
     user.hashed_password = auth_users.hash_password(payload.new_password)
     db.commit()
     # A password change must not leave old refresh sessions alive.
@@ -394,7 +385,7 @@ def reset_password(
     return {"detail": "Password updated"}
 
 
-@app.get("/auth/me", response_model=auth_users.UserOut)
+@app.get("/auth/me", response_model=schemas.UserOut)
 def read_me(
     current_user: CurrentUser,
 ) -> models.User:
