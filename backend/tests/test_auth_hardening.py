@@ -28,7 +28,7 @@ def _clear_outbox():
     mailer.outbox.clear()
 
 
-def _register(client, email, password="pw123456", display_name=None):
+def _register(client, email, password="Pw123456", display_name=None):
     return client.post(
         "/auth/register",
         json={"email": email, "password": password, "display_name": display_name},
@@ -81,14 +81,14 @@ def _verify(db_session, email):
 
 def test_login_blocks_unverified_account(client):
     _register(client, "unv@x.com")
-    resp = client.post("/auth/login", json={"email": "unv@x.com", "password": "pw123456"})
+    resp = client.post("/auth/login", json={"email": "unv@x.com", "password": "Pw123456"})
     assert resp.status_code == 403
 
 
 def test_login_sets_refresh_cookie_when_verified(client, db_session):
     _register(client, "v@x.com")
     _verify(db_session, "v@x.com")
-    resp = client.post("/auth/login", json={"email": "v@x.com", "password": "pw123456"})
+    resp = client.post("/auth/login", json={"email": "v@x.com", "password": "Pw123456"})
     assert resp.status_code == 200
     assert "refresh_token" in resp.cookies
 
@@ -135,7 +135,7 @@ def test_forgot_password_is_always_neutral(client):
 def test_reset_password_updates_and_revokes_sessions(client, db_session):
     _register(client, "reset@x.com")
     _verify(db_session, "reset@x.com")
-    login = client.post("/auth/login", json={"email": "reset@x.com", "password": "pw123456"})
+    login = client.post("/auth/login", json={"email": "reset@x.com", "password": "Pw123456"})
     assert login.status_code == 200
     user = crud.get_user_by_email(db_session, "reset@x.com")
 
@@ -144,11 +144,11 @@ def test_reset_password_updates_and_revokes_sessions(client, db_session):
     token = _token_from_outbox()
 
     resp = client.post(
-        "/auth/reset-password", json={"token": token, "new_password": "newpass99"}
+        "/auth/reset-password", json={"token": token, "new_password": "Newpass99"}
     )
     assert resp.status_code == 200
     db_session.refresh(user)
-    assert auth_users.verify_password("newpass99", user.hashed_password)
+    assert auth_users.verify_password("Newpass99", user.hashed_password)
     # Every refresh token for the user is revoked.
     active = [t for t in db_session.query(models.RefreshToken).filter_by(user_id=user.id) if not t.revoked]
     assert active == []
@@ -170,7 +170,7 @@ def test_reset_password_rejects_short_password(client, db_session):
 def _login(client, db_session, email):
     _register(client, email)
     _verify(db_session, email)
-    resp = client.post("/auth/login", json={"email": email, "password": "pw123456"})
+    resp = client.post("/auth/login", json={"email": email, "password": "Pw123456"})
     return resp.cookies["refresh_token"]
 
 
@@ -235,7 +235,7 @@ def test_auth_endpoint_is_rate_limited(client, monkeypatch):
     monkeypatch.setattr(app.state.limiter, "enabled", True)
     saw_429 = False
     for _ in range(40):
-        resp = client.post("/auth/login", json={"email": "rl@x.com", "password": "pw123456"})
+        resp = client.post("/auth/login", json={"email": "rl@x.com", "password": "Pw123456"})
         if resp.status_code == 429:
             saw_429 = True
             break

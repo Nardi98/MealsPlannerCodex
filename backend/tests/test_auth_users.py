@@ -65,7 +65,7 @@ def test_register_login_me_flow(db_session):
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "u@x.com", "password": "pw123456", "display_name": "U"},
+            json={"email": "u@x.com", "password": "Pw123456", "display_name": "U"},
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["email"] == "u@x.com"
@@ -74,7 +74,7 @@ def test_register_login_me_flow(db_session):
 
         # Unverified account cannot log in yet.
         resp = client.post(
-            "/auth/login", json={"email": "u@x.com", "password": "pw123456"}
+            "/auth/login", json={"email": "u@x.com", "password": "Pw123456"}
         )
         assert resp.status_code == 403
 
@@ -82,7 +82,7 @@ def test_register_login_me_flow(db_session):
 
         # login success once verified
         resp = client.post(
-            "/auth/login", json={"email": "u@x.com", "password": "pw123456"}
+            "/auth/login", json={"email": "u@x.com", "password": "Pw123456"}
         )
         assert resp.status_code == 200
         token = resp.json()["access_token"]
@@ -112,7 +112,7 @@ def test_register_normalises_email_and_login_ignores_case(db_session):
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "Shouty.User@Example.COM", "password": "pw123456"},
+            json={"email": "Shouty.User@Example.COM", "password": "Pw123456"},
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["email"] == "shouty.user@example.com"
@@ -121,7 +121,7 @@ def test_register_normalises_email_and_login_ignores_case(db_session):
 
         resp = client.post(
             "/auth/login",
-            json={"email": "shouty.user@example.com", "password": "pw123456"},
+            json={"email": "shouty.user@example.com", "password": "Pw123456"},
         )
         assert resp.status_code == 200, resp.text
     finally:
@@ -136,14 +136,14 @@ def test_register_duplicate_email_is_neutral_and_creates_no_second_account(
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "dupe@example.com", "password": "pw123456"},
+            json={"email": "dupe@example.com", "password": "Pw123456"},
         )
         assert resp.status_code == 201, resp.text
 
         # Same shape, same status -- no enumeration signal.
         resp = client.post(
             "/auth/register",
-            json={"email": "DUPE@Example.com", "password": "pw123456"},
+            json={"email": "DUPE@Example.com", "password": "Pw123456"},
         )
         assert resp.status_code == 201, resp.text
 
