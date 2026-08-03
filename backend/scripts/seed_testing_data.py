@@ -352,6 +352,8 @@ def populate(session) -> None:
         display_name="Demo User",
         auth_provider="local",
         default_people=2,
+        # Seeded local accounts are pre-verified so they can log in immediately.
+        email_verified=True,
     )
     session.add(demo_user)
     # Flush so ``demo_user.id`` is available to stamp ownership on every row.

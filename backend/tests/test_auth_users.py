@@ -54,27 +54,35 @@ def test_lookup_user_by_email_ignores_case(db_session):
 
 # --- routes -----------------------------------------------------------------
 
+def _verify(db_session, email):
+    """Flip a freshly-registered account to email-verified for login tests."""
+    user = crud.get_user_by_email(db_session, email)
+    crud.set_email_verified(db_session, user, True)
+
+
 def test_register_login_me_flow(db_session):
     client = db_client(db_session)
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "u@x.com", "password": "pw12345", "display_name": "U"},
+            json={"email": "u@x.com", "password": "Pw123456", "display_name": "U"},
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["email"] == "u@x.com"
+        assert resp.json()["email_verified"] is False
         assert "hashed_password" not in resp.json()
 
-        # duplicate email rejected
+        # Unverified account cannot log in yet.
         resp = client.post(
-            "/auth/register",
-            json={"email": "u@x.com", "password": "pw12345", "display_name": "U"},
+            "/auth/login", json={"email": "u@x.com", "password": "Pw123456"}
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 403
 
-        # login success
+        _verify(db_session, "u@x.com")
+
+        # login success once verified
         resp = client.post(
-            "/auth/login", json={"email": "u@x.com", "password": "pw12345"}
+            "/auth/login", json={"email": "u@x.com", "password": "Pw123456"}
         )
         assert resp.status_code == 200
         token = resp.json()["access_token"]
@@ -104,33 +112,46 @@ def test_register_normalises_email_and_login_ignores_case(db_session):
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "Shouty.User@Example.COM", "password": "pw12345"},
+            json={"email": "Shouty.User@Example.COM", "password": "Pw123456"},
         )
         assert resp.status_code == 201, resp.text
         assert resp.json()["email"] == "shouty.user@example.com"
 
+        _verify(db_session, "shouty.user@example.com")
+
         resp = client.post(
             "/auth/login",
-            json={"email": "shouty.user@example.com", "password": "pw12345"},
+            json={"email": "shouty.user@example.com", "password": "Pw123456"},
         )
         assert resp.status_code == 200, resp.text
     finally:
         app.dependency_overrides.clear()
 
 
-def test_register_rejects_duplicate_email_differing_only_in_case(db_session):
+def test_register_duplicate_email_is_neutral_and_creates_no_second_account(
+    db_session,
+):
+    """A duplicate registration must not reveal the address is taken."""
     client = db_client(db_session)
     try:
         resp = client.post(
             "/auth/register",
-            json={"email": "dupe@example.com", "password": "pw12345"},
+            json={"email": "dupe@example.com", "password": "Pw123456"},
         )
         assert resp.status_code == 201, resp.text
 
+        # Same shape, same status -- no enumeration signal.
         resp = client.post(
             "/auth/register",
-            json={"email": "DUPE@Example.com", "password": "pw12345"},
+            json={"email": "DUPE@Example.com", "password": "Pw123456"},
         )
-        assert resp.status_code == 400, resp.text
+        assert resp.status_code == 201, resp.text
+
+        assert (
+            db_session.query(crud.User)
+            .filter(crud.User.email == "dupe@example.com")
+            .count()
+            == 1
+        )
     finally:
         app.dependency_overrides.clear()

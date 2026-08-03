@@ -137,6 +137,12 @@ class User(Base):
     default_people = Column(
         Integer, nullable=False, server_default="2", default=DEFAULT_PEOPLE
     )
+    # Whether the account has proven control of its email address. Local sign-ups
+    # start ``False`` and must click a verification link before they can log in;
+    # Google accounts inherit the verified claim from the ID token.
+    email_verified = Column(
+        Boolean, nullable=False, server_default=false(), default=False
+    )
 
     @validates("email")
     def _canonicalise_email(self, key: str, value: str) -> str:
@@ -408,6 +414,31 @@ class Meal(Base):
     @property
     def side_recipe_id(self):
         return self.sides[0].side_recipe_id if self.sides else None
+
+
+class RefreshToken(Base):
+    """A server-side record of an issued refresh token.
+
+    The token itself is a signed JWT held only in the client's ``HttpOnly``
+    cookie; this table stores its ``jti`` so a token can be revoked (on logout,
+    rotation, or password reset) independently of its cryptographic expiry. A
+    refresh presented whose ``jti`` is missing, ``revoked``, or past
+    ``expires_at`` is rejected.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    jti = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, nullable=False, server_default=false(), default=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
 
 
 class MealSide(Base):

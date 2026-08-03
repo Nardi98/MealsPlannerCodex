@@ -27,6 +27,14 @@ TEST_DATABASE_URL = os.environ.get(
 # pointing at a real database must never win over TEST_DATABASE_URL.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
+# ``auth_users`` fails closed when JWT_SECRET is unset (mirrors DATABASE_URL), so
+# the suite must supply one before importing anything that imports it.
+os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
+# The auth rate limiter uses process-wide in-memory counters; leaving it on
+# would let calls from one test throttle another. Tests that exercise the limit
+# re-enable it explicitly.
+os.environ["RATE_LIMIT_ENABLED"] = "0"
+
 from database import Base  # noqa: E402
 import models  # noqa: E402  ensures tables are registered
 

@@ -8,48 +8,84 @@ const API_BASE_URL =
       process.env.NEXT_PUBLIC_API_BASE_URL)) ||
   '';
 
-const TOKEN_KEY = 'auth_token';
+// The access token lives in memory only — never localStorage — so it cannot be
+// read by injected scripts. Durable session state is the HttpOnly refresh cookie
+// the server sets; we recover the access token from it via /auth/refresh.
+let accessToken = null;
 
-// Called when the backend rejects our credentials (401) so the app can drop the
-// session and route back to login. Registered by the auth layer at startup.
+// Called when the session is irrecoverable (refresh failed) so the app can drop
+// the session and route back to login. Registered by the auth layer at startup.
 let unauthorizedHandler = null;
+
+// De-dupes concurrent refreshes: many in-flight requests hitting 401 at once
+// should share a single /auth/refresh round-trip.
+let refreshPromise = null;
 
 function setUnauthorizedHandler(handler) {
   unauthorizedHandler = handler;
 }
 
 function getToken() {
-  try {
-    return (typeof localStorage !== 'undefined' && localStorage.getItem(TOKEN_KEY)) || null;
-  } catch {
-    return null;
-  }
+  return accessToken;
 }
 
 function setAuthToken(token) {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else localStorage.removeItem(TOKEN_KEY);
-  } catch {
-    // Storage unavailable (e.g. private mode) — token simply won't persist.
-  }
+  accessToken = token || null;
 }
 
-async function request(path, options = {}) {
-  const url = `${API_BASE_URL}${path}`;
+function buildConfig(options) {
   // Let the browser set the multipart boundary itself for FormData uploads;
   // forcing application/json here would break the request.
   const isFormData =
     typeof FormData !== 'undefined' && options.body instanceof FormData;
   const defaultHeaders = isFormData ? {} : { 'Content-Type': 'application/json' };
-  const token = getToken();
-  if (token) defaultHeaders['Authorization'] = `Bearer ${token}`;
-  const config = { ...options, headers: { ...defaultHeaders, ...(options.headers || {}) } };
+  if (accessToken) defaultHeaders['Authorization'] = `Bearer ${accessToken}`;
+  return {
+    ...options,
+    // Send the refresh cookie (and receive Set-Cookie) on every call.
+    credentials: 'include',
+    headers: { ...defaultHeaders, ...(options.headers || {}) },
+  };
+}
 
-  const response = await fetch(url, config);
+// Exchanges the HttpOnly refresh cookie for a fresh access token. Returns the
+// new token on success, or null when the cookie is missing/revoked/expired.
+// Deliberately a raw fetch (not request()) so a 401 here cannot recurse.
+async function attemptRefresh() {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = await res.json().catch(() => null);
+        return data && data.access_token ? data.access_token : null;
+      })
+      .catch(() => null)
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  const token = await refreshPromise;
+  if (token) setAuthToken(token);
+  return token;
+}
+
+async function request(path, options = {}, allowRefresh = true) {
+  const url = `${API_BASE_URL}${path}`;
+  const response = await fetch(url, buildConfig(options));
+
   if (!response.ok) {
     if (response.status === 401) {
+      // Try to silently refresh the access token exactly once, then replay the
+      // original request. /auth/refresh itself is exempt to avoid recursion.
+      if (allowRefresh && path !== '/auth/refresh') {
+        const newToken = await attemptRefresh();
+        if (newToken) return request(path, options, false);
+      }
+      // No recovery — the session is dead. Drop it and notify the app.
       setAuthToken(null);
       if (unauthorizedHandler) unauthorizedHandler();
     }

@@ -200,7 +200,7 @@ def test_registration_seeds_system_tags_for_the_new_user(db_session):
         client = db_client(db_session)
         resp = client.post(
             "/auth/register",
-            json={"email": "fresh@x.com", "password": "pw123456"},
+            json={"email": "fresh@x.com", "password": "Pw123456"},
         )
         assert resp.status_code == 201
         new_id = resp.json()["id"]
@@ -232,11 +232,11 @@ def test_registration_seeds_starter_ingredients_per_user(db_session):
         client = db_client(db_session)
         first = client.post(
             "/auth/register",
-            json={"email": "starter-a@x.com", "password": "pw123456"},
+            json={"email": "starter-a@x.com", "password": "Pw123456"},
         ).json()["id"]
         second = client.post(
             "/auth/register",
-            json={"email": "starter-b@x.com", "password": "pw123456"},
+            json={"email": "starter-b@x.com", "password": "Pw123456"},
         ).json()["id"]
 
         assert _ingredient_count(first) == len(SYSTEM_INGREDIENTS)

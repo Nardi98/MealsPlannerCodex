@@ -9,17 +9,26 @@ import { authApi } from '../../api/authApi'
 import * as client from '../../api/client'
 
 vi.mock('../../api/authApi', () => ({
-  authApi: { login: vi.fn(), register: vi.fn(), me: vi.fn(), google: vi.fn() },
+  authApi: {
+    login: vi.fn(),
+    register: vi.fn(),
+    me: vi.fn(),
+    google: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  },
 }))
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-  localStorage.clear()
 })
 
 beforeEach(() => {
   client.setAuthToken(null)
+  // Default: no refresh cookie → anonymous.
+  authApi.refresh.mockRejectedValue(new Error('no cookie'))
+  authApi.logout.mockResolvedValue(null)
 })
 
 function Probe() {
@@ -49,20 +58,21 @@ function renderAuth() {
   )
 }
 
-test('starts anonymous when no token is stored', async () => {
+test('starts anonymous when the refresh cookie is missing', async () => {
   renderAuth()
   expect(await screen.findByText('anonymous')).toBeInTheDocument()
   expect(authApi.me).not.toHaveBeenCalled()
 })
 
-test('hydrates the user from a stored token on mount', async () => {
-  client.setAuthToken('stored-jwt')
+test('restores the session from the refresh cookie on mount', async () => {
+  authApi.refresh.mockResolvedValue({ access_token: 'restored-jwt' })
   authApi.me.mockResolvedValue({ id: 1, email: 'hydrated@b.c' })
 
   renderAuth()
 
   expect(await screen.findByText('hydrated@b.c')).toBeInTheDocument()
-  expect(authApi.me).toHaveBeenCalledTimes(1)
+  expect(authApi.refresh).toHaveBeenCalledTimes(1)
+  expect(client.getToken()).toBe('restored-jwt')
 })
 
 test('login stores the token and sets the user', async () => {
@@ -96,8 +106,8 @@ test('loginWithGoogle exchanges the ID token and sets the user', async () => {
   expect(client.getToken()).toBe('google-jwt')
 })
 
-test('logout clears the user and the token', async () => {
-  client.setAuthToken('stored-jwt')
+test('logout calls the server, clears the user and the token', async () => {
+  authApi.refresh.mockResolvedValue({ access_token: 'restored-jwt' })
   authApi.me.mockResolvedValue({ id: 1, email: 'hydrated@b.c' })
 
   renderAuth()
@@ -108,13 +118,12 @@ test('logout clears the user and the token', async () => {
   })
 
   expect(await screen.findByText('anonymous')).toBeInTheDocument()
+  expect(authApi.logout).toHaveBeenCalledTimes(1)
   expect(client.getToken()).toBe(null)
 })
 
-test('register creates the account then logs in', async () => {
+test('register creates the account but does NOT log in', async () => {
   authApi.register.mockResolvedValue({ id: 3, email: 'n@b.c' })
-  authApi.login.mockResolvedValue({ access_token: 'reg-jwt' })
-  authApi.me.mockResolvedValue({ id: 3, email: 'n@b.c' })
 
   renderAuth()
   await screen.findByText('anonymous')
@@ -123,7 +132,8 @@ test('register creates the account then logs in', async () => {
     screen.getByText('register').click()
   })
 
-  expect(await screen.findByText('n@b.c')).toBeInTheDocument()
   expect(authApi.register).toHaveBeenCalledTimes(1)
-  expect(client.getToken()).toBe('reg-jwt')
+  expect(authApi.login).not.toHaveBeenCalled()
+  expect(await screen.findByText('anonymous')).toBeInTheDocument()
+  expect(client.getToken()).toBe(null)
 })

@@ -1,33 +1,45 @@
 import React from 'react'
 import { authApi } from '../api/authApi'
-import { getToken, setAuthToken, setUnauthorizedHandler } from '../api/client'
+import { setAuthToken, setUnauthorizedHandler } from '../api/client'
 
 const AuthContext = React.createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = React.useState(null)
-  // Start in a loading state only when there is a token to validate, so a
-  // logged-out visitor lands on the login screen without an extra flash.
-  const [loading, setLoading] = React.useState(() => Boolean(getToken()))
+  // The access token never survives a reload, so we always begin by trying to
+  // restore the session from the HttpOnly refresh cookie.
+  const [loading, setLoading] = React.useState(true)
 
-  const logout = React.useCallback(() => {
+  const logout = React.useCallback(async () => {
+    try {
+      await authApi.logout()
+    } catch {
+      // Best-effort: even if the server call fails, drop the client session.
+    }
     setAuthToken(null)
     setUser(null)
   }, [])
 
-  // A 401 from any request means our session is dead — drop it everywhere.
+  // A failed refresh means our session is irrecoverable — drop it everywhere.
   React.useEffect(() => {
-    setUnauthorizedHandler(() => setUser(null))
+    setUnauthorizedHandler(() => {
+      setAuthToken(null)
+      setUser(null)
+    })
     return () => setUnauthorizedHandler(null)
   }, [])
 
-  // Restore the session from a persisted token on first load.
+  // Bootstrap on load: swap the refresh cookie for an access token, then load
+  // the account. A missing/expired cookie just lands us on the login screen.
   React.useEffect(() => {
-    if (!getToken()) return
     let active = true
     authApi
-      .me()
-      .then((u) => active && setUser(u))
+      .refresh()
+      .then(async ({ access_token }) => {
+        setAuthToken(access_token)
+        const u = await authApi.me()
+        if (active) setUser(u)
+      })
       .catch(() => active && setAuthToken(null))
       .finally(() => active && setLoading(false))
     return () => {
@@ -54,12 +66,11 @@ export function AuthProvider({ children }) {
     [startSession],
   )
 
+  // Registration no longer logs in — the account is unverified until the user
+  // follows the emailed link. Returns the created user for the "check email" UI.
   const register = React.useCallback(
-    async (payload) => {
-      await authApi.register(payload)
-      return login({ email: payload.email, password: payload.password })
-    },
-    [login],
+    async (payload) => authApi.register(payload),
+    [],
   )
 
   const value = React.useMemo(
