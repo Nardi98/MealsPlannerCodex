@@ -29,7 +29,15 @@ services:
       - DATABASE_URL=postgresql://user:pass@db:5432/mealsdb
       # Optional: set in your shell / .env to enable "Sign in with Google".
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
-      - JWT_SECRET=${JWT_SECRET:-}
+      # Auth is fail-closed: JWT_SECRET is required or the app refuses to start.
+      # Provide an insecure default for local compose; override in real deploys.
+      - JWT_SECRET=${JWT_SECRET:-dev-insecure-secret-change-me}
+      # Local dev auth defaults: console mailer (links printed to this log),
+      # non-secure cookie over http, and CORS/links pointed at the dev frontend.
+      - MAIL_BACKEND=${MAIL_BACKEND:-console}
+      - COOKIE_SECURE=${COOKIE_SECURE:-0}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
     depends_on:
       db:
         condition: service_healthy
@@ -42,6 +50,9 @@ services:
       # Same client ID as the backend; the dev server reads it at startup.
       # Either variable works: compose fans GOOGLE_CLIENT_ID out to the frontend.
       - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
+      # The browser (on the host) reaches the backend on the published :8000
+      # port. Cross-origin cookies work because backend CORS allows this origin.
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:
