@@ -58,7 +58,8 @@ test('switches to register and submits a policy-compliant password', async () =>
   fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
 
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   await waitFor(() =>
@@ -73,11 +74,41 @@ test('blocks register and shows an error for a weak password', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'weak' } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'weak' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'weak' } })
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(/at least 8/i)
   expect(register).not.toHaveBeenCalled()
+})
+
+test('blocks register when the confirm password does not match', async () => {
+  renderPage()
+
+  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef99' } })
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/do not match/i)
+  expect(register).not.toHaveBeenCalled()
+})
+
+test('does not send the confirm value in the register payload', async () => {
+  register.mockResolvedValue({ id: 3, email: 'n@b.c' })
+  renderPage()
+
+  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  await waitFor(() => expect(register).toHaveBeenCalledTimes(1))
+  const payload = register.mock.calls[0][0]
+  expect(payload).toEqual({ email: 'n@b.c', password: 'Abcdef12', display_name: null })
+  expect(Object.keys(payload)).not.toContain('confirmPassword')
 })
 
 test('shows a check-your-email screen after registering', async () => {
@@ -86,7 +117,8 @@ test('shows a check-your-email screen after registering', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   expect(await screen.findByText(/check your email/i)).toBeInTheDocument()

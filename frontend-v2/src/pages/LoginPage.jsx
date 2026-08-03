@@ -62,6 +62,7 @@ export default function LoginPage() {
   const [mode, setMode] = React.useState('login') // 'login' | 'register'
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
+  const [confirmPassword, setConfirmPassword] = React.useState('')
   const [displayName, setDisplayName] = React.useState('')
   const [error, setError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
@@ -76,6 +77,10 @@ export default function LoginPage() {
       const pwError = validatePassword(password)
       if (pwError) {
         setError(pwError)
+        return
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.')
         return
       }
     }
@@ -114,6 +119,7 @@ export default function LoginPage() {
           setRegisteredEmail('')
           setMode('login')
           setPassword('')
+          setConfirmPassword('')
         }}
       />
     )
@@ -159,6 +165,18 @@ export default function LoginPage() {
             </span>
           )}
         </label>
+        {isRegister && (
+          <label className="flex flex-col gap-1">
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Confirm password</span>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </label>
+        )}
 
         {error && (
           <div role="alert" style={{ fontSize: 13, color: 'var(--c-neg)' }}>
@@ -193,6 +211,7 @@ export default function LoginPage() {
           onClick={() => {
             setMode(isRegister ? 'login' : 'register')
             setError('')
+            setConfirmPassword('')
           }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-a2)' }}
         >
