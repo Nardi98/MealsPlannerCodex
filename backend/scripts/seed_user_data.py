@@ -26,6 +26,7 @@ from __future__ import annotations
 import os
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 
 # Allow ``python scripts/seed_user_data.py`` to resolve the top-level modules
 # that live at the backend root.
@@ -33,7 +34,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from sqlalchemy import select  # noqa: E402
 
-from crud import normalize_email  # noqa: E402
+import usernames  # noqa: E402
+from crud import _derive_username, normalize_email  # noqa: E402
 from database import SessionLocal  # noqa: E402
 from models import Ingredient, Recipe, RecipeIngredient, Tag, User  # noqa: E402
 from auth_users import hash_password  # noqa: E402
@@ -59,6 +61,11 @@ class Profile:
     email: str
     password: str
     recipes: list[SeedRecipe]
+    # UN-1: ``users.username`` is NOT NULL and this script constructs ``User``
+    # directly, so every profile has to name its handle rather than leaving one
+    # to be derived. ``None`` means "derive one from the email", which is what
+    # an ad-hoc account named on the command line gets.
+    username: str | None = None
 
 
 def _meat_free(recipes: list[SeedRecipe]) -> list[SeedRecipe]:
@@ -66,25 +73,46 @@ def _meat_free(recipes: list[SeedRecipe]) -> list[SeedRecipe]:
 
 
 PROFILES: list[Profile] = [
-    Profile(email=DEFAULT_EMAIL, password=DEFAULT_PASSWORD, recipes=RECIPES),
+    Profile(
+        email=DEFAULT_EMAIL,
+        password=DEFAULT_PASSWORD,
+        recipes=RECIPES,
+        username="omni_demo",
+    ),
     Profile(
         email="veggie.demo@example.com",
         password=DEFAULT_PASSWORD,
         recipes=_meat_free(RECIPES),
+        username="veggie_demo",
     ),
 ]
 
 
-def get_or_create_user(session, email: str, password: str) -> User:
-    """Return the user with ``email``, creating a local account if missing."""
+def get_or_create_user(
+    session, email: str, password: str, username: str | None = None
+) -> User:
+    """Return the user with ``email``, creating a local account if missing.
+
+    ``username`` is optional so an ad-hoc ``python scripts/seed_user_data.py
+    someone@example.com`` still works; when omitted a handle is derived from the
+    address the same way ``crud.create_user`` does.
+    """
 
     email = normalize_email(email)
     user = session.execute(
         select(User).where(User.email == email)
     ).scalar_one_or_none()
     if user is None:
+        handle = (
+            usernames.normalise(username)
+            if username
+            else _derive_username(session, email)
+        )
         user = User(
             email=email,
+            username=handle,
+            # A deliberately chosen handle counts as confirmed (D-7).
+            username_changed_at=datetime.utcnow(),
             hashed_password=hash_password(password),
             display_name=email.split("@")[0],
             auth_provider="local",
@@ -187,7 +215,9 @@ def seed_profiles(session, profiles: list[Profile] | None = None) -> list[tuple[
 
     seeded = []
     for profile in PROFILES if profiles is None else profiles:
-        user = get_or_create_user(session, profile.email, profile.password)
+        user = get_or_create_user(
+            session, profile.email, profile.password, profile.username
+        )
         counts = populate_for_user(session, user, profile.recipes)
         seeded.append((user, counts))
     return seeded
@@ -214,7 +244,12 @@ def profile_for_email(email: str, password: str) -> Profile:
     for profile in PROFILES:
         if normalize_email(profile.email) == email:
             return profile
-    return Profile(email=email, password=password, recipes=RECIPES)
+    return Profile(
+        email=email,
+        password=password,
+        recipes=RECIPES,
+        username=None,
+    )
 
 
 def main() -> None:

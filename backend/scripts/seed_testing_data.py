@@ -23,8 +23,10 @@ Run from the ``backend/`` directory::
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
+from datetime import datetime, timedelta
 from typing import NamedTuple
 
 # Allow ``python scripts/seed_testing_data.py`` to resolve the top-level
@@ -36,17 +38,28 @@ from models import (  # noqa: E402
     Ingredient,
     Recipe,
     RecipeIngredient,
+    RecipeShare,
     Tag,
     User,
     UnitEnum,
 )
 from auth_users import hash_password  # noqa: E402
+import usernames  # noqa: E402
 
-# Default seed account. Every seeded row below is owned by this user; it starts
-# on the shared ``DEFAULT_PLAN_SETTINGS`` (``User.plan_settings`` stays NULL
-# until the account overrides something).
+# Default seed account. It owns the recipe catalogue below; it starts on the
+# shared ``DEFAULT_PLAN_SETTINGS`` (``User.plan_settings`` stays NULL until the
+# account overrides something).
 DEMO_USER_EMAIL = "demo@mealplanner.test"
 DEMO_USER_PASSWORD = "demo1234"
+DEMO_USER_USERNAME = "demo_chef"
+
+# Two further accounts so the sharing states below have somewhere to point
+# (DM-1). ``friend`` receives a person-mode share and holds the copy; ``guest``
+# exists so "a different signed-in account" (SH-24) is reproducible by hand.
+FRIEND_USER_EMAIL = "friend@mealplanner.test"
+FRIEND_USER_USERNAME = "friend_cook"
+GUEST_USER_EMAIL = "guest@mealplanner.test"
+GUEST_USER_USERNAME = "guest_cook"
 
 # ---------------------------------------------------------------------------
 # Ingredients: (name, unit, season_months, categories)  -- 56 entries
@@ -162,6 +175,189 @@ def link_favorite_sides(recipes_by_title: dict[str, "Recipe"]) -> None:
             for side_title in side_titles
             if side_title in recipes_by_title
         ]
+
+
+class SeedShare(NamedTuple):
+    """One row of :data:`SHARES`, resolved against the inserted recipes.
+
+    ``token`` is the plaintext a QA walkthrough pastes into the browser; only
+    its SHA-256 digest is stored (SH-3, D-5), exactly as the runtime path will
+    do. These are seed fixtures, not credentials to anything real.
+
+    ``expires_in_days`` and ``revoked_days_ago`` are relative so a database
+    seeded weeks ago still shows the same active / expired / revoked mix.
+    """
+
+    recipe_title: str
+    token: str
+    mode: str
+    recipient: str | None = None       # username of the recipient account
+    recipient_email: str | None = None
+    expires_in_days: int | None = None
+    revoked_days_ago: int | None = None
+
+
+class SeedCopy(NamedTuple):
+    """One copy of a shared recipe, carrying its AT-1 attribution snapshot."""
+
+    source_title: str
+    copier: str        # username of the copying account
+    new_title: str
+
+
+# DM-1's required states, one row each. Kept beside ``RECIPES`` rather than as
+# extra tuple fields for the same reason as ``FAVORITE_SIDES``: the 44 catalogue
+# rows stay untouched and readable, and adding a share means adding one line.
+SHARES: list[SeedShare] = [
+    # Active link share: anyone holding the URL can read it (SH-4).
+    SeedShare("Beef Stew", "seed-link-token-beef-stew", "link"),
+    # Active person share to an account, so it lands in their Shared-with-me.
+    SeedShare(
+        "Chicken Curry",
+        "seed-person-token-chicken-curry",
+        "person",
+        recipient=FRIEND_USER_USERNAME,
+    ),
+    # Active person share to an address with no account: openable only once
+    # that address signs up and verifies (the accepted residual of SH-4).
+    SeedShare(
+        "Pumpkin Soup",
+        "seed-person-token-pumpkin-soup",
+        "person",
+        recipient_email="nobody@mealplanner.test",
+    ),
+    # Expired: treated exactly as revoked (SH-21).
+    SeedShare(
+        "Lentil Soup", "seed-expired-token-lentil-soup", "link", expires_in_days=-3
+    ),
+    # Revoked: the recipe is back to ``private`` (VIS-7).
+    SeedShare(
+        "Fried Rice", "seed-revoked-token-fried-rice", "link", revoked_days_ago=2
+    ),
+]
+
+# One copy, so attribution (AT-1/AT-3) and the owner's "copied N times" counter
+# (AT-7) are both demoable from a fresh database.
+COPIES: list[SeedCopy] = [
+    SeedCopy("Chicken Curry", FRIEND_USER_USERNAME, "Chicken Curry"),
+]
+
+
+def _digest(token: str) -> str:
+    """The stored form of a share token: a SHA-256 hex digest (D-5)."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def link_shares(
+    session,
+    recipes_by_title: dict[str, "Recipe"],
+    users_by_username: dict[str, "User"],
+    owner: "User",
+    now: datetime | None = None,
+) -> None:
+    """Insert :data:`SHARES` and promote every actively-shared recipe (VIS-6).
+
+    Runs after every recipe exists, like :func:`link_favorite_sides`. Titles the
+    caller did not insert are skipped rather than raising.
+    """
+    now = now or datetime.utcnow()
+    for spec in SHARES:
+        recipe = recipes_by_title.get(spec.recipe_title)
+        if recipe is None:
+            continue
+        recipient = users_by_username.get(spec.recipient or "")
+        expires_at = (
+            now + timedelta(days=spec.expires_in_days)
+            if spec.expires_in_days is not None
+            else None
+        )
+        revoked_at = (
+            now - timedelta(days=spec.revoked_days_ago)
+            if spec.revoked_days_ago is not None
+            else None
+        )
+        session.add(
+            RecipeShare(
+                recipe=recipe,
+                created_by_user_id=owner.id,
+                token_hash=_digest(spec.token),
+                mode=spec.mode,
+                recipient_user_id=recipient.id if recipient else None,
+                recipient_email=spec.recipient_email,
+                expires_at=expires_at,
+                revoked_at=revoked_at,
+                last_viewed_at=None,
+            )
+        )
+        # VIS-6: an active share promotes a private recipe to unlisted. An
+        # expired or revoked one does not (VIS-7 leaves it private).
+        active = revoked_at is None and (expires_at is None or expires_at > now)
+        if active:
+            recipe.visibility = "unlisted"
+
+
+def link_copies(
+    session,
+    recipes_by_title: dict[str, "Recipe"],
+    users_by_username: dict[str, "User"],
+    ingredients: dict[str, "Ingredient"],
+    owner: "User",
+    now: datetime | None = None,
+) -> None:
+    """Insert :data:`COPIES` as independent recipes carrying attribution.
+
+    Mirrors what the Phase 2A copy path will do: the copy is private (CP-4),
+    owned by the copier with its own ingredient rows in *their* namespace
+    (CP-2/CP-3), carries no planner history (CP-7), snapshots the immediate
+    source (AT-1), and bumps the source's counter (AT-7).
+    """
+    now = now or datetime.utcnow()
+    for spec in COPIES:
+        source = recipes_by_title.get(spec.source_title)
+        copier = users_by_username.get(spec.copier)
+        if source is None or copier is None:
+            continue
+
+        copy = Recipe(
+            title=spec.new_title,
+            servings_default=source.servings_default,
+            procedure=source.procedure,
+            course=source.course,
+            bulk_prep=source.bulk_prep,
+            user_id=copier.id,
+            visibility="private",
+            copy_count=0,
+            source_recipe_id=source.id,
+            source_user_id=owner.id,
+            source_author_username=owner.username,
+            source_recipe_title=source.title,
+            copied_at=now,
+        )
+        for item in source.ingredients:
+            name = item.ingredient.name
+            # CP-3: resolve by *name* inside the copier's namespace. Reusing the
+            # source owner's ``Ingredient`` row would be the cross-user leak the
+            # requirement exists to prevent.
+            own = session.query(Ingredient).filter_by(
+                name=name, user_id=copier.id
+            ).one_or_none()
+            if own is None:
+                template = ingredients[name]
+                own = Ingredient(
+                    name=name,
+                    unit=template.unit,
+                    season_months=template.season_months,
+                    categories=template.categories,
+                    user_id=copier.id,
+                )
+                session.add(own)
+            copy.ingredients.append(
+                RecipeIngredient(
+                    ingredient=own, quantity=item.quantity, unit=item.unit
+                )
+            )
+        session.add(copy)
+        source.copy_count += 1
 
 
 class SeedRecipe(NamedTuple):
@@ -346,18 +542,39 @@ def reset_database() -> None:
 def populate(session) -> None:
     """Insert the full testing dataset into an empty database."""
 
-    demo_user = User(
-        email=DEMO_USER_EMAIL,
-        hashed_password=hash_password(DEMO_USER_PASSWORD),
-        display_name="Demo User",
-        auth_provider="local",
-        default_people=2,
-        # Seeded local accounts are pre-verified so they can log in immediately.
-        email_verified=True,
-    )
-    session.add(demo_user)
-    # Flush so ``demo_user.id`` is available to stamp ownership on every row.
+    def _account(email: str, username: str, display_name: str) -> User:
+        return User(
+            email=email,
+            # UN-1 is NOT NULL, and these are constructed directly rather than
+            # through ``crud.create_user``, so the handle is explicit.
+            username=username,
+            # UN-5: a seeded local account has a deliberately chosen handle, so
+            # it counts as confirmed and skips the selection step (D-7).
+            username_changed_at=datetime.utcnow(),
+            hashed_password=hash_password(DEMO_USER_PASSWORD),
+            display_name=display_name,
+            auth_provider="local",
+            default_people=2,
+            # Seeded local accounts are pre-verified so they can log in
+            # immediately -- and so ``friend`` satisfies SWM-4's verified-email
+            # requirement for the person-mode share below.
+            email_verified=True,
+        )
+
+    demo_user = _account(DEMO_USER_EMAIL, DEMO_USER_USERNAME, "Demo User")
+    friend_user = _account(FRIEND_USER_EMAIL, FRIEND_USER_USERNAME, "Friend Cook")
+    guest_user = _account(GUEST_USER_EMAIL, GUEST_USER_USERNAME, "Guest Cook")
+    session.add_all([demo_user, friend_user, guest_user])
+    # Flush so the ids are available to stamp ownership on every row.
     session.flush()
+
+    users_by_username = {
+        u.username: u for u in (demo_user, friend_user, guest_user)
+    }
+
+    # UN-4 must hold in a seeded database too, or a manual walkthrough of
+    # acceptance criterion 1 would find ``admin`` claimable.
+    usernames.seed_reserved(session)
 
     tags: dict[str, Tag] = {}
     for name, penalize, is_system in TAGS:
@@ -404,6 +621,11 @@ def populate(session) -> None:
         recipes_by_title[title] = recipe
 
     link_favorite_sides(recipes_by_title)
+    session.flush()
+    link_shares(session, recipes_by_title, users_by_username, demo_user)
+    link_copies(
+        session, recipes_by_title, users_by_username, ingredients, demo_user
+    )
     session.commit()
 
 
@@ -415,11 +637,14 @@ def main() -> None:
         n_r = session.query(Recipe).count()
         n_i = session.query(Ingredient).count()
         n_t = session.query(Tag).count()
+        n_s = session.query(RecipeShare).count()
+        n_u = session.query(User).count()
     finally:
         session.close()
     print(
         f"[seed_testing_data] Database reset and populated: "
-        f"{n_r} recipes, {n_i} ingredients, {n_t} tags."
+        f"{n_r} recipes, {n_i} ingredients, {n_t} tags, "
+        f"{n_u} users, {n_s} shares."
     )
 
 
