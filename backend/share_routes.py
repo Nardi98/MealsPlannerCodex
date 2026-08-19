@@ -159,6 +159,15 @@ def create_recipe_share(
 
     ``request`` is required by slowapi (SH-11) and is also what
     :func:`shares.share_url` falls back to when ``PUBLIC_BASE_URL`` is unset.
+
+    UN-11 is enforced on the server and not only by the SPA's gate -- the
+    account holds a valid access token, so the API is reachable without the UI.
+    The rule itself lives in :func:`shares.create_share` alongside the ownership
+    check, so a future caller cannot inherit one without the other; this route
+    only chooses the status. 403 rather than 400: the request is well formed and
+    the recipe is the caller's, but a step their account has not completed is
+    missing, and the message names it because the caller *is* the account in
+    question and so there is nothing to conceal.
     """
     recipe = _owned_recipe(db, recipe_id, current_user)
     try:
@@ -174,6 +183,8 @@ def create_recipe_share(
         # Unreachable given ``_owned_recipe``, but the domain layer owns the
         # rule and this keeps the route honest if that ever changes.
         raise _not_found()
+    except shares.HandleNotConfirmed as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

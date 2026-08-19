@@ -116,16 +116,50 @@ test('explains a 429 rate limit plainly (CP-9)', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(/too many|try again/i)
 })
 
-test('recognises a rate limit from the message alone', async () => {
-  // client.js's request() throws a plain Error carrying only the backend's
-  // `detail` text — no `status` — so the message has to be enough on its own.
-  sharedWithMeApi.copyByToken.mockRejectedValue(new Error('Rate limit exceeded'))
+// The three below pin that the status, not the prose, decides. `client.js`
+// attaches `error.status` to everything it throws, so the backend's wording is
+// free to change, be translated, or be replaced by a generic proxy message
+// without any of these outcomes silently degrading to "unknown error".
+
+test('presents a 404 as gone even when the wording is not "not found"', async () => {
+  const gone = new Error('Risorsa non disponibile')
+  gone.status = 404
+  sharedWithMeApi.copyByToken.mockRejectedValue(gone)
+  const user = userEvent.setup()
+
+  renderAt('/shared/tok-123')
+  await user.click(await screen.findByRole('button', { name: /copy to my book/i }))
+
+  expect(await screen.findByText(/no longer available/i)).toBeInTheDocument()
+})
+
+test('presents a 429 as a rate limit even when the wording does not say so', async () => {
+  const limited = new Error('Troppe richieste')
+  limited.status = 429
+  sharedWithMeApi.copyByToken.mockRejectedValue(limited)
   const user = userEvent.setup()
 
   renderAt('/shared/tok-123')
   await user.click(await screen.findByRole('button', { name: /copy to my book/i }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent(/too many|try again/i)
+})
+
+test('does not present a server error as gone just because it says "not found"', async () => {
+  // The misfire prose-matching produces. A 500 mentioning "not found" — a
+  // failed internal lookup, say — would be shown as the calm "this recipe is
+  // gone" message, telling the user to stop trying when they should retry.
+  const broken = new Error('Upstream dependency not found')
+  broken.status = 500
+  sharedWithMeApi.copyByToken.mockRejectedValue(broken)
+  const user = userEvent.setup()
+
+  renderAt('/shared/tok-123')
+  await user.click(await screen.findByRole('button', { name: /copy to my book/i }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent(/upstream dependency/i)
+  expect(alert).not.toHaveTextContent(/no longer available/i)
 })
 
 test('says the link is malformed when the route carries no token', async () => {

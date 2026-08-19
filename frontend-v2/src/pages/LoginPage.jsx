@@ -116,10 +116,16 @@ export default function LoginPage() {
       }
     } catch (err) {
       const message = err.message || 'Something went wrong. Please try again.'
-      // /auth/register answers 409 "That username is taken" for a taken or
-      // reserved handle. Routing it to the field keeps the failure about the
-      // handle and nothing else.
-      if (isRegister && /username/i.test(message)) {
+      // /auth/register answers 409 for a taken or reserved handle — and 409 is
+      // the *only* thing it means, which is why the status decides rather than
+      // the wording. Matching `/username/i` against the message worked by
+      // coincidence: it broke as soon as the text was translated, and it
+      // misfired on any unrelated failure whose message mentioned the word,
+      // marking a field invalid that the user had no way to fix.
+      // Routing it to the field keeps the failure about the handle and nothing
+      // else — in particular it can never be read as a statement about the
+      // email, which the backend keeps deliberately neutral.
+      if (isRegister && err.status === 409) {
         setUsernameError(message)
       } else {
         setError(message)

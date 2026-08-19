@@ -25,13 +25,31 @@ const NEUTRAL_GONE =
 // SH-22 / the 404 contract: revoked, expired, dismissed, and never-existed are
 // one indistinguishable answer, so it is presented calmly rather than as a
 // failure implying the recipe is still there.
+//
+// The status alone decides. `client.js` attaches it to every error it throws,
+// and it is the part of the response the backend has actually promised —
+// unlike the `detail` prose, which is free to be reworded or translated, and
+// which would have made a 500 mentioning "not found" look like a gone recipe.
 function isGone(error) {
-  return error?.status === 404 || /not found/i.test(error?.message || '')
+  return error?.status === 404
 }
 
 // AttributionLine's prop shape is frozen around `source_*`; shared entries carry
 // the same snapshot under `attribution`. Mapped rather than duplicated so the
 // credit renders identically wherever the recipe appears (AT-3 / AT-8).
+//
+// The two shapes were considered for reconciliation and deliberately kept
+// apart. They are not an accident: `RecipeOut.source_*` is a flat mirror of the
+// recipe's own columns, which is what an owner's recipe payload should be,
+// while `PublicRecipe.attribution` is a nested snapshot object because the
+// public page renders it as a *block* that is present or absent as a unit —
+// `blocks.py` drops the attribution block on `attribution is None`, and the
+// Jinja templates read `attribution.recipe_title`. Collapsing either into the
+// other would put `source_` prefixes inside a namespace already called
+// "attribution", or flatten a nullable group into six loose nullable fields and
+// lose the "present as a unit" check the block rendering depends on. The cost
+// of reconciling is two schemas, two templates, and their tests; the cost of
+// not reconciling is the six lines below. The six lines win.
 function asAttributionRecipe(recipe) {
   const a = recipe?.attribution
   if (!a) return null

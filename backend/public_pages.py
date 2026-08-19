@@ -225,14 +225,21 @@ def _absolute_og_image(request: Request, image_url: str | None) -> str | None:
     return public_markup.safe_url(urljoin(base, image_url))
 
 
-@router.get("/s/{token}")
+@router.get("/s/{token}", include_in_schema=False)
 def share_page(
     token: str,
     request: Request,
     db: Session = Depends(get_db),
     current_user: models.User | None = Depends(optional_current_user),
 ):
-    """Render a shared recipe, or refuse in a way that discloses nothing."""
+    """Render a shared recipe, or refuse in a way that discloses nothing.
+
+    ``include_in_schema=False`` (FC-9): ``/openapi.json`` and the ``/docs`` page
+    it feeds are unauthenticated, so listing this route there would publish the
+    shape of the sharing system -- and the fact that a bearer token lives in a
+    URL path -- to any reader. It buys a caller nothing, since the token is the
+    only thing that grants access and no schema can supply one.
+    """
     share = shares.resolve(db, token)
     if share is None:
         return _not_found()

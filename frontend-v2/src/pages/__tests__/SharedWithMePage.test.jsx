@@ -157,6 +157,38 @@ test('presents a 404 on copy as a calm "no longer available", not an error', asy
   expect(await screen.findByText(/no longer available/i)).toBeInTheDocument()
 })
 
+test('presents a 404 as gone even when the wording is not "not found"', async () => {
+  // The status is the contract; the prose is the backend's to reword or
+  // translate. Matching on it made this outcome depend on an English string
+  // nobody had promised to keep.
+  sharedWithMeApi.fetchAll.mockResolvedValue([entry()])
+  const gone = new Error('Risorsa non disponibile')
+  gone.status = 404
+  sharedWithMeApi.copy.mockRejectedValue(gone)
+  const user = userEvent.setup()
+
+  render(<SharedWithMePage />)
+  await user.click(await screen.findByRole('button', { name: /view ribollita/i }))
+  await user.click(await screen.findByRole('button', { name: /copy to my book/i }))
+
+  expect(await screen.findByText(/no longer available/i)).toBeInTheDocument()
+})
+
+test('does not present a server error as gone just because it says "not found"', async () => {
+  sharedWithMeApi.fetchAll.mockResolvedValue([entry()])
+  const broken = new Error('Upstream dependency not found')
+  broken.status = 500
+  sharedWithMeApi.copy.mockRejectedValue(broken)
+  const user = userEvent.setup()
+
+  render(<SharedWithMePage />)
+  await user.click(await screen.findByRole('button', { name: /view ribollita/i }))
+  await user.click(await screen.findByRole('button', { name: /copy to my book/i }))
+
+  expect(await screen.findByText(/upstream dependency/i)).toBeInTheDocument()
+  expect(screen.queryByText(/no longer available/i)).not.toBeInTheDocument()
+})
+
 // --- SWM-3: dismiss ----------------------------------------------------------
 
 test('dismisses an entry and drops it from the list', async () => {

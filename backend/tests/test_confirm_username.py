@@ -252,6 +252,7 @@ def test_the_body_cannot_redirect_the_write_to_another_account(client, db_sessio
                                                                other_user,
                                                                unconfirmed):
     """Identity comes from the token only -- never from the payload."""
+    before = other_user.username_changed_at
     resp = client.post(
         "/auth/username",
         json={"username": "annarossi", "user_id": other_user.id,
@@ -261,7 +262,12 @@ def test_the_body_cannot_redirect_the_write_to_another_account(client, db_sessio
     db_session.refresh(other_user)
     db_session.refresh(unconfirmed)
     assert other_user.username == "other"
-    assert other_user.username_changed_at is None
+    # The write landed on the token's account, not the payload's. Asserted as
+    # "the stamp did not move" rather than "the stamp is NULL": ``other_user``
+    # is created with an explicit handle, which D-7 counts as *chosen* and so
+    # already confirmed, so NULL was never the interesting property -- what
+    # matters is that this request did not touch the row at all.
+    assert other_user.username_changed_at == before
     assert unconfirmed.username == "annarossi"
 
 

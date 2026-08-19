@@ -38,6 +38,14 @@ services:
       - COOKIE_SECURE=${COOKIE_SECURE:-0}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      # The Host headers the app answers to (TrustedHostMiddleware). `*` is safe
+      # for local compose, where nobody is forging headers at your laptop. It is
+      # NOT safe in a deployment: share URLs fall back to the request Host when
+      # PUBLIC_BASE_URL is unset, so a forged Host yields a share link on an
+      # attacker's origin that the sharer then forwards, handing over the token.
+      # Set both of these to real values in any real deploy.
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
     depends_on:
       db:
         condition: service_healthy

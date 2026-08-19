@@ -198,8 +198,14 @@ test('blocks register and flags the field when no handle is given', async () => 
 // The 409 from /auth/register is about the handle. Rendering it as a general
 // form failure would let a user read it as a statement about the email, which
 // the backend deliberately keeps neutral.
+function rejectRegistrationWith(message, status) {
+  const error = new Error(message)
+  if (status !== undefined) error.status = status
+  register.mockRejectedValue(error)
+}
+
 test('attaches a rejected-handle error to the username field', async () => {
-  register.mockRejectedValue(new Error('That username is taken'))
+  rejectRegistrationWith('That username is taken', 409)
   renderPage()
 
   fillRegistration()
@@ -209,8 +215,38 @@ test('attaches a rejected-handle error to the username field', async () => {
   expect(screen.getByLabelText(/username/i)).toHaveAttribute('aria-invalid', 'true')
 })
 
+// The next two pin the *mechanism* the routing uses, because the two available
+// mechanisms disagree on exactly these cases. Matching `/username/i` against
+// the backend's prose works only for as long as the backend keeps saying
+// "username" for a conflict and never says it for anything else — neither of
+// which is a promise anyone made. `error.status` is the contract: 409 means
+// "the handle is unavailable", in every language and after any rewording.
+test('routes a 409 to the username field even when the wording changes', async () => {
+  rejectRegistrationWith('Quel nome utente non è disponibile', 409)
+  renderPage()
+
+  fillRegistration()
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  await screen.findByRole('alert')
+  expect(screen.getByLabelText(/username/i)).toHaveAttribute('aria-invalid', 'true')
+})
+
+test('does not blame the username field for a server error that merely mentions it', async () => {
+  // The misfire prose-matching produces: a 500 whose message happens to
+  // contain the word, marking a field invalid that the user cannot fix.
+  rejectRegistrationWith('Could not save the username column right now', 500)
+  renderPage()
+
+  fillRegistration()
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/could not save/i)
+  expect(screen.getByLabelText(/username/i)).not.toHaveAttribute('aria-invalid')
+})
+
 test('leaves a non-handle registration failure on the form, not on the field', async () => {
-  register.mockRejectedValue(new Error('Registration is temporarily unavailable'))
+  rejectRegistrationWith('Registration is temporarily unavailable', 503)
   renderPage()
 
   fillRegistration()

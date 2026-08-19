@@ -12,9 +12,11 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Uploa
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
+from starlette.datastructures import MutableHeaders
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy import select, func
@@ -191,15 +193,23 @@ def _send_token_email(
 CurrentUser = Annotated[models.User, Depends(auth_users.get_current_user)]
 Db = Annotated[Session, Depends(get_db)]
 
+
+def _csv_env(name: str, default: str = "") -> list[str]:
+    """Read a comma-separated environment variable into a list of entries.
+
+    Blank entries are dropped and each is stripped, so a trailing comma or a
+    space after one in a ``.env`` file cannot become an empty origin or host --
+    which in an allowlist would either match nothing or, worse, be treated as a
+    wildcard by whatever consumes it.
+    """
+    return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
+
 # Restrict CORS to the configured frontend origin(s). ``ALLOWED_ORIGINS`` is a
 # comma-separated list; default to the local dev server. Credentials are only
 # enabled when concrete origins are set (a wildcard + credentials is rejected by
 # browsers and is a security smell).
-_allowed_origins = [
-    origin.strip()
-    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-    if origin.strip()
-]
+_allowed_origins = _csv_env("ALLOWED_ORIGINS", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
@@ -207,6 +217,79 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def allowed_hosts() -> list[str]:
+    """The ``Host`` values this deployment answers to (``ALLOWED_HOSTS``).
+
+    ``Host`` is a *request header*, so it is attacker-controlled, and several
+    things here derive absolute URLs from it when ``PUBLIC_BASE_URL`` is unset
+    -- ``shares.share_url`` most importantly, since a forged host there yields
+    a share link on the attacker's origin that the sharer forwards in good
+    faith, handing over a bearer token. ``shares`` validates the *shape* of the
+    header, which stops injection but not forgery: ``evil.example`` is a
+    perfectly well-formed hostname. Only configuration can answer "is this host
+    mine", which is what this is.
+
+    Comma-separated, whitespace-tolerant, and ``["*"]`` when unset so that
+    local development and the test suite need no configuration -- there is no
+    attacker on a developer's laptop to forge anything. **Set it in every
+    deployment**, alongside ``PUBLIC_BASE_URL``.
+    """
+    return _csv_env("ALLOWED_HOSTS") or ["*"]
+
+
+# Applied after CORS in source order, which means Starlette runs it *first* --
+# a forged Host is rejected with 400 before any handler, and therefore before
+# anything can build a URL from it.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
+
+
+class NoIndexMiddleware:
+    """FC-9 / FC-10: stamp ``X-Robots-Tag: noindex, nofollow`` on every response.
+
+    ``public_pages`` already sets this on the share page, which is the surface
+    carrying user content. This is the *default* underneath it, and it exists
+    because the surfaces that lacked it were the ones nobody thought about:
+    FastAPI's ``/docs``, ``/docs/oauth2-redirect`` and ``/redoc`` are full HTML
+    pages, are served unauthenticated, and enumerate the entire API. An indexed
+    ``/docs`` is a published map of the product to anyone who has never seen it.
+
+    Applied to every response rather than only to HTML ones for two reasons:
+    the header is meaningless-but-harmless on JSON, and a rule with no
+    exceptions is a rule a future route cannot fall out of by being added with
+    a content type nobody predicted. Routes that set their own value keep it --
+    ``public_pages.PAGE_HEADERS`` is more specific and is left to win, which
+    ``setdefault`` is what guarantees.
+
+    Written as raw ASGI rather than ``@app.middleware("http")``. That decorator
+    is ``BaseHTTPMiddleware``, which per request spins up an anyio task group
+    and a pair of memory object streams and then re-pumps every response body
+    chunk through them -- a large amount of machinery for one ``setdefault`` on
+    a header dict, and it would put the ``/static`` mount's streamed
+    ``FileResponse`` bodies through that pump too. Touching only the
+    ``http.response.start`` message leaves bodies, streaming, and background
+    tasks entirely alone.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_with_header(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message).setdefault(
+                    "X-Robots-Tag", "noindex, nofollow"
+                )
+            await send(message)
+
+        await self.app(scope, receive, send_with_header)
+
+
+app.add_middleware(NoIndexMiddleware)
 
 
 @app.get("/", include_in_schema=False)
@@ -240,21 +323,29 @@ def register(
         # UN-4/UN-5: a reserved or taken handle is rejected clearly. Unlike the
         # email, the handle is a *public* identifier, so saying it is taken
         # discloses nothing the availability endpoint (UN-7) does not.
-        raise HTTPException(status_code=409, detail="That username is taken")
+        raise HTTPException(status_code=409, detail=usernames.CONFLICT_MESSAGE)
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
-        user = _create_account(
-            db,
-            email=payload.email,
-            hashed_password=hashed,
-            display_name=payload.display_name,
-            username=payload.username,
-        )
+        try:
+            user = _create_account(
+                db,
+                email=payload.email,
+                hashed_password=hashed,
+                display_name=payload.display_name,
+                username=payload.username,
+            )
+        except crud.UsernameTaken:
+            # UN-2. The availability check above is a *hint*: it and the insert
+            # are two statements, so two concurrent registrations of the same
+            # handle both pass it and ``uq_user_username_lower`` decides. The
+            # loser gets the identical 409 an ordinary conflict produces --
+            # never a 500, and never a hint that it was a race, because the
+            # answer to both is the same: pick another handle.
+            raise HTTPException(status_code=409, detail=usernames.CONFLICT_MESSAGE)
         # UN-5: a local sign-up chooses its own handle, so it counts as
-        # confirmed from the start (D-7) and skips the selection step.
-        if payload.username is not None:
-            user.username_changed_at = user.created_at or datetime.utcnow()
-            db.commit()
+        # confirmed from the start (D-7) and skips the selection step. Stamped
+        # by ``crud.create_user`` itself, which is the only place that knows
+        # whether the handle was chosen or derived.
         _send_verification_email(user.email, user.id)
         user_id = user.id
         handle = user.username

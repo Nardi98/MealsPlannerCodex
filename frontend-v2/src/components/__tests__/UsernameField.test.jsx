@@ -187,7 +187,12 @@ describe('debounced availability checking (UN-5 / UN-7)', () => {
 
 describe('failure handling (UN-7)', () => {
   test('degrades to a soft notice when the rate limit is hit', async () => {
-    checkUsername.mockRejectedValue(new Error('Rate limit exceeded: 30 per 1 minute'))
+    // A 429 as `client.js` actually throws it: the status is what identifies
+    // the outcome, and the field reads that rather than the message text, so
+    // the backend is free to reword or translate it.
+    const limited = new Error('Rate limit exceeded: 30 per 1 minute')
+    limited.status = 429
+    checkUsername.mockRejectedValue(limited)
     renderField()
 
     type('chefanna')

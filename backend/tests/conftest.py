@@ -185,6 +185,48 @@ def auth_client(db_session, user):
 
 
 @pytest.fixture
+def anon(db_session):
+    """A ``TestClient`` on ``db_session`` with nobody logged in.
+
+    The unauthenticated counterpart of :func:`auth_client`, and the fixture
+    every "can a stranger reach this" test needs. Lives here because six files
+    had already hand-rolled the identical three lines, and a shared override
+    that some tests forget to clear is a cross-test contamination bug waiting
+    to happen -- the ``finally`` below is the point of wrapping it at all.
+    """
+    from main import app
+
+    try:
+        yield db_client(db_session)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def get_route_paths(app, *, parameterised: bool = True) -> list[str]:
+    """Every GET path registered on ``app``, sorted and de-duplicated.
+
+    The sweep tests (``test_forward_compat``, ``test_private_unreachable``,
+    ``test_provisional_handle_exposure``) all walk the routing table asking
+    "and what about this one too?", which is the only way to write an assertion
+    that covers routes nobody has added yet. They need the same list, so it is
+    built once here.
+
+    ``parameterised=False`` drops paths containing ``{...}``, for callers that
+    fetch each path as-is rather than substituting ids into it.
+    """
+    paths = set()
+    for route in app.routes:
+        methods = getattr(route, "methods", None) or set()
+        path = getattr(route, "path", "")
+        if not path or "GET" not in methods:
+            continue
+        if not parameterised and "{" in path:
+            continue
+        paths.add(path)
+    return sorted(paths)
+
+
+@pytest.fixture
 def api_client(engine):
     """A ``TestClient`` on the real-engine DB with one logged-in user.
 

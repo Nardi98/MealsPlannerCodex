@@ -28,9 +28,27 @@ MAX_LENGTH = 30
 #: never starting or ending with an underscore, never two in a row.
 _PATTERN = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
 
+#: The single wording for every way a handle can be unavailable: taken,
+#: reserved, or lost in a check-then-insert race. Owned here because three
+#: modules answer with it -- ``main.register``, ``username_routes.confirm_username``
+#: and the race handler behind both -- and a comment saying "keep these in sync"
+#: is not a mechanism. If two of them drifted, the difference between the
+#: messages would itself be an oracle: it would tell a caller *which* kind of
+#: unavailability they hit, and "somebody claimed this a millisecond ago" is
+#: not something they need to know. One constant makes that impossible rather
+#: than merely discouraged.
+#:
+#: "Taken" is deliberately used for reserved handles too. ``GET
+#: /usernames/available`` is the endpoint that exposes the distinction, and it
+#: is rate-limited and about a handle the caller already typed; repeating it
+#: here would hand an authenticated caller a map of the structurally blocked
+#: handle space for no gain, since their next action is the same either way.
+CONFLICT_MESSAGE = "That username is taken"
+
 __all__ = [
     "MIN_LENGTH",
     "MAX_LENGTH",
+    "CONFLICT_MESSAGE",
     "normalise",
     "validate",
     "is_available",
