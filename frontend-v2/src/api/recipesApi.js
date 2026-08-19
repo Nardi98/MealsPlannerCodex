@@ -19,6 +19,18 @@ function normaliseRecipe(recipe) {
     })),
     procedure: recipe.procedure || '',
     favorite_side_ids: recipe.favorite_side_ids || [],
+    // Kept so an edit round-trips the real value. This used to be dropped here
+    // and hardcoded to 1 on the way out, which silently reset every saved
+    // recipe to "Serves 1" — including on the share page (SP-1 / SP-2).
+    servings_default: recipe.servings_default ?? 1,
+    visibility: recipe.visibility ?? 'private',
+    // AT-3 / AT-7: the attribution snapshot renders the permanent credit line,
+    // and `copy_count` is the owner's "copied N times". Read-only — see
+    // serialiseRecipe.
+    copy_count: recipe.copy_count ?? 0,
+    source_author_username: recipe.source_author_username ?? null,
+    source_recipe_title: recipe.source_recipe_title ?? null,
+    copied_at: recipe.copied_at ?? null,
   };
 }
 
@@ -26,7 +38,15 @@ function serialiseRecipe(recipe) {
   return {
     title: recipe.title,
     course: recipe.course || 'main',
-    servings_default: 1,
+    // The real value, not a hardcoded 1 (see normaliseRecipe).
+    servings_default: recipe.servings_default ?? 1,
+    // VIS-2: private unless the caller says otherwise. `public` is rejected by
+    // the backend with 400.
+    visibility: recipe.visibility || 'private',
+    // AT-4: `copy_count` and the attribution snapshot are deliberately absent.
+    // `RecipeIn` has no such fields, so sending them would be misleading noise
+    // that reads as if the copier could edit their own credit line. They are
+    // write-once, set by the copy path alone.
     procedure: recipe.procedure,
     bulk_prep: recipe.hot || false,
     image_url: recipe.image_url || null,
