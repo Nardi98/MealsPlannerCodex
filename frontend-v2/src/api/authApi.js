@@ -17,6 +17,11 @@ export function validatePassword(password) {
   return null;
 }
 
+// The server rejects `u` longer than this with a 422 (`username_routes.py`'s
+// `_MAX_QUERY_LENGTH`). Answering locally keeps a paste-bomb from consuming one
+// of the caller's 30-per-minute checks (UN-7).
+export const USERNAME_QUERY_MAX_LENGTH = 64;
+
 export const authApi = {
   // No auto-login: the account starts unverified and the server emails a
   // verification link. Returns the created user.
@@ -65,6 +70,20 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     }),
+  // UN-7. Unauthenticated GET, rate-limited to 30/minute server-side, so callers
+  // must debounce. Resolves `{ available, reason }`; `reason` is "taken",
+  // "reserved", or a validation message, and null when the handle is free. The
+  // candidate is never logged — it is unvalidated user input.
+  checkUsername: (handle) => {
+    const candidate = (handle || '').trim();
+    if (candidate.length > USERNAME_QUERY_MAX_LENGTH) {
+      return Promise.resolve({
+        available: false,
+        reason: 'Usernames must be at most 30 characters',
+      });
+    }
+    return request(`/usernames/available?u=${encodeURIComponent(candidate)}`);
+  },
   me: () => request('/auth/me'),
   setDefaultPeople: ({ people, startDate, endDate }) =>
     request('/auth/me/default-people', {

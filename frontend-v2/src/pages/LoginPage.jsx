@@ -2,6 +2,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card, Input } from '../components'
 import GoogleSignInButton from '../components/GoogleSignInButton'
+import UsernameField from '../components/UsernameField'
 import { useAuth } from '../auth/AuthContext'
 import { validatePassword } from '../api/authApi'
 
@@ -64,11 +65,15 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState('')
   const [confirmPassword, setConfirmPassword] = React.useState('')
   const [displayName, setDisplayName] = React.useState('')
-  // UN-5: the handle is chosen here, on the existing registration form. Phase
-  // 3C adds the debounced availability check (UN-7) and the full copy; this is
-  // the minimum that makes the field exist and reach the API.
+  // UN-5: the handle is chosen here, on the existing registration form.
+  // `UsernameField` owns the debounced availability check (UN-7); this page only
+  // owns the value and whatever the submit itself rejected.
   const [username, setUsername] = React.useState('')
   const [error, setError] = React.useState('')
+  // Kept apart from `error` so a 409 lands on the field rather than reading as a
+  // statement about the form — and so it can never be mistaken for a signal
+  // about the email, which the server keeps deliberately neutral.
+  const [usernameError, setUsernameError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [registeredEmail, setRegisteredEmail] = React.useState('')
 
@@ -77,7 +82,14 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setUsernameError('')
     if (isRegister) {
+      // `UsernameField` is a controlled component, not a bare `required` input,
+      // so the empty case is checked here rather than by the browser.
+      if (!username.trim()) {
+        setUsernameError('Choose a username.')
+        return
+      }
       const pwError = validatePassword(password)
       if (pwError) {
         setError(pwError)
@@ -103,7 +115,15 @@ export default function LoginPage() {
         await login({ email, password })
       }
     } catch (err) {
-      setError(err.message || 'Something went wrong. Please try again.')
+      const message = err.message || 'Something went wrong. Please try again.'
+      // /auth/register answers 409 "That username is taken" for a taken or
+      // reserved handle. Routing it to the field keeps the failure about the
+      // handle and nothing else.
+      if (isRegister && /username/i.test(message)) {
+        setUsernameError(message)
+      } else {
+        setError(message)
+      }
     } finally {
       setBusy(false)
     }
@@ -150,20 +170,11 @@ export default function LoginPage() {
           </label>
         )}
         {isRegister && (
-          <label className="flex flex-col gap-1">
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Username</span>
-            <Input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
-              required
-            />
-            <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>
-              3–30 lowercase letters, numbers, or underscores. Shown on recipes
-              you share.
-            </span>
-          </label>
+          <UsernameField
+            value={username}
+            onChange={setUsername}
+            error={usernameError}
+          />
         )}
         <label className="flex flex-col gap-1">
           <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Email</span>
@@ -237,6 +248,7 @@ export default function LoginPage() {
           onClick={() => {
             setMode(isRegister ? 'login' : 'register')
             setError('')
+            setUsernameError('')
             setConfirmPassword('')
           }}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--c-a2)' }}

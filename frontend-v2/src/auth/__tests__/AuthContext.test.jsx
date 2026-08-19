@@ -38,13 +38,16 @@ function Probe() {
 }
 
 function Controls() {
-  const { login, register, logout, loginWithGoogle } = useAuth()
+  const { login, register, logout, loginWithGoogle, refreshUser } = useAuth()
   return (
     <div>
       <button onClick={() => login({ email: 'a@b.c', password: 'pw' })}>login</button>
       <button onClick={() => register({ email: 'n@b.c', password: 'pw' })}>register</button>
       <button onClick={() => logout()}>logout</button>
       <button onClick={() => loginWithGoogle('google-id-token')}>google</button>
+      {/* Swallowed here only so a deliberate rejection in one test does not
+          surface as an unhandled promise; the assertions cover the outcome. */}
+      <button onClick={() => refreshUser().catch(() => {})}>refresh-user</button>
     </div>
   )
 }
@@ -120,6 +123,43 @@ test('logout calls the server, clears the user and the token', async () => {
   expect(await screen.findByText('anonymous')).toBeInTheDocument()
   expect(authApi.logout).toHaveBeenCalledTimes(1)
   expect(client.getToken()).toBe(null)
+})
+
+// D-7: the handle gate keys off `username_confirmed` from /auth/me, so once the
+// handle is confirmed the app needs a way to re-read the account without a full
+// reload — otherwise the gate would never let go.
+test('refreshUser re-reads the account and replaces the cached user', async () => {
+  authApi.refresh.mockResolvedValue({ access_token: 'restored-jwt' })
+  authApi.me.mockResolvedValue({ id: 1, email: 'hydrated@b.c', username_confirmed: false })
+
+  renderAuth()
+  await screen.findByText('hydrated@b.c')
+
+  authApi.me.mockResolvedValue({ id: 1, email: 'confirmed@b.c', username_confirmed: true })
+  await act(async () => {
+    screen.getByText('refresh-user').click()
+  })
+
+  expect(await screen.findByText('confirmed@b.c')).toBeInTheDocument()
+  expect(authApi.me).toHaveBeenCalledTimes(2)
+})
+
+// A transient /auth/me failure must not silently drop the session; the caller
+// gets the rejection and the existing user stays put.
+test('refreshUser leaves the session alone when the reload fails', async () => {
+  authApi.refresh.mockResolvedValue({ access_token: 'restored-jwt' })
+  authApi.me.mockResolvedValue({ id: 1, email: 'hydrated@b.c' })
+
+  renderAuth()
+  await screen.findByText('hydrated@b.c')
+
+  authApi.me.mockRejectedValue(new Error('boom'))
+  await act(async () => {
+    screen.getByText('refresh-user').click()
+  })
+
+  expect(await screen.findByText('hydrated@b.c')).toBeInTheDocument()
+  expect(client.getToken()).toBe('restored-jwt')
 })
 
 test('register creates the account but does NOT log in', async () => {
