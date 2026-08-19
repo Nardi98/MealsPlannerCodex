@@ -10,7 +10,13 @@ import { Badge } from '../components/Badge'
 import { Card } from '../components/Card'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
-import { FavoriteSidesSelect, ImportRecipeModal, NewRecipeModal } from '../components'
+import {
+  AttributionLine,
+  FavoriteSidesSelect,
+  ImportRecipeModal,
+  NewRecipeModal,
+  ShareRecipeModal,
+} from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -71,6 +77,12 @@ export default function RecipesPage() {
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
+  const [sharing, setSharing] = React.useState(false)
+  // The share dialog belongs to whichever recipe is open; closing or switching
+  // the detail modal must not carry it over to the next one.
+  React.useEffect(() => {
+    setSharing(false)
+  }, [opened])
   const [search, setSearch] = React.useState('')
   const [showFilters, setShowFilters] = React.useState(false)
   const [tags, setTags] = React.useState([])
@@ -376,6 +388,8 @@ export default function RecipesPage() {
               />
               {openRecipe.course}
             </div>
+            {/* AT-3/AT-7: permanent credit when this recipe was copied. */}
+            <AttributionLine recipe={openRecipe} />
             {(openRecipe.hot || (openRecipe.tags || []).length > 0) && (
               <div className="flex flex-wrap gap-1.5">
                 {openRecipe.hot && (
@@ -436,6 +450,10 @@ export default function RecipesPage() {
               </div>
             )}
             <div className="flex justify-end gap-2">
+              {/* SH-12: the share control lives in the existing detail modal. */}
+              <Button size="sm" variant="secondary" onClick={() => setSharing(true)}>
+                Share
+              </Button>
               <Button
                 size="sm"
                 variant="accent"
@@ -453,6 +471,14 @@ export default function RecipesPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {openRecipe && (
+        <ShareRecipeModal
+          recipe={openRecipe}
+          open={sharing}
+          onClose={() => setSharing(false)}
+        />
       )}
 
       {showModal && (
