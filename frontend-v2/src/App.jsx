@@ -6,6 +6,7 @@ import {
   ShoppingCartIcon,
   BeakerIcon,
   ArrowUpTrayIcon,
+  InboxArrowDownIcon,
 } from '@heroicons/react/24/outline'
 import { Input, ProfileMenu } from './components'
 import RecipesPage from './pages/RecipesPage'
@@ -17,11 +18,15 @@ import LoginPage from './pages/LoginPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import SharedWithMePage from './pages/SharedWithMePage'
+import SharedRecipePage from './pages/SharedRecipePage'
+import ChooseHandlePage from './pages/ChooseHandlePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
   { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', match: (p) => p === '/meal-plan' },
+  { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', match: (p) => p === '/shared-with-me' },
   { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', match: (p) => p === '/ingredients' },
   { label: 'Shopping List', path: '/shopping-list', Icon: ShoppingCartIcon, color: 'var(--cat-teal)', match: (p) => p === '/shopping-list' },
   { label: 'Import/Export', path: '/import-export', Icon: ArrowUpTrayIcon, color: 'var(--cat-plum)', match: (p) => p === '/import-export' },
@@ -154,6 +159,8 @@ function Shell() {
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
               <Route path="/import-export" element={<ImportExportPage />} />
+              <Route path="/shared-with-me" element={<SharedWithMePage />} />
+              <Route path="/shared/:token" element={<SharedRecipePage />} />
             </Routes>
           </main>
         </div>
@@ -187,6 +194,16 @@ function Gate() {
         <Route path="*" element={<LoginPage />} />
       </Routes>
     )
+  }
+
+  // UN-11 / D-7. A handle the user has never confirmed is system-assigned from
+  // the email local part (anna.rossi@… → anna_rossi), so it partially discloses
+  // the address. Nothing may render until it is confirmed. This is deliberately
+  // *not* a <Route>: no <Routes> element exists on this branch, so there is no
+  // path — and no in-app navigation — that can reach the shell around it.
+  // It fails closed: anything other than an explicit `true` blocks.
+  if (user.username_confirmed !== true) {
+    return <ChooseHandlePage />
   }
 
   return <Shell />
