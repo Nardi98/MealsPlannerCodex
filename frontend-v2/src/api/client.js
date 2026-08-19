@@ -101,6 +101,9 @@ async function request(path, options = {}, allowRefresh = true) {
         ? data.detail
         : text || `Request failed with status ${response.status}`;
     const error = new Error(message);
+    // Callers that must react to a specific status (e.g. wording a 429 rate
+    // limit calmly rather than as a generic failure) need it off the error.
+    error.status = response.status;
     if (data) error.data = data;
     throw error;
   }

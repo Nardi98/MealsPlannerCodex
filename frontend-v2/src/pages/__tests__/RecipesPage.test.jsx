@@ -310,3 +310,79 @@ test('deletes a recipe from the detail modal', async () => {
   await waitFor(() => expect(screen.queryByText('Risotto')).toBeNull())
   expect(recipesApi.delete).toHaveBeenCalledWith(1)
 })
+
+// SH-12: the share control must be reachable from the existing recipe modal.
+test('opens the share dialog from the recipe detail modal', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  fireEvent.click(await screen.findByRole('button', { name: /^share$/i }))
+
+  expect(
+    await screen.findByText(/Anyone with the link can open this recipe/i)
+  ).toBeInTheDocument()
+})
+
+// Reopening a recipe must not resurrect the previous share dialog.
+test('closing the detail modal also drops the share dialog', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  fireEvent.click(await screen.findByRole('button', { name: /^share$/i }))
+  await screen.findByText(/Anyone with the link can open this recipe/i)
+
+  fireEvent.click(screen.getAllByLabelText('Close')[0])
+  fireEvent.click(await screen.findByText('Risotto'))
+
+  await screen.findByText('Ingredients')
+  expect(screen.queryByText(/Anyone with the link can open this recipe/i)).toBeNull()
+})
+
+// AT-3/AT-7: a copied recipe credits its original author in the detail modal.
+test('shows the attribution line for a copied recipe', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Risotto',
+      course: 'main',
+      tags: [],
+      ingredients: [],
+      procedure: '',
+      source_author_username: 'nonna',
+      source_recipe_title: 'Risotto alla Milanese',
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+
+  expect(
+    await screen.findByText('Adapted from Risotto alla Milanese by @nonna')
+  ).toBeInTheDocument()
+})
+
+test('shows no attribution line for an original recipe', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  await screen.findByText('Ingredients')
+
+  expect(screen.queryByText(/^Adapted from/)).toBeNull()
+})
