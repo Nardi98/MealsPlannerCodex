@@ -14,8 +14,15 @@ def test_the_three_domain_routers_are_included():
 
     for module in (username_routes, share_routes, public_pages):
         assert module.router is not None
-        # Phase 0 ships them empty on purpose.
-        assert module.router.routes == []
+
+    # Phase 0 shipped these two empty; their phases fill them.
+    assert share_routes.router.routes == []
+    assert public_pages.router.routes == []
+    # Phase 1A filled the username router; its routes are asserted in
+    # ``test_username_routes.py``.
+    assert {r.path for r in username_routes.router.routes} == {
+        "/usernames/available"
+    }
 
     # Including an empty router is a no-op at the route table, so assert the
     # modules are the ones ``main`` imported rather than counting routes.
