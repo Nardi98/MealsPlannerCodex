@@ -19,14 +19,16 @@ import { authApi } from '../api/authApi'
  * off. Hence the field starts empty, nothing here reads `user.username` or
  * `user.email`, and failure messages are server text about the *handle* only.
  *
- * KNOWN GAP — the confirming endpoint does not exist. UN-8/UN-9 (changing a
- * handle) are deferred to Part 2, so no route sets `username` after
- * registration; `POST /auth/username` is explicitly not built (see
- * `backend/username_routes.py`). Everything up to the submit works; the submit
- * itself calls `authApi.confirmUsername`, which is deliberately absent rather
- * than invented. Until a backend route ships, a Google user reaching this page
- * is told plainly that the step cannot be completed instead of being shown a
- * spinner that never resolves.
+ * Submitting calls `authApi.confirmUsername` → `POST /auth/username`, which is
+ * **confirm-once**: it stamps `username_changed_at`, which is what
+ * `username_confirmed` derives from and therefore what releases the gate. A 403
+ * means the handle was already confirmed — *changing* a handle (UN-8/UN-9) is
+ * still deferred to Part 2, so this route is the only writer and it writes once.
+ *
+ * The `typeof confirm !== 'function'` guard below is kept deliberately: it is
+ * what turned a permanently-trapped Google sign-up into a legible message while
+ * the endpoint was missing, and it costs one comparison to stay safe if a build
+ * ever ships a client ahead of the server.
  */
 export function ChooseHandlePage() {
   const { refreshUser } = useAuth()

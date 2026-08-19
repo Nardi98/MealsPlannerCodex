@@ -84,6 +84,16 @@ export const authApi = {
     }
     return request(`/usernames/available?u=${encodeURIComponent(candidate)}`);
   },
+  // D-7. Confirm-once: sets `username` and stamps `username_changed_at`, which
+  // is what `username_confirmed` derives from and therefore what releases the
+  // ChooseHandlePage gate. Resolves the updated account (same shape as `me`).
+  // 403 means the handle was already confirmed — renaming is Part 2 (UN-8/UN-9);
+  // 409 means taken or reserved, one body for both.
+  confirmUsername: (handle) =>
+    request('/auth/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: (handle || '').trim() }),
+    }),
   me: () => request('/auth/me'),
   setDefaultPeople: ({ people, startDate, endDate }) =>
     request('/auth/me/default-people', {
