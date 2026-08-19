@@ -56,6 +56,17 @@ export function AuthProvider({ children }) {
     return u
   }, [])
 
+  // Re-reads /auth/me on the current token. The handle gate (D-7) keys off
+  // `username_confirmed`, so after the handle is confirmed something has to pull
+  // the fresh account or the gate would hold forever. A failure is re-thrown
+  // rather than swallowed: a transient /auth/me error must not look like a
+  // logout, and `client.request` already tears the session down on a real 401.
+  const refreshUser = React.useCallback(async () => {
+    const u = await authApi.me()
+    setUser(u)
+    return u
+  }, [])
+
   const login = React.useCallback(
     async (credentials) => startSession(await authApi.login(credentials)),
     [startSession],
@@ -76,8 +87,8 @@ export function AuthProvider({ children }) {
   )
 
   const value = React.useMemo(
-    () => ({ user, loading, login, register, logout, loginWithGoogle }),
-    [user, loading, login, register, logout, loginWithGoogle],
+    () => ({ user, loading, login, register, logout, loginWithGoogle, refreshUser }),
+    [user, loading, login, register, logout, loginWithGoogle, refreshUser],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

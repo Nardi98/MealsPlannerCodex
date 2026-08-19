@@ -3,7 +3,7 @@
  */
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import LoginPage from '../LoginPage'
 
@@ -11,9 +11,21 @@ const login = vi.fn()
 const register = vi.fn()
 const loginWithGoogle = vi.fn()
 
+const checkUsername = vi.fn()
+
 vi.mock('../../auth/AuthContext', () => ({
   useAuth: () => ({ login, register, loginWithGoogle }),
 }))
+
+// Only the network call is faked; `validatePassword` stays real so the password
+// policy tests below keep exercising the shipped rules.
+vi.mock('../../api/authApi', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    authApi: { ...actual.authApi, checkUsername: (...args) => checkUsername(...args) },
+  }
+})
 
 // The real button talks to Google's SDK; here we only care that the page hands
 // a returned credential to the auth context.
@@ -32,6 +44,10 @@ function renderPage() {
     </MemoryRouter>
   )
 }
+
+beforeEach(() => {
+  checkUsername.mockResolvedValue({ available: true, reason: null })
+})
 
 afterEach(() => {
   cleanup()
@@ -145,6 +161,63 @@ test('shows a check-your-email screen after registering', async () => {
 
   expect(await screen.findByText(/check your email/i)).toBeInTheDocument()
   expect(screen.getByText(/n@b\.c/)).toBeInTheDocument()
+})
+
+// UN-5/UN-7: the registration form checks the handle as the user types, through
+// the shared field rather than a second implementation.
+test('checks the typed handle against the server while registering', async () => {
+  renderPage()
+
+  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'ChefAnna' } })
+
+  await waitFor(() => expect(checkUsername).toHaveBeenCalledWith('chefanna'))
+  expect(await screen.findByRole('status')).toHaveTextContent(/available/i)
+})
+
+test('tells the user inline when the typed handle is taken', async () => {
+  checkUsername.mockResolvedValue({ available: false, reason: 'taken' })
+  renderPage()
+
+  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: 'chefanna' } })
+
+  expect(await screen.findByRole('status')).toHaveTextContent(/already taken/i)
+})
+
+test('blocks register and flags the field when no handle is given', async () => {
+  renderPage()
+
+  fillRegistration({ username: '   ' })
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/username/i)
+  expect(register).not.toHaveBeenCalled()
+})
+
+// The 409 from /auth/register is about the handle. Rendering it as a general
+// form failure would let a user read it as a statement about the email, which
+// the backend deliberately keeps neutral.
+test('attaches a rejected-handle error to the username field', async () => {
+  register.mockRejectedValue(new Error('That username is taken'))
+  renderPage()
+
+  fillRegistration()
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/that username is taken/i)
+  expect(screen.getByLabelText(/username/i)).toHaveAttribute('aria-invalid', 'true')
+})
+
+test('leaves a non-handle registration failure on the form, not on the field', async () => {
+  register.mockRejectedValue(new Error('Registration is temporarily unavailable'))
+  renderPage()
+
+  fillRegistration()
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent(/temporarily unavailable/i)
+  expect(screen.getByLabelText(/username/i)).not.toHaveAttribute('aria-invalid')
 })
 
 test('shows an error message when login fails', async () => {
