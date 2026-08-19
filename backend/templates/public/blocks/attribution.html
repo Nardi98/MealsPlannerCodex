@@ -1,0 +1,7 @@
+{# AT-1: permanent credit when the shared recipe is itself a copy.
+   ``build_blocks`` drops this block entirely when there is nothing to credit. #}
+<p class="pub-attribution">
+{{ t('adapted_from',
+      title=block.data.attribution.recipe_title,
+      author=block.data.attribution.author_username) }}
+</p>

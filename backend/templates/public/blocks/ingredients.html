@@ -1,0 +1,27 @@
+{# SP-1 ingredients, plus the SP-2 servings control.
+
+   The control is a plain GET form: it re-renders server-side, so the page
+   scales with JavaScript disabled. It is the whole feature, not a fallback. #}
+<section class="pub-section pub-ingredients">
+<h2 class="pub-section__title">{{ t('ingredients') }}</h2>
+<form class="pub-servings" method="get" action="">
+<label class="pub-servings__label" for="pub-servings">{{ t('servings') }}</label>
+<input class="pub-servings__input" id="pub-servings" name="servings" type="number"
+       inputmode="numeric" min="1" max="99" step="1" value="{{ block.data.servings }}">
+<button class="pub-btn pub-btn--quiet" type="submit">{{ t('update_servings') }}</button>
+</form>
+{% if block.data.ingredients %}
+<ul class="pub-list">
+{% for line in block.data.ingredients %}
+<li class="pub-list__item">
+<span class="pub-list__name">{{ line.name }}</span>
+{% if line.quantity is not none %}
+<span class="pub-list__amount">{{ line.quantity|quantity }}{% if line.unit %}&nbsp;{{ line.unit }}{% endif %}</span>
+{% endif %}
+</li>
+{% endfor %}
+</ul>
+{% else %}
+<p class="pub-empty">{{ t('no_ingredients') }}</p>
+{% endif %}
+</section>

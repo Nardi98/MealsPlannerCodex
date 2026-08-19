@@ -1,0 +1,25 @@
+{# SP-1 hero: image, title, author name and handle. #}
+<header class="pub-hero">
+{% if block.data.image_url|safe_url %}
+<img class="pub-hero__image"
+     src="{{ block.data.image_url|safe_url }}"
+     alt="{{ t('recipe_image_alt', title=block.data.title) }}">
+{% endif %}
+<p class="pub-eyebrow">{{ t('shared_recipe') }}</p>
+<h1 class="pub-hero__title">{{ block.data.title }}</h1>
+<p class="pub-hero__byline">
+{{ t('by_author', author=block.data.author_display_name) }}
+<span class="pub-handle">&#64;{{ block.data.author_username }}</span>
+</p>
+<p class="pub-hero__meta">
+<span class="pub-pill">{{ course_label(lang, block.data.course) }}</span>
+<span class="pub-pill">{{ t('servings_for', count=block.data.servings) }}</span>
+</p>
+{% if block.data.tags %}
+<ul class="pub-tags">
+{% for tag in block.data.tags %}
+<li class="pub-tag">{{ tag }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+</header>

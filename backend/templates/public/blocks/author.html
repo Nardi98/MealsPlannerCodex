@@ -1,0 +1,8 @@
+{# SP-1 author card. Name and handle only: PRV-3 forbids the email, the numeric
+   id, and any other recipe belonging to the same owner. There is deliberately
+   no link to a profile -- Part 1 creates no indexable URL anywhere (FC-10). #}
+<aside class="pub-author">
+<h2 class="pub-section__title">{{ t('about_author') }}</h2>
+<p class="pub-author__name">{{ block.data.author_display_name }}</p>
+<p class="pub-author__handle">&#64;{{ block.data.author_username }}</p>
+</aside>
