@@ -9,8 +9,11 @@ from datetime import date, datetime, timezone
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -20,8 +23,13 @@ from sqlalchemy.orm import Session, selectinload
 import crud
 import mailer
 import models
+import public_pages
+import ratelimit
 import schemas
+import share_routes
 import storage
+import username_routes
+import usernames
 from mealplanner import planner
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
 from database import SessionLocal, engine, get_db
@@ -31,19 +39,33 @@ import auth_users
 # Ensure database tables exist on startup
 models.Base.metadata.create_all(bind=engine)
 
-# Backfill the curated system tags for accounts that predate per-user tagging.
-# New accounts get their own set at registration (see ``_create_account``), so
-# this only has work to do for pre-existing users and is a no-op once they are
-# all caught up.
-with SessionLocal() as _session:
-    _seeded = set(
-        _session.execute(
+
+def _bootstrap(session: Session) -> None:
+    """Idempotent startup data: system tags per account, reserved handles.
+
+    A function rather than a bare module-level block so the behaviour is
+    reachable from a test; ``main`` still runs it once at import.
+    """
+    # Backfill the curated system tags for accounts that predate per-user
+    # tagging. New accounts get their own set at registration (see
+    # ``_create_account``), so this only has work to do for pre-existing users
+    # and is a no-op once they are all caught up.
+    seeded = set(
+        session.execute(
             select(models.Tag.user_id).where(models.Tag.is_system.is_(True)).distinct()
         ).scalars()
     )
-    for _user_id in _session.execute(select(models.User.id)).scalars():
-        if _user_id not in _seeded:
-            seed_system_tags(_session, _user_id)
+    for user_id in session.execute(select(models.User.id)).scalars():
+        if user_id not in seeded:
+            seed_system_tags(session, user_id)
+    # UN-4: the reserved list must be in place before the first registration,
+    # or the first person to sign up could claim ``admin``.
+    usernames.seed_reserved(session)
+    session.commit()
+
+
+with SessionLocal() as _session:
+    _bootstrap(_session)
 
 app = FastAPI()
 
@@ -59,14 +81,55 @@ limiter = Limiter(
 )
 app.state.limiter = limiter
 
+# The second, per-user limiter for the sharing endpoints (D-8). Registered on
+# the same app so slowapi's middleware finds it, but kept as its own instance so
+# the ``/auth/*`` behaviour above is unchanged. Phase 1/2 routers decorate with
+# ``ratelimit.limiter.limit(...)``.
+app.state.share_limiter = ratelimit.limiter
+
+app.include_router(username_routes.router)
+app.include_router(share_routes.router)
+app.include_router(public_pages.router)
+
+# D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
+# without authentication. ``static`` is on the UN-4 reserved list so no username
+# can ever shadow this path.
+app.mount(
+    "/static",
+    StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")),
+    name="static",
+)
+
 
 @app.exception_handler(RateLimitExceeded)
 def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> Response:
     return Response("Too Many Requests", status_code=429)
 
 
+@app.exception_handler(RequestValidationError)
+def _validation_handler(request: Request, exc: RequestValidationError) -> Response:
+    """Return VIS-5's rejection as a 400 rather than Pydantic's generic 422.
+
+    The requirement names the status and the message, and a client asking for a
+    capability that does not exist yet deserves that answer rather than a field
+    error. Every other validation failure keeps FastAPI's normal 422 shape.
+    """
+    for error in exc.errors():
+        if schemas.PUBLIC_VISIBILITY_MESSAGE in str(error.get("msg", "")):
+            return JSONResponse(
+                status_code=400,
+                content={"detail": schemas.PUBLIC_VISIBILITY_MESSAGE},
+            )
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+
+
 # Configuration for the auth flows read at request time.
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+# Q-1: the origin share URLs are built against. Share links are forwarded and
+# persist in chat history, so the origin must be stable and configured rather
+# than inferred. Empty means "fall back to the request base URL", which is
+# correct in dev and wrong in production -- set it there.
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/auth"
@@ -171,6 +234,13 @@ def register(
     password is hashed on every path so both branches cost the same time.
     """
     hashed = auth_users.hash_password(payload.password)
+    if payload.username is not None and not usernames.is_available(
+        db, payload.username
+    ):
+        # UN-4/UN-5: a reserved or taken handle is rejected clearly. Unlike the
+        # email, the handle is a *public* identifier, so saying it is taken
+        # discloses nothing the availability endpoint (UN-7) does not.
+        raise HTTPException(status_code=409, detail="That username is taken")
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
         user = _create_account(
@@ -178,16 +248,31 @@ def register(
             email=payload.email,
             hashed_password=hashed,
             display_name=payload.display_name,
+            username=payload.username,
         )
+        # UN-5: a local sign-up chooses its own handle, so it counts as
+        # confirmed from the start (D-7) and skips the selection step.
+        if payload.username is not None:
+            user.username_changed_at = user.created_at or datetime.utcnow()
+            db.commit()
         _send_verification_email(user.email, user.id)
         user_id = user.id
+        handle = user.username
+        confirmed = user.username_confirmed
     else:
-        # Neutral path: never confirm the address exists, never resend.
+        # Neutral path: never confirm the address exists, never resend. The
+        # handle echoed back is the submitted one, not the existing account's:
+        # returning the real handle would turn this endpoint into the email
+        # enumeration oracle the neutral response exists to prevent.
         user_id = existing.id
+        handle = usernames.normalise(payload.username) or ""
+        confirmed = payload.username is not None
 
     return schemas.UserOut(
         id=user_id,
         email=models.normalize_email(payload.email),
+        username=handle,
+        username_confirmed=confirmed,
         display_name=payload.display_name,
         auth_provider="local",
         default_people=models.DEFAULT_PEOPLE,
@@ -204,12 +289,17 @@ def _create_account(
     auth_provider: str = "local",
     google_sub: str | None = None,
     email_verified: bool = False,
+    username: str | None = None,
 ) -> models.User:
     """Create a user and give it the starter data a fresh account needs.
 
     New accounts start with their own copy of the curated system tags and the
     starter ingredient library, so tagging and recipe entry work out of the box
     without leaking another user's data.
+
+    ``username=None`` leaves ``crud.create_user`` to derive a provisional handle
+    and leaves ``username_changed_at`` NULL, which is how a Google sign-up ends
+    up in the "unconfirmed handle" state that forces selection (D-7, UN-6).
     """
     user = crud.create_user(
         db,
@@ -219,6 +309,7 @@ def _create_account(
         auth_provider=auth_provider,
         google_sub=google_sub,
         email_verified=email_verified,
+        username=username,
     )
     seed_system_tags(db, user.id)
     seed_system_ingredients(db, user.id)
@@ -511,6 +602,11 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
         "procedure": payload.procedure,
         "bulk_prep": payload.bulk_prep,
         "image_url": payload.image_url,
+        # ``RecipeIn`` has already rejected ``public`` (VIS-5), so anything
+        # reaching here is ``private`` or ``unlisted``. Note the attribution
+        # snapshot is deliberately absent: it is not a client-writable field
+        # (AT-4).
+        "visibility": payload.visibility,
         "tags": tags,
         "ingredients": ingredients,
         "favorite_sides": _resolve_favorite_sides(payload, db, user_id),
