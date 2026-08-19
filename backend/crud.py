@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
+import usernames
 from database import SessionLocal, Base
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from scoping import owned as _owned, scope as _scope
@@ -22,6 +23,7 @@ from models import (
     Meal,
     MealSide,
     Recipe,
+    RecipeShare,
     RefreshToken,
     Tag,
     RecipeIngredient,
@@ -56,6 +58,7 @@ __all__ = [
     "merge_ingredients",
     "update_recipe",
     "delete_recipe",
+    "revoke_shares_for_recipe",
     "delete_ingredient",
     "set_meal_plan",
     "get_plan",
@@ -78,6 +81,36 @@ __all__ = [
 ]
 
 
+def _derive_username(session: Session, email: str) -> str:
+    """Derive a free, UN-3-conforming handle from ``email``'s local part.
+
+    Sanitising rather than rejecting: this runs on paths where the caller has no
+    handle to offer (Google sign-in, seed scripts, the whole existing test
+    suite), so it must always succeed. ``anna.rossi@x`` becomes ``anna_rossi``;
+    a collision, a reserved name, or a too-short stem gets a numeric suffix.
+
+    The suffix loop is bounded and the result is still checked by
+    ``uq_user_username_lower`` on insert -- this is best-effort disambiguation,
+    not the uniqueness guarantee.
+    """
+    local = normalize_email(email).split("@", 1)[0]
+    # Collapse every run of non-conforming characters to a single underscore,
+    # then trim the underscores UN-3 forbids at the edges.
+    stem = re.sub(r"[^a-z0-9]+", "_", local).strip("_")
+    stem = re.sub(r"_+", "_", stem)[: usernames.MAX_LENGTH]
+    if len(stem) < usernames.MIN_LENGTH:
+        # ``jo@x`` and ``a.b@x`` both need padding to reach three characters.
+        stem = (stem + "user")[: usernames.MAX_LENGTH]
+
+    candidate = stem
+    suffix = 1
+    while not usernames.is_available(session, candidate):
+        suffix += 1
+        tail = str(suffix)
+        candidate = stem[: usernames.MAX_LENGTH - len(tail)] + tail
+    return candidate
+
+
 def create_user(
     session: Session,
     *,
@@ -87,11 +120,26 @@ def create_user(
     auth_provider: str = "local",
     google_sub: Optional[str] = None,
     email_verified: bool = False,
+    username: Optional[str] = None,
 ) -> User:
-    """Create and persist a :class:`~models.User`."""
+    """Create and persist a :class:`~models.User`.
+
+    ``username`` is non-null on the model (UN-1), but most callers -- the seed
+    scripts, the Google sign-in path, and every existing test -- have no handle
+    to offer. When it is ``None`` one is derived from the email local part and
+    ``username_changed_at`` is left ``NULL``, which is precisely the
+    "system-assigned, unconfirmed" state that forces the account through
+    handle selection before it reaches the app (D-7).
+    """
+    handle = (
+        usernames.normalise(username)
+        if username is not None
+        else _derive_username(session, email)
+    )
     user = User(
         # ``User`` canonicalises the address itself, so no folding is needed here.
         email=email,
+        username=handle,
         hashed_password=hashed_password,
         display_name=display_name,
         auth_provider=auth_provider,
@@ -436,9 +484,35 @@ def delete_recipe(
     if recipe is None:
         return False
 
+    # SH-25. The rows would cascade away with the recipe anyway, but stamping
+    # them first means every deletion path -- route, cascade, or script --
+    # leaves an explicit revocation rather than relying on the absence of a row,
+    # and any share resolved concurrently in this transaction sees it revoked.
+    revoke_shares_for_recipe(session, recipe_id)
     session.delete(recipe)
     session.commit()
     return True
+
+
+def revoke_shares_for_recipe(
+    session: Session, recipe_id: int, *, at: datetime | None = None
+) -> int:
+    """Revoke every still-active share on ``recipe_id``. Returns the count.
+
+    Already-revoked shares keep their original timestamp: the stamp records when
+    access was withdrawn, and overwriting it would falsify that.
+    """
+    now = at or datetime.utcnow()
+    shares = session.execute(
+        select(RecipeShare).where(
+            RecipeShare.recipe_id == recipe_id,
+            RecipeShare.revoked_at.is_(None),
+        )
+    ).scalars().all()
+    for share in shares:
+        share.revoked_at = now
+    session.flush()
+    return len(shares)
 
 
 def get_or_create_tag(

@@ -13,6 +13,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     CheckConstraint,
     JSON,
@@ -105,6 +106,55 @@ def _owner_fk_column(*, index: bool = True) -> Column:
     return Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=index)
 
 
+#: The three visibility states a recipe can hold (VIS-1). All three are defined
+#: in this release; ``public`` is deliberately unreachable (VIS-5), so Part 2
+#: removes a guard rather than migrating a column (FC-2).
+VISIBILITY_VALUES: tuple[str, ...] = ("private", "unlisted", "public")
+
+#: How a share grants access (SH-4). ``link`` is bearer access for anyone
+#: holding the URL; ``person`` additionally requires the named recipient.
+SHARE_MODES: tuple[str, ...] = ("link", "person")
+
+#: Handles nobody may claim (UN-4). Every current and planned root route segment
+#: is here -- a user called ``s`` or ``static`` would shadow the share page or
+#: the public stylesheet the moment Part 2 adds ``/@{username}`` -- plus the
+#: role names an impersonator would reach for.
+RESERVED_USERNAMES: tuple[str, ...] = (
+    # Route segments, current and planned.
+    "r",
+    "s",
+    "api",
+    "static",
+    "assets",
+    "auth",
+    "recipes",
+    "shared",
+    # UN-4 names these two literally. Neither is a claimable handle under UN-3
+    # (a dot is outside the charset), but they are listed so the reserved table
+    # matches the requirement rather than an interpretation of it.
+    "sitemap.xml",
+    "robots.txt",
+    "sitemap",
+    "robots",
+    # Roles and reserved words.
+    "admin",
+    "administrator",
+    "support",
+    "help",
+    "about",
+    "login",
+    "logout",
+    "signup",
+    "register",
+    "settings",
+    "account",
+    "me",
+    "search",
+    "null",
+    "undefined",
+)
+
+
 def normalize_email(email: str) -> str:
     """Return the canonical stored form of ``email``: trimmed and lowercased.
 
@@ -123,6 +173,15 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     email = Column(String, nullable=False, unique=True, index=True)
+    # The account's stable public identifier (UN-1). Non-null from the start so
+    # attribution always has something to name and Part 2 can add ``/@{handle}``
+    # without backfilling anyone (FC-8). ``crud.create_user`` derives one from
+    # the email when the caller supplies none.
+    username = Column(String, nullable=False)
+    # When the handle was last chosen *by the user*. NULL therefore means
+    # "system-assigned, never confirmed" (D-7), which is what forces a Google
+    # sign-up through the handle-selection step in Part 1's Phase 3C.
+    username_changed_at = Column(DateTime, nullable=True)
     # Null for OAuth-only accounts (e.g. Google sign-in).
     hashed_password = Column(String, nullable=True)
     display_name = Column(String)
@@ -151,6 +210,30 @@ class User(Base):
         # unique index then enforces case-insensitive uniqueness by
         # construction rather than by luck of lowercase literals.
         return normalize_email(value)
+
+    @property
+    def username_confirmed(self) -> bool:
+        """Whether the user, rather than the system, chose the handle (D-7).
+
+        Derived rather than stored: §11.1 offers only ``username_changed_at``,
+        and a second boolean could contradict it.
+        """
+        return self.username_changed_at is not None
+
+    @validates("username")
+    def _canonicalise_username(self, key: str, value: str) -> str:
+        # UN-3 says input SHOULD be lowercased on entry rather than rejected for
+        # case. Doing it here rather than in ``crud`` means the seed scripts and
+        # any future write path get it for free.
+        return value.strip().lower() if value is not None else value
+
+    __table_args__ = (
+        # UN-2: case-insensitive uniqueness enforced by the database, not by
+        # application code that a second concurrent request could race past.
+        # Functional index, so it is Postgres-only -- which the project already
+        # is (``database.resolve_database_url`` accepts nothing else).
+        Index("uq_user_username_lower", func.lower(username), unique=True),
+    )
 
 
 # Association table linking recipes and tags for a many-to-many relationship.
@@ -235,6 +318,42 @@ class Recipe(Base):
     date_last_rejected = Column(Date)
     course = Column(String, nullable=False, default="main")
     image_url = Column(String, nullable=True)
+
+    # --- Sharing (Part 1) ------------------------------------------------
+    # VIS-2: private at the *database* level, so a row created by any path --
+    # import, seed script, raw SQL -- is private unless it says otherwise.
+    visibility = Column(
+        String, nullable=False, server_default="private", default="private"
+    )
+    # FC-3 / FC-4: always NULL in this release. ``page_layout is None`` means
+    # "render the default block list"; Part 2's editor writes them without a
+    # schema change.
+    page_layout = Column(JSON, nullable=True)
+    page_theme = Column(JSON, nullable=True)
+    # AT-7: shown to the owner as "copied N times". Copier identities are never
+    # stored, so this counter is the whole of what the owner can learn.
+    copy_count = Column(Integer, nullable=False, server_default="0", default=0)
+
+    # --- Attribution snapshot (AT-1) -------------------------------------
+    # The two FKs are ``ON DELETE SET NULL`` and the two text columns are
+    # snapshots: deleting the source recipe or the source account must not erase
+    # the credit (AT-2). Only the immediate source is recorded (AT-6).
+    source_recipe_id = Column(
+        Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True
+    )
+    source_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    source_author_username = Column(String, nullable=True)
+    source_recipe_title = Column(String, nullable=True)
+    copied_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "visibility IN ('private', 'unlisted', 'public')",
+            name="ck_recipe_visibility",
+        ),
+    )
 
     # Relationship to ``RecipeIngredient`` association objects.
     ingredients = relationship(
@@ -439,6 +558,94 @@ class RefreshToken(Base):
     expires_at = Column(DateTime, nullable=False)
     revoked = Column(Boolean, nullable=False, server_default=false(), default=False)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+
+class RecipeShare(Base):
+    """One secret-token grant of read access to one recipe (§11.3).
+
+    The raw token exists only in the URL the sharer forwards: this row stores a
+    SHA-256 digest of it (SH-3), so read access to the database yields no usable
+    share URL. ``__repr__`` is overridden so the digest cannot leak into a log
+    line either.
+
+    Validity is *not* modelled as a column. ``revoked_at`` and ``expires_at``
+    are read after the row is fetched (D-5), which is what keeps token lookup
+    constant-time with respect to validity (SH-27).
+    """
+
+    __tablename__ = "recipe_shares"
+
+    id = Column(Integer, primary_key=True)
+    recipe_id = Column(
+        Integer,
+        ForeignKey("recipes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_by_user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # SHA-256 hex digest. Unique and indexed so resolution is a single equality
+    # lookup rather than the O(n) scan a password hash would force.
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    mode = Column(String, nullable=False)
+    # Either may be set for a ``person`` share; a ``link`` share may carry a
+    # recipient purely so the recipe lands in their Shared-with-me (SH-6).
+    recipient_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    recipient_email = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    expires_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    # SH-26: the only view telemetry kept. No per-visit log, no visitor
+    # identity, no IP address.
+    last_viewed_at = Column(DateTime, nullable=True)
+    dismissed_by_recipient_at = Column(DateTime, nullable=True)
+
+    recipe = relationship("Recipe")
+
+    __table_args__ = (
+        CheckConstraint(
+            "mode <> 'person' OR recipient_user_id IS NOT NULL "
+            "OR recipient_email IS NOT NULL",
+            name="ck_share_person_requires_recipient",
+        ),
+        CheckConstraint(
+            "mode IN ('link', 'person')", name="ck_share_mode"
+        ),
+        Index("ix_recipe_shares_recipient_user", "recipient_user_id"),
+    )
+
+    def __repr__(self) -> str:  # pragma: no cover - diagnostics only
+        # Deliberately omits ``token_hash``: a digest in a traceback or a log
+        # aggregator is a standing offline-guessing target for no benefit.
+        return f"<RecipeShare id={self.id} recipe_id={self.recipe_id} mode={self.mode!r}>"
+
+
+class ReservedUsername(Base):
+    """A handle nobody may claim, permanently or for a window (§11.3).
+
+    ``reason='system'`` covers the UN-4 list and is permanent
+    (``reserved_until IS NULL``). ``reason='released'`` is UN-9's cooling-off
+    period after a user changes handle: the column ships now so the Part 2 flow
+    needs no migration.
+    """
+
+    __tablename__ = "reserved_usernames"
+
+    username = Column(String, primary_key=True)
+    reason = Column(String, nullable=False, server_default="system")
+    reserved_until = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "reason IN ('system', 'released')", name="ck_reserved_username_reason"
+        ),
+    )
 
 
 class MealSide(Base):

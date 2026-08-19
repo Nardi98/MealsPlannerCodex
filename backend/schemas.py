@@ -1,12 +1,17 @@
 """Pydantic schemas for API responses and requests."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from models import CATEGORIES, UnitEnum
+import usernames
+from models import CATEGORIES, VISIBILITY_VALUES, UnitEnum
+
+#: VIS-5. Stated once, so the schema validator and ``main``'s 400 handler
+#: cannot drift apart.
+PUBLIC_VISIBILITY_MESSAGE = "Public recipes are not available yet"
 
 # bcrypt truncates anything past 72 bytes, so passwords longer than that are
 # rejected rather than silently trimmed.
@@ -48,17 +53,38 @@ def validate_password(pw: str) -> str:
     return pw
 
 
+def validate_username(value: Optional[str]) -> Optional[str]:
+    """Normalise and check a submitted handle (UN-3), passing ``None`` through.
+
+    ``None`` means "the caller offered no handle"; ``crud.create_user`` then
+    derives one. Registration (UN-5) supplies one, so the form gets the
+    user-facing message from :mod:`usernames` rather than a regex complaint.
+    """
+    if value is None:
+        return None
+    return usernames.validate(usernames.normalise(value))
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     display_name: Optional[str] = None
+    # Optional on the wire so the existing clients and tests keep working; the
+    # registration form sends it (UN-5) and Phase 3C makes it required in the UI.
+    username: Optional[str] = None
 
     _check_password = field_validator("password")(validate_password)
+    _check_username = field_validator("username")(validate_username)
 
 
 class UserOut(BaseModel):
     id: int
     email: str
+    username: str
+    # D-7: ``username_changed_at IS NULL`` means the handle was system-assigned
+    # and never confirmed, which is what the SPA's gate reads to force the
+    # handle-selection step for a Google sign-up (UN-6).
+    username_confirmed: bool = False
     display_name: Optional[str] = None
     auth_provider: str
     default_people: int
@@ -188,6 +214,24 @@ class RecipeIn(BaseModel):
     # Sides this main is habitually served with; the planner attaches one of
     # them automatically. Only meaningful for main / first-course recipes.
     favorite_side_ids: List[int] = []
+    # VIS-2: private unless the caller says otherwise.
+    visibility: str = "private"
+
+    # AT-4: there is deliberately no ``source_author_username`` field here. The
+    # attribution snapshot is write-once, set by the copy path alone; because
+    # ``RecipeIn`` cannot carry it, no amount of subsequent editing can change
+    # or remove it.
+
+    @field_validator("visibility")
+    @classmethod
+    def _check_visibility(cls, value: str) -> str:
+        if value == "public":
+            # VIS-5. Rejected here rather than silently coerced, so a client
+            # that tries it learns the capability does not exist yet.
+            raise ValueError(PUBLIC_VISIBILITY_MESSAGE)
+        if value not in VISIBILITY_VALUES:
+            raise ValueError(f"Unknown visibility: {value!r}")
+        return value
 
 
 class RecipeOut(BaseModel):
@@ -204,6 +248,14 @@ class RecipeOut(BaseModel):
     tags: List[TagOut] = []
     # Read off ``Recipe.favorite_side_ids``, which flattens the relationship.
     favorite_side_ids: List[int] = []
+    visibility: str = "private"
+    # AT-3 / AT-7: the attribution snapshot and the copy counter have to reach
+    # the authenticated recipe view -- that is where the credit line renders and
+    # where the owner sees "copied N times".
+    copy_count: int = 0
+    source_author_username: Optional[str] = None
+    source_recipe_title: Optional[str] = None
+    copied_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
