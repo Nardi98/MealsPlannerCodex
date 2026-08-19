@@ -31,6 +31,7 @@ import auth_users
 import models
 import public_schema
 import ratelimit
+import recipe_copy
 import shares
 from database import get_db
 
@@ -313,3 +314,67 @@ def dismiss_shared_with_me(
     share.dismissed_by_recipient_at = datetime.utcnow()
     db.commit()
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Copying (§7)
+# ---------------------------------------------------------------------------
+class CopyResult(BaseModel):
+    """What the copier gets back: their own new recipe, and CP-11's warning.
+
+    Nothing about the source appears here. The copier's own recipe id is fine --
+    they own that row -- but the source's ids, its owner, and its share are not
+    theirs to learn (PRV-3).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    title: str
+    already_copied: bool
+
+
+@router.post("/s/{token}/copy", response_model=CopyResult, status_code=201)
+@ratelimit.limiter.limit(ratelimit.COPY_RATE_LIMIT)
+def copy_shared_recipe(
+    request: Request,
+    token: str,
+    db: Db,
+    current_user: CurrentUser,
+) -> CopyResult:
+    """Copy a recipe reachable through ``token`` into the caller's book (CP-1).
+
+    Order matters. ``shares.resolve`` answers only "is this token live" -- it
+    does **not** check that the caller is the named recipient -- so a
+    ``person`` share is enforced here, immediately after resolution and before
+    anything is read from the recipe. Skipping it would silently degrade every
+    ``person`` share into a ``link`` share.
+
+    403 rather than 404 for the wrong account matches SH-24: the holder of a
+    live token already knows a share exists, so the distinction leaks nothing,
+    and "you are signed in as the wrong account" is the only message that lets
+    them fix it. Every *invalid*-token path stays one identical 404 (SH-22).
+    """
+    share = shares.resolve(db, token)
+    if share is None:
+        raise _not_found()
+
+    if share.mode == "person" and not recipe_copy.is_named_recipient(
+        share, current_user
+    ):
+        raise HTTPException(
+            status_code=403, detail="This link was shared with a different account"
+        )
+
+    source = db.get(models.Recipe, share.recipe_id)
+    if source is None:
+        raise _not_found()
+    if source.user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="This recipe is already yours")
+
+    # Asked before the copy, since the copy itself would satisfy the query.
+    already_copied = recipe_copy.existing_copy(db, source, current_user) is not None
+    made = recipe_copy.copy_recipe(db, source, current_user)
+    return CopyResult(
+        id=made.id, title=made.title, already_copied=already_copied
+    )
