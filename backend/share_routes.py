@@ -159,7 +159,26 @@ def create_recipe_share(
 
     ``request`` is required by slowapi (SH-11) and is also what
     :func:`shares.share_url` falls back to when ``PUBLIC_BASE_URL`` is unset.
+
+    UN-11 is enforced here, on the server, and not only by the SPA's gate. An
+    unconfirmed handle is *derived from the email local part*
+    (``anna.rossi@…`` becomes ``anna_rossi``), and the share page publishes the
+    author's handle to anyone holding the link. The client-side gate stops the
+    UI reaching this route, but the account holds a valid access token and the
+    API is reachable without the UI -- so without this check, a Google sign-up
+    who never completed handle selection could publish most of their own email
+    address without ever having been shown the handle, let alone chosen it.
+    Checked *before* :func:`shares.create_share`, since that call promotes the
+    recipe to ``unlisted`` (VIS-6) as a side effect.
     """
+    if not current_user.username_confirmed:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Choose your username before sharing: a shared recipe shows "
+                "the author's username publicly."
+            ),
+        )
     recipe = _owned_recipe(db, recipe_id, current_user)
     try:
         share, token = shares.create_share(

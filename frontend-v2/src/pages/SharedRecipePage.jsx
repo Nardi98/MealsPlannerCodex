@@ -26,16 +26,21 @@ const NEUTRAL_GONE =
 const RATE_LIMITED =
   'Too many copies in a short time. Please wait a moment and try again.'
 
+// Dispatch on `error.status`, never on the message. `client.js`'s request()
+// attaches the HTTP status to everything it throws, and the status is the
+// contract: 404 means gone, 429 means slow down, in every locale and after any
+// rewording. Matching the backend's English prose instead meant this page had
+// an undeclared dependency on strings nobody had promised to keep — it would
+// have degraded silently the day a message was translated or a proxy replaced
+// it, and it misfired the other way too, presenting a 500 that happened to say
+// "not found" as a calm "this recipe is gone".
 function messageFor(error) {
-  if (error.status === 404 || /not found/i.test(error.message || '')) {
+  if (error.status === 404) {
     // SH-22: revoked, expired, and never-existed are one indistinguishable
     // answer, phrased so it neither confirms nor denies that a recipe exists.
     return { text: NEUTRAL_GONE, tone: 'calm' }
   }
-  // `status` is matched where a caller supplies one, but client.js's request()
-  // throws a plain Error carrying only the backend's `detail` text, so the
-  // message has to be sufficient on its own.
-  if (error.status === 429 || /rate limit/i.test(error.message || '')) {
+  if (error.status === 429) {
     return { text: RATE_LIMITED, tone: 'alert' }
   }
   // 403 (SH-24, wrong account) and anything else: the backend's own wording is

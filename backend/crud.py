@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import usernames
@@ -36,6 +37,7 @@ from models import (
 )
 
 __all__ = [
+    "UsernameTaken",
     "create_user",
     "set_email_verified",
     "get_user",
@@ -79,6 +81,31 @@ __all__ = [
     "clear_data",
     "meal_item",
 ]
+
+
+class UsernameTaken(Exception):
+    """``uq_user_username_lower`` refused the insert (UN-2).
+
+    A named domain error rather than a bare ``IntegrityError`` so callers can
+    map *this* failure to a 409 without also mapping every other constraint on
+    ``users`` -- a duplicate email, for instance, has a completely different
+    correct response and must not be reported as a username conflict.
+    """
+
+
+#: The functional unique index behind UN-2. Matched by name in the error text
+#: because that is the only place the driver exposes which constraint failed.
+_USERNAME_INDEX = "uq_user_username_lower"
+
+#: How many times a *derived* handle is re-derived after losing the race.
+#: Bounded so a permanently-wedged deriver cannot spin: each retry re-runs
+#: ``_derive_username``, which re-reads the table and so proposes a fresh
+#: suffix, and three collisions in a row means something other than a race.
+_USERNAME_INSERT_ATTEMPTS = 3
+
+
+def _is_username_conflict(error: Exception) -> bool:
+    return _USERNAME_INDEX in str(getattr(error, "orig", error))
 
 
 def _derive_username(session: Session, email: str) -> str:
@@ -130,26 +157,67 @@ def create_user(
     ``username_changed_at`` is left ``NULL``, which is precisely the
     "system-assigned, unconfirmed" state that forces the account through
     handle selection before it reaches the app (D-7).
+
+    Losing the check-then-insert race (UN-2)
+    ----------------------------------------
+    Availability is checked by a separate ``SELECT``, so two concurrent
+    registrations of the same handle can both pass it; ``uq_user_username_lower``
+    then lets exactly one insert through. The loser used to surface that as a
+    500 with a poisoned session. It is now caught inside a **SAVEPOINT** -- the
+    same shape ``POST /auth/username`` uses -- so only the failed insert rolls
+    back and the session stays usable, and the two callers are told apart by
+    what they can do about it:
+
+    * a caller who *chose* the handle gets :class:`UsernameTaken`, which the
+      route turns into the ordinary 409. Their next action is to pick another.
+    * a caller who supplied none (Google sign-in, the seed scripts) has nothing
+      to pick, so the derived handle is simply re-derived and retried. A 409
+      there would mean sign-in breaks for whoever registers second.
     """
-    handle = (
-        usernames.normalise(username)
-        if username is not None
-        else _derive_username(session, email)
-    )
-    user = User(
-        # ``User`` canonicalises the address itself, so no folding is needed here.
-        email=email,
-        username=handle,
-        hashed_password=hashed_password,
-        display_name=display_name,
-        auth_provider=auth_provider,
-        google_sub=google_sub,
-        email_verified=email_verified,
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
+    explicit = username is not None
+    for attempt in range(_USERNAME_INSERT_ATTEMPTS):
+        handle = (
+            usernames.normalise(username)
+            if explicit
+            else _derive_username(session, email)
+        )
+        user = User(
+            # ``User`` canonicalises the address itself, so no folding here.
+            email=email,
+            username=handle,
+            hashed_password=hashed_password,
+            display_name=display_name,
+            auth_provider=auth_provider,
+            google_sub=google_sub,
+            email_verified=email_verified,
+            # D-7: NULL means "system-assigned, unconfirmed". A handle the
+            # caller passed in was *chosen*, so recording it as unconfirmed
+            # would say something false -- and would put every locally
+            # registered account behind the selection gate it had just walked
+            # through on the registration form (UN-5).
+            username_changed_at=datetime.utcnow() if explicit else None,
+        )
+        try:
+            with session.begin_nested():
+                session.add(user)
+                session.flush()
+        except IntegrityError as exc:
+            if not _is_username_conflict(exc):
+                # A duplicate email, or anything else: not ours to reinterpret.
+                raise
+            # No ``expunge`` here: rolling the SAVEPOINT back already evicted
+            # the pending instance, and asking again raises InvalidRequestError.
+            if explicit:
+                raise UsernameTaken(handle) from exc
+            if attempt == _USERNAME_INSERT_ATTEMPTS - 1:
+                raise
+            continue
+        session.commit()
+        session.refresh(user)
+        return user
+    # Unreachable: every path above either returns, raises, or continues, and
+    # the final iteration cannot continue.
+    raise AssertionError("username retry loop fell through")
 
 
 def set_email_verified(

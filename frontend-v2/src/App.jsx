@@ -22,6 +22,17 @@ import SharedWithMePage from './pages/SharedWithMePage'
 import SharedRecipePage from './pages/SharedRecipePage'
 import ChooseHandlePage from './pages/ChooseHandlePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { nextFromSearch } from './auth/nextDestination'
+
+// Where a freshly-authenticated user goes when nothing better is known.
+const DEFAULT_LANDING = '/recipes'
+
+// Paths the shell has no route for, so arriving at one authenticated must be
+// resolved to somewhere real rather than rendering an empty <main>. `/login` is
+// the one that matters: the server-rendered share page sends anonymous visitors
+// to `/login?next=/s/<token>`, and until this existed they signed in and landed
+// on a blank page with the token discarded (SH-23).
+const NON_SHELL_PATHS = ['/login', '/verify-email', '/forgot-password', '/reset-password']
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
@@ -84,6 +95,44 @@ function Sidebar() {
       })}
     </div>
   )
+}
+
+// SH-23. Consumes a `?next=` destination once, on the render that first shows
+// the shell — which is the render immediately after sign-in.
+//
+// It runs *inside* the authenticated branch on purpose. The gate above it
+// (`username_confirmed`) is not a page a redirect may skip, so an unconfirmed
+// account never reaches this component and a `next` cannot be used to route
+// around handle selection (UN-11).
+//
+// `replace: true` so the consumed `/login?next=…` does not sit in history: the
+// back button should return the user to wherever they came from, not to a
+// sign-in URL that now redirects them forward again.
+function ReturnToNext() {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  React.useEffect(() => {
+    const destination = nextFromSearch(location.search)
+    if (destination) {
+      navigate(destination, { replace: true })
+      return
+    }
+    // No usable destination — either none was given, or it was rejected as
+    // hostile. Either way an unroutable path must not be left on screen as a
+    // blank shell. A rejected `next` is deliberately indistinguishable from an
+    // absent one: there is nothing useful to tell the user, and naming the
+    // refusal would only confirm to an attacker which shapes are filtered.
+    if (NON_SHELL_PATHS.includes(location.pathname)) {
+      navigate(DEFAULT_LANDING, { replace: true })
+    }
+    // Mount-only: this consumes an arrival, not every later navigation. Re-
+    // running it on each location change would make `?next=` sticky and fight
+    // the user's own clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  return null
 }
 
 function Shell() {
@@ -152,6 +201,7 @@ function Shell() {
           }}
         >
           <main style={{ padding: 24 }}>
+            <ReturnToNext />
             <Routes>
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />

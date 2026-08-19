@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Uploa
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter
@@ -209,6 +210,57 @@ app.add_middleware(
 )
 
 
+def allowed_hosts() -> list[str]:
+    """The ``Host`` values this deployment answers to (``ALLOWED_HOSTS``).
+
+    ``Host`` is a *request header*, so it is attacker-controlled, and several
+    things here derive absolute URLs from it when ``PUBLIC_BASE_URL`` is unset
+    -- ``shares.share_url`` most importantly, since a forged host there yields
+    a share link on the attacker's origin that the sharer forwards in good
+    faith, handing over a bearer token. ``shares`` validates the *shape* of the
+    header, which stops injection but not forgery: ``evil.example`` is a
+    perfectly well-formed hostname. Only configuration can answer "is this host
+    mine", which is what this is.
+
+    Comma-separated, whitespace-tolerant, and ``["*"]`` when unset so that
+    local development and the test suite need no configuration -- there is no
+    attacker on a developer's laptop to forge anything. **Set it in every
+    deployment**, alongside ``PUBLIC_BASE_URL``.
+    """
+    raw = os.environ.get("ALLOWED_HOSTS", "")
+    hosts = [host.strip() for host in raw.split(",") if host.strip()]
+    return hosts or ["*"]
+
+
+# Applied after CORS in source order, which means Starlette runs it *first* --
+# a forged Host is rejected with 400 before any handler, and therefore before
+# anything can build a URL from it.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
+
+
+@app.middleware("http")
+async def _noindex_everything(request: Request, call_next):
+    """FC-9 / FC-10: stamp ``X-Robots-Tag: noindex, nofollow`` on every response.
+
+    ``public_pages`` already sets this on the share page, which is the surface
+    that carries user content. This is the *default* underneath it, and it
+    exists because the surfaces that lacked it were the ones nobody thought
+    about: FastAPI's ``/docs``, ``/docs/oauth2-redirect`` and ``/redoc`` are
+    full HTML pages, are served unauthenticated, and enumerate the entire API.
+    An indexed ``/docs`` is a published map of the product to anyone who has
+    never seen it.
+
+    Applied to every response rather than only to HTML ones for two reasons:
+    the header is meaningless-but-harmless on JSON, and a rule with no
+    exceptions is a rule a future route cannot fall out of by being added with
+    a content type nobody predicted. Routes that set their own value keep it --
+    ``public_pages.PAGE_HEADERS`` is more specific and is left to win.
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    return response
+
+
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
     """Redirect the index route to the interactive API docs."""
@@ -219,6 +271,15 @@ def root() -> RedirectResponse:
 def favicon() -> Response:
     """Return an empty response for browsers requesting a favicon."""
     return Response(status_code=204)
+
+
+#: One wording for both ways registration can conflict on a handle: the
+#: pre-check that found it taken, and the insert that lost the race to it. Named
+#: rather than repeated so the two cannot drift apart -- if they did, the
+#: difference would be an oracle telling a caller which of the two happened, and
+#: "it was claimed a millisecond ago" is not something they need to know.
+#: Matches ``username_routes._CONFLICT`` for the same reason.
+_USERNAME_CONFLICT = "That username is taken"
 
 
 @app.post("/auth/register", response_model=schemas.UserOut, status_code=201)
@@ -240,21 +301,29 @@ def register(
         # UN-4/UN-5: a reserved or taken handle is rejected clearly. Unlike the
         # email, the handle is a *public* identifier, so saying it is taken
         # discloses nothing the availability endpoint (UN-7) does not.
-        raise HTTPException(status_code=409, detail="That username is taken")
+        raise HTTPException(status_code=409, detail=_USERNAME_CONFLICT)
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
-        user = _create_account(
-            db,
-            email=payload.email,
-            hashed_password=hashed,
-            display_name=payload.display_name,
-            username=payload.username,
-        )
+        try:
+            user = _create_account(
+                db,
+                email=payload.email,
+                hashed_password=hashed,
+                display_name=payload.display_name,
+                username=payload.username,
+            )
+        except crud.UsernameTaken:
+            # UN-2. The availability check above is a *hint*: it and the insert
+            # are two statements, so two concurrent registrations of the same
+            # handle both pass it and ``uq_user_username_lower`` decides. The
+            # loser gets the identical 409 an ordinary conflict produces --
+            # never a 500, and never a hint that it was a race, because the
+            # answer to both is the same: pick another handle.
+            raise HTTPException(status_code=409, detail=_USERNAME_CONFLICT)
         # UN-5: a local sign-up chooses its own handle, so it counts as
-        # confirmed from the start (D-7) and skips the selection step.
-        if payload.username is not None:
-            user.username_changed_at = user.created_at or datetime.utcnow()
-            db.commit()
+        # confirmed from the start (D-7) and skips the selection step. Stamped
+        # by ``crud.create_user`` itself, which is the only place that knows
+        # whether the handle was chosen or derived.
         _send_verification_email(user.email, user.id)
         user_id = user.id
         handle = user.username
