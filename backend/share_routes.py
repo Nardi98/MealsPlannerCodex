@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 
 import auth_users
 import models
+import public_schema
 import ratelimit
 import shares
 from database import get_db
@@ -230,5 +231,85 @@ def revoke_recipe_share(
     recipe = db.get(models.Recipe, share.recipe_id)
     if recipe is not None:
         shares.demote_if_no_active_shares(db, recipe)
+    db.commit()
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Shared with me (§5.3)
+# ---------------------------------------------------------------------------
+class SharedWithMeEntry(BaseModel):
+    """One recipe somebody addressed to the caller.
+
+    The recipe is projected through :class:`public_schema.PublicRecipe` rather
+    than ``schemas.RecipeOut``: the caller does not own this row, so they get
+    exactly what the share page shows a stranger -- no numeric ids, no ``score``,
+    no ``bulk_prep``, nothing that would feed their planner (SWM-5, PRV-3).
+
+    ``share_id`` is the only handle exposed, and it is only good for dismissing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    share_id: int
+    mode: str
+    created_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    recipe: public_schema.PublicRecipe
+
+
+@router.get("/shared-with-me", response_model=List[SharedWithMeEntry])
+def list_shared_with_me(
+    db: Db,
+    current_user: CurrentUser,
+) -> List[SharedWithMeEntry]:
+    """Every live share addressed to the caller (SWM-1/2/4/5).
+
+    Membership is decided entirely by :func:`shares.active_shares_for_recipient`,
+    which already enforces SWM-3 (dismissed) and SWM-4 (unverified address).
+    Keeping the rule in one place is what stops this list and the person-mode
+    access check from drifting apart.
+    """
+    entries: List[SharedWithMeEntry] = []
+    for share in shares.active_shares_for_recipient(db, current_user):
+        recipe = db.get(models.Recipe, share.recipe_id)
+        if recipe is None:
+            continue
+        author = db.get(models.User, recipe.user_id)
+        if author is None:
+            continue
+        entries.append(
+            SharedWithMeEntry(
+                share_id=share.id,
+                mode=share.mode,
+                created_at=share.created_at,
+                expires_at=share.expires_at,
+                recipe=public_schema.PublicRecipe.from_recipe(recipe, author),
+            )
+        )
+    return entries
+
+
+@router.post("/shared-with-me/{share_id}/dismiss", status_code=204)
+def dismiss_shared_with_me(
+    share_id: int,
+    db: Db,
+    current_user: CurrentUser,
+) -> Response:
+    """Drop one entry from the caller's own list (SWM-3).
+
+    Dismissal is recorded on the share row but is a *recipient*-side act: the
+    token keeps working and the sharer sees nothing change. The id must be one
+    of the caller's own live entries -- resolved through the same helper the
+    list uses -- so this cannot be used to probe share ids at large.
+    """
+    addressed = {
+        share.id: share
+        for share in shares.active_shares_for_recipient(db, current_user)
+    }
+    share = addressed.get(share_id)
+    if share is None:
+        raise _not_found()
+    share.dismissed_by_recipient_at = datetime.utcnow()
     db.commit()
     return Response(status_code=204)
