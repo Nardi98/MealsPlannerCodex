@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import {
   CalendarDaysIcon,
   BookmarkIcon,
@@ -26,13 +26,6 @@ import { nextFromSearch } from './auth/nextDestination'
 
 // Where a freshly-authenticated user goes when nothing better is known.
 const DEFAULT_LANDING = '/recipes'
-
-// Paths the shell has no route for, so arriving at one authenticated must be
-// resolved to somewhere real rather than rendering an empty <main>. `/login` is
-// the one that matters: the server-rendered share page sends anonymous visitors
-// to `/login?next=/s/<token>`, and until this existed they signed in and landed
-// on a blank page with the token discarded (SH-23).
-const NON_SHELL_PATHS = ['/login', '/verify-email', '/forgot-password', '/reset-password']
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
@@ -97,43 +90,34 @@ function Sidebar() {
   )
 }
 
-// SH-23. Consumes a `?next=` destination once, on the render that first shows
-// the shell — which is the render immediately after sign-in.
+// SH-23. Redirects to a `?next=` destination on the first authenticated render.
 //
-// It runs *inside* the authenticated branch on purpose. The gate above it
-// (`username_confirmed`) is not a page a redirect may skip, so an unconfirmed
-// account never reaches this component and a `next` cannot be used to route
-// around handle selection (UN-11).
+// Declarative rather than an effect. An effect that called `navigate` raced the
+// catch-all `<Route path="*">` below: both fire after the same commit, and if
+// the catch-all won it replaced `/login?next=…` with the default page and threw
+// the token away — the exact bug this component exists to fix, reintroduced by
+// its own fix. Returning a `<Navigate>` resolves during render, so the shell's
+// routes never see a path this was going to redirect away from.
 //
-// `replace: true` so the consumed `/login?next=…` does not sit in history: the
-// back button should return the user to wherever they came from, not to a
-// sign-in URL that now redirects them forward again.
-function ReturnToNext() {
-  const location = useLocation()
-  const navigate = useNavigate()
-
-  React.useEffect(() => {
-    const destination = nextFromSearch(location.search)
-    if (destination) {
-      navigate(destination, { replace: true })
-      return
-    }
-    // No usable destination — either none was given, or it was rejected as
-    // hostile. Either way an unroutable path must not be left on screen as a
-    // blank shell. A rejected `next` is deliberately indistinguishable from an
-    // absent one: there is nothing useful to tell the user, and naming the
-    // refusal would only confirm to an attacker which shapes are filtered.
-    if (NON_SHELL_PATHS.includes(location.pathname)) {
-      navigate(DEFAULT_LANDING, { replace: true })
-    }
-    // Mount-only: this consumes an arrival, not every later navigation. Re-
-    // running it on each location change would make `?next=` sticky and fight
-    // the user's own clicks.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  return null
+// It wraps the shell from *inside* the authenticated branch on purpose. The
+// gate above it (`username_confirmed`) is not a page a redirect may skip, so an
+// unconfirmed account never reaches this component and a `next` cannot be used
+// to route around handle selection (UN-11).
+//
+// `replace` so the consumed `/login?next=…` does not sit in history: the back
+// button should return the user to wherever they came from, not to a sign-in
+// URL that immediately redirects them forward again.
+//
+// A rejected `next` is deliberately indistinguishable from an absent one — both
+// simply fall through to `children`, and from there to the catch-all route.
+// There is nothing useful to tell the user, and naming the refusal would only
+// confirm to an attacker which shapes are filtered.
+function ReturnToNext({ children }) {
+  const destination = nextFromSearch(useLocation().search)
+  if (destination) return <Navigate to={destination} replace />
+  return children
 }
+
 
 function Shell() {
   const rowRef = React.useRef(null)
@@ -201,7 +185,6 @@ function Shell() {
           }}
         >
           <main style={{ padding: 24 }}>
-            <ReturnToNext />
             <Routes>
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
@@ -211,6 +194,15 @@ function Shell() {
               <Route path="/import-export" element={<ImportExportPage />} />
               <Route path="/shared-with-me" element={<SharedWithMePage />} />
               <Route path="/shared/:token" element={<SharedRecipePage />} />
+              {/*
+                Anything the shell has no route for — `/login` after signing in,
+                `/verify-email`, a stale bookmark, a typo. Declarative and
+                general: the alternative was a hand-maintained list of the
+                logged-out paths in `Gate`, 200 lines away, which silently
+                rendered a blank <main> the first time somebody added a route
+                to one list and not the other.
+              */}
+              <Route path="*" element={<Navigate to={DEFAULT_LANDING} replace />} />
             </Routes>
           </main>
         </div>
@@ -256,7 +248,11 @@ function Gate() {
     return <ChooseHandlePage />
   }
 
-  return <Shell />
+  return (
+    <ReturnToNext>
+      <Shell />
+    </ReturnToNext>
+  )
 }
 
 export default function App() {

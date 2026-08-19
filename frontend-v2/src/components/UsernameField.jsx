@@ -71,7 +71,11 @@ export function UsernameField({ value, onChange, error }) {
           if (!current) return
           // Never fatal: the handle is still checked for real at submit. The
           // message is not logged — it can echo attacker-controlled input.
-          const throttled = /rate limit|too many/i.test((err && err.message) || '')
+          // 429, not the message text. `client.js` attaches the status to
+          // everything it throws, and the status is the part the backend has
+          // promised — the prose is free to be reworded or translated, and a
+          // proxy's own 429 body would not have said "rate limit" at all.
+          const throttled = err?.status === 429
           setStatus({
             tone: 'muted',
             message: throttled

@@ -46,7 +46,19 @@ from models import Recipe, RecipeShare, User
 
 logger = logging.getLogger(__name__)
 
+
+class HandleNotConfirmed(Exception):
+    """The sharer has not chosen a username yet (UN-11, D-7).
+
+    A named error rather than ``PermissionError``: the two failures next to it
+    in :func:`create_share` need different answers. Not owning the recipe must
+    disclose nothing (404); this one is about the *caller's own* account, so
+    naming the missing step is both safe and the only useful thing to say.
+    """
+
+
 __all__ = [
+    "HandleNotConfirmed",
     "mint_token",
     "hash_token",
     "resolve",
@@ -187,6 +199,20 @@ def create_share(
     if getattr(owner, "id", None) is None or recipe.user_id != owner.id:
         # Deliberately says nothing about the recipe.
         raise PermissionError("Not the owner of this recipe")
+
+    # UN-11, enforced here for the same reason ownership is: the route is a
+    # separate layer that could grow another caller, and a share minted for an
+    # account with an unconfirmed handle publishes something the account never
+    # chose. An unconfirmed handle is derived from the email local part
+    # (``anna.rossi@…`` becomes ``anna_rossi``), and the share page renders the
+    # author's handle to anyone holding the link -- so minting the share is the
+    # moment most of an email address becomes public. A second call site that
+    # inherited the ownership check but not this one would leak silently.
+    if not getattr(owner, "username_confirmed", False):
+        raise HandleNotConfirmed(
+            "Choose your username before sharing: a shared recipe shows the "
+            "author's username publicly."
+        )
 
     if mode not in models.SHARE_MODES:
         raise ValueError(f"Unsupported share mode: {mode!r}")

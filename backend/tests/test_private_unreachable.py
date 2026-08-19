@@ -25,7 +25,7 @@ import secrets
 import pytest
 
 import crud
-from tests.conftest import client_as, db_client
+from tests.conftest import client_as, get_route_paths
 
 #: The string that must never come back. Distinctive enough that a substring
 #: match cannot collide with template chrome or an error message.
@@ -59,17 +59,6 @@ def private_recipe(db_session, user):
     return recipe
 
 
-@pytest.fixture
-def anon(db_session):
-    """An unauthenticated client on the test's session."""
-    from main import app
-
-    try:
-        yield db_client(db_session)
-    finally:
-        app.dependency_overrides.clear()
-
-
 def _substitute(path: str, recipe_id: int, handle: str) -> str:
     """Fill a route's path parameters with values that name the private recipe.
 
@@ -84,26 +73,12 @@ def _substitute(path: str, recipe_id: int, handle: str) -> str:
         name = filled[start + 1:end].split(":", 1)[0].lower()
         if "recipe" in name or name in {"id", "item_id"}:
             value = str(recipe_id)
-        elif "user" in name or "username" in name or name == "u":
+        elif "user" in name or name == "u":
             value = handle
         else:
             value = _FILLER
         filled = filled[:start] + value + filled[end + 1:]
     return filled
-
-
-def _sweepable_routes(app):
-    """Every GET route, as ``(path, methods)``.
-
-    Restricted to GET: this file is about *reading* a private recipe without
-    credentials, and firing unauthenticated writes at every route would be a
-    different (and destructive) test.
-    """
-    for route in app.routes:
-        methods = getattr(route, "methods", None) or set()
-        path = getattr(route, "path", "")
-        if "GET" in methods and path:
-            yield path
 
 
 def test_no_unauthenticated_get_route_returns_a_private_recipe(
@@ -113,7 +88,7 @@ def test_no_unauthenticated_get_route_returns_a_private_recipe(
     from main import app
 
     leaks = []
-    for path in sorted(set(_sweepable_routes(app))):
+    for path in get_route_paths(app):
         target = _substitute(path, private_recipe.id, user.username)
         try:
             response = anon.get(target, follow_redirects=False)
@@ -289,7 +264,6 @@ def test_sharing_never_promotes_a_recipe_past_unlisted(
     db_session.commit()
 
     assert private_recipe.visibility == "unlisted"
-    assert private_recipe.visibility != "public"
 
 
 def test_the_schema_validator_refuses_public_without_a_request():

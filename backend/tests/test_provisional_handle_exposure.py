@@ -50,16 +50,6 @@ def provisional(db_session):
     return user
 
 
-@pytest.fixture
-def anon(db_session):
-    from main import app
-
-    try:
-        yield db_client(db_session)
-    finally:
-        app.dependency_overrides.clear()
-
-
 def test_the_derived_handle_really_does_disclose_the_email(provisional):
     """The premise, stated once so the rest of the file has a reason to exist.
 
@@ -78,7 +68,7 @@ def test_the_derived_handle_really_does_disclose_the_email(provisional):
 def test_the_share_page_would_publish_an_unconfirmed_handle(
     db_session, provisional, anon
 ):
-    """The leak, demonstrated. This is *why* the check below exists.
+    """The leak, demonstrated. This is *why* the checks below exist.
 
     The share page renders the author's handle -- correctly, since AT-5 and the
     hero block are about crediting a named person. But "named" assumes the name
@@ -86,10 +76,14 @@ def test_the_share_page_would_publish_an_unconfirmed_handle(
     publishes ``giulia_bianchi`` to anyone holding the link, and that is most of
     ``giulia.bianchi@clinic.example``.
 
-    The share is built through the domain layer here, deliberately bypassing the
-    route, so this test keeps documenting the underlying exposure even after the
-    route learns to refuse it. If someone ever adds a second way to mint a
-    share, this is the assertion that says what it must not enable.
+    The share row is inserted **directly**, bypassing both
+    :func:`shares.create_share` and the route, because both now refuse to
+    produce it -- which is the fix, and is asserted next door. Reaching the
+    state anyway is the point: this is the standing statement of what those
+    refusals are protecting, so if a third way to mint a share ever appears,
+    this test says what it must not be allowed to enable. Written with the raw
+    token in hand rather than by reading one back, since the digest is all the
+    row stores.
     """
     recipe = crud.create_recipe(
         db_session,
@@ -98,16 +92,49 @@ def test_the_share_page_would_publish_an_unconfirmed_handle(
         servings_default=2,
         user_id=provisional.id,
     )
-    db_session.commit()
-    _, token = shares.create_share(
-        db_session, recipe=recipe, owner=provisional, mode="link"
+    db_session.flush()
+    token = shares.mint_token()
+    db_session.add(
+        models.RecipeShare(
+            recipe_id=recipe.id,
+            created_by_user_id=provisional.id,
+            token_hash=shares.hash_token(token),
+            mode="link",
+        )
     )
     db_session.commit()
 
     body = anon.get(f"/s/{token}").text
 
-    assert "giulia_bianchi" in body
+    # Computed rather than hardcoded, so it survives a change to the fixture.
     assert provisional.email.split("@")[0].replace(".", "_") in body
+
+
+def test_the_domain_layer_refuses_to_mint_the_share_at_all(db_session, provisional):
+    """The rule lives beside the ownership check, not only at the route.
+
+    ``shares.create_share`` already documents why ownership is enforced here
+    rather than only at the route -- "the route is a separate layer that could
+    grow another caller". UN-11 is the same shape of precondition, and a second
+    caller that inherited one check but not the other would publish an email
+    local part with nothing to stop it.
+    """
+    recipe = crud.create_recipe(
+        db_session,
+        title="Ragu della nonna",
+        course="main",
+        servings_default=2,
+        user_id=provisional.id,
+    )
+    db_session.flush()
+
+    with pytest.raises(shares.HandleNotConfirmed):
+        shares.create_share(
+            db_session, recipe=recipe, owner=provisional, mode="link"
+        )
+
+    # And VIS-6's promotion did not fire on the refused call.
+    assert recipe.visibility == "private"
 
 
 def test_creating_a_share_is_refused_while_the_handle_is_unconfirmed(

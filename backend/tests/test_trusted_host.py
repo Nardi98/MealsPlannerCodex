@@ -111,6 +111,17 @@ def test_the_middleware_is_configured_from_the_environment():
 # ---------------------------------------------------------------------------
 # behaviour
 # ---------------------------------------------------------------------------
+def _request_on(netloc, scheme="https"):
+    """The smallest object ``shares.share_url`` reads a base URL off.
+
+    A stub rather than a real ``Request``: the function touches exactly
+    ``request.url.scheme`` and ``request.url.netloc``, and building a full ASGI
+    scope to supply two strings would hide which two they are.
+    """
+    url = type("_Url", (), {"scheme": scheme, "netloc": netloc})()
+    return type("_Request", (), {"url": url})()
+
+
 def _guarded_app(hosts):
     """A minimal app carrying the same middleware, for behavioural assertions.
 
@@ -125,7 +136,7 @@ def _guarded_app(hosts):
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 
     @app.get("/probe")
-    def probe(request_host: str = ""):  # pragma: no cover - trivial
+    def probe():  # pragma: no cover - trivial
         return {"ok": True}
 
     return app
@@ -179,14 +190,7 @@ def test_a_forged_host_cannot_reach_share_url_construction(monkeypatch):
 
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
 
-    class _Url:
-        scheme = "https"
-        netloc = "mealplanner.app"
-
-    class _Request:
-        url = _Url()
-
-    url = shares.share_url("tok-123", _Request())
+    url = shares.share_url("tok-123", _request_on("mealplanner.app"))
 
     assert url == "https://mealplanner.app/s/tok-123"
 
@@ -203,11 +207,4 @@ def test_public_base_url_still_wins_over_the_host_header(monkeypatch):
 
     monkeypatch.setenv("PUBLIC_BASE_URL", "https://canonical.example/")
 
-    class _Url:
-        scheme = "https"
-        netloc = "mealplanner.app"
-
-    class _Request:
-        url = _Url()
-
-    assert shares.share_url("tok", _Request()) == "https://canonical.example/s/tok"
+    assert shares.share_url("tok", _request_on("mealplanner.app")) == "https://canonical.example/s/tok"

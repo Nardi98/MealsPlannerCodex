@@ -126,12 +126,11 @@ class ConfirmUsernameRequest(BaseModel):
     username: str = Field(max_length=_MAX_QUERY_LENGTH)
 
 
-#: One message for "taken" and for "reserved". ``GET /usernames/available`` is
-#: the endpoint that deliberately exposes the distinction (rate-limited, and
-#: about a handle the caller already typed); repeating it here would hand an
-#: authenticated caller a map of the structurally blocked handle space for no
-#: gain -- the user's next action is the same either way: pick another one.
-_CONFLICT = "That username is taken"
+#: The one wording for every kind of handle unavailability, owned by
+#: ``usernames`` because ``main.register`` answers with it too and two copies
+#: could drift into an oracle. See the constant's own note for why "taken"
+#: covers reserved handles as well.
+_CONFLICT = usernames.CONFLICT_MESSAGE
 
 
 @router.post("/auth/username", response_model=schemas.UserOut)

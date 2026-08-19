@@ -42,16 +42,6 @@ from tests.conftest import db_client
 
 
 @pytest.fixture
-def anon(db_session):
-    from main import app
-
-    try:
-        yield db_client(db_session)
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.fixture
 def race(monkeypatch):
     """Make every availability check pass, whatever the database says.
 

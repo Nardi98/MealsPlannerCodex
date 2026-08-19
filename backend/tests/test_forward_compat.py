@@ -28,7 +28,7 @@ from fastapi.routing import APIRoute
 import crud
 import models
 import shares
-from tests.conftest import db_client
+from tests.conftest import get_route_paths
 
 
 #: Paths a discovery-oriented crawler (or a curious human) would try first.
@@ -40,9 +40,7 @@ DISCOVERY_PATHS = [
     "/sitemap.xml",
     "/robots.txt",
     "/search",
-    "/@anything",
     "/@owner",
-    "/profiles/anything",
     "/profiles/owner",
     "/profile/owner",
     "/users/owner",
@@ -75,33 +73,6 @@ def _is_noindexed(response) -> bool:
         return True
     body = (response.text or "").lower()
     return 'name="robots"' in body and "noindex" in body
-
-
-def _static_get_paths(app) -> list[str]:
-    """Every GET route with no path parameters, so it can be fetched as-is.
-
-    Parameterised routes are covered explicitly below (``/s/{token}`` is the
-    only one that renders HTML); sweeping them here would mean inventing
-    plausible ids and asserting against error pages instead of real ones.
-    """
-    paths = []
-    for route in app.routes:
-        methods = getattr(route, "methods", None) or set()
-        path = getattr(route, "path", "")
-        if "GET" not in methods or "{" in path:
-            continue
-        paths.append(path)
-    return sorted(set(paths))
-
-
-@pytest.fixture
-def client(db_session):
-    from main import app
-
-    try:
-        yield db_client(db_session)
-    finally:
-        app.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -143,7 +114,7 @@ def shared_page(db_session, user):
 # ---------------------------------------------------------------------------
 # FC-10: every page carries noindex
 # ---------------------------------------------------------------------------
-def test_every_html_route_is_noindexed(client):
+def test_every_html_route_is_noindexed(anon):
     """The sweep. Any HTML response from any GET route must carry ``noindex``.
 
     Written as a sweep with a collected failure list rather than a
@@ -153,8 +124,8 @@ def test_every_html_route_is_noindexed(client):
     from main import app
 
     offenders = []
-    for path in _static_get_paths(app):
-        response = client.get(path, follow_redirects=False)
+    for path in get_route_paths(app, parameterised=False):
+        response = anon.get(path, follow_redirects=False)
         content_type = response.headers.get("content-type", "")
         if "text/html" not in content_type:
             continue
@@ -168,18 +139,18 @@ def test_every_html_route_is_noindexed(client):
     )
 
 
-def test_the_share_page_itself_is_noindexed(client, shared_page):
+def test_the_share_page_itself_is_noindexed(anon, shared_page):
     """The one HTML route with a path parameter, covered explicitly."""
-    response = client.get(f"/s/{shared_page}")
+    response = anon.get(f"/s/{shared_page}")
 
     assert response.status_code == 200
     assert "text/html" in response.headers.get("content-type", "")
     assert _is_noindexed(response)
 
 
-def test_the_share_pages_neutral_404_is_also_noindexed(client):
+def test_the_share_pages_neutral_404_is_also_noindexed(anon):
     """A 404 body is still a body a crawler can be served."""
-    response = client.get("/s/not-a-real-token")
+    response = anon.get("/s/not-a-real-token")
 
     assert response.status_code == 404
     assert "noindex" in response.headers.get("x-robots-tag", "").lower()
@@ -189,7 +160,7 @@ def test_the_share_pages_neutral_404_is_also_noindexed(client):
 # FC-9: no discovery endpoint exists
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("path", DISCOVERY_PATHS)
-def test_no_discovery_endpoint_exists(client, path):
+def test_no_discovery_endpoint_exists(anon, path):
     """Sitemaps, robots.txt, search, and profile URLs are all simply absent.
 
     ``robots.txt`` returning 404 rather than a ``Disallow: /`` file is the
@@ -199,7 +170,7 @@ def test_no_discovery_endpoint_exists(client, path):
     per-page, honoured by well-behaved crawlers, and does not advertise
     anything about the surfaces it does not name.
     """
-    response = client.get(path, follow_redirects=False)
+    response = anon.get(path, follow_redirects=False)
 
     assert response.status_code == 404, (
         f"{path} exists (status {response.status_code}); FC-9 forbids "
@@ -236,8 +207,8 @@ def test_no_route_is_mounted_under_a_username_shaped_prefix():
 # RA-9: no structured data, no canonical
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("signal", INDEXING_SIGNALS)
-def test_the_share_page_emits_no_indexing_signal(client, shared_page, signal):
-    response = client.get(f"/s/{shared_page}")
+def test_the_share_page_emits_no_indexing_signal(anon, shared_page, signal):
+    response = anon.get(f"/s/{shared_page}")
 
     assert signal.lower() not in response.text.lower(), (
         f"the share page emits {signal!r}; RA-9 forbids structured data, a "
@@ -276,22 +247,6 @@ def test_the_share_page_template_source_emits_no_indexing_signal():
     for path, source in sources:
         for signal in INDEXING_SIGNALS:
             assert signal.lower() not in source, f"{path} contains {signal!r}"
-
-
-def test_the_openapi_schema_advertises_no_discovery_route():
-    """The API's own description is a discovery surface too.
-
-    ``/openapi.json`` is public and enumerates every route. It cannot list a
-    sitemap or profile endpoint, because none may exist -- this pins that the
-    schema and the routing table agree.
-    """
-    from main import app
-
-    schema_paths = set(app.openapi()["paths"])
-
-    assert not any(p.startswith("/@") or p.startswith("/profiles") for p in schema_paths)
-    assert "/sitemap.xml" not in schema_paths
-    assert "/robots.txt" not in schema_paths
 
 
 def test_the_share_route_is_absent_from_the_public_schema():

@@ -215,9 +215,6 @@ def create_user(
         session.commit()
         session.refresh(user)
         return user
-    # Unreachable: every path above either returns, raises, or continues, and
-    # the final iteration cannot continue.
-    raise AssertionError("username retry loop fell through")
 
 
 def set_email_verified(
