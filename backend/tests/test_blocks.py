@@ -252,6 +252,29 @@ def test_copy_cta_renders_only_when_a_url_is_supplied():
     assert 'href="https://app.example/shared/TOKEN"' in html
 
 
+def test_og_image_is_emitted_only_when_phase_2b_supplies_an_absolute_url():
+    """RA-7: the meta tag needs an absolutised URL, which the route builds."""
+    assert 'property="og:image"' not in render()
+    html = render(og_image="https://app.example/media/x.jpg")
+    assert '<meta property="og:image" content="https://app.example/media/x.jpg">' in html
+    assert 'content="summary_large_image"' in html
+
+
+def test_og_image_with_a_hostile_scheme_is_dropped():
+    html = render(og_image="javascript:alert(1)")
+    assert "javascript:" not in html.lower()
+    assert 'property="og:image"' not in html
+
+
+def test_og_title_cannot_break_out_of_the_meta_attribute():
+    html = render(make_recipe(title='" onload="alert(1)'))
+    tag = re.search(r'<meta property="og:title"[^>]*>', html).group(0)
+    # The payload's quote is an entity, so it never terminates the attribute:
+    # the whole thing stays one inert content value.
+    assert tag.count('"') == 4, tag
+    assert "&#34;" in tag or "&quot;" in tag
+
+
 def test_servings_form_works_without_javascript():
     html = render()
     assert "<form" in html
