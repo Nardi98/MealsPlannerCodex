@@ -20,10 +20,18 @@ export function validatePassword(password) {
 export const authApi = {
   // No auto-login: the account starts unverified and the server emails a
   // verification link. Returns the created user.
-  register: ({ email, password, display_name }) =>
+  // `username` is the account's public handle (UN-1/UN-5). It is omitted rather
+  // than sent as null when the caller has none, so the server falls back to
+  // deriving one from the email instead of failing validation.
+  register: ({ email, password, display_name, username }) =>
     request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, display_name }),
+      body: JSON.stringify({
+        email,
+        password,
+        display_name,
+        ...(username ? { username } : {}),
+      }),
     }),
   // On success the server sets the HttpOnly refresh cookie and returns the
   // access token. 403 when the email is not yet verified.

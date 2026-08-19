@@ -68,6 +68,8 @@ export function AuthProvider({ children }) {
 
   // Registration no longer logs in — the account is unverified until the user
   // follows the emailed link. Returns the created user for the "check email" UI.
+  // The payload is passed straight through, so the `username` the form collects
+  // (UN-5) reaches `authApi.register` without this layer knowing about it.
   const register = React.useCallback(
     async (payload) => authApi.register(payload),
     [],
