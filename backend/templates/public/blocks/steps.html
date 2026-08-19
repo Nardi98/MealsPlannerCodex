@@ -1,0 +1,13 @@
+{# SP-1 method.
+
+   ``block.data.procedure`` is already ``Markup`` produced by
+   ``public_markup.render_markup``, which escaped the text before building a
+   single tag. Do not add ``|safe`` here and do not pass raw text through. #}
+<section class="pub-section pub-steps">
+<h2 class="pub-section__title">{{ t('steps') }}</h2>
+{% if block.data.procedure %}
+<div class="pub-prose">{{ block.data.procedure }}</div>
+{% else %}
+<p class="pub-empty">{{ t('no_steps') }}</p>
+{% endif %}
+</section>

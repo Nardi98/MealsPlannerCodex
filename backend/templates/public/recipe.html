@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+{# The product's only unauthenticated page.
+
+   Rules for anyone editing this file:
+   * autoescaping is ON and must stay on -- never add ``|safe``;
+   * user text reaches markup only via ``render_markup`` (applied in blocks.py);
+   * URLs reach an attribute only via the ``safe_url`` filter;
+   * design values are ``var(--...)`` from /static/public.css, never literals (RA-5);
+   * no JSON-LD, no canonical, no schema.org, no tracking, no script (RA-9, FC-9).
+   Comments in this file must stay free of recipe or account data (PRV-3). #}
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="referrer" content="no-referrer">
+<title>{{ recipe.title }} &middot; {{ t('shared_recipe') }}</title>
+<meta property="og:type" content="article">
+<meta property="og:title" content="{{ recipe.title }}">
+<meta property="og:description" content="{{ t('by_author', author=recipe.author_display_name) }}">
+{% if og_image|safe_url %}
+<meta property="og:image" content="{{ og_image|safe_url }}">
+<meta name="twitter:card" content="summary_large_image">
+{% else %}
+<meta name="twitter:card" content="summary">
+{% endif %}
+<link rel="stylesheet" href="/static/public.css">
+</head>
+<body class="pub">
+<main class="pub-page">
+{% for block in blocks %}
+{% include "public/blocks/" ~ block.type ~ ".html" %}
+{% endfor %}
+{% if copy_url|safe_url %}
+<p class="pub-cta">
+<a class="pub-btn" href="{{ copy_url|safe_url }}">{{ t('copy_cta') }}</a>
+</p>
+{% endif %}
+<p class="pub-note">{{ t('privacy_note') }}</p>
+</main>
+</body>
+</html>
