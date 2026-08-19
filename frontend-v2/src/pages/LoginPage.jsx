@@ -64,6 +64,10 @@ export default function LoginPage() {
   const [password, setPassword] = React.useState('')
   const [confirmPassword, setConfirmPassword] = React.useState('')
   const [displayName, setDisplayName] = React.useState('')
+  // UN-5: the handle is chosen here, on the existing registration form. Phase
+  // 3C adds the debounced availability check (UN-7) and the full copy; this is
+  // the minimum that makes the field exist and reach the API.
+  const [username, setUsername] = React.useState('')
   const [error, setError] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [registeredEmail, setRegisteredEmail] = React.useState('')
@@ -87,7 +91,13 @@ export default function LoginPage() {
     setBusy(true)
     try {
       if (isRegister) {
-        await register({ email, password, display_name: displayName || null })
+        await register({
+          email,
+          password,
+          display_name: displayName || null,
+          // UN-3: lowercased on entry rather than rejected for case.
+          username: username.trim().toLowerCase(),
+        })
         setRegisteredEmail(email)
       } else {
         await login({ email, password })
@@ -137,6 +147,22 @@ export default function LoginPage() {
               onChange={(e) => setDisplayName(e.target.value)}
               autoComplete="name"
             />
+          </label>
+        )}
+        {isRegister && (
+          <label className="flex flex-col gap-1">
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Username</span>
+            <Input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoComplete="username"
+              required
+            />
+            <span style={{ fontSize: 12, color: 'var(--text-subtle)' }}>
+              3–30 lowercase letters, numbers, or underscores. Shown on recipes
+              you share.
+            </span>
           </label>
         )}
         <label className="flex flex-col gap-1">

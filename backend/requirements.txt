@@ -15,3 +15,7 @@ google-auth
 boto3
 slowapi
 pydantic[email]
+# D-1: the share page is the product's only unauthenticated surface, and
+# Jinja2's autoescape=True makes contextual output escaping (SP-10/SP-11) the
+# default rather than something each template has to remember.
+jinja2>=3.1

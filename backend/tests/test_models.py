@@ -6,7 +6,10 @@ from models import Recipe, Ingredient, RecipeIngredient, Tag, User
 def test_user_email_is_canonicalised_on_assignment(db_session):
     """The invariant lives on the model, so direct ORM construction obeys it too."""
     user = User(
-        email="  Direct.ORM@Example.COM ", hashed_password="x", auth_provider="local"
+        email="  Direct.ORM@Example.COM ",
+        username="direct_orm",
+        hashed_password="x",
+        auth_provider="local",
     )
     assert user.email == "direct.orm@example.com"
 
@@ -95,7 +98,10 @@ def test_many_to_many_tags(db_session):
 def test_tag_name_unique_constraint(db_session):
     # Uniqueness is now scoped per user: two same-named tags owned by the same
     # user collide, but different users may each own a "pasta" tag.
-    user = User(email="tags@x.test", hashed_password="x", auth_provider="local")
+    user = User(
+        email="tags@x.test", username="tags", hashed_password="x",
+        auth_provider="local",
+    )
     db_session.add(user)
     db_session.flush()
     db_session.add_all([

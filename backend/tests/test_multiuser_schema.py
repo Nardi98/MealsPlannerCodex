@@ -13,7 +13,13 @@ from models import Ingredient, Meal, MealPlan, Tag, User
 
 
 def _make_user(db_session, email):
-    user = User(email=email, hashed_password="x", auth_provider="local")
+    user = User(
+        email=email,
+        # UN-1 is NOT NULL, so a directly-constructed User needs a handle.
+        username=email.split("@")[0].replace(".", "_"),
+        hashed_password="x",
+        auth_provider="local",
+    )
     db_session.add(user)
     db_session.flush()
     return user

@@ -146,6 +146,8 @@ def test_user_out_has_email_verified():
     m = UserOut(
         id=1,
         email="user@example.com",
+        # UN-1: every account has a handle, so ``UserOut`` requires one.
+        username="user",
         auth_provider="local",
         default_people=2,
         email_verified=True,

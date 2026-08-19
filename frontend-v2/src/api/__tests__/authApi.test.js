@@ -14,16 +14,37 @@ function mockJson(data) {
   )
 }
 
-test('register posts email/password/display_name to /auth/register', async () => {
-  mockJson({ id: 1, email: 'a@b.c', auth_provider: 'local' })
+test('register posts email/password/display_name/username to /auth/register', async () => {
+  mockJson({ id: 1, email: 'a@b.c', auth_provider: 'local', username: 'chef' })
 
-  const result = await authApi.register({ email: 'a@b.c', password: 'pw', display_name: 'A' })
+  const result = await authApi.register({
+    email: 'a@b.c',
+    password: 'pw',
+    display_name: 'A',
+    username: 'chef',
+  })
 
   const [url, opts] = globalThis.fetch.mock.calls[0]
   expect(url).toContain('/auth/register')
   expect(opts.method).toBe('POST')
-  expect(JSON.parse(opts.body)).toEqual({ email: 'a@b.c', password: 'pw', display_name: 'A' })
-  expect(result).toEqual({ id: 1, email: 'a@b.c', auth_provider: 'local' })
+  expect(JSON.parse(opts.body)).toEqual({
+    email: 'a@b.c',
+    password: 'pw',
+    display_name: 'A',
+    username: 'chef',
+  })
+  expect(result.username).toBe('chef')
+})
+
+// UN-1 makes the handle non-null server-side, but a caller that omits it (the
+// server then derives one) must not send an explicit null and trip validation.
+test('register omits username when the caller gives none', async () => {
+  mockJson({ id: 1, email: 'a@b.c', auth_provider: 'local', username: 'a' })
+
+  await authApi.register({ email: 'a@b.c', password: 'pw', display_name: null })
+
+  const [, opts] = globalThis.fetch.mock.calls[0]
+  expect(Object.keys(JSON.parse(opts.body))).not.toContain('username')
 })
 
 test('login posts credentials to /auth/login and returns the token', async () => {

@@ -51,15 +51,23 @@ test('submits the login form with entered credentials', async () => {
   )
 })
 
+// Fills every field the registration form requires. UN-5 adds the username, so
+// each register-path test goes through here rather than repeating the sequence.
+function fillRegistration({ username = 'newcook' } = {}) {
+  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
+  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: username } })
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fireEvent.change(screen.getByLabelText(/confirm password/i), {
+    target: { value: 'Abcdef12' },
+  })
+}
+
 test('switches to register and submits a policy-compliant password', async () => {
   register.mockResolvedValue({ id: 3, email: 'n@b.c' })
   renderPage()
 
-  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
-
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
-  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
+  fillRegistration()
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   await waitFor(() =>
@@ -69,11 +77,28 @@ test('switches to register and submits a policy-compliant password', async () =>
   )
 })
 
+// UN-5: the handle is chosen at registration, on the existing form.
+test('sends the chosen username in the register payload', async () => {
+  register.mockResolvedValue({ id: 3, email: 'n@b.c' })
+  renderPage()
+
+  fillRegistration({ username: 'ChefAnna' })
+  fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
+
+  await waitFor(() => expect(register).toHaveBeenCalledTimes(1))
+  // UN-3 says input is lowercased on entry rather than rejected for case.
+  expect(register.mock.calls[0][0].username).toBe('chefanna')
+})
+
+test('the login form does not ask for a username', () => {
+  renderPage()
+  expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument()
+})
+
 test('blocks register and shows an error for a weak password', async () => {
   renderPage()
 
-  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
+  fillRegistration()
   fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'weak' } })
   fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'weak' } })
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
@@ -85,9 +110,7 @@ test('blocks register and shows an error for a weak password', async () => {
 test('blocks register when the confirm password does not match', async () => {
   renderPage()
 
-  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
+  fillRegistration()
   fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef99' } })
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
@@ -99,15 +122,17 @@ test('does not send the confirm value in the register payload', async () => {
   register.mockResolvedValue({ id: 3, email: 'n@b.c' })
   renderPage()
 
-  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
-  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
+  fillRegistration()
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   await waitFor(() => expect(register).toHaveBeenCalledTimes(1))
   const payload = register.mock.calls[0][0]
-  expect(payload).toEqual({ email: 'n@b.c', password: 'Abcdef12', display_name: null })
+  expect(payload).toEqual({
+    email: 'n@b.c',
+    password: 'Abcdef12',
+    display_name: null,
+    username: 'newcook',
+  })
   expect(Object.keys(payload)).not.toContain('confirmPassword')
 })
 
@@ -115,10 +140,7 @@ test('shows a check-your-email screen after registering', async () => {
   register.mockResolvedValue({ id: 3, email: 'n@b.c' })
   renderPage()
 
-  fireEvent.click(screen.getByRole('button', { name: /create an account/i }))
-  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'n@b.c' } })
-  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: 'Abcdef12' } })
-  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: 'Abcdef12' } })
+  fillRegistration()
   fireEvent.click(screen.getByRole('button', { name: /sign up/i }))
 
   expect(await screen.findByText(/check your email/i)).toBeInTheDocument()

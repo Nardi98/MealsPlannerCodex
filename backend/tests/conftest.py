@@ -88,7 +88,27 @@ def user(db_session):
     import crud
 
     return crud.create_user(
-        db_session, email="owner@test.local", hashed_password="x"
+        db_session,
+        email="owner@test.local",
+        username="owner",
+        hashed_password="x",
+    )
+
+
+@pytest.fixture
+def other_user(db_session):
+    """A second persisted account, for cross-user and sharing tests.
+
+    Every requirement in §5 and §7 is about two people, so the second account is
+    a fixture rather than something each test hand-rolls.
+    """
+    import crud
+
+    return crud.create_user(
+        db_session,
+        email="other@test.local",
+        username="other",
+        hashed_password="x",
     )
 
 
@@ -185,7 +205,10 @@ def api_client(engine):
     session = SessionLocal()
     try:
         user = crud.create_user(
-            session, email="routes@test.local", hashed_password="x"
+            session,
+            email="routes@test.local",
+            username="routes",
+            hashed_password="x",
         )
     finally:
         session.close()

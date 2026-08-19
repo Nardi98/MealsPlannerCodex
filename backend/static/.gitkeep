@@ -1,0 +1,4 @@
+# Mount point for the public stylesheet (RA-5 / D-4). Phase 1B adds public.css
+# here; ``main`` mounts this directory at /static so the share page can load it
+# without JavaScript. ``static`` is on the UN-4 reserved-username list precisely
+# so no user handle can ever shadow this path.

@@ -22,3 +22,17 @@ rather than replaying these entries.
 | 004 | Add `meals.side_recipe_id` | Nullable FK from `meals` to `recipes` for a single side dish. |
 | 005 | Add `meal_side_dishes` table | Replace the single `meals.side_recipe_id` with an ordered `meal_side_dishes(plan_date, meal_number, position, side_recipe_id)` table (composite PK); migrate existing sides to `position = 1` and drop `meals.side_recipe_id`. |
 | 006 | Add `meals.leftover` | New non-null boolean flag, default `false`. |
+| 007 | Recipe sharing, Part 1 | **Requires a fresh database.** Adds `users.username` (NOT NULL, case-insensitively unique via the functional index `uq_user_username_lower`) and `users.username_changed_at`; adds `recipes.visibility` (NOT NULL, `DEFAULT 'private'`), `page_layout`, `page_theme`, `copy_count`, `source_recipe_id`, `source_user_id`, `source_author_username`, `source_recipe_title`, `copied_at`; adds the `recipe_shares` and `reserved_usernames` tables. |
+
+> **Release note for 007.** `Base.metadata.create_all` never `ALTER`s an existing
+> table, and a NOT NULL unique `users.username` is unreachable on a populated one.
+> Per the project's development story this release therefore **requires a fresh
+> database**: drop and recreate, or re-run `scripts/seed_testing_data.py`.
+>
+> If a deployed environment holds data worth keeping, a one-off SQL script is
+> required and is deliberately **not** part of this change: `ADD COLUMN username
+> TEXT` → backfill from the email local part (sanitised to `^[a-z0-9_]{3,30}$`
+> and disambiguated with a numeric suffix, as `crud._derive_username` does) →
+> `CREATE UNIQUE INDEX uq_user_username_lower ON users (lower(username))` →
+> `ALTER COLUMN username SET NOT NULL`. The remaining columns are all nullable
+> or defaulted and can be added in place.
