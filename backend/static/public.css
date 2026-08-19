@@ -1,0 +1,439 @@
+/* The public share page stylesheet (RA-5, FC-7, D-4).
+ *
+ * The :root block below mirrors the token block in frontend-v2/src/index.css
+ * value for value, and a test fails if the two drift. Templates reference
+ * var(--...) only: a hex colour or a px literal in a template is a test
+ * failure, which is how "design values MUST NOT be duplicated as literals"
+ * becomes an enforceable rule rather than a wish.
+ *
+ * This file is served unauthenticated to anyone holding a share link. It
+ * therefore contains no user data, no @import, and no off-origin url():
+ * a stylesheet that fetched a font or an image from another host would leak
+ * the fact and timing of every share view to that host.
+ *
+ * Part 2 reuses this file unchanged for its public recipe and profile pages.
+ */
+
+:root {
+  /* ---- Base palette (mirrors frontend-v2/src/index.css) ---- */
+  --c-white: #F8FAF9;
+  --c-pos: #0C3A2D;
+  --c-neg: #BD210F;
+  --c-a1: #6D9773;
+  --c-a2: #FFB902;
+  --c-a3: #BB8A52;
+  --border: #e2e8f0;
+
+  --text-strong: #0C3A2D;
+  --text-muted: #475569;
+  --text-subtle: #64748b;
+
+  /* ---- Semantic aliases ---- */
+  --surface-card: #FFFFFF;
+  --surface-sunken: #EEF3EF;
+  --border-default: var(--border);
+  --text-on-dark: #F8FAF9;
+  --text-on-accent: #121212;
+
+  --accent-primary: var(--c-a2);
+  --accent-secondary: var(--c-a1);
+  --danger: var(--c-neg);
+
+  --page-bg: #ECE6D9;
+
+  /* ---- Typography ---- */
+  --font-display: 'Sora', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Work Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ---- Spacing, radius & layout ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px 0 rgb(12 58 45 / 0.06), 0 1px 3px 0 rgb(12 58 45 / 0.05);
+  --shadow-md: 0 4px 10px -2px rgb(12 58 45 / 0.10), 0 2px 6px -2px rgb(12 58 45 / 0.06);
+
+  /* ---- Public page only ---- */
+  --pub-measure: 44rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+.pub {
+  margin: 0;
+  padding: var(--space-6) var(--space-4) var(--space-12);
+  background: var(--page-bg);
+  color: var(--text-strong);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  -webkit-text-size-adjust: 100%;
+}
+
+.pub-page {
+  max-width: var(--pub-measure);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ---- Hero ---- */
+
+.pub-hero {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-md);
+}
+
+.pub-hero__image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  background: var(--surface-sunken);
+}
+
+.pub-eyebrow {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.pub-hero__title {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  margin: var(--space-2) 0 var(--space-3);
+  color: var(--text-strong);
+}
+
+.pub-hero__byline {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-muted);
+}
+
+.pub-handle {
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.pub-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+}
+
+.pub-pill {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.pub-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+
+.pub-tag {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Sections ---- */
+
+.pub-section {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.pub-section__title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  margin: 0 0 var(--space-4);
+  color: var(--text-strong);
+}
+
+.pub-ingredients .pub-list {
+  margin-top: var(--space-4);
+}
+
+.pub-steps .pub-prose {
+  margin-top: 0;
+}
+
+/* ---- Servings control (SP-2, works without JavaScript) ---- */
+
+.pub-servings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.pub-servings__label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-muted);
+}
+
+.pub-servings__input {
+  width: var(--space-12);
+  padding: var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.pub-servings__input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+/* ---- Lists ---- */
+
+.pub-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pub-list__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.pub-list__item:last-child {
+  border-bottom: 0;
+}
+
+.pub-list__name {
+  color: var(--text-strong);
+}
+
+.pub-list__amount {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pub-empty {
+  margin: 0;
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+/* ---- Prose (the only place restricted user markup is rendered) ---- */
+
+.pub-prose p {
+  margin: 0 0 var(--space-4);
+}
+
+.pub-prose h2,
+.pub-prose h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.pub-prose ul,
+.pub-prose ol {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-6);
+}
+
+.pub-prose li {
+  margin-bottom: var(--space-2);
+}
+
+.pub-prose a {
+  color: var(--c-pos);
+  text-underline-offset: 2px;
+}
+
+.pub-prose strong {
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- Attribution & author ---- */
+
+.pub-attribution {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--accent-secondary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.pub-author {
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.pub-author__name {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+}
+
+.pub-author__handle {
+  margin: var(--space-1) 0 0;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+/* ---- Call to action & footer note ---- */
+
+.pub-cta {
+  margin: 0;
+  text-align: center;
+}
+
+.pub-btn {
+  display: inline-block;
+  padding: var(--space-3) var(--space-6);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+  color: var(--text-on-accent);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.pub-btn:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.pub-btn:active {
+  transform: scale(0.98);
+}
+
+.pub-btn:focus-visible {
+  outline: 2px solid var(--c-pos);
+  outline-offset: 2px;
+}
+
+.pub-btn--quiet {
+  padding: var(--space-2) var(--space-4);
+  background: var(--c-pos);
+  color: var(--text-on-dark);
+  font-size: var(--text-sm);
+}
+
+.pub-note {
+  margin: 0;
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* ---- Responsive ---- */
+
+@media (max-width: 30rem) {
+  .pub {
+    padding: var(--space-4) var(--space-3) var(--space-10);
+  }
+
+  .pub-hero,
+  .pub-section,
+  .pub-author {
+    padding: var(--space-4);
+  }
+
+  .pub-hero__title {
+    font-size: var(--text-2xl);
+  }
+
+  .pub-list__item {
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pub-btn {
+    transition: none;
+  }
+
+  .pub-btn:active {
+    transform: none;
+  }
+}
