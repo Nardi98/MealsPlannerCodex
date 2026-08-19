@@ -291,6 +291,57 @@ def list_shared_with_me(
     return entries
 
 
+def _addressed_share(
+    db: Session, share_id: int, user: models.User
+) -> models.RecipeShare:
+    """One of the caller's *own* live entries, or an indistinguishable 404.
+
+    Resolution goes through :func:`shares.active_shares_for_recipient` rather
+    than ``db.get(RecipeShare, share_id)`` plus a check. That is not a style
+    preference: the helper is the single definition of "addressed to me and
+    still live", so revoked, expired, dismissed and unverified-address all fail
+    closed here by construction, and cannot drift away from the list route.
+
+    404 -- never 403 -- for an id the caller is not the recipient of. Share ids
+    are sequential integers, so a 403 would confirm the row exists and turn
+    these routes into an enumeration oracle over every share in the system.
+    """
+    for share in shares.active_shares_for_recipient(db, user):
+        if share.id == share_id:
+            return share
+    raise _not_found()
+
+
+@router.get("/shared-with-me/{share_id}", response_model=SharedWithMeEntry)
+def get_shared_with_me_entry(
+    share_id: int,
+    db: Db,
+    current_user: CurrentUser,
+) -> SharedWithMeEntry:
+    """One entry, in full, for the SPA to render (SWM-2's *view*).
+
+    Tokens are stored as digests only (D-5), so a recipient who no longer holds
+    the original URL cannot use ``GET /s/{token}``. This is the same recipe, at
+    the same width: :class:`public_schema.PublicRecipe` is the PRV-2 allowlist
+    the public page renders, and reusing it is what guarantees a future
+    ``Recipe`` column is not silently disclosed to a non-owner.
+    """
+    share = _addressed_share(db, share_id, current_user)
+    recipe = db.get(models.Recipe, share.recipe_id)
+    if recipe is None:
+        raise _not_found()
+    author = db.get(models.User, recipe.user_id)
+    if author is None:
+        raise _not_found()
+    return SharedWithMeEntry(
+        share_id=share.id,
+        mode=share.mode,
+        created_at=share.created_at,
+        expires_at=share.expires_at,
+        recipe=public_schema.PublicRecipe.from_recipe(recipe, author),
+    )
+
+
 @router.post("/shared-with-me/{share_id}/dismiss", status_code=204)
 def dismiss_shared_with_me(
     share_id: int,
@@ -370,6 +421,43 @@ def copy_shared_recipe(
     if source is None:
         raise _not_found()
     if source.user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="This recipe is already yours")
+
+    # Asked before the copy, since the copy itself would satisfy the query.
+    already_copied = recipe_copy.existing_copy(db, source, current_user) is not None
+    made = recipe_copy.copy_recipe(db, source, current_user)
+    return CopyResult(
+        id=made.id, title=made.title, already_copied=already_copied
+    )
+
+
+@router.post(
+    "/shared-with-me/{share_id}/copy", response_model=CopyResult, status_code=201
+)
+@ratelimit.limiter.limit(ratelimit.COPY_RATE_LIMIT)
+def copy_shared_with_me_entry(
+    request: Request,
+    share_id: int,
+    db: Db,
+    current_user: CurrentUser,
+) -> CopyResult:
+    """Copy one of the caller's own entries into their book (SWM-2's *copy*).
+
+    The ``person``-mode check the token route performs is already satisfied
+    before this body runs: :func:`_addressed_share` only ever yields shares
+    whose recipient *is* the caller, which is a strictly narrower test than
+    ``is_named_recipient``. There is no second path in.
+
+    ``request`` is unused by the body and required by slowapi (SH-11 /
+    ``COPY_RATE_LIMIT``); the same limit as the token route, since this is the
+    same act by the same account.
+    """
+    share = _addressed_share(db, share_id, current_user)
+    source = db.get(models.Recipe, share.recipe_id)
+    if source is None:
+        raise _not_found()
+    if source.user_id == current_user.id:
+        # CP-10. 403 here leaks nothing: the caller owns the row.
         raise HTTPException(status_code=403, detail="This recipe is already yours")
 
     # Asked before the copy, since the copy itself would satisfy the query.
