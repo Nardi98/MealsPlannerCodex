@@ -24,7 +24,9 @@ export default function MealPlanCalendar({
   onArmSwap,
   armedCell,
 }) {
-  const renderCell = (d, idx) => {
+  // One cell carries the tutorial's anchor: the step explains what a cell is,
+  // and the whole calendar is taller than the window on most screens.
+  const renderCell = (d, idx, isTourAnchor = false) => {
     const iso = fmt(d)
     const meal = plan[iso]?.[idx]
     const armed =
@@ -43,6 +45,7 @@ export default function MealPlanCalendar({
       <div
         key={`${idx}-${iso}`}
         data-cell
+        data-tour={isTourAnchor ? 'mealplan-cell' : undefined}
         className="relative border p-2 h-24 cursor-pointer"
         onClick={() =>
           armedCell
@@ -144,7 +147,7 @@ export default function MealPlanCalendar({
             )
           })}
           <div className="p-2 text-left font-medium">Lunch</div>
-          {weekDays.map((d) => renderCell(d, 0))}
+          {weekDays.map((d, i) => renderCell(d, 0, i === 0))}
           <div className="p-2 text-left font-medium">Dinner</div>
           {weekDays.map((d) => renderCell(d, 1))}
         </div>

@@ -57,3 +57,9 @@ test('collapse state persists to localStorage', async () => {
     expect(stored.Vegetables).toBe(true)
   })
 })
+
+test('marks the first category section as the tutorial anchor, not the whole list', async () => {
+  const { container } = render(<IngredientsPage />)
+  await screen.findByText('Tomato')
+  expect(container.querySelectorAll('[data-tour="ingredients-group"]')).toHaveLength(1)
+})

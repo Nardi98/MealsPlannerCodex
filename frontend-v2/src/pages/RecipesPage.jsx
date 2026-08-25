@@ -327,9 +327,12 @@ export default function RecipesPage() {
           gap: 16,
         }}
       >
-        {filteredRecipes.map((r) => (
+        {filteredRecipes.map((r, i) => (
           <Card
             key={r.id}
+            // The tour points at one card, not the grid: the grid is taller than
+            // the window, and there is no room beside it for a bubble.
+            data-tour={i === 0 ? 'recipes-card' : undefined}
             onClick={() => setOpened(r.id)}
             className="flex cursor-pointer flex-col overflow-hidden"
             style={{ padding: 0 }}

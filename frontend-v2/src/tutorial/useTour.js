@@ -7,6 +7,27 @@ function sameFrame(a, b) {
   return a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height
 }
 
+// A step's `target` is either a selector or a list of them in priority order —
+// the small, precise anchor first, the container it lives in as a fallback for
+// the pages where the small one does not exist yet (an empty recipe book, a week
+// with no plan). Passing the list to `querySelector` directly would not do: it
+// would coerce to a comma-joined selector list and return document order.
+export function findTarget(target) {
+  const selectors = Array.isArray(target) ? target : [target]
+  for (const selector of selectors) {
+    const found = document.querySelector(selector)
+    if (found) return found
+  }
+  return null
+}
+
+// Off-screen anchors are the other half of the bubble-off-screen bug: the tour
+// would talk about something the user cannot see, and point at a cutout drawn
+// past the edge of the window.
+export function isFullyVisible(box, viewportHeight) {
+  return box.top >= 0 && box.top + box.height <= viewportHeight
+}
+
 function currentViewport() {
   return typeof window === 'undefined'
     ? { width: 1024, height: 768 }
@@ -95,7 +116,7 @@ export function useTour({ id, steps, enabled = true }) {
 
     const measure = () => {
       frame = 0
-      if (!el || !el.isConnected) el = document.querySelector(step.target)
+      if (!el || !el.isConnected) el = findTarget(step.target)
       const box = el ? el.getBoundingClientRect() : null
       const next = box
         ? { top: box.top, left: box.left, width: box.width, height: box.height }
@@ -111,6 +132,18 @@ export function useTour({ id, steps, enabled = true }) {
     const schedule = () => {
       if (frame) return
       frame = window.requestAnimationFrame(measure)
+    }
+
+    // Bring the step's anchor on screen before saying anything about it. The
+    // scroll listener below re-measures as it animates, so nothing else is
+    // needed to keep the cutout and the bubble on it the whole way. The lookup
+    // primes `el`, so `measure()` below costs one layout read, not two.
+    el = findTarget(step.target)
+    if (el && typeof el.scrollIntoView === 'function') {
+      const box = el.getBoundingClientRect()
+      if (!isFullyVisible(box, window.innerHeight)) {
+        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+      }
     }
 
     measure()

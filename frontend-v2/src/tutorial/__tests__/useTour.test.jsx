@@ -100,3 +100,37 @@ test('start replays a completed tour from the beginning', () => {
   expect(result.current.running).toBe(true)
   expect(result.current.index).toBe(0)
 })
+
+test('a step may list several selectors and prefers the earlier one', () => {
+  // The fallback is first in the document on purpose: the list is a priority
+  // order, not a plain CSS selector list, which would match document order.
+  anchor('fallback', { width: 999 })
+  anchor('preferred', { width: 111 })
+  const steps = [{ target: ['[data-tour="preferred"]', '[data-tour="fallback"]'], title: 'A', body: '' }]
+  const { result } = renderHook(() => useTour({ id: 'recipes', steps }))
+  expect(result.current.rect.width).toBe(111)
+})
+
+test('a step falls back to the next selector when the preferred one is absent', () => {
+  anchor('fallback', { width: 999 })
+  const steps = [{ target: ['[data-tour="preferred"]', '[data-tour="fallback"]'], title: 'A', body: '' }]
+  const { result } = renderHook(() => useTour({ id: 'recipes', steps }))
+  expect(result.current.rect.width).toBe(999)
+})
+
+test('an off-screen target is scrolled into the middle of the screen', () => {
+  const el = anchor('a', { top: 2400, bottom: 2440 })
+  const calls = []
+  el.scrollIntoView = (opts) => calls.push(opts)
+  renderHook(() => useTour({ id: 'recipes', steps: STEPS }))
+  expect(calls).toHaveLength(1)
+  expect(calls[0]).toMatchObject({ block: 'center' })
+})
+
+test('a target already in view is left where it is', () => {
+  const el = anchor('a')
+  const calls = []
+  el.scrollIntoView = (opts) => calls.push(opts)
+  renderHook(() => useTour({ id: 'recipes', steps: STEPS }))
+  expect(calls).toHaveLength(0)
+})

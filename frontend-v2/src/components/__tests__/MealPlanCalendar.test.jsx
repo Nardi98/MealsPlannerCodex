@@ -73,3 +73,10 @@ test('the armed cell is tinted yellow', () => {
   const armed = screen.getByText('Lunch A').closest('div[data-cell]')
   expect(armed.getAttribute('style')).toMatch(/255, ?185, ?2/)
 })
+
+test('marks the first lunch cell as the tutorial anchor, so the tour points at one meal', () => {
+  const { container } = renderCalendar()
+  const anchors = container.querySelectorAll('[data-tour="mealplan-cell"]')
+  expect(anchors).toHaveLength(1)
+  expect(anchors[0].textContent).toContain('Lunch A')
+})

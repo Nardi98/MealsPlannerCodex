@@ -6,10 +6,16 @@
 //
 // `placement` is a preference: the bubble flips to the opposite side when the
 // preferred one has no room (see placement.js).
+//
+// A `target` may be a list of selectors in priority order. The steps that talk
+// about a collection point at one member of it — one recipe card, one meal cell
+// — because a bubble cannot sit beside a container taller than the window, and
+// fall back to the container for the pages where that member does not exist yet
+// (an empty recipe book, a week with no plan). See findTarget in useTour.js.
 
 export const RECIPES_STEPS = [
   {
-    target: '[data-tour="recipes-grid"]',
+    target: ['[data-tour="recipes-card"]', '[data-tour="recipes-grid"]'],
     title: 'Your recipe book',
     body: 'Every recipe you have lives here. Click any card to see it, edit it, or share it with a friend.',
     placement: 'bottom',
@@ -22,8 +28,8 @@ export const RECIPES_STEPS = [
   },
   {
     target: '[data-tour="recipes-import"]',
-    title: 'Or let the web do the typing',
-    body: 'Paste a link to a recipe page and it gets pulled in for you, ingredients and all.',
+    title: 'Or let a chatbot do the typing',
+    body: 'Copy the prompt you get here into any chatbot, along with the recipe, and paste back the JSON it returns — ingredients and all.',
     placement: 'bottom',
   },
   {
@@ -42,7 +48,7 @@ export const RECIPES_STEPS = [
 
 export const MEAL_PLAN_STEPS = [
   {
-    target: '[data-tour="mealplan-calendar"]',
+    target: ['[data-tour="mealplan-cell"]', '[data-tour="mealplan-calendar"]'],
     title: 'Your week, two meals a day',
     body: 'Each cell is a meal. Click one to accept it, reject it, swap it for something else, or add a side dish.',
     placement: 'bottom',
@@ -54,7 +60,7 @@ export const MEAL_PLAN_STEPS = [
     placement: 'bottom',
   },
   {
-    target: '[data-tour="mealplan-form"]',
+    target: ['[data-tour="mealplan-tabs"]', '[data-tour="mealplan-form"]'],
     title: 'Tell the planner what you want',
     body: 'Pick the dates, lean on a tag, avoid an ingredient, or plan around what is already in your fridge.',
     placement: 'top',
@@ -69,7 +75,7 @@ export const MEAL_PLAN_STEPS = [
 
 export const INGREDIENTS_STEPS = [
   {
-    target: '[data-tour="ingredients-list"]',
+    target: ['[data-tour="ingredients-group"]', '[data-tour="ingredients-list"]'],
     title: 'Everything your recipes are made of',
     body: 'Ingredients are grouped by category. Collapse a group you rarely look at — it stays that way.',
     placement: 'bottom',

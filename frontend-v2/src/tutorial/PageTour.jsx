@@ -2,7 +2,7 @@ import React from 'react'
 import { useTour } from './useTour'
 import { TourOverlay } from './TourOverlay'
 import { TourBubble } from './TourBubble'
-import { placeBubble } from './placement'
+import { placeBubble, maxBubbleHeight } from './placement'
 import { useTutorial } from './tutorialContext'
 import { TOURS } from './steps'
 
@@ -19,18 +19,34 @@ export function PageTour({ id, steps, enabled = true }) {
   const tour = useTour({ id, steps: tourSteps, enabled })
   const { running, step, index, total, isLast, rect, viewport } = tour
   const { register } = useTutorial()
+  const [size, setSize] = React.useState(null)
+  const bubble = React.useRef(null)
 
   // Offer this page's tour to the header's replay button for as long as the
   // page is mounted.
   React.useEffect(() => register(tour.start), [register, tour.start])
 
+  // How big the bubble actually turned out. A step with long copy is taller than
+  // any estimate, and an estimate that reads low is how the bubble ends up
+  // hanging off the bottom of the window — so measure it and place it again.
+  // Re-measured whenever the step changes: a longer step must never be placed by
+  // the previous one's height. Before paint, so the bubble never shows in the
+  // wrong place first — and again on a resize, which reflows the copy.
+  React.useLayoutEffect(() => {
+    const node = bubble.current
+    const box = node ? node.getBoundingClientRect() : null
+    setSize(box ? { width: box.width, height: box.height } : null)
+  }, [index, running, viewport.width])
+
   if (!running || !step) return null
 
-  const { top, left, arrow } = placeBubble(rect, step.placement, viewport)
+  const { top, left, arrow } = placeBubble(rect, step.placement, viewport, size)
 
   return (
     <TourOverlay rect={rect}>
       <TourBubble
+        ref={bubble}
+        maxHeight={maxBubbleHeight(viewport)}
         title={step.title}
         body={step.body}
         index={index}

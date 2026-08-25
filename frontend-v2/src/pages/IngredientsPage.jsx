@@ -219,7 +219,7 @@ export default function IngredientsPage() {
       <div className="space-y-4" data-tour="ingredients-list">
         {groups
           .filter((g) => selected.has(g.category))
-          .map((g) => {
+          .map((g, i) => {
             const isCollapsed = !!collapsed[g.category]
             return (
               <section key={g.category}>
@@ -227,6 +227,9 @@ export default function IngredientsPage() {
                   type="button"
                   onClick={() => toggleCollapse(g.category)}
                   aria-label={`${g.category} section`}
+                  // The tour anchors on the first group's header rather than the
+                  // whole list, which is taller than the window.
+                  data-tour={i === 0 ? 'ingredients-group' : undefined}
                   className="flex items-center gap-2 w-full text-left py-1"
                   style={{ color: 'var(--text-strong)' }}
                 >

@@ -89,6 +89,9 @@ export default function GenerationForm({
         <div
           role="tablist"
           aria-label="Plan settings sections"
+          // The tutorial points here rather than at the whole card: a bubble
+          // anchored on something taller than the window has nowhere to sit.
+          data-tour="mealplan-tabs"
           className="flex gap-6 border-b"
           style={{ borderColor: 'var(--border)' }}
         >

@@ -424,3 +424,19 @@ test('does not offer the starter recipes again after they were dismissed', async
   await waitFor(() => expect(recipesApi.fetchAll).toHaveBeenCalledTimes(2))
   expect(screen.queryByText('Start with a few recipes')).toBeNull()
 })
+
+test('marks the first recipe card as the tutorial anchor, not the whole grid', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main' },
+    { id: 2, title: 'Pizza', course: 'main' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  const { container } = render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  const anchors = container.querySelectorAll('[data-tour="recipes-card"]')
+  expect(anchors).toHaveLength(1)
+  expect(anchors[0].textContent).toContain('Spaghetti')
+})

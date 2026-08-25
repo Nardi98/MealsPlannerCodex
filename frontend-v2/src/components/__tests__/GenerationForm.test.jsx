@@ -84,3 +84,8 @@ test('the generate button is available regardless of the active tab', () => {
   fireEvent.click(screen.getByRole('tab', { name: /your fridge/i }))
   expect(screen.getByRole('button', { name: /generate plan/i })).toBeInTheDocument()
 })
+
+test('marks its tab strip as the tutorial anchor, so the tour points at a strip and not the whole card', () => {
+  const { container } = renderForm()
+  expect(container.querySelectorAll('[data-tour="mealplan-tabs"]')).toHaveLength(1)
+})

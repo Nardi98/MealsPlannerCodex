@@ -40,9 +40,13 @@ function LinkButton({ onClick, underline, children }) {
 // `arrow` is the direction the arrow points — or null when there is no target
 // to point at, in which case the bubble sits in the middle of the screen and
 // simply explains itself.
-export function TourBubble({ title, body, index, total, isLast, arrow, onNext, onBack, onSkip, style }) {
+export const TourBubble = React.forwardRef(function TourBubble(
+  { title, body, index, total, isLast, arrow, maxHeight, onNext, onBack, onSkip, style },
+  ref,
+) {
   return (
     <Card
+      ref={ref}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -50,6 +54,11 @@ export function TourBubble({ title, body, index, total, isLast, arrow, onNext, o
         position: 'absolute',
         width: BUBBLE_WIDTH,
         boxSizing: 'border-box',
+        // A step whose copy runs long scrolls inside the bubble rather than
+        // growing past the bottom of the window. The budget comes from the
+        // placement module so the bubble is sized and positioned by one rule.
+        maxHeight,
+        overflowY: 'auto',
         boxShadow: 'var(--shadow-lg)',
         padding: 18,
         fontFamily: 'var(--font-display)',
@@ -107,4 +116,4 @@ export function TourBubble({ title, body, index, total, isLast, arrow, onNext, o
       </div>
     </Card>
   )
-}
+})
