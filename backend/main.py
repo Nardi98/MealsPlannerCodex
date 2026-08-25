@@ -678,7 +678,21 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
         ingredient_obj = crud.get_or_create_ingredient(
             db, ing.id, ing.name, ing.unit, user_id
         )
-        ingredient_obj.season_months = ing.season_months or list(range(1, 13))
+        # Seasonality belongs to the shared ingredient row, and the row is owned
+        # by the ``/ingredients`` endpoints -- a recipe payload only *names* it.
+        # So seed it when this call just created the row, and never touch a row
+        # that already existed: the SPA's recipe forms do not collect the field
+        # and ``serialiseRecipe`` fills the gap with an all-year default, which
+        # assigning unconditionally would stamp onto every ingredient of every
+        # recipe anyone saves -- flattening the seasonality the account was
+        # seeded with, for every other recipe using that ingredient too, and
+        # with it the planner's seasonality score.
+        #
+        # ``id is None`` is precisely "added to the session by the call above
+        # and not yet flushed"; anything resolved by id or by name is already
+        # persistent.
+        if ingredient_obj.id is None:
+            ingredient_obj.season_months = ing.season_months or list(range(1, 13))
         ingredients.append(
             models.RecipeIngredient(
                 ingredient=ingredient_obj,
