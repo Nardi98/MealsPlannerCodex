@@ -51,10 +51,26 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 - `database.py` — engine + `SessionLocal` + `Base`. The database is **PostgreSQL only**; `resolve_database_url()` reads the required `DATABASE_URL` env var (normalizing a bare `postgres://` scheme) and raises `RuntimeError` when it is unset — there is no fallback, so a misconfigured deploy fails loudly instead of silently using the wrong database. `main.py` calls `Base.metadata.create_all` on startup, so a fresh DB needs no migration step.
 
 ### Migrations
-**The real schema story is `Base.metadata.create_all` on startup** (`main.py`), so a fresh DB needs no migration step. There is **no active migration system** and `alembic` is not a dependency. During development, changing the schema means changing the model and starting against a fresh DB — nothing else. Real migrations will be adopted via `alembic init` (generating a fresh baseline from the models) when the project approaches production and must evolve a populated DB in place. `backend/migrations/README.md` holds a historical changelog of past schema changes; do **not** add new revision scripts.
+The schema is owned by **Alembic**. `alembic upgrade head` runs at container start
+(`backend/Dockerfile`), and the app does **not** call `Base.metadata.create_all` -- `create_all` only
+creates *missing* tables and never alters existing ones, which silently loses schema changes against a
+populated database.
+
+**Any model change needs a revision in the same commit:** `alembic revision --autogenerate -m "..."`
+from `backend/`, then *read the generated script* (autogenerate cannot see renames and does not compare
+`CHECK` expressions; data migrations are hand-written). `tests/test_migrations.py` builds a database
+from the migrations alone and fails if it disagrees with the models, so drift is caught in CI.
+
+Config is `backend/alembic.ini`; the URL is not in it -- `migrations/env.py` resolves it via
+`database.resolve_database_url()` so migrations and app can never target different databases.
+Generated revision scripts under `migrations/versions/` are excluded from `flake8`; `migrations/env.py`
+is hand-written and is linted. `backend/migrations/README.md` documents the workflow and keeps the
+pre-Alembic changelog as a historical paper trail.
 
 ### Testing data seed
-`backend/scripts/seed_testing_data.py` performs a **complete DB reset** (drops + recreates every table) and inserts a coherent testing dataset (≥40 recipes, ≥50 ingredients, ≥10 tags). `docker-compose.yml` runs it before uvicorn, so **every `docker compose up` (built or not) starts from a clean, fully-populated database**. Run it manually with `python scripts/seed_testing_data.py` from `backend/`.
+`backend/scripts/seed_testing_data.py` performs a **complete DB reset** (drops + recreates every table).
+It refuses to run unless `ALLOW_DESTRUCTIVE_SEED=1` -- it would otherwise wipe whatever `DATABASE_URL`
+points at, including a deployment. `docker-compose.yml` sets the flag; no deployment may. The script inserts a coherent testing dataset (≥40 recipes, ≥50 ingredients, ≥10 tags). `docker-compose.yml` runs it before uvicorn, so **every `docker compose up` (built or not) starts from a clean, fully-populated database**. Run it manually with `python scripts/seed_testing_data.py` from `backend/`.
 
 **MANDATORY:** whenever the database schema or domain model changes (new/renamed/removed columns, tables, enums, relationships, or constraints), `seed_testing_data.py` MUST be updated in the same change so the seeded data stays coherent with the updated database. A schema change is not complete until the seed script inserts valid data again.
 

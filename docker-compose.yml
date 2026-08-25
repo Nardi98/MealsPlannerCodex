@@ -18,6 +18,11 @@ services:
   backend:
     build: ./backend
     # On every compose, wipe + repopulate the DB with testing data, then serve.
+    # No `alembic upgrade head` here: the seed rebuilds the schema from the
+    # models immediately afterwards, so migrating first would only leave a
+    # models-built schema wearing a migrated schema's version stamp -- the exact
+    # divergence you would want a local database to reveal. The migrations are
+    # exercised by backend/tests/test_migrations.py instead.
     # run python in unbuffered mode (+ louder uvicorn logs)
     command: >
       sh -c "python -u scripts/seed_testing_data.py &&
@@ -27,6 +32,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://user:pass@db:5432/mealsdb
+      # The seed script drops every table, so it refuses to run without this.
+      # Compose owns a throwaway database; a deployment must never set it.
+      - ALLOW_DESTRUCTIVE_SEED=1
       # Optional: set in your shell / .env to enable "Sign in with Google".
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       # Auth is fail-closed: JWT_SECRET is required or the app refuses to start.
@@ -53,7 +61,12 @@ services:
       - ./backend:/app
 
   frontend-v2:
-    build: ./frontend-v2
+    build:
+      context: ./frontend-v2
+      # The Vite dev server. The image's default (final) stage is the nginx
+      # production build, which serves a bundle with the VITE_* values baked in
+      # -- not what you want while developing.
+      target: dev
     environment:
       # Same client ID as the backend; the dev server reads it at startup.
       # Either variable works: compose fans GOOGLE_CLIENT_ID out to the frontend.

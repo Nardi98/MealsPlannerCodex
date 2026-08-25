@@ -1,4 +1,6 @@
 SQLAlchemy
+# Schema migrations; see backend/migrations/README.md.
+alembic
 psycopg2-binary
 pandas
 python-dateutil

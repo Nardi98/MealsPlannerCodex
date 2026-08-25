@@ -1,0 +1,33 @@
+# Rendered by the nginx image's envsubst entrypoint (files in
+# /etc/nginx/templates are expanded into /etc/nginx/conf.d), which is how the
+# platform-injected $PORT reaches the listen directive.
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Long-lived caching for the build's content-hashed assets. Vite renames
+    # them on every build, so a stale copy can never be served for new content.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # react-router owns the URL space: any path that is not a real file must
+    # return index.html so a deep link or a reload lands on the app rather than
+    # on nginx's 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # index.html itself must never be cached, or a client keeps requesting the
+    # asset hashes from a previous deploy.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+}

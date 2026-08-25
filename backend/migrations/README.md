@@ -1,18 +1,45 @@
-# Schema change history
+# Migrations
 
-This project has **no active migration system**. During development the schema is
-created directly from the SQLAlchemy models by `Base.metadata.create_all` on startup
-(`backend/main.py`), so a fresh database needs no migration step.
+This project uses **Alembic**. The deployed schema is defined by the revision
+scripts in `versions/`, and `alembic upgrade head` runs at container start
+(`backend/Dockerfile`) -- so a failed migration fails the deploy rather than
+producing a service whose code expects columns the database does not have.
 
-Real migrations will be introduced with `alembic init` when the project approaches
-production and needs to evolve a populated database in place. Until then, changing the
-schema means changing the model — nothing else.
+The app does **not** create its own tables. `Base.metadata.create_all` only ever
+creates what is *missing*; it never alters an existing table, which is fine for a
+disposable development database and silently wrong for one holding real data.
 
-The file below is a **historical changelog** of schema changes made so far, kept as a
-paper trail. The original executable Alembic-style revision scripts were removed because
-they were never wired up (no `alembic.ini` / `env.py`) and looked runnable when they
-were not. If/when Alembic is adopted, generate a fresh baseline from the current models
-rather than replaying these entries.
+## Changing the schema
+
+1. Change the model in `models.py`.
+2. `alembic revision --autogenerate -m "what changed"` (run from `backend/`,
+   with `DATABASE_URL` pointing at a database that is already at `head`).
+3. **Read the generated script.** Autogenerate is a first draft: it does not
+   detect renames (it sees a drop plus an add, which loses the data), and it
+   does not compare `CHECK` constraint expressions. Data migrations are always
+   hand-written.
+4. Update `scripts/seed_testing_data.py` in the same change -- CLAUDE.md makes
+   that part of any schema change.
+5. `tests/test_migrations.py` builds a database from the migrations alone and
+   fails if it does not match the models. A model change with no revision behind
+   it is caught there.
+
+Configuration lives in `backend/alembic.ini`, but the database URL does not:
+`migrations/env.py` resolves it through `database.resolve_database_url()`, the
+same function the app uses, so the migrations and the app can never be pointed at
+two different databases.
+
+## Rolling back
+
+`alembic downgrade -1`. Downgrades are generated but rarely exercised -- on a
+database with real data, restoring the platform's backup is usually both safer
+and faster.
+
+## Historical changelog (pre-Alembic)
+
+Everything below predates the migration system. It is a paper trail, not
+something to run: the baseline revision in `versions/` was generated fresh from
+the models and already contains the cumulative result of every entry here.
 
 | # | Change | Details |
 |---|--------|---------|
@@ -31,8 +58,8 @@ rather than replaying these entries.
 >
 > If a deployed environment holds data worth keeping, a one-off SQL script is
 > required and is deliberately **not** part of this change: `ADD COLUMN username
-> TEXT` → backfill from the email local part (sanitised to `^[a-z0-9_]{3,30}$`
-> and disambiguated with a numeric suffix, as `crud._derive_username` does) →
-> `CREATE UNIQUE INDEX uq_user_username_lower ON users (lower(username))` →
+> TEXT` â†' backfill from the email local part (sanitised to `^[a-z0-9_]{3,30}$`
+> and disambiguated with a numeric suffix, as `crud._derive_username` does) â†'
+> `CREATE UNIQUE INDEX uq_user_username_lower ON users (lower(username))` â†'
 > `ALTER COLUMN username SET NOT NULL`. The remaining columns are all nullable
 > or defaulted and can be added in place.

@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import random
+import sys
+import time
 from datetime import date, datetime, timezone
-from typing import Annotated, Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, NamedTuple, Optional
+from urllib.parse import unquote_plus
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
@@ -25,6 +29,7 @@ from sqlalchemy.orm import Session, selectinload
 import crud
 import mailer
 import models
+import ops_routes
 import public_pages
 import ratelimit
 import schemas
@@ -34,12 +39,12 @@ import username_routes
 import usernames
 from mealplanner import planner
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
-from database import SessionLocal, engine, get_db
+from database import SessionLocal, get_db
 from scoping import scope
 import auth_users
 
-# Ensure database tables exist on startup
-models.Base.metadata.create_all(bind=engine)
+# The schema is owned by Alembic; the app never creates it. See
+# ``migrations/README.md``.
 
 
 def _bootstrap(session: Session) -> None:
@@ -92,6 +97,7 @@ app.state.share_limiter = ratelimit.limiter
 app.include_router(username_routes.router)
 app.include_router(share_routes.router)
 app.include_router(public_pages.router)
+app.include_router(ops_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
@@ -132,25 +138,76 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 # than inferred. Empty means "fall back to the request base URL", which is
 # correct in dev and wrong in production -- set it there.
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
-COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "0") == "1"
 REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/auth"
 
+_VALID_SAMESITE = ("lax", "strict", "none")
+
+
+class CookiePolicy(NamedTuple):
+    samesite: str
+    secure: bool
+
+
+def cookie_policy() -> CookiePolicy:
+    """The refresh cookie's cross-site attributes (``COOKIE_SAMESITE``/``COOKIE_SECURE``).
+
+    Read at call time rather than at import, like :func:`allowed_hosts`, so the
+    values are configuration rather than something baked into the module.
+
+    The default -- ``Lax`` and insecure -- is right for local development, where
+    the SPA and the API share an origin over http. It is *wrong* for the
+    deployment, where they are two Railway services on two different registrable
+    domains: a ``Lax`` cookie is not sent on the cross-site ``/auth/refresh``
+    XHR, so every session would end at the next page reload.
+
+    Both failure modes below are ones browsers punish *silently* -- an unknown
+    ``SameSite`` and ``None`` without ``Secure`` are each grounds for dropping
+    the cookie without telling anyone -- which is precisely why they raise here.
+    """
+    samesite = os.environ.get("COOKIE_SAMESITE", "lax").strip().lower()
+    secure = os.environ.get("COOKIE_SECURE", "0") == "1"
+    if samesite not in _VALID_SAMESITE:
+        raise RuntimeError(
+            f"COOKIE_SAMESITE must be one of {_VALID_SAMESITE}, got {samesite!r}"
+        )
+    if samesite == "none" and not secure:
+        raise RuntimeError(
+            "COOKIE_SAMESITE=none requires COOKIE_SECURE=1; browsers reject a "
+            "cross-site cookie that is not marked Secure."
+        )
+    return CookiePolicy(samesite=samesite, secure=secure)
+
+
+# Fail at startup rather than at the first login if the pair is misconfigured.
+cookie_policy()
+
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
+    policy = cookie_policy()
     response.set_cookie(
         REFRESH_COOKIE_NAME,
         token,
         max_age=auth_users.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
-        samesite="lax",
-        secure=COOKIE_SECURE,
+        samesite=policy.samesite,
+        secure=policy.secure,
         path=REFRESH_COOKIE_PATH,
     )
 
 
 def _clear_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(REFRESH_COOKIE_NAME, path=REFRESH_COOKIE_PATH)
+    # The clear must mirror the attributes it was set with: a ``delete_cookie``
+    # whose SameSite/Secure differ is ignored by some browsers, which would
+    # leave a logged-out user still holding a live refresh cookie.
+    policy = cookie_policy()
+    response.delete_cookie(
+        REFRESH_COOKIE_NAME,
+        path=REFRESH_COOKIE_PATH,
+        samesite=policy.samesite,
+        secure=policy.secure,
+        httponly=True,
+    )
 
 
 def _issue_session(db: Session, response: Response, user: models.User) -> schemas.Token:
@@ -290,6 +347,90 @@ class NoIndexMiddleware:
 
 
 app.add_middleware(NoIndexMiddleware)
+
+
+# One structured line per request. There is no error-tracking service wired up,
+# so the platform's log view is the only account of what a tester hit when they
+# report that something broke, and uvicorn's default access log -- a bare
+# ``"GET /path HTTP/1.1" 200`` string -- is not something you can filter or
+# aggregate. JSON is, and it costs one ``dumps`` per request.
+ACCESS_LOGGER_NAME = "mealplanner.access"
+_access_logger = logging.getLogger(ACCESS_LOGGER_NAME)
+# Wired to stdout explicitly. Uvicorn configures its own loggers and leaves the
+# root logger without a handler, so a logger that only propagates emits nothing
+# at all in the deployed container -- which is precisely where these lines are
+# the only record of what a request did. The message is already JSON, so the
+# formatter passes it through untouched.
+if not _access_logger.handlers:
+    _access_handler = logging.StreamHandler(sys.stdout)
+    _access_handler.setFormatter(logging.Formatter("%(message)s"))
+    _access_logger.addHandler(_access_handler)
+_access_logger.setLevel(logging.INFO)
+
+
+def _query_keys(query_string: bytes) -> list[str]:
+    """The *names* of the query parameters, decoded, sorted and de-duplicated.
+
+    Splitting on the separators beats ``parse_qs`` here: ``parse_qs`` decodes
+    and materialises every *value* into lists, and the values are the one part
+    of a query string that must never reach a log -- ``/verify-email?token=...``
+    and ``/reset-password?token=...`` both carry a live credential, and a log
+    line outlives the token it would leak.
+    """
+    if not query_string:
+        return []
+    query = query_string.decode("latin-1")
+    return sorted({unquote_plus(pair.split("=", 1)[0]) for pair in query.split("&") if pair})
+
+
+class AccessLogMiddleware:
+    """Log method, path, status and duration for every HTTP request.
+
+    Query *keys* are recorded but never their values. The values are exactly
+    where the secrets are -- ``/verify-email?token=...`` and
+    ``/reset-password?token=...`` both put a live credential in the query string
+    -- and a log line outlives the token it would leak. Knowing which parameters
+    were present is enough to reproduce a bug report.
+
+    Raw ASGI for the same reason as :class:`NoIndexMiddleware`: reading the
+    status off ``http.response.start`` leaves bodies, streaming and background
+    tasks untouched, where ``BaseHTTPMiddleware`` would re-pump every chunk.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        started = time.perf_counter()
+        status = 500
+
+        async def send_with_log(message):
+            nonlocal status
+            if message["type"] == "http.response.start":
+                status = message["status"]
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_log)
+        finally:
+            # In ``finally`` so a handler that raises past us is still recorded;
+            # the 500 default above is what that case reports. Guarded on the
+            # level so a quietened logger costs nothing on a path the platform
+            # health probe alone hits continuously.
+            if _access_logger.isEnabledFor(logging.INFO):
+                _access_logger.info(json.dumps({
+                    "method": scope.get("method"),
+                    "path": scope.get("path"),
+                    "query_keys": _query_keys(scope.get("query_string", b"")),
+                    "status": status,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                }))
+
+
+app.add_middleware(AccessLogMiddleware)
 
 
 @app.get("/", include_in_schema=False)

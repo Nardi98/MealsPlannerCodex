@@ -125,6 +125,8 @@ RESERVED_USERNAMES: tuple[str, ...] = (
     "s",
     "api",
     "static",
+    # The platform healthcheck endpoint; a handle here would shadow the probe.
+    "health",
     "assets",
     "auth",
     "recipes",
@@ -519,7 +521,12 @@ class Meal(Base):
             ["meal_plans.user_id", "meal_plans.plan_date"],
             ondelete="CASCADE",
         ),
-        CheckConstraint("meal_number IN (1,2)"),
+        # Named explicitly, with the exact name PostgreSQL was already deriving
+        # for it. An unnamed constraint has no name in the metadata to match
+        # the reflected one against, so autogenerate reads it as "present in
+        # the database, absent from the models" and proposes dropping it on
+        # every single migration. Naming it is not a schema change.
+        CheckConstraint("meal_number IN (1,2)", name="meals_meal_number_check"),
         CheckConstraint(
             "(leftover_source_date IS NULL) = (leftover_source_meal IS NULL)",
             name="ck_meal_leftover_source_all_or_nothing",

@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 import usernames
-from database import SessionLocal, Base
+from database import SessionLocal
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from scoping import owned as _owned, scope as _scope
 from models import (
@@ -1502,9 +1502,6 @@ def import_data(
         session = SessionLocal()
         close_session = True
 
-    # Ensure database tables exist for this session's engine
-    Base.metadata.create_all(bind=session.get_bind())
-
     try:
         raw = file_obj.read()
         if isinstance(raw, bytes):
@@ -1665,9 +1662,6 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
     if session is None:
         session = SessionLocal()
         close_session = True
-
-    # Ensure database tables exist for this session's engine
-    Base.metadata.create_all(bind=session.get_bind())
 
     try:
         recipes_data = []

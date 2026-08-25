@@ -52,14 +52,3 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def init_db() -> None:
-    """Create database tables.
-
-    Applications can call this on startup to ensure all tables are created in
-    the configured database. It is safe to call multiple times; existing tables
-    are left untouched.
-    """
-
-    Base.metadata.create_all(bind=engine)

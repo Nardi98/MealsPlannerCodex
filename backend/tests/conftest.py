@@ -35,7 +35,7 @@ os.environ.setdefault("JWT_SECRET", "test-secret-not-for-production")
 # re-enable it explicitly.
 os.environ["RATE_LIMIT_ENABLED"] = "0"
 
-from database import Base  # noqa: E402
+from database import Base, engine as _app_engine  # noqa: E402
 import models  # noqa: E402  ensures tables are registered
 
 
@@ -50,6 +50,14 @@ def reset_schema(bind):
     Base.metadata.create_all(bind=bind)
 
 
+# Build the schema at import time, before any test module runs
+# ``from main import app``: the app's startup bootstrap queries tables, and the
+# app no longer creates them itself. Built from the models rather than by
+# running Alembic so the suite stays fast; ``tests/test_migrations.py`` is what
+# checks the migrations still agree with them.
+reset_schema(_app_engine)
+
+
 @pytest.fixture(scope="session")
 def engine():
     """The application's own engine, pointed at ``TEST_DATABASE_URL`` above.
@@ -57,12 +65,11 @@ def engine():
     Reusing it rather than building a second one keeps the suite on a single
     connection pool -- two pools on one database means ``reset_schema``'s
     ``DROP TABLE`` can block on connections the other pool is holding.
-    """
-    from database import engine as eng
 
-    # Clear stale schema from a previous run, then build a clean one. Runs once.
-    reset_schema(eng)
-    return eng
+    The schema was already built at import time above; this only hands the
+    engine to the tests that ask for it.
+    """
+    return _app_engine
 
 @pytest.fixture
 def db_session(engine):

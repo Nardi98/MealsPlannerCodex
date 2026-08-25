@@ -3,11 +3,8 @@ import json
 from datetime import date
 
 import pytest
-from sqlalchemy.orm import sessionmaker
 
 import crud
-from conftest import reset_schema
-from database import Base
 from models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
 
 
@@ -133,36 +130,6 @@ def test_export_includes_related_objects(db_session, user):
     assert meal_info["recipe_id"] == data["recipes"][0]["id"]
     assert meal_info["accepted"] is True
     assert meal_info["leftover"] is False
-
-
-def test_import_creates_tables_when_missing(engine):
-    """import_data should initialise schema if tables are absent."""
-    Base.metadata.drop_all(bind=engine)
-    Session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-
-    payload = {
-        "recipes": [
-            {
-                "title": "Temp",
-                "course": "main",
-                "ingredients": [],
-                "tags": [],
-            }
-        ],
-        "tags": [],
-        "meal_plans": [],
-    }
-
-    try:
-        with Session() as session:
-            crud.import_data(
-                io.StringIO(json.dumps(payload)), session, mode="overwrite", user_id=None
-            )
-            assert session.query(Recipe).count() == 1
-    finally:
-        # ``import_data`` commits, and the database is shared with every other
-        # test, so hand back a pristine schema.
-        reset_schema(engine)
 
 
 _FULL_RECIPE_PAYLOAD = {

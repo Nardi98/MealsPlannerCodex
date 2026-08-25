@@ -1,0 +1,30 @@
+# Keep out of the production image. Note what is deliberately NOT here:
+#   data/        - mealplanner/seed.py reads data/system_ingredients.json at
+#                  registration time.
+#   templates/   - Jinja templates for the public share page.
+#   static/      - the share page's stylesheet, served at /static.
+#   mealplanner/ - the planner package itself.
+#   migrations/  - alembic upgrade head runs at container start.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Tests and their fixtures are not part of the running service.
+tests/
+
+# The seed scripts drop every table. They are env-guarded as well, but the
+# safest copy of a destructive script is the one that never ships.
+scripts/
+
+# Uploaded images belong in object storage; the platform filesystem is
+# ephemeral, so a baked-in copy is misleading at best.
+media/
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+Makefile
+.flake8

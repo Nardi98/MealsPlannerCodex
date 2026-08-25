@@ -560,9 +560,27 @@ RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
 ]]
 
 
-def reset_database() -> None:
-    """Drop every table and recreate a clean schema from the models."""
+# Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever
+# database the process was handed -- on Railway, the deployed one. Requiring an
+# explicit opt-in means the destruction can only happen where someone put the
+# flag there on purpose: ``docker-compose.yml`` sets it, no deployment does.
+ALLOW_DESTRUCTIVE_SEED_ENV = "ALLOW_DESTRUCTIVE_SEED"
 
+
+def reset_database() -> None:
+    """Drop every table and recreate a clean schema from the models.
+
+    Raises ``RuntimeError`` unless ``ALLOW_DESTRUCTIVE_SEED=1``. The check is an
+    equality test rather than a truthiness one: a leftover ``0`` or ``false`` in
+    a deployment's variables must not read as permission to wipe it.
+    """
+
+    if os.environ.get(ALLOW_DESTRUCTIVE_SEED_ENV) != "1":
+        raise RuntimeError(
+            "seed_testing_data drops every table. Set "
+            f"{ALLOW_DESTRUCTIVE_SEED_ENV}=1 to confirm you are pointing at a "
+            "disposable database -- never at a deployment."
+        )
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
 

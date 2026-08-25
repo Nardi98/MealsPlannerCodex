@@ -1,0 +1,100 @@
+# Deploying to Railway
+
+Two services and two managed resources:
+
+| Component | What it is |
+|---|---|
+| **api** | `backend/`, Dockerfile build. FastAPI + the public share pages. |
+| **web** | `frontend-v2/`, Dockerfile build. The Vite bundle, served by nginx. |
+| **Postgres** | Railway plugin. Supplies `DATABASE_URL`. |
+| **Bucket** | Railway object storage. Holds uploaded recipe images. |
+
+The two services get separate domains, which is why several variables below
+exist at all: the API has to be told the frontend's origin (CORS, email links),
+the frontend has to be told the API's origin at *build* time, and the session
+cookie has to be marked cross-site.
+
+## Schema
+
+`alembic upgrade head` runs as the api service's **pre-deploy command**
+(`backend/railway.json`), so it runs once per deploy, while the previous
+container is still serving, and a failed migration fails the deploy rather than
+starting a service whose code expects columns the database does not have. The
+app itself never creates tables.
+
+Note that this lives in `railway.json`, not in the Dockerfile: running the image
+outside Railway does **not** migrate. Do it yourself with
+`alembic upgrade head` from `backend/`.
+
+On a brand-new database the migrations build the schema and the app's startup
+bootstrap seeds reserved usernames and system tags. Nothing else is needed —
+`scripts/seed_testing_data.py` is **destructive**, is excluded from the
+production image, and refuses to run without `ALLOW_DESTRUCTIVE_SEED=1`.
+
+See `backend/migrations/README.md` for the schema-change workflow.
+
+## Images
+
+Uploads go to the bucket when `AWS_S3_BUCKET_NAME` is set, and to a local
+`media/` directory otherwise (`backend/storage.py`). The platform filesystem is
+**ephemeral**: without the bucket configured, every uploaded image is lost on the
+next deploy. Configure the bucket before anyone uploads anything.
+
+## Variables — api
+
+| Var | Value | Why |
+|---|---|---|
+| `DATABASE_URL` | reference to the Postgres service | Required; the app refuses to start without it. |
+| `JWT_SECRET` | a fresh random secret | Required. Never reuse the compose default — anyone holding it can forge sessions. |
+| `PUBLIC_BASE_URL` | `https://<api-domain>` | The origin share links are built on. Left empty it falls back to the request `Host`, which is attacker-controlled. |
+| `ALLOWED_HOSTS` | `<api-domain>` | `TrustedHostMiddleware`. Unset means `*`, and a forged `Host` yields a share link on someone else's origin that the sharer then forwards. |
+| `ALLOWED_ORIGINS` | `https://<web-domain>` | CORS allowlist. |
+| `FRONTEND_URL` | `https://<web-domain>` | Where verification and password-reset links point. |
+| `COOKIE_SECURE` | `1` | The refresh cookie is HTTPS-only. |
+| `COOKIE_SAMESITE` | `none` | Required while api and web are different registrable domains, or the refresh cookie is not sent and every session ends on page reload. Requires `COOKIE_SECURE=1`. |
+| `MAIL_BACKEND` | `smtp` | Default is `console`, which prints links to the log and sends nothing. |
+| `SMTP_HOST` / `SMTP_PORT` | `smtp.resend.com` / `587` | |
+| `SMTP_USER` / `SMTP_PASSWORD` | `resend` / Resend API key | |
+| `SMTP_FROM` | a Resend-verified sender | |
+| `AWS_*` | from the bucket | Image storage. |
+| `GOOGLE_CLIENT_ID` | OAuth client id | Optional; omit to disable Google sign-in. |
+
+**Must stay unset:** `AUTH_DEV_MODE` (makes the JWT secret a publicly-known
+constant) and `ALLOW_DESTRUCTIVE_SEED` (unlocks a full database wipe).
+
+## Variables — web
+
+These are **build** variables. Vite inlines them into the bundle at build time;
+setting them at runtime does nothing.
+
+| Var | Value |
+|---|---|
+| `VITE_API_BASE_URL` | `https://<api-domain>` |
+| `VITE_GOOGLE_CLIENT_ID` | same client id as the api, if used |
+
+Because each service needs the other's domain, the first deploy is a two-pass
+operation: deploy to obtain the generated domains, fill in the cross-references,
+redeploy.
+
+## Backups
+
+Enable Railway's Postgres backups and **restore one to a scratch database once**
+before inviting testers. An untested backup is not a backup.
+
+## Operational notes
+
+- **Do not scale the api past one replica.** Rate limiting (`backend/ratelimit.py`)
+  uses in-process counters; a second replica halves every limit and makes them
+  unpredictable. `railway.json` pins `numReplicas: 1`.
+- `/health` is the healthcheck. It is deliberately a pure liveness probe and does
+  not touch the database, so a transient database blip cannot get a healthy
+  container killed.
+- Every request logs one JSON line (method, path, query *keys*, status,
+  duration) to Railway's log view. Query values are never logged — they carry
+  verification and reset tokens.
+- `/docs` and `/redoc` are publicly reachable. They carry `X-Robots-Tag:
+  noindex, nofollow` but are not access-controlled.
+- The legacy `/plan` routes remain registered alongside `/meal-plans`; removal is
+  scheduled no earlier than 2026-10-01.
+- The `refresh_tokens` table has no expired-row cleanup yet. Harmless at alpha
+  scale; it needs a sweep before any wider release.
