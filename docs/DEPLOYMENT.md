@@ -40,6 +40,26 @@ Uploads go to the bucket when `AWS_S3_BUCKET_NAME` is set, and to a local
 **ephemeral**: without the bucket configured, every uploaded image is lost on the
 next deploy. Configure the bucket before anyone uploads anything.
 
+### Service settings live in the dashboard, not in a file
+
+The api service deliberately has **no `railway.json`**. Railway treats a
+committed config file as the source of truth and greys the corresponding
+controls out in the dashboard, which made the region unchangeable there. These
+settings are therefore configured on the service itself and are edited in the
+dashboard:
+
+| Setting | Value | Why it matters |
+|---|---|---|
+| Region | `europe-west4` (Amsterdam) | Co-located with Postgres; a split would put every query across the Atlantic. |
+| Root directory | `/backend` | |
+| Pre-deploy command | `alembic upgrade head` | **The only thing that migrates the database.** If this is ever cleared, deploys will start against a stale schema. |
+| Healthcheck path | `/health` | |
+| Replicas | `1` | Rate limiting is in-process; see below. |
+| Restart policy | `ON_FAILURE`, max 3 | |
+
+The trade-off is that these are no longer version-controlled, so they are
+recorded here instead. Check them after any significant Railway change.
+
 ## Variables — api
 
 | Var | Value | Why |
