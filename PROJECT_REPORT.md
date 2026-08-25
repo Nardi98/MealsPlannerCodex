@@ -15,7 +15,7 @@ keeps learning.
 
 ### What it does today (working features)
 - **Recipe CRUD** with tags (many-to-many), ingredients (with `season_months`), a
-  `course` field (`main` / `first-course` / `side`), servings, procedure and a
+  `course` field (`main` / `first-course` / `side`), procedure and a
   `bulk_prep` flag.
 - **Ingredient CRUD** with search, per-ingredient season months, and a "recipes using
   this ingredient" lookup + safe/forced delete.

@@ -293,8 +293,8 @@ def create_recipe(session: Session, **data: Any) -> Recipe:
     session:
         SQLAlchemy session used for persisting the object.
     **data:
-        Fields to initialise the :class:`Recipe` with. At minimum ``title`` and
-        ``servings_default`` should be supplied.
+        Fields to initialise the :class:`Recipe` with. At minimum ``title``
+        should be supplied.
 
     Returns
     -------
@@ -1433,6 +1433,22 @@ def clear_data(session: Session, user_id: int | None) -> None:
     session.commit()
 
 
+def _legacy_servings_basis(rec_info: Dict[str, Any]) -> float:
+    """How many people this payload entry's quantities were written for.
+
+    Exports predating the removal of ``Recipe.servings_default`` stated their
+    quantities for that many people; today a recipe is always stored per person.
+    Importing an old backup verbatim would silently multiply every shopping list
+    and share page by the old value, so quantities are divided by this basis on
+    the way in. Anything missing or unusable means "already per person".
+    """
+    try:
+        basis = float(rec_info.get("servings_default") or 1)
+    except (TypeError, ValueError):
+        return 1.0
+    return basis if basis > 0 else 1.0
+
+
 def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None) -> Recipe:
     """Build a :class:`Recipe` from an import payload entry.
 
@@ -1445,7 +1461,6 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
     return Recipe(
         id=rec_id,
         title=rec_info["title"],
-        servings_default=rec_info["servings_default"],
         procedure=rec_info.get("procedure"),
         bulk_prep=rec_info.get("bulk_prep", False),
         course=rec_info.get("course", "main"),
@@ -1541,6 +1556,7 @@ def import_data(
             if rec_id is not None:
                 recipe_id_map[rec_id] = recipe.id
 
+            basis = _legacy_servings_basis(rec_info)
             for ing_info in rec_info.get("ingredients", []):
                 months = ing_info.get("season_months")
                 if isinstance(months, str):
@@ -1553,10 +1569,13 @@ def import_data(
                     ingredient_obj.season_months = months
                 unit_val = ing_info.get("unit")
                 unit = UnitEnum(unit_val) if unit_val else None
+                quantity = ing_info.get("quantity")
+                if quantity is not None and basis != 1:
+                    quantity = round(quantity / basis, 2)
                 recipe.ingredients.append(
                     RecipeIngredient(
                         ingredient=ingredient_obj,
-                        quantity=ing_info.get("quantity"),
+                        quantity=quantity,
                         unit=unit,
                     )
                 )
@@ -1658,7 +1677,6 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                 {
                     "id": recipe.id,
                     "title": recipe.title,
-                    "servings_default": recipe.servings_default,
                     "procedure": recipe.procedure,
                     "bulk_prep": recipe.bulk_prep,
                     "course": recipe.course,

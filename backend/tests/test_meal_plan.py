@@ -8,7 +8,7 @@ from models import MealPlan, Meal, Recipe
 
 
 def test_meal_plan_model_relationships(db_session, user):
-    recipe = create_recipe(db_session, user_id=user.id, title="Toast", servings_default=1, course="main")
+    recipe = create_recipe(db_session, user_id=user.id, title="Toast", course="main")
     plan = MealPlan(user_id=user.id, plan_date=date(2024, 1, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
@@ -22,7 +22,7 @@ def test_meal_plan_model_relationships(db_session, user):
 
 def test_generate_and_persist_plan(db_session, user):
     for i in range(7):
-        create_recipe(db_session, user_id=user.id, title=f"Meal {i}", servings_default=1, course="main")
+        create_recipe(db_session, user_id=user.id, title=f"Meal {i}", course="main")
     plan_date = date(2024, 5, 17)
 
     plan_titles = planner.generate_plan(
@@ -70,9 +70,9 @@ def test_generate_and_persist_plan(db_session, user):
 
 def test_duplicate_titles_do_not_break_plan(db_session, user):
     """Generating a plan works even if recipe titles are duplicated."""
-    create_recipe(db_session, user_id=user.id, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, user_id=user.id, title="Dup", course="main")
     # duplicate title intentionally
-    create_recipe(db_session, user_id=user.id, title="Dup", servings_default=1, course="main")
+    create_recipe(db_session, user_id=user.id, title="Dup", course="main")
 
     plan_date = date(2024, 5, 18)
     plan_titles = {plan_date.isoformat(): ["Dup"]}
@@ -117,7 +117,7 @@ def test_duplicate_titles_do_not_break_plan(db_session, user):
 
 
 def test_mark_meal_accepted(db_session, user):
-    r = create_recipe(db_session, user_id=user.id, title="Meal", servings_default=1, course="main")
+    r = create_recipe(db_session, user_id=user.id, title="Meal", course="main")
     plan_date = date(2024, 5, 19)
     set_meal_plan(db_session, {plan_date.isoformat(): [r.id]}, user.id)
     meal = mark_meal_accepted(db_session, plan_date, 1, True, user.id)
@@ -140,8 +140,8 @@ def test_mark_meal_accepted(db_session, user):
 
 
 def test_meal_with_side_recipe(db_session, user):
-    main = create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
-    side = create_recipe(db_session, user_id=user.id, title="Side", servings_default=1, course="main")
+    main = create_recipe(db_session, user_id=user.id, title="Main", course="main")
+    side = create_recipe(db_session, user_id=user.id, title="Side", course="main")
     plan_date = date(2024, 9, 1)
     set_meal_plan(
         db_session,
@@ -172,7 +172,7 @@ def test_meal_with_side_recipe(db_session, user):
 
 def test_leftover_persistence(db_session, user):
     """A leftover is persisted as a link to its source meal on an earlier day."""
-    main = create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
+    main = create_recipe(db_session, user_id=user.id, title="Main", course="main")
     source_date = date(2024, 9, 2)
     leftover_date = date(2024, 9, 3)
     set_meal_plan(
@@ -197,7 +197,7 @@ def test_leftover_persistence(db_session, user):
 
 def test_delete_plan_cascades_meals(db_session, user):
     """Deleting a meal plan should remove associated meals."""
-    recipe = create_recipe(db_session, user_id=user.id, title="Stew", servings_default=2, course="main")
+    recipe = create_recipe(db_session, user_id=user.id, title="Stew", course="main")
     plan = MealPlan(user_id=user.id, plan_date=date(2024, 6, 1))
     meal = Meal(meal_number=1, recipe=recipe, accepted=False)
     plan.meals.append(meal)
@@ -215,8 +215,8 @@ def test_delete_plan_cascades_meals(db_session, user):
 
 def test_delete_plan_removes_all_meals(db_session, user):
     """Deleting a plan removes all related meal entries."""
-    recipe1 = create_recipe(db_session, user_id=user.id, title="Soup", servings_default=1, course="main")
-    recipe2 = create_recipe(db_session, user_id=user.id, title="Salad", servings_default=1, course="main")
+    recipe1 = create_recipe(db_session, user_id=user.id, title="Soup", course="main")
+    recipe2 = create_recipe(db_session, user_id=user.id, title="Salad", course="main")
     plan = MealPlan(user_id=user.id, plan_date=date(2024, 8, 2))
     plan.meals.extend(
         [
@@ -237,8 +237,8 @@ def test_delete_plan_removes_all_meals(db_session, user):
 
 
 def test_set_meal_plan_overwrites_existing(db_session, user):
-    r1 = create_recipe(db_session, user_id=user.id, title="Old", servings_default=1, course="main")
-    r2 = create_recipe(db_session, user_id=user.id, title="New", servings_default=1, course="main")
+    r1 = create_recipe(db_session, user_id=user.id, title="Old", course="main")
+    r2 = create_recipe(db_session, user_id=user.id, title="New", course="main")
     plan_date = date(2024, 7, 1)
     set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
     set_meal_plan(db_session, {plan_date.isoformat(): [r2.id]}, user.id)
@@ -249,8 +249,8 @@ def test_set_meal_plan_overwrites_existing(db_session, user):
 
 def test_overwriting_plan_resets_acceptance(db_session, user):
     """Replacing an existing plan clears previous acceptance status."""
-    r1 = create_recipe(db_session, user_id=user.id, title="Old", servings_default=1, course="main")
-    r2 = create_recipe(db_session, user_id=user.id, title="New", servings_default=1, course="main")
+    r1 = create_recipe(db_session, user_id=user.id, title="Old", course="main")
+    r2 = create_recipe(db_session, user_id=user.id, title="New", course="main")
     plan_date = date(2024, 7, 2)
     set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
     mark_meal_accepted(db_session, plan_date, 1, True, user.id)
@@ -266,8 +266,8 @@ def test_get_plan_orders_meals_by_meal_number(db_session, user):
     plan[date][1] as Dinner (meal_number 2), so the returned array index must
     map to the slot even when the dinner row was persisted before the lunch row.
     """
-    lunch = create_recipe(db_session, user_id=user.id, title="Lunch", servings_default=1, course="main")
-    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", servings_default=1, course="main")
+    lunch = create_recipe(db_session, user_id=user.id, title="Lunch", course="main")
+    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", course="main")
     plan_date = date(2024, 8, 1)
     plan = MealPlan(user_id=user.id, plan_date=plan_date)
     # Append dinner (meal_number 2) BEFORE lunch (meal_number 1) on purpose.
@@ -283,7 +283,7 @@ def test_get_plan_orders_meals_by_meal_number(db_session, user):
 
 def test_get_plan_keeps_dinner_in_second_slot_when_lunch_missing(db_session, user):
     """A day with only a dinner keeps it at array index 1 (Dinner row)."""
-    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", servings_default=1, course="main")
+    dinner = create_recipe(db_session, user_id=user.id, title="Dinner", course="main")
     plan_date = date(2024, 8, 2)
     plan = MealPlan(user_id=user.id, plan_date=plan_date)
     plan.meals.append(Meal(meal_number=2, recipe=dinner, accepted=False))

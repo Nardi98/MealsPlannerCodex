@@ -80,14 +80,14 @@ def test_expiry_is_stored_when_supplied(client, make_recipe, db_session):
 def test_cannot_share_another_users_recipe(client, db_session, other_user):
     """Owner scoping: a foreign recipe is simply not there."""
     foreign = crud.create_recipe(
-        db_session, title="Theirs", servings_default=2, user_id=other_user.id
+        db_session, title="Theirs", user_id=other_user.id
     )
     assert _create(client, foreign.id).status_code == 404
 
 
 def test_sharing_a_missing_recipe_is_the_same_404(client, db_session, other_user):
     foreign = crud.create_recipe(
-        db_session, title="Theirs", servings_default=2, user_id=other_user.id
+        db_session, title="Theirs", user_id=other_user.id
     )
     missing = _create(client, 10_000_000)
     theirs = _create(client, foreign.id)
@@ -128,7 +128,7 @@ def test_the_share_list_never_leaks_a_raw_token(client, make_recipe):
 
 def test_listing_another_users_recipe_shares_is_404(client, db_session, other_user):
     foreign = crud.create_recipe(
-        db_session, title="Theirs", servings_default=2, user_id=other_user.id
+        db_session, title="Theirs", user_id=other_user.id
     )
     shares.create_share(
         db_session, recipe=foreign, owner=other_user, mode="link"
@@ -168,7 +168,7 @@ def test_revoking_one_of_two_shares_keeps_the_recipe_unlisted(
 
 def test_revoking_someone_elses_share_is_404(client, db_session, other_user):
     foreign = crud.create_recipe(
-        db_session, title="Theirs", servings_default=2, user_id=other_user.id
+        db_session, title="Theirs", user_id=other_user.id
     )
     share, _ = shares.create_share(
         db_session, recipe=foreign, owner=other_user, mode="link"
@@ -178,7 +178,7 @@ def test_revoking_someone_elses_share_is_404(client, db_session, other_user):
 
 def test_revoking_a_nonexistent_share_is_the_same_404(client, db_session, other_user):
     foreign = crud.create_recipe(
-        db_session, title="Theirs", servings_default=2, user_id=other_user.id
+        db_session, title="Theirs", user_id=other_user.id
     )
     share, _ = shares.create_share(
         db_session, recipe=foreign, owner=other_user, mode="link"
@@ -208,7 +208,7 @@ def test_share_creation_is_rate_limited(engine, monkeypatch):
         hashed_password="x",
     )
     recipe = crud.create_recipe(
-        session, title="Ragu", servings_default=2, user_id=owner.id
+        session, title="Ragu", user_id=owner.id
     )
     recipe_id = recipe.id
 

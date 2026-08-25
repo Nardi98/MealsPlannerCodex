@@ -11,7 +11,6 @@ from main import app
 def _recipe_payload(**overrides) -> dict:
     payload = {
         "title": "Test Recipe",
-        "servings_default": 1,
         "procedure": "Cook it.",
         "bulk_prep": False,
         "course": "main",

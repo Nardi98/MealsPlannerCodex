@@ -64,7 +64,6 @@ def _seed(db_session, user, *, image_url=None, procedure="Mix well."):
         db_session,
         title="Pasta al forno",
         course="main",
-        servings_default=4,
         user_id=user.id,
         procedure=procedure,
         image_url=image_url,
@@ -100,7 +99,9 @@ def test_from_recipe_maps_the_permitted_fields(db_session, user):
     public = PublicRecipe.from_recipe(recipe, user)
 
     assert public.title == "Pasta al forno"
-    assert public.servings == 4
+    # A stored recipe is always authored for one person, so an unscaled
+    # projection always renders for one.
+    assert public.servings == 1
     assert public.course == "main"
     assert public.image_url == "/media/x.jpg"
     assert public.procedure == "Mix well."
@@ -197,8 +198,9 @@ def test_scale_returns_a_new_recipe_with_scaled_quantities(db_session, user):
 
     scaled = public.scaled_to(8)
 
+    # The stored quantity is per person, so eight people want eight times it.
     assert scaled.servings == 8
-    assert scaled.ingredients[0].quantity == 500.0
+    assert scaled.ingredients[0].quantity == 2000.0
     assert public.ingredients[0].quantity == 250.0
 
 
@@ -206,5 +208,5 @@ def test_scale_to_zero_or_negative_is_ignored(db_session, user):
     recipe = _seed(db_session, user)
     public = PublicRecipe.from_recipe(recipe, user)
 
-    assert public.scaled_to(0).servings == 4
+    assert public.scaled_to(0).servings == 1
     assert public.scaled_to(-3).ingredients[0].quantity == 250.0

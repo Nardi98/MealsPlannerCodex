@@ -5,7 +5,7 @@ import main
 
 def test_generate_endpoint_returns_plan(db_session, user, auth_client):
     for i in range(3):
-        crud.create_recipe(db_session, user_id=user.id, title=f"Meal {i}", servings_default=1, course="main")
+        crud.create_recipe(db_session, user_id=user.id, title=f"Meal {i}", course="main")
 
     response = auth_client.post(
         "/meal-plans/generate",

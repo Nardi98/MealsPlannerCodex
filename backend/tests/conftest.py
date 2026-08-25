@@ -114,11 +114,7 @@ def other_user(db_session):
 
 @pytest.fixture
 def make_recipe(db_session, user):
-    """Factory for a persisted recipe owned by the ``user`` fixture.
-
-    ``servings_default`` is not nullable, so every caller has to supply it;
-    defaulting it here keeps the tests about the behaviour under test.
-    """
+    """Factory for a persisted recipe owned by the ``user`` fixture."""
     import crud
 
     def _make(title, course="main", **overrides):
@@ -126,7 +122,6 @@ def make_recipe(db_session, user):
             db_session,
             title=title,
             course=course,
-            servings_default=overrides.pop("servings_default", 2),
             user_id=user.id,
             **overrides,
         )

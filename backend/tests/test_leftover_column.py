@@ -8,7 +8,7 @@ import crud
 def test_recipe_named_leftover_is_not_treated_as_leftover(db_session, user, auth_client):
     """A recipe literally titled '... (leftover)' must not be flagged as a leftover."""
     crud.create_recipe(
-        db_session, title="Soup (leftover)", servings_default=1, course="main",
+        db_session, title="Soup (leftover)", course="main",
         user_id=user.id,
     )
     response = auth_client.post(
@@ -25,7 +25,7 @@ def test_recipe_named_leftover_is_not_treated_as_leftover(db_session, user, auth
 def test_scheduled_leftover_slot_has_clean_title_and_flag(db_session, user, auth_client):
     """A bulk-prep leftover slot reports leftover=True with the clean base title."""
     crud.create_recipe(
-        db_session, title="Bulk", servings_default=1, course="main", bulk_prep=True,
+        db_session, title="Bulk", course="main", bulk_prep=True,
         user_id=user.id,
     )
     response = auth_client.post(

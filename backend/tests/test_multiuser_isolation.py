@@ -13,7 +13,6 @@ from main import app
 def _recipe_payload(title, **over):
     payload = {
         "title": title,
-        "servings_default": 1,
         "course": "main",
         "tags": [],
         "ingredients": [],

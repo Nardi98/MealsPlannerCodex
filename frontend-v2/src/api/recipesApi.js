@@ -19,10 +19,6 @@ function normaliseRecipe(recipe) {
     })),
     procedure: recipe.procedure || '',
     favorite_side_ids: recipe.favorite_side_ids || [],
-    // Kept so an edit round-trips the real value. This used to be dropped here
-    // and hardcoded to 1 on the way out, which silently reset every saved
-    // recipe to "Serves 1" — including on the share page (SP-1 / SP-2).
-    servings_default: recipe.servings_default ?? 1,
     visibility: recipe.visibility ?? 'private',
     // AT-3 / AT-7: the attribution snapshot renders the permanent credit line,
     // and `copy_count` is the owner's "copied N times". Read-only — see
@@ -38,8 +34,6 @@ function serialiseRecipe(recipe) {
   return {
     title: recipe.title,
     course: recipe.course || 'main',
-    // The real value, not a hardcoded 1 (see normaliseRecipe).
-    servings_default: recipe.servings_default ?? 1,
     // VIS-2: private unless the caller says otherwise. `public` is rejected by
     // the backend with 400.
     visibility: recipe.visibility || 'private',

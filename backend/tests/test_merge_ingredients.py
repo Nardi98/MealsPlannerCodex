@@ -24,7 +24,7 @@ def _make(session, name, unit, categories=None, season=None):
 def test_merge_repoints_references(db_session) -> None:
     source = _make(db_session, "Tomatoes", UnitEnum.PIECE)
     target = _make(db_session, "Tomato", UnitEnum.G)
-    recipe = Recipe(title="Salad", servings_default=2)
+    recipe = Recipe(title="Salad")
     db_session.add(recipe)
     db_session.flush()
     db_session.add(
@@ -52,7 +52,7 @@ def test_merge_repoints_references(db_session) -> None:
 def test_merge_folds_colliding_line(db_session) -> None:
     source = _make(db_session, "Tomatoes", UnitEnum.G)
     target = _make(db_session, "Tomato", UnitEnum.G)
-    recipe = Recipe(title="Sauce", servings_default=2)
+    recipe = Recipe(title="Sauce")
     db_session.add(recipe)
     db_session.flush()
     db_session.add_all(
@@ -78,7 +78,7 @@ def test_merge_folds_colliding_line(db_session) -> None:
 def test_merge_leaves_units_when_no_factor(db_session) -> None:
     source = _make(db_session, "Tomatoes", UnitEnum.ML)
     target = _make(db_session, "Tomato", UnitEnum.G)
-    recipe = Recipe(title="Soup", servings_default=2)
+    recipe = Recipe(title="Soup")
     db_session.add(recipe)
     db_session.flush()
     db_session.add(

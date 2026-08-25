@@ -12,7 +12,6 @@ def test_invalid_unit_rejected(api_client) -> None:
     client = api_client
     payload = {
         "title": "Salad",
-        "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",

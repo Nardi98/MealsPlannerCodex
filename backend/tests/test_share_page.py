@@ -43,7 +43,6 @@ def shared_recipe(db_session, user):
         db_session,
         title="Pasta al pomodoro",
         course="main",
-        servings_default=2,
         procedure="Boil the pasta. Add sauce.",
         user_id=user.id,
     )
@@ -100,8 +99,18 @@ def test_servings_query_scales_the_ingredient_quantities(
 ):
     _share, token, _recipe = shared_recipe
     body = page_client().get(f"/s/{token}?servings=4").text
-    assert "400" in body  # 200 g of pasta doubled
-    assert "800" in body  # 400 g of tomato doubled
+    # Stored quantities are per person, so four people want four times them.
+    assert "800" in body  # 200 g of pasta
+    assert "1600" in body  # 400 g of tomato
+
+
+def test_page_renders_for_one_person_by_default(page_client, shared_recipe):
+    """A recipe is stored per person, so an unscaled page renders for one."""
+    _share, token, _recipe = shared_recipe
+    body = page_client().get(f"/s/{token}").text
+    assert 'value="1"' in body
+    assert "200" in body
+    assert "400" in body
 
 
 def test_nonsense_servings_degrades_instead_of_erroring(
@@ -129,8 +138,7 @@ def test_revoked_expired_and_unknown_tokens_return_identical_404s(
     db_session, user, page_client
 ):
     recipe = crud.create_recipe(
-        db_session, title="R", course="main", servings_default=2,
-        user_id=user.id,
+        db_session, title="R", course="main", user_id=user.id,
     )
     revoked, revoked_token = shares.create_share(
         db_session, recipe=recipe, owner=user, mode="link"
@@ -170,8 +178,7 @@ def test_unknown_token_404_leaks_no_recipe_or_reason(page_client):
 @pytest.fixture
 def person_share(db_session, user, other_user):
     recipe = crud.create_recipe(
-        db_session, title="Just for you", course="main", servings_default=2,
-        user_id=user.id,
+        db_session, title="Just for you", course="main", user_id=user.id,
     )
     other_user.email_verified = True
     db_session.commit()
@@ -249,8 +256,7 @@ def test_person_share_matches_the_recipient_by_account_id(
     db_session, page_client, user, other_user
 ):
     recipe = crud.create_recipe(
-        db_session, title="By id", course="main", servings_default=2,
-        user_id=user.id,
+        db_session, title="By id", course="main", user_id=user.id,
     )
     other_user.email_verified = True
     other_user.email = "renamed@test.local"
@@ -273,8 +279,7 @@ def test_link_share_ignores_a_named_recipient(
 ):
     """SH-6: a link share with a recipient is still open to anyone."""
     recipe = crud.create_recipe(
-        db_session, title="Open", course="main", servings_default=2,
-        user_id=user.id,
+        db_session, title="Open", course="main", user_id=user.id,
     )
     _share, token = shares.create_share(
         db_session,

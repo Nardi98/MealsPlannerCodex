@@ -24,11 +24,11 @@ D3 = "2024-01-03"
 def _bulk_plan(session, user):
     """Create a bulk source on D1 with leftovers on D2/D3 (same recipe)."""
     bulk = crud.create_recipe(
-        session, title="Bulk", servings_default=1, course="main", bulk_prep=True,
+        session, title="Bulk", course="main", bulk_prep=True,
         user_id=user.id
     )
     other = crud.create_recipe(
-        session, title="Other", servings_default=1, course="main", user_id=user.id
+        session, title="Other", course="main", user_id=user.id
     )
     crud.set_meal_plan(
         session,

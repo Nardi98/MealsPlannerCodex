@@ -4,7 +4,7 @@ import crud
 
 
 def test_toggle_meal_acceptance(db_session, user, auth_client):
-    r = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
+    r = crud.create_recipe(db_session, user_id=user.id, title="A", course="main")
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [r.id]}, user.id)
     client = auth_client

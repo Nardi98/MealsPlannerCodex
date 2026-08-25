@@ -6,7 +6,6 @@
     -   CRUD (create, read, update, delete).
     -   Each recipe has:
         -   Title
-        -   Servings default
         -   Procedure (nullable)
         -   Bulk preparation flag (leftovers possible)
         -   Course (main, side, first-course)

@@ -240,8 +240,7 @@ def test_copying_your_own_recipe_is_refused_in_the_domain_layer(
 
 def test_favourite_sides_are_copied_and_relinked(db_session, source, copier, user):
     side = crud.create_recipe(
-        db_session, title="Insalata", course="side", servings_default=2,
-        user_id=user.id,
+        db_session, title="Insalata", course="side", user_id=user.id,
     )
     source.favorite_sides.append(side)
     db_session.flush()
@@ -258,8 +257,7 @@ def test_a_side_owned_by_a_third_party_is_dropped_silently(
 ):
     """CP-6: unreachable through this share, so it does not come along."""
     foreign_side = crud.create_recipe(
-        db_session, title="Theirs", course="side", servings_default=2,
-        user_id=other_user.id,
+        db_session, title="Theirs", course="side", user_id=other_user.id,
     )
     source.favorite_sides.append(foreign_side)
     db_session.flush()
@@ -469,7 +467,7 @@ def test_copying_is_rate_limited(engine, monkeypatch):
     )
     thief.email_verified = True
     recipe = crud.create_recipe(
-        session, title="Ragu", servings_default=2, user_id=owner.id
+        session, title="Ragu", user_id=owner.id
     )
     _, token = shares.create_share(
         session, recipe=recipe, owner=owner, mode="link"
@@ -502,7 +500,6 @@ def test_the_copier_cannot_edit_the_attribution_away(
         f"/recipes/{made.id}",
         json={
             "title": "Mine now",
-            "servings_default": 2,
             "course": "main",
             "source_author_username": "copier",
             "source_recipe_title": "Mine now",

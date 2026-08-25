@@ -103,7 +103,6 @@ def _duplicate(
     made = models.Recipe(
         user_id=copier.id,
         title=source.title,
-        servings_default=source.servings_default,
         procedure=source.procedure,
         course=source.course,
         image_url=source.image_url,

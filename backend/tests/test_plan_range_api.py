@@ -4,8 +4,8 @@ import crud
 
 
 def test_get_plan_range(db_session, user, auth_client):
-    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
-    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", servings_default=1, course="main")
+    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", course="main")
+    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", course="main")
     start = date(2024, 1, 1)
     second = start + timedelta(days=1)
     crud.set_meal_plan(

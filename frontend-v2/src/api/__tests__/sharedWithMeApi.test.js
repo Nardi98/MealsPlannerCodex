@@ -33,8 +33,7 @@ test('fetchAll GETs /shared-with-me and returns the entries verbatim', async () 
     recipe: {
       title: 'Ribollita',
       image_url: null,
-      servings: 4,
-      procedure: 'Simmer.',
+          procedure: 'Simmer.',
       ingredients: [{ name: 'Kale', quantity: 200, unit: 'g' }],
       tags: ['soup'],
       course: 'main',

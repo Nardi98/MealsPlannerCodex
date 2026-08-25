@@ -6,7 +6,7 @@ from mealplanner.planner import generate_plan
 
 
 def _make_plan(db_session, caplog, level):
-    good = Recipe(title="Good", servings_default=1, score=1.0, course="main")
+    good = Recipe(title="Good", score=1.0, course="main")
     db_session.add(good)
     db_session.commit()
     with caplog.at_level(level, logger="mealplanner.planner"):

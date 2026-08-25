@@ -28,7 +28,6 @@ function entry(overrides = {}, recipeOverrides = {}) {
     recipe: {
       title: 'Ribollita',
       image_url: null,
-      servings: 4,
       procedure: 'Simmer the kale with the bread.',
       ingredients: [
         { name: 'Kale', quantity: 200, unit: 'g' },
@@ -62,6 +61,15 @@ test('lists every recipe shared with the account', async () => {
 
   expect(await screen.findByText('Ribollita')).toBeInTheDocument()
   expect(screen.getByText(/@anna/)).toBeInTheDocument()
+})
+
+test('shows no serving count, because quantities are per person', async () => {
+  sharedWithMeApi.fetchAll.mockResolvedValue([entry()])
+
+  render(<SharedWithMePage />)
+  await screen.findByText('Ribollita')
+
+  expect(screen.queryByText(/Serves/i)).toBeNull()
 })
 
 test('says so plainly when nothing has been shared', async () => {

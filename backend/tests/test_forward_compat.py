@@ -87,7 +87,6 @@ def shared_page(db_session, user):
         db_session,
         title="Pasta al pomodoro",
         course="main",
-        servings_default=2,
         procedure="Boil the pasta. Add sauce.",
         user_id=user.id,
     )

@@ -14,7 +14,7 @@ from models import Ingredient, MealPlan, Meal, Recipe, RecipeIngredient, Tag
 def _create_sample_data(session, user):
     """Populate the database with a small set of objects owned by ``user``."""
     tag = Tag(name="vegan", user_id=user.id)
-    recipe = Recipe(title="Soup", servings_default=2, course="main", user_id=user.id)
+    recipe = Recipe(title="Soup", course="main", user_id=user.id)
     base = Ingredient(name="Water", user_id=user.id)
     recipe.ingredients.append(RecipeIngredient(ingredient=base, quantity=1, unit="ml"))
     recipe.tags.append(tag)
@@ -62,7 +62,6 @@ def test_import_merge_adds_data(db_session, user):
         "recipes": [
             {
                 "title": "Salad",
-                "servings_default": 1,
                 "course": "main",
                 "ingredients": [],
                 "tags": [],
@@ -145,7 +144,6 @@ def test_import_creates_tables_when_missing(engine):
         "recipes": [
             {
                 "title": "Temp",
-                "servings_default": 1,
                 "course": "main",
                 "ingredients": [],
                 "tags": [],
@@ -169,6 +167,8 @@ def test_import_creates_tables_when_missing(engine):
 
 _FULL_RECIPE_PAYLOAD = {
     "title": "Stew",
+    # Exports written before ``servings_default`` was dropped still carry the
+    # key. The importer must not choke on it.
     "servings_default": 4,
     "procedure": "Simmer everything.",
     "bulk_prep": True,
@@ -182,7 +182,6 @@ _FULL_RECIPE_PAYLOAD = {
 
 def _assert_full_recipe(recipe):
     assert recipe.title == "Stew"
-    assert recipe.servings_default == 4
     assert recipe.procedure == "Simmer everything."
     assert recipe.bulk_prep is True
     assert recipe.course == "first-course"
@@ -207,7 +206,7 @@ def test_import_overwrite_new_builds_all_recipe_fields(db_session):
 
 
 def test_import_overwrite_existing_builds_all_recipe_fields(db_session):
-    existing = Recipe(id=7, title="Old", servings_default=1, course="main")
+    existing = Recipe(id=7, title="Old", course="main")
     db_session.add(existing)
     db_session.commit()
 
@@ -236,3 +235,54 @@ def test_clear_data(db_session, user):
     assert db_session.query(Ingredient).count() == 0
     assert db_session.query(MealPlan).count() == 0
     assert db_session.query(Meal).count() == 0
+
+
+def test_legacy_export_quantities_are_rebased_onto_one_person(db_session):
+    """A pre-removal export stated its quantities for ``servings_default``
+    people. Importing them verbatim would multiply every shopping list by that
+    number, so the importer divides them back down to one person."""
+    payload = {
+        "recipes": [
+            {
+                "title": "Ragu",
+                "servings_default": 4,
+                "ingredients": [
+                    {"name": "Beef", "quantity": 800, "unit": "g"},
+                    {"name": "Salt", "quantity": None, "unit": None},
+                ],
+                "tags": [],
+            }
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
+
+    recipe = db_session.query(Recipe).one()
+    quantities = sorted(
+        (link.quantity for link in recipe.ingredients),
+        key=lambda q: (q is None, q),
+    )
+    assert quantities == [200.0, None]
+
+
+def test_import_leaves_quantities_alone_without_a_legacy_servings_key(db_session):
+    """Current exports are already per person; nothing must be rescaled."""
+    payload = {
+        "recipes": [
+            {
+                "title": "Ragu",
+                "ingredients": [{"name": "Beef", "quantity": 200, "unit": "g"}],
+                "tags": [],
+            }
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
+
+    assert db_session.query(Recipe).one().ingredients[0].quantity == 200.0

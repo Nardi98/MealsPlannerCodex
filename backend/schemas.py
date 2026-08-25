@@ -203,8 +203,8 @@ class RecipeSummary(BaseModel):
 
 
 class RecipeIn(BaseModel):
+    # Ingredient quantities are for one person; see ``models.Recipe``.
     title: str
-    servings_default: int
     procedure: Optional[str] = None
     bulk_prep: bool = False
     course: str = "main"
@@ -237,7 +237,6 @@ class RecipeIn(BaseModel):
 class RecipeOut(BaseModel):
     id: int
     title: str
-    servings_default: int
     procedure: Optional[str] = None
     bulk_prep: bool
     course: str

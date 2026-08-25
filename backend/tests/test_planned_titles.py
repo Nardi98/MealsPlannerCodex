@@ -3,9 +3,9 @@ import crud
 
 
 def test_list_planned_titles_returns_distinct_titles_from_db(db_session, user):
-    a = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
-    b = crud.create_recipe(db_session, user_id=user.id, title="B", servings_default=1, course="main")
-    crud.create_recipe(db_session, user_id=user.id, title="C", servings_default=1, course="main")
+    a = crud.create_recipe(db_session, user_id=user.id, title="A", course="main")
+    b = crud.create_recipe(db_session, user_id=user.id, title="B", course="main")
+    crud.create_recipe(db_session, user_id=user.id, title="C", course="main")
 
     crud.set_meal_plan(
         db_session,

@@ -48,7 +48,6 @@ def private_recipe(db_session, user):
         db_session,
         title=SECRET_TITLE,
         course="main",
-        servings_default=2,
         procedure=SECRET_PROCEDURE,
         user_id=user.id,
     )
@@ -212,7 +211,6 @@ def test_setting_a_recipe_to_public_is_rejected_with_400(
             json={
                 "title": SECRET_TITLE,
                 "course": "main",
-                "servings_default": 2,
                 "visibility": "public",
             },
         )
@@ -237,7 +235,6 @@ def test_creating_a_recipe_as_public_is_rejected_with_400(db_session, user):
             json={
                 "title": "Attempted public recipe",
                 "course": "main",
-                "servings_default": 2,
                 "visibility": "public",
             },
         )
@@ -282,7 +279,6 @@ def test_the_schema_validator_refuses_public_without_a_request():
         schemas.RecipeIn(
             title="Attempted public recipe",
             course="main",
-            servings_default=2,
             visibility="public",
         )
 

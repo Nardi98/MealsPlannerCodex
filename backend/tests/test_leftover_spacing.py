@@ -7,8 +7,8 @@ from mealplanner.planner import generate_plan, Slot
 
 def test_gap1_produces_leftovers(db_session):
     """GAP=1 with keep_days=3 should produce leftovers."""
-    bulk = Recipe(title="Bulk", servings_default=1, score=5.0, bulk_prep=True, course="main")
-    other = Recipe(title="Other", servings_default=1, score=4.0, bulk_prep=False, course="main")
+    bulk = Recipe(title="Bulk", score=5.0, bulk_prep=True, course="main")
+    other = Recipe(title="Other", score=4.0, bulk_prep=False, course="main")
     db_session.add_all([bulk, other])
     db_session.commit()
 
@@ -37,8 +37,8 @@ def test_gap1_produces_leftovers(db_session):
 
 def test_gap2_produces_leftovers(db_session):
     """GAP=2 with keep_days=7 should produce leftovers spread 2 days apart."""
-    bulk = Recipe(title="Bulk", servings_default=1, score=5.0, bulk_prep=True, course="main")
-    other = Recipe(title="Other", servings_default=1, score=4.0, bulk_prep=False, course="main")
+    bulk = Recipe(title="Bulk", score=5.0, bulk_prep=True, course="main")
+    other = Recipe(title="Other", score=4.0, bulk_prep=False, course="main")
     db_session.add_all([bulk, other])
     db_session.commit()
 
@@ -67,8 +67,8 @@ def test_gap2_produces_leftovers(db_session):
 
 def test_gap3_produces_leftovers(db_session):
     """GAP=3 with keep_days=7 should produce leftovers spread 3 days apart."""
-    bulk = Recipe(title="Bulk", servings_default=1, score=5.0, bulk_prep=True, course="main")
-    other = Recipe(title="Other", servings_default=1, score=4.0, bulk_prep=False, course="main")
+    bulk = Recipe(title="Bulk", score=5.0, bulk_prep=True, course="main")
+    other = Recipe(title="Other", score=4.0, bulk_prep=False, course="main")
     db_session.add_all([bulk, other])
     db_session.commit()
 
@@ -97,8 +97,8 @@ def test_gap3_produces_leftovers(db_session):
 
 def test_leftover_is_actually_spaced(db_session):
     """Verify that leftovers appear at least GAP days after cooking."""
-    bulk = Recipe(title="Bulk", servings_default=1, score=5.0, bulk_prep=True, course="main")
-    other = Recipe(title="Other", servings_default=1, score=4.0, bulk_prep=False, course="main")
+    bulk = Recipe(title="Bulk", score=5.0, bulk_prep=True, course="main")
+    other = Recipe(title="Other", score=4.0, bulk_prep=False, course="main")
     db_session.add_all([bulk, other])
     db_session.commit()
 
@@ -136,10 +136,10 @@ def test_leftover_is_actually_spaced(db_session):
 def test_existing_test_still_passes(db_session):
     """Verify the existing test_leftover_ignores_recency_penalty still passes."""
     bulk = Recipe(
-        title="Bulk", servings_default=1, score=5.0, bulk_prep=True, course="main"
+        title="Bulk", score=5.0, bulk_prep=True, course="main"
     )
     other = Recipe(
-        title="Other", servings_default=1, score=4.0, bulk_prep=False, course="main"
+        title="Other", score=4.0, bulk_prep=False, course="main"
     )
     db_session.add_all([bulk, other])
     db_session.commit()

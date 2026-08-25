@@ -18,12 +18,11 @@ def test_user_email_is_canonicalised_on_assignment(db_session):
 
 
 def test_recipe_insert_defaults(db_session):
-    r = Recipe(title="Pasta", servings_default=2)
+    r = Recipe(title="Pasta")
     db_session.add(r)
     db_session.commit()
     db_session.refresh(r)
     assert r.id is not None
-    assert r.servings_default == 2
     assert r.procedure is None
     assert r.score is None
     assert r.date_last_consumed is None
@@ -32,7 +31,7 @@ def test_recipe_insert_defaults(db_session):
 
 
 def test_ingredient_relationship(db_session):
-    r = Recipe(title="Soup", servings_default=4, course="main")
+    r = Recipe(title="Soup", course="main")
     ing = Ingredient(name="Carrot")
     r.ingredients.append(RecipeIngredient(ingredient=ing, quantity=2, unit="piece"))
     db_session.add(r)
@@ -44,7 +43,7 @@ def test_ingredient_relationship(db_session):
 
 
 def test_delete_orphan_ingredients(db_session):
-    r = Recipe(title="Stew", servings_default=3, course="main")
+    r = Recipe(title="Stew", course="main")
     ing = Ingredient(name="Onion")
     r.ingredients.append(RecipeIngredient(ingredient=ing))
     db_session.add(r)
@@ -66,8 +65,8 @@ def test_delete_orphan_ingredients(db_session):
 def test_shared_ingredient_multiple_recipes(db_session):
     """A single Ingredient can appear in many recipes with different amounts."""
     salt = Ingredient(name="Salt")
-    soup = Recipe(title="Soup", servings_default=2, course="main")
-    salad = Recipe(title="Salad", servings_default=1, course="main")
+    soup = Recipe(title="Soup", course="main")
+    salad = Recipe(title="Salad", course="main")
 
     soup.ingredients.append(
         RecipeIngredient(ingredient=salt, quantity=1, unit="g")
@@ -85,7 +84,7 @@ def test_shared_ingredient_multiple_recipes(db_session):
 
 
 def test_many_to_many_tags(db_session):
-    r = Recipe(title="Salad", servings_default=1, course="main")
+    r = Recipe(title="Salad", course="main")
     t1, t2 = Tag(name="vegetarian"), Tag(name="quick")
     r.tags.extend([t1, t2])
     db_session.add(r)

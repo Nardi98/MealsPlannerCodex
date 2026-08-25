@@ -5,10 +5,10 @@ import crud
 
 def test_swap_endpoint_exchanges_meals(db_session, user, auth_client):
     a = crud.create_recipe(
-        db_session, user_id=user.id, title="A", servings_default=1, course="main"
+        db_session, user_id=user.id, title="A", course="main"
     )
     b = crud.create_recipe(
-        db_session, user_id=user.id, title="B", servings_default=1, course="main"
+        db_session, user_id=user.id, title="B", course="main"
     )
     crud.set_meal_plan(
         db_session,
@@ -41,7 +41,7 @@ def test_swap_endpoint_sequential_swaps_are_one_to_one(db_session, user, auth_cl
     ids = {}
     for title in ("A", "B", "C"):
         ids[title] = crud.create_recipe(
-            db_session, user_id=user.id, title=title, servings_default=1, course="main"
+            db_session, user_id=user.id, title=title, course="main"
         ).id
     crud.set_meal_plan(
         db_session,
@@ -70,7 +70,7 @@ def test_swap_endpoint_sequential_swaps_are_one_to_one(db_session, user, auth_cl
 
 def test_swap_endpoint_missing_slot_returns_404(db_session, user, auth_client):
     a = crud.create_recipe(
-        db_session, user_id=user.id, title="A", servings_default=1, course="main"
+        db_session, user_id=user.id, title="A", course="main"
     )
     crud.set_meal_plan(db_session, {"2024-01-01": [a.id]}, user.id)
 

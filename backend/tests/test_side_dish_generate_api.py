@@ -6,7 +6,7 @@ from models import Tag, MealPlan, Meal, MealSide
 
 def test_generate_side_dish_endpoint_returns_side(db_session, user, auth_client):
     for i in range(3):
-        crud.create_recipe(db_session, title=f"Side {i}", servings_default=1, course="side", user_id=user.id)
+        crud.create_recipe(db_session, title=f"Side {i}", course="side", user_id=user.id)
     client = auth_client
     resp = client.post("/side-dishes/generate", json={})
     assert resp.status_code == 200
@@ -20,7 +20,6 @@ def test_generate_side_dish_respects_tag_weight(db_session, user, auth_client):
     good = crud.create_recipe(
         db_session,
         title="Good",
-        servings_default=1,
         course="side",
         score=1.0,
         bulk_prep=True,
@@ -29,7 +28,6 @@ def test_generate_side_dish_respects_tag_weight(db_session, user, auth_client):
     recent = crud.create_recipe(
         db_session,
         title="Recent",
-        servings_default=1,
         course="side",
         score=2.0,
         bulk_prep=True,
@@ -62,7 +60,6 @@ def test_generate_side_dish_respects_tag_weight(db_session, user, auth_client):
     crud.create_recipe(
         db_session,
         title="Avoid",
-        servings_default=1,
         course="side",
         score=5.0,
         tags=[Tag(name="avoid")],
@@ -88,7 +85,6 @@ def test_generate_side_dish_avoids_titles(db_session, user, auth_client):
     crud.create_recipe(
         db_session,
         title="Keep",
-        servings_default=1,
         course="side",
         score=1.0,
         user_id=user.id,
@@ -96,7 +92,6 @@ def test_generate_side_dish_avoids_titles(db_session, user, auth_client):
     crud.create_recipe(
         db_session,
         title="Skip",
-        servings_default=1,
         course="side",
         score=10.0,
         user_id=user.id,

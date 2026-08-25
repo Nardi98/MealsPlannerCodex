@@ -160,7 +160,7 @@ def test_entries_are_read_only(client, db_session, make_recipe, user, recipient)
     recipe_id = share.recipe_id
     assert client.put(
         f"/recipes/{recipe_id}",
-        json={"title": "Hijacked", "servings_default": 2, "course": "main"},
+        json={"title": "Hijacked", "course": "main"},
     ).status_code == 404
     assert client.delete(f"/recipes/{recipe_id}").status_code == 404
 

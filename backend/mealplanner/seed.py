@@ -37,7 +37,6 @@ SYSTEM_INGREDIENTS: list[dict] = json.loads(_SYSTEM_INGREDIENTS_PATH.read_text(e
 def _create_recipe(
     session: Session,
     title: str,
-    servings: int,
     procedure: str,
     ingredients: Iterable[tuple[str, float, str | UnitEnum]],
     tags: Iterable[str],
@@ -56,7 +55,6 @@ def _create_recipe(
 
     recipe = Recipe(
         title=title,
-        servings_default=servings,
         procedure=procedure,
         course=course,
     )
@@ -166,7 +164,6 @@ def seed_sample_data(session: Session) -> None:
     _create_recipe(
         session,
         title="Oatmeal",
-        servings=1,
         procedure="Boil water and oats until thick.",
         ingredients=[
             ("Oats", 100.0, "g"),
@@ -178,7 +175,6 @@ def seed_sample_data(session: Session) -> None:
     _create_recipe(
         session,
         title="Grilled Cheese",
-        servings=1,
         procedure="Butter bread, add cheese and grill until golden.",
         ingredients=[
             ("Bread", 2.0, "piece"),

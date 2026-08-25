@@ -8,7 +8,6 @@ def test_new_tag_creation_and_linking(db_session):
     _create_recipe(
         db_session,
         title="Tag Test Recipe",
-        servings=1,
         procedure="Boil water.",
         course="main",
         ingredients=[],

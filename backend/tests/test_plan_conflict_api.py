@@ -5,8 +5,8 @@ from models import MealPlan, Meal
 
 
 def test_post_meal_plan_conflict_requires_force(db_session, user, auth_client):
-    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", servings_default=1, course="main")
-    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", servings_default=1, course="main")
+    r1 = crud.create_recipe(db_session, user_id=user.id, title="A", course="main")
+    r2 = crud.create_recipe(db_session, user_id=user.id, title="B", course="main")
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [r1.id]}, user.id)
 

@@ -56,6 +56,8 @@ class PublicRecipe(BaseModel):
 
     title: str
     image_url: str | None = None
+    # Not recipe state: always 1 from ``from_recipe``, set by ``scaled_to`` so
+    # the page can echo the chosen head-count back into its servings form.
     servings: int
     procedure: str | None = None
     ingredients: list[PublicIngredient] = []
@@ -84,7 +86,7 @@ class PublicRecipe(BaseModel):
         return cls(
             title=recipe.title,
             image_url=recipe.image_url,
-            servings=recipe.servings_default,
+            servings=1,
             procedure=recipe.procedure,
             ingredients=[
                 PublicIngredient(
@@ -104,15 +106,16 @@ class PublicRecipe(BaseModel):
     def scaled_to(self, servings: int) -> "PublicRecipe":
         """SP-2: a copy scaled to ``servings``, leaving ``self`` untouched.
 
-        Scaling happens on the server so the page works with JavaScript off. A
-        non-positive or unchanged target is a no-op rather than an error: the
-        input arrives from a query string on an unauthenticated page, so it must
-        degrade rather than raise.
+        Quantities come out of :meth:`from_recipe` per person, so the target
+        head-count *is* the factor. Scaling happens on the server so the page
+        works with JavaScript off. A non-positive or unchanged target is a no-op
+        rather than an error: the input arrives from a query string on an
+        unauthenticated page, so it must degrade rather than raise.
         """
-        if servings <= 0 or servings == self.servings or self.servings <= 0:
+        if servings <= 0 or servings == self.servings:
             return self.model_copy(deep=True)
 
-        factor = servings / self.servings
+        factor = float(servings)
         scaled = self.model_copy(deep=True)
         scaled.servings = servings
         for line in scaled.ingredients:

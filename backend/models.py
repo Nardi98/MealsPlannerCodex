@@ -303,14 +303,19 @@ class UnitEnum(str, PyEnum):
 
 
 class Recipe(Base):
-    """A meal that can be prepared and consumed."""
+    """A meal that can be prepared and consumed.
+
+    Ingredient quantities are always stored **for one person**. Everything that
+    renders them scales up from there: the shopping list by ``Meal.people`` and
+    the public share page by its ``?servings=`` control. There is no column
+    recording a different basis, so nothing may write quantities in one.
+    """
 
     __tablename__ = "recipes"
 
     id = Column(Integer, primary_key=True)
     user_id = _owner_fk_column()
     title = Column(String, nullable=False)
-    servings_default = Column(Integer, nullable=False)
     procedure = Column(Text)
     bulk_prep = Column(Boolean, default=False)
     score = Column(Float)

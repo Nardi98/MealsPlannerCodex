@@ -39,7 +39,6 @@ def rich_recipe(db_session, user):
         db_session,
         title="Ragu",
         course="main",
-        servings_default=4,
         procedure="Simmer.",
         bulk_prep=True,
         score=7.25,
@@ -167,8 +166,7 @@ def test_person_share_403_masks_the_recipient_address(
     db_session, page_client, user
 ):
     recipe = crud.create_recipe(
-        db_session, title="Secret", course="main", servings_default=2,
-        user_id=user.id,
+        db_session, title="Secret", course="main", user_id=user.id,
     )
     _share, token = shares.create_share(
         db_session,

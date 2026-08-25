@@ -89,7 +89,6 @@ def test_the_share_page_would_publish_an_unconfirmed_handle(
         db_session,
         title="Ragu della nonna",
         course="main",
-        servings_default=2,
         user_id=provisional.id,
     )
     db_session.flush()
@@ -123,7 +122,6 @@ def test_the_domain_layer_refuses_to_mint_the_share_at_all(db_session, provision
         db_session,
         title="Ragu della nonna",
         course="main",
-        servings_default=2,
         user_id=provisional.id,
     )
     db_session.flush()
@@ -159,7 +157,6 @@ def test_creating_a_share_is_refused_while_the_handle_is_unconfirmed(
         db_session,
         title="Ragu della nonna",
         course="main",
-        servings_default=2,
         user_id=provisional.id,
     )
     db_session.commit()
@@ -190,7 +187,6 @@ def test_a_refused_share_leaves_the_recipe_private(db_session, provisional):
         db_session,
         title="Ragu della nonna",
         course="main",
-        servings_default=2,
         user_id=provisional.id,
     )
     db_session.commit()
@@ -223,7 +219,6 @@ def test_confirming_the_handle_unblocks_sharing(db_session, provisional):
         db_session,
         title="Ragu della nonna",
         course="main",
-        servings_default=2,
         user_id=provisional.id,
     )
     provisional.username_changed_at = datetime.utcnow()

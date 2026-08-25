@@ -13,7 +13,6 @@ def test_recipe_crud(api_client) -> None:
     client = api_client
     payload = {
         "title": "Soup",
-        "servings_default": 2,
         "procedure": "Boil",
         "bulk_prep": False,
         "course": "main",
@@ -51,7 +50,6 @@ def test_create_recipe_ignores_blank_ingredients(api_client) -> None:
     client = api_client
     payload = {
         "title": "Tea",
-        "servings_default": 1,
         "course": "main",
         "ingredients": [
             {"name": "Water", "quantity": 1, "unit": "l"},
@@ -69,7 +67,6 @@ def test_create_recipe_defaults_course_api(api_client) -> None:
     client = api_client
     payload = {
         "title": "Rice",
-        "servings_default": 1,
         "ingredients": [],
     }
     res = client.post("/recipes", json=payload)
@@ -81,7 +78,6 @@ def test_recipe_persists_ingredient_season_months(api_client) -> None:
     client = api_client
     payload = {
         "title": "Veggies",
-        "servings_default": 2,
         "course": "main",
         "ingredients": [
             {
@@ -102,7 +98,6 @@ def test_recipe_defaults_ingredient_season_months(api_client) -> None:
     client = api_client
     payload = {
         "title": "Pepper Soup",
-        "servings_default": 1,
         "course": "main",
         "ingredients": [
             {"name": "Pepper", "quantity": 1, "unit": "piece"}

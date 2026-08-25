@@ -26,14 +26,12 @@ def test_import_restores_the_pairing_under_remapped_ids(db_session, user):
             {
                 "id": 501,
                 "title": "Roast",
-                "servings_default": 2,
                 "course": "main",
                 "favorite_side_ids": [502],
             },
             {
                 "id": 502,
                 "title": "Potatoes",
-                "servings_default": 2,
                 "course": "side",
             },
         ],
@@ -61,12 +59,11 @@ def test_import_drops_a_pairing_to_a_recipe_that_is_not_a_side(db_session, user)
             {
                 "id": 501,
                 "title": "Roast",
-                "servings_default": 2,
                 "course": "main",
                 "favorite_side_ids": [502, 503],
             },
-            {"id": 502, "title": "Lasagne", "servings_default": 2, "course": "main"},
-            {"id": 503, "title": "Potatoes", "servings_default": 2, "course": "side"},
+            {"id": 502, "title": "Lasagne", "course": "main"},
+            {"id": 503, "title": "Potatoes", "course": "side"},
         ],
         "tags": [],
         "meal_plans": [],
@@ -89,7 +86,6 @@ def test_import_tolerates_a_pairing_to_a_missing_recipe(db_session, user):
             {
                 "id": 501,
                 "title": "Roast",
-                "servings_default": 2,
                 "course": "main",
                 "favorite_side_ids": [999],
             }

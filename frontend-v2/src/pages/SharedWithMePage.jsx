@@ -11,8 +11,8 @@ import { sharedWithMeApi } from '../api/sharedWithMeApi'
 // collection.
 //
 // Everything rendered comes from the backend's PRV-2 allowlist — title, image,
-// servings, procedure, ingredients, tags, course, the author's display name and
-// handle, and the attribution snapshot. Fields outside that list are not read,
+// procedure, ingredients, tags, course, the author's display name and handle,
+// and the attribution snapshot. Fields outside that list are not read,
 // so a future column cannot leak by being added upstream.
 
 // The share list holds no raw tokens (SH-3 stores them hashed), so nothing here
@@ -135,9 +135,6 @@ function SharedCard({ entry, onOpen, onDismiss, dismissing }) {
               </Badge>
             ))}
           </div>
-          <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-            {`Serves ${recipe.servings}`}
-          </p>
         </div>
       </button>
       <div
@@ -195,10 +192,6 @@ function SharedRecipeDetail({ entry, onClose, onCopy, copying, copyResult, copyE
             </Badge>
           ))}
         </div>
-
-        <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-          {`Serves ${recipe.servings}`}
-        </p>
 
         <section>
           <h4

@@ -131,7 +131,6 @@ def seed_test_data(session) -> None:
             continue
         recipe = Recipe(
             title=title,
-            servings_default=4,
             procedure=f"Prepare {title}.",
             score=score,
             bulk_prep=bulk,

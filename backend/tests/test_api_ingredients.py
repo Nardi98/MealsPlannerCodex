@@ -24,7 +24,6 @@ def test_search_ingredients(api_client) -> None:
     client = api_client
     payload = {
         "title": "Pasta",
-        "servings_default": 2,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",
@@ -53,7 +52,6 @@ def test_list_all_ingredients(api_client) -> None:
     client = api_client
     payload = {
         "title": "Soup",
-        "servings_default": 2,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",
@@ -80,7 +78,6 @@ def test_update_ingredient(api_client) -> None:
     client = api_client
     payload = {
         "title": "Tea",
-        "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",
@@ -111,7 +108,6 @@ def test_ingredient_recipe_lookup_and_delete(api_client) -> None:
     # Create two recipes sharing an ingredient and one unique recipe
     payload1 = {
         "title": "Pasta",
-        "servings_default": 2,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",
@@ -122,7 +118,6 @@ def test_ingredient_recipe_lookup_and_delete(api_client) -> None:
     }
     payload2 = {
         "title": "Salad",
-        "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",
@@ -159,7 +154,6 @@ def test_ingredient_recipe_lookup_and_delete(api_client) -> None:
         f"/recipes/{recipe1['id']}",
         json={
             "title": recipe1["title"],
-            "servings_default": recipe1["servings_default"],
             "procedure": recipe1["procedure"],
             "bulk_prep": recipe1["bulk_prep"],
             "course": recipe1["course"],
@@ -182,7 +176,6 @@ def test_force_delete_removes_references(api_client) -> None:
 
     payload = {
         "title": "Soup",
-        "servings_default": 1,
         "procedure": "",
         "bulk_prep": False,
         "course": "main",

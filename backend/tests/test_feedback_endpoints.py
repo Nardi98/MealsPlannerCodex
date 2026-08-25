@@ -11,9 +11,9 @@ def test_feedback_endpoints_return_unique_replacement(db_session):
     )
     client = client_as(db_session, user)
     uid = user.id
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
-    c = crud.create_recipe(db_session, title="C", servings_default=1, course="main", score=0, user_id=uid)
+    a = crud.create_recipe(db_session, title="A", course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", course="main", score=0, user_id=uid)
+    c = crud.create_recipe(db_session, title="C", course="main", score=0, user_id=uid)
     crud.set_meal_plan(
         db_session,
         {
@@ -50,10 +50,10 @@ def test_reject_replacement_limited_to_main_courses(db_session):
     )
     client = client_as(db_session, user)
     uid = user.id
-    a = crud.create_recipe(db_session, title="A", servings_default=1, course="main", score=0, user_id=uid)
-    crud.create_recipe(db_session, title="B", servings_default=1, course="main", score=0, user_id=uid)
+    a = crud.create_recipe(db_session, title="A", course="main", score=0, user_id=uid)
+    crud.create_recipe(db_session, title="B", course="main", score=0, user_id=uid)
     crud.create_recipe(
-        db_session, title="C", servings_default=1, course="dessert", score=0, user_id=uid
+        db_session, title="C", course="dessert", score=0, user_id=uid
     )
     crud.set_meal_plan(
         db_session,

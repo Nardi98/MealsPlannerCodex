@@ -4,8 +4,8 @@ import crud
 
 
 def test_post_plan_with_side_recipe(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main", user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side = crud.create_recipe(db_session, title="Side", course="main", user_id=user.id)
     plan_date = date(2024, 1, 1)
     payload = {
         "plan_date": plan_date.isoformat(),
@@ -37,8 +37,8 @@ def test_post_plan_with_side_recipe(db_session, user, auth_client):
 
 
 def test_add_side_dish_endpoint(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side = crud.create_recipe(db_session, title="Side", servings_default=1, course="main", user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side = crud.create_recipe(db_session, title="Side", course="main", user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
 
@@ -76,9 +76,9 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
 
 
 def test_replace_and_remove_side_dish_scores(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
@@ -90,9 +90,9 @@ def test_replace_and_remove_side_dish_scores(db_session, user, auth_client):
 
 
 def test_add_multiple_side_dishes(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
 
@@ -127,10 +127,10 @@ def test_add_multiple_side_dishes(db_session, user, auth_client):
 
 
 def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
-    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
@@ -165,10 +165,10 @@ def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
 
 
 def test_remove_first_of_multiple_side_dishes(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
-    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
@@ -191,10 +191,10 @@ def test_remove_first_of_multiple_side_dishes(db_session, user, auth_client):
 
 
 def test_remove_middle_side_dish_renumbers_positions(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
-    side3 = crud.create_recipe(db_session, title="Side3", servings_default=1, course="side", score=0, user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", score=0, user_id=user.id)
+    side3 = crud.create_recipe(db_session, title="Side3", course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)
@@ -208,9 +208,9 @@ def test_remove_middle_side_dish_renumbers_positions(db_session, user, auth_clie
 
 
 def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, title="Main", servings_default=1, course="main", user_id=user.id)
-    side1 = crud.create_recipe(db_session, title="Side1", servings_default=1, course="side", score=0, user_id=user.id)
-    side2 = crud.create_recipe(db_session, title="Side2", servings_default=1, course="side", score=0, user_id=user.id)
+    main = crud.create_recipe(db_session, title="Main", course="main", user_id=user.id)
+    side1 = crud.create_recipe(db_session, title="Side1", course="side", score=0, user_id=user.id)
+    side2 = crud.create_recipe(db_session, title="Side2", course="side", score=0, user_id=user.id)
     plan_date = date(2024, 1, 1)
     crud.set_meal_plan(db_session, {plan_date.isoformat(): [main.id]}, user_id=user.id)
     crud.add_meal_side(db_session, plan_date, 1, side1.id)

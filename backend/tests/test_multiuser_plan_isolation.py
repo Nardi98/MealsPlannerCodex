@@ -34,7 +34,6 @@ def _recipe(session, user, title, course="main"):
     return crud.create_recipe(
         session,
         title=title,
-        servings_default=1,
         course=course,
         user_id=user.id,
     )
@@ -177,7 +176,6 @@ def test_import_stamps_ownership_on_the_caller(db_session):
         "recipes": [
             {
                 "title": "Imported",
-                "servings_default": 1,
                 "course": "main",
                 "ingredients": [],
                 "tags": [],

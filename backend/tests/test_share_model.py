@@ -21,7 +21,7 @@ def _digest(value: str) -> str:
 @pytest.fixture
 def recipe(db_session, user):
     return crud.create_recipe(
-        db_session, title="Ragu", servings_default=4, user_id=user.id
+        db_session, title="Ragu", user_id=user.id
     )
 
 
@@ -64,7 +64,7 @@ def test_a_person_share_requires_a_recipient(db_session, user, recipe):
 
 def test_a_person_share_accepts_a_recipient_account(db_session, user, other_user):
     recipe = crud.create_recipe(
-        db_session, title="Ragu", servings_default=4, user_id=user.id
+        db_session, title="Ragu", user_id=user.id
     )
     share = RecipeShare(
         recipe_id=recipe.id,

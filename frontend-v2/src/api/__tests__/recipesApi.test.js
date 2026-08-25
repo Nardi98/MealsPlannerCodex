@@ -39,43 +39,23 @@ function sentBody() {
   return JSON.parse(globalThis.fetch.mock.calls[0][1].body)
 }
 
-// --- servings_default regression (SP-1 / SP-2) --------------------------------
-// serialiseRecipe used to hardcode `servings_default: 1`, so every recipe the
-// SPA saved was silently reset to "Serves 1" — including on a plain edit of a
-// four-serving recipe, and that wrong number is what a share page shows.
+// A recipe's ingredient quantities are always stored for one person, so there
+// is no servings field to round-trip.
 
-test('normaliseRecipe keeps servings_default so an edit can round-trip it', async () => {
+test('serialiseRecipe sends no servings field', async () => {
+  mockJson({ id: 1, title: 'Ribollita' }, 201)
+
+  await recipesApi.create({ title: 'Ribollita', servings_default: 4 })
+
+  expect(sentBody()).not.toHaveProperty('servings_default')
+})
+
+test('normaliseRecipe drops a servings field the backend no longer sends', async () => {
   mockJson({ id: 1, title: 'Ribollita', servings_default: 6 })
 
   const recipe = await recipesApi.fetch(1)
 
-  expect(recipe.servings_default).toBe(6)
-})
-
-test('serialiseRecipe sends the recipe servings, not a hardcoded 1', async () => {
-  mockJson({ id: 1, title: 'Ribollita', servings_default: 4 }, 201)
-
-  await recipesApi.create({ title: 'Ribollita', servings_default: 4 })
-
-  expect(sentBody().servings_default).toBe(4)
-})
-
-test('an edited recipe keeps its servings across a fetch/update round-trip', async () => {
-  mockJson({ id: 1, title: 'Ribollita', servings_default: 6 })
-  const loaded = await recipesApi.fetch(1)
-
-  mockJson({ id: 1, title: 'Ribollita v2', servings_default: 6 })
-  await recipesApi.update(1, { ...loaded, title: 'Ribollita v2' })
-
-  expect(sentBody().servings_default).toBe(6)
-})
-
-test('servings_default falls back to 1 when the recipe carries none', async () => {
-  mockJson({ id: 1, title: 'Ribollita', servings_default: 1 }, 201)
-
-  await recipesApi.create({ title: 'Ribollita' })
-
-  expect(sentBody().servings_default).toBe(1)
+  expect(recipe).not.toHaveProperty('servings_default')
 })
 
 // --- attribution + visibility passthrough (AT-3 / AT-7) ----------------------
@@ -84,7 +64,6 @@ test('normaliseRecipe exposes visibility, copy_count and the attribution snapsho
   mockJson({
     id: 1,
     title: 'My ribollita',
-    servings_default: 2,
     visibility: 'unlisted',
     copy_count: 3,
     source_author_username: 'anna',
@@ -102,11 +81,10 @@ test('normaliseRecipe exposes visibility, copy_count and the attribution snapsho
 })
 
 test('serialiseRecipe sends visibility but never the attribution fields (AT-4)', async () => {
-  mockJson({ id: 1, title: 'My ribollita', servings_default: 2 }, 201)
+  mockJson({ id: 1, title: 'My ribollita' }, 201)
 
   await recipesApi.create({
     title: 'My ribollita',
-    servings_default: 2,
     visibility: 'unlisted',
     copy_count: 3,
     source_author_username: 'attacker',
@@ -123,7 +101,7 @@ test('serialiseRecipe sends visibility but never the attribution fields (AT-4)',
 })
 
 test('visibility defaults to private when the caller does not set it (VIS-2)', async () => {
-  mockJson({ id: 1, title: 'Ribollita', servings_default: 1 }, 201)
+  mockJson({ id: 1, title: 'Ribollita' }, 201)
 
   await recipesApi.create({ title: 'Ribollita' })
 

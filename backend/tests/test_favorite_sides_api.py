@@ -5,7 +5,6 @@ import crud
 def _create(client, title, course, favorite_side_ids=None):
     payload = {
         "title": title,
-        "servings_default": 2,
         "course": course,
     }
     if favorite_side_ids is not None:
@@ -47,7 +46,6 @@ def test_update_replaces_the_favorite_sides(api_client):
         f"/recipes/{created['id']}",
         json={
             "title": "Roast Chicken",
-            "servings_default": 2,
             "course": "main",
             "favorite_side_ids": [second],
         },
@@ -105,11 +103,11 @@ def test_deleting_a_favorite_side_leaves_the_main(api_client):
 def test_generate_returns_the_favorite_side_for_the_main(db_session, user, auth_client):
     side = crud.create_recipe(
         db_session, user_id=user.id, title="Potatoes",
-        servings_default=1, course="side",
+        course="side",
     )
     main = crud.create_recipe(
         db_session, user_id=user.id, title="Roast",
-        servings_default=1, course="main",
+        course="main",
     )
     main.favorite_sides = [side]
     db_session.flush()
@@ -128,7 +126,7 @@ def test_generate_returns_no_sides_for_a_main_without_favorites(
 ):
     crud.create_recipe(
         db_session, user_id=user.id, title="Plain Steak",
-        servings_default=1, course="main",
+        course="main",
     )
 
     res = auth_client.post(
@@ -143,11 +141,11 @@ def test_a_generated_side_persists_onto_the_meal(db_session, user, auth_client):
     """The whole point: generate -> save -> the side is on the plan."""
     side = crud.create_recipe(
         db_session, user_id=user.id, title="Potatoes",
-        servings_default=1, course="side",
+        course="side",
     )
     main = crud.create_recipe(
         db_session, user_id=user.id, title="Roast",
-        servings_default=1, course="main",
+        course="main",
     )
     main.favorite_sides = [side]
     db_session.flush()

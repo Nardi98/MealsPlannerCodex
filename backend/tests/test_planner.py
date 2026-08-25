@@ -7,11 +7,11 @@ from mealplanner.planner import generate_plan, filter_recipes
 
 def test_filter_recipes_excludes_out_of_season(db_session):
     """A recipe whose only ingredient is out of season is filtered out."""
-    winter = Recipe(title="Winter", servings_default=1, course="main")
+    winter = Recipe(title="Winter", course="main")
     winter_ing = Ingredient(name="winter-veg", season_months=[12, 1, 2])
     winter.ingredients = [RecipeIngredient(ingredient=winter_ing, recipe=winter)]
 
-    summer = Recipe(title="Summer", servings_default=1, course="main")
+    summer = Recipe(title="Summer", course="main")
     summer_ing = Ingredient(name="summer-veg", season_months=[6, 7, 8])
     summer.ingredients = [RecipeIngredient(ingredient=summer_ing, recipe=summer)]
 
@@ -23,7 +23,7 @@ def test_filter_recipes_excludes_out_of_season(db_session):
 
 
 def make_recipe(name, bulk=False, tags=None, season=None):
-    r = Recipe(title=name, servings_default=2, bulk_prep=bulk, course="main")
+    r = Recipe(title=name, bulk_prep=bulk, course="main")
     if tags:
         r.tags = [Tag(name=t) for t in tags]
     if season:
@@ -36,8 +36,8 @@ def make_recipe(name, bulk=False, tags=None, season=None):
 
 def test_generate_plan_avoid_tags_from_ui(db_session):
     """Avoid tags supplied as a list should exclude recipes."""
-    good = Recipe(title="Good", servings_default=1, score=1.0, bulk_prep=True, course="main")
-    bad = Recipe(title="Bad", servings_default=1, score=1.5, bulk_prep=True, course="main")
+    good = Recipe(title="Good", score=1.0, bulk_prep=True, course="main")
+    bad = Recipe(title="Bad", score=1.5, bulk_prep=True, course="main")
     bad.tags = [Tag(name="avoid")]
     db_session.add_all([good, bad])
     db_session.commit()
@@ -55,8 +55,8 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
 
 def test_fridge_ingredient_boosts_recipe(db_session):
     """A fridge ingredient promotes a lower-base recipe that uses it."""
-    plain = Recipe(title="Plain", servings_default=1, score=1.5, course="main")
-    fridgey = Recipe(title="Fridgey", servings_default=1, score=1.0, course="main")
+    plain = Recipe(title="Plain", score=1.5, course="main")
+    fridgey = Recipe(title="Fridgey", score=1.0, course="main")
     onion = Ingredient(name="onion")
     fridgey.ingredients = [RecipeIngredient(ingredient=onion, recipe=fridgey)]
     db_session.add_all([plain, fridgey])
@@ -77,8 +77,8 @@ def test_fridge_ingredient_boosts_recipe(db_session):
 
 def test_fridge_boost_consumed_after_count_reached(db_session):
     """A count-1 fridge selection only boosts one slot; then it stops."""
-    plain = Recipe(title="Plain", servings_default=1, score=1.5, course="main")
-    fridgey = Recipe(title="Fridgey", servings_default=1, score=1.0, course="main")
+    plain = Recipe(title="Plain", score=1.5, course="main")
+    fridgey = Recipe(title="Fridgey", score=1.0, course="main")
     onion = Ingredient(name="onion")
     fridgey.ingredients = [RecipeIngredient(ingredient=onion, recipe=fridgey)]
     db_session.add_all([plain, fridgey])
@@ -97,14 +97,12 @@ def test_fridge_boost_consumed_after_count_reached(db_session):
 def test_recency_weight(db_session, user):
     fresh = Recipe(
         title="Fresh",
-        servings_default=1,
         score=1.0,
         bulk_prep=True,
         course="main",
     )
     recent = Recipe(
         title="Recent",
-        servings_default=1,
         score=1.2,
         bulk_prep=True,
         course="main",
@@ -149,14 +147,12 @@ def test_recency_weight(db_session, user):
 def test_leftover_ignores_recency_penalty(db_session):
     bulk = Recipe(
         title="Bulk",
-        servings_default=1,
         score=5.0,
         bulk_prep=True,
         course="main",
     )
     other = Recipe(
         title="Other",
-        servings_default=1,
         score=4.0,
         bulk_prep=False,
         course="main",
@@ -183,8 +179,8 @@ def test_leftover_ignores_recency_penalty(db_session):
 def test_generate_plan_epsilon_randomness(db_session):
     """With epsilon > 0 the selection may choose lower scoring recipes."""
     recipes = [
-        Recipe(title="Top", servings_default=1, score=2.0, bulk_prep=True, course="main"),
-        Recipe(title="Low", servings_default=1, score=1.0, bulk_prep=True, course="main"),
+        Recipe(title="Top", score=2.0, bulk_prep=True, course="main"),
+        Recipe(title="Low", score=1.0, bulk_prep=True, course="main"),
     ]
     db_session.add_all(recipes)
     db_session.commit()
@@ -203,9 +199,9 @@ def test_generate_plan_epsilon_randomness(db_session):
 def test_exploration_favors_stale_recipes(db_session):
     """With epsilon=1, a long-unrejected recipe is explored far more often."""
     start = date(2024, 6, 1)
-    stale = Recipe(title="Stale", servings_default=1, score=1.0, course="main")
+    stale = Recipe(title="Stale", score=1.0, course="main")
     stale.date_last_rejected = start - timedelta(days=60)
-    fresh = Recipe(title="Fresh", servings_default=1, score=1.0, course="main")
+    fresh = Recipe(title="Fresh", score=1.0, course="main")
     fresh.date_last_rejected = start - timedelta(days=2)
     db_session.add_all([stale, fresh])
     db_session.commit()
@@ -224,9 +220,9 @@ def test_exploration_favors_stale_recipes(db_session):
 def test_exploration_excludes_recipe_within_cooldown(db_session, user):
     """A recipe proposed within the cooldown is never chosen on the explore branch."""
     start = date(2024, 6, 1)
-    recent = Recipe(title="Recent", servings_default=1, score=1.0, course="main")
+    recent = Recipe(title="Recent", score=1.0, course="main")
     recent.date_last_rejected = start - timedelta(days=90)  # very stale...
-    available = Recipe(title="Available", servings_default=1, score=1.0, course="main")
+    available = Recipe(title="Available", score=1.0, course="main")
     db_session.add_all([recent, available])
     db_session.commit()
 
@@ -247,7 +243,7 @@ def test_exploration_excludes_recipe_within_cooldown(db_session, user):
 
 
 def test_generate_plan_leftover_expiry(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
+    recipe = Recipe(title="Bulk", bulk_prep=True, score=1.0, course="main")
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
@@ -271,7 +267,7 @@ def test_generate_plan_leftover_expiry(db_session):
 
 
 def test_generate_plan_bulk_leftovers_disabled(db_session):
-    recipe = Recipe(title="Bulk", servings_default=1, bulk_prep=True, score=1.0, course="main")
+    recipe = Recipe(title="Bulk", bulk_prep=True, score=1.0, course="main")
     db_session.add(recipe)
     db_session.commit()
     start = date(2024, 1, 1)
@@ -292,8 +288,8 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
 
 
 def test_generate_plan_respects_meals_per_day(db_session):
-    first = Recipe(title="MealA", servings_default=1, score=1.0, course="main")
-    second = Recipe(title="MealB", servings_default=1, score=1.0, course="main")
+    first = Recipe(title="MealA", score=1.0, course="main")
+    second = Recipe(title="MealB", score=1.0, course="main")
     db_session.add_all([first, second])
     db_session.commit()
     start = date(2024, 1, 1)
@@ -302,8 +298,8 @@ def test_generate_plan_respects_meals_per_day(db_session):
 
 
 def test_generate_plan_gap_filter(db_session, user):
-    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
-    r2 = Recipe(title="R2", servings_default=1, score=1.0, course="main")
+    r1 = Recipe(title="R1", score=5.0, course="main")
+    r2 = Recipe(title="R2", score=1.0, course="main")
     db_session.add_all([r1, r2])
     db_session.commit()
 
@@ -327,7 +323,7 @@ def test_generate_plan_gap_filter(db_session, user):
 
 
 def test_generate_plan_gap_filter_fallback(db_session, user):
-    r1 = Recipe(title="R1", servings_default=1, score=5.0, course="main")
+    r1 = Recipe(title="R1", score=5.0, course="main")
     db_session.add(r1)
     db_session.commit()
 
@@ -351,7 +347,7 @@ def test_generate_plan_gap_filter_fallback(db_session, user):
 
 
 def _recipe_with_ingredient(title, score, ingredient, tags=None):
-    r = Recipe(title=title, servings_default=1, score=score, course="main")
+    r = Recipe(title=title, score=score, course="main")
     r.ingredients = [RecipeIngredient(ingredient=ingredient, recipe=r)]
     if tags:
         r.tags = tags

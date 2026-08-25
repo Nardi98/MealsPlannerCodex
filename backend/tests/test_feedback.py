@@ -11,7 +11,6 @@ def test_accept_recipe_updates_score_and_date(db_session):
     r = crud.create_recipe(
         db_session,
         title="Test",
-        servings_default=1,
         course="main",
         score=0,
     )
@@ -26,7 +25,6 @@ def test_reject_recipe_updates_score(db_session):
     r = crud.create_recipe(
         db_session,
         title="Test2",
-        servings_default=1,
         course="main",
         score=0,
     )
@@ -42,7 +40,6 @@ def test_reject_recipe_stamps_date_last_rejected(db_session):
     r = crud.create_recipe(
         db_session,
         title="RejectStamp",
-        servings_default=1,
         course="main",
         score=0,
     )
@@ -58,7 +55,6 @@ def test_accept_recipe_leaves_date_last_rejected(db_session):
     r = crud.create_recipe(
         db_session,
         title="AcceptKeep",
-        servings_default=1,
         course="main",
         score=0,
     )
@@ -70,8 +66,8 @@ def test_accept_recipe_leaves_date_last_rejected(db_session):
 def test_accept_recipe_handles_duplicates(db_session):
     """Accepting a recipe with a non-unique title updates only one entry."""
 
-    r1 = crud.create_recipe(db_session, title="Dup", servings_default=1, course="main", score=0)
-    r2 = crud.create_recipe(db_session, title="Dup", servings_default=1, course="main", score=0)
+    r1 = crud.create_recipe(db_session, title="Dup", course="main", score=0)
+    r2 = crud.create_recipe(db_session, title="Dup", course="main", score=0)
 
     # Should not raise MultipleResultsFound even with duplicate titles
     consumed = date(2024, 2, 2)

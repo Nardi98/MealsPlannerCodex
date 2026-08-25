@@ -13,7 +13,6 @@ from mealplanner.planner import generate_plan, pick_favorite_side
 def _main(title, bulk=False, score=1.0):
     return Recipe(
         title=title,
-        servings_default=1,
         score=score,
         bulk_prep=bulk,
         course="main",
@@ -21,13 +20,13 @@ def _main(title, bulk=False, score=1.0):
 
 
 def _side(title):
-    return Recipe(title=title, servings_default=1, score=1.0, course="side")
+    return Recipe(title=title, score=1.0, course="side")
 
 
 def test_pick_favorite_side_ignores_a_non_main_course(db_session):
     """Only mains take sides, even if legacy rows carry a pairing."""
     risotto = Recipe(
-        title="Risotto", servings_default=1, score=1.0, course="first-course"
+        title="Risotto", score=1.0, course="first-course"
     )
     risotto.favorite_sides = [_side("Potatoes")]
     db_session.add(risotto)
@@ -38,7 +37,7 @@ def test_pick_favorite_side_ignores_a_non_main_course(db_session):
 
 def test_a_planned_first_course_gets_no_side(db_session):
     risotto = Recipe(
-        title="Risotto", servings_default=1, score=1.0, course="first-course"
+        title="Risotto", score=1.0, course="first-course"
     )
     risotto.favorite_sides = [_side("Potatoes")]
     db_session.add(risotto)

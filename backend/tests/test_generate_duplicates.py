@@ -4,7 +4,7 @@ import crud
 
 def test_generate_endpoint_handles_duplicate_titles(db_session, user, auth_client):
     for _ in range(2):
-        crud.create_recipe(db_session, user_id=user.id, title="Dup", servings_default=1, course="main")
+        crud.create_recipe(db_session, user_id=user.id, title="Dup", course="main")
 
     response = auth_client.post(
         "/meal-plans/generate",

@@ -7,9 +7,9 @@ from models import Meal, MealPlan
 
 
 def test_delete_meal_plans_removes_rows_and_cache(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
-    alt = crud.create_recipe(db_session, user_id=user.id, title="Alt", servings_default=1, course="main")
-    side = crud.create_recipe(db_session, user_id=user.id, title="Side", servings_default=1, course="side")
+    main = crud.create_recipe(db_session, user_id=user.id, title="Main", course="main")
+    alt = crud.create_recipe(db_session, user_id=user.id, title="Alt", course="main")
+    side = crud.create_recipe(db_session, user_id=user.id, title="Side", course="side")
 
     start = date(2024, 1, 1)
     second = start + timedelta(days=1)
@@ -58,7 +58,7 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session, user, auth_client)
 
 
 def test_delete_meal_plans_legacy_route(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, user_id=user.id, title="Main", servings_default=1, course="main")
+    main = crud.create_recipe(db_session, user_id=user.id, title="Main", course="main")
 
     start = date(2024, 1, 1)
 
