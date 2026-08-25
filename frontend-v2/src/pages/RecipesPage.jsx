@@ -71,11 +71,23 @@ function RecipeMedia({ recipe, rounded }) {
   )
 }
 
+// Lazy: the starter pack carries a 30 KB recipe catalogue that only a
+// brand-new, empty account ever renders. Importing it through the barrel would
+// put it in every page's bundle, login included.
+const StarterRecipesModal = React.lazy(() => import('../components/StarterRecipesModal'))
+
+const STARTER_DISMISSED_KEY = 'starterRecipesDismissed'
+
 export default function RecipesPage() {
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
+  // The starter-recipe offer (SR): shown once the first load comes back empty.
+  // Dismissal lives in sessionStorage rather than on the account, so a user who
+  // says "maybe later" is not asked again this session but is offered the pack
+  // again next time they sign in with a book that is still empty.
+  const [showStarter, setShowStarter] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
   // The share dialog belongs to whichever recipe is open; closing or switching
@@ -86,7 +98,14 @@ export default function RecipesPage() {
   const [search, setSearch] = React.useState('')
   const [showFilters, setShowFilters] = React.useState(false)
   const [tags, setTags] = React.useState([])
-  const [ingredients, setIngredients] = React.useState([])
+  // The account's full ingredient rows. The filter list needs only the names,
+  // but the starter-pack import needs each row's id, unit and seasonality —
+  // fetching them twice was the alternative.
+  const [ingredientRows, setIngredientRows] = React.useState([])
+  const ingredientNames = React.useMemo(
+    () => ingredientRows.map((i) => i.name),
+    [ingredientRows],
+  )
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
   const [selectedCourses, setSelectedCourses] = React.useState([])
@@ -103,8 +122,11 @@ export default function RecipesPage() {
           ingredientsApi.fetchAll(),
         ])
         setRecipes(recipesRes)
+        if (recipesRes.length === 0 && sessionStorage.getItem(STARTER_DISMISSED_KEY) !== '1') {
+          setShowStarter(true)
+        }
         setTags(tagsRes.map((t) => t.name))
-        setIngredients(ingRes.map((i) => i.name))
+        setIngredientRows(ingRes)
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
       }
@@ -251,7 +273,7 @@ export default function RecipesPage() {
                   label="Ingredients"
                   open={ingredientsOpen}
                   onToggle={() => setIngredientsOpen((o) => !o)}
-                  options={ingredients}
+                  options={ingredientNames}
                   selected={selectedIngredients}
                   onSelect={toggleIngredient}
                 />
@@ -490,6 +512,22 @@ export default function RecipesPage() {
           onSave={handleSave}
           initialRecipe={editing}
         />
+      )}
+
+      {showStarter && (
+        <React.Suspense fallback={null}>
+          <StarterRecipesModal
+            ingredients={ingredientRows}
+            onClose={() => {
+              sessionStorage.setItem(STARTER_DISMISSED_KEY, '1')
+              setShowStarter(false)
+            }}
+            onImported={async () => {
+              setShowStarter(false)
+              setRecipes(await recipesApi.fetchAll())
+            }}
+          />
+        </React.Suspense>
       )}
 
       {showImport && (

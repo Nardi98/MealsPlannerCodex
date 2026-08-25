@@ -38,6 +38,8 @@ vi.mock('../../api/ingredientsApi', () => ({
 beforeEach(() => {
   // The dish-glyph Icon fetches SVGs from a CDN; keep tests hermetic.
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('no network')))
+  // The starter-recipe offer remembers its dismissal here; each test starts fresh.
+  sessionStorage.clear()
 })
 
 afterEach(() => {
@@ -385,4 +387,40 @@ test('shows no attribution line for an original recipe', async () => {
   await screen.findByText('Ingredients')
 
   expect(screen.queryByText(/^Adapted from/)).toBeNull()
+})
+
+test('offers the starter recipes when the book is empty', async () => {
+  recipesApi.fetchAll.mockResolvedValue([])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  expect(await screen.findByText('Start with a few recipes')).toBeInTheDocument()
+})
+
+test('does not offer the starter recipes when the book has recipes', async () => {
+  recipesApi.fetchAll.mockResolvedValue([{ id: 1, title: 'Risotto', course: 'main' }])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Risotto')
+
+  expect(screen.queryByText('Start with a few recipes')).toBeNull()
+})
+
+test('does not offer the starter recipes again after they were dismissed', async () => {
+  recipesApi.fetchAll.mockResolvedValue([])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  const { unmount } = render(<RecipesPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Maybe later' }))
+  expect(screen.queryByText('Start with a few recipes')).toBeNull()
+  unmount()
+
+  render(<RecipesPage />)
+  await waitFor(() => expect(recipesApi.fetchAll).toHaveBeenCalledTimes(2))
+  expect(screen.queryByText('Start with a few recipes')).toBeNull()
 })

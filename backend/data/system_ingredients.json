@@ -177,5 +177,19 @@
   { "name": "White Wine", "unit": "ml", "season_months": [], "categories": ["Beverages"] },
   { "name": "Red Wine", "unit": "ml", "season_months": [], "categories": ["Beverages"] },
   { "name": "Orange Juice", "unit": "ml", "season_months": [], "categories": ["Beverages"] },
-  { "name": "Coffee", "unit": "g", "season_months": [], "categories": ["Beverages"] }
+  { "name": "Coffee", "unit": "g", "season_months": [], "categories": ["Beverages"] },
+  { "name": "Red Lentils", "unit": "g", "season_months": [], "categories": ["Legumes", "Protein", "Plant-based", "Fiber"] },
+  { "name": "Seitan", "unit": "g", "season_months": [], "categories": ["Protein", "Plant-based"] },
+  { "name": "Gnocchi", "unit": "g", "season_months": [], "categories": ["Carbs", "Grains & Pasta"] },
+  { "name": "Rice Noodles", "unit": "g", "season_months": [], "categories": ["Carbs", "Grains & Pasta"] },
+  { "name": "Edamame", "unit": "g", "season_months": [], "categories": ["Legumes", "Protein", "Plant-based", "Fiber"] },
+  { "name": "Clams", "unit": "g", "season_months": [], "categories": ["Fish", "Protein"] },
+  { "name": "Olives", "unit": "g", "season_months": [], "categories": ["Vegetables", "Condiments & Oils", "High-calorie"] },
+  { "name": "Ground Turkey", "unit": "g", "season_months": [], "categories": ["Meat", "Protein"] },
+  { "name": "Pita Bread", "unit": "piece", "season_months": [], "categories": ["Carbs", "Grains & Pasta"] },
+  { "name": "Tahini", "unit": "g", "season_months": [], "categories": ["Nuts & Seeds", "Condiments & Oils", "High-calorie"] },
+  { "name": "Ricotta Salata", "unit": "g", "season_months": [], "categories": ["Dairy & Eggs", "Protein"] },
+  { "name": "Smoked Salmon", "unit": "g", "season_months": [], "categories": ["Fish", "Protein"] },
+  { "name": "Rice Vinegar", "unit": "ml", "season_months": [], "categories": ["Condiments & Oils"] },
+  { "name": "Harissa", "unit": "g", "season_months": [], "categories": ["Herbs & Spices", "Condiments & Oils"] }
 ]
