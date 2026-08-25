@@ -52,15 +52,26 @@ next deploy. Configure the bucket before anyone uploads anything.
 | `FRONTEND_URL` | `https://<web-domain>` | Where verification and password-reset links point. |
 | `COOKIE_SECURE` | `1` | The refresh cookie is HTTPS-only. |
 | `COOKIE_SAMESITE` | `none` | Required while api and web are different registrable domains, or the refresh cookie is not sent and every session ends on page reload. Requires `COOKIE_SECURE=1`. |
-| `MAIL_BACKEND` | `smtp` | Default is `console`, which prints links to the log and sends nothing. |
-| `SMTP_HOST` / `SMTP_PORT` | `smtp.resend.com` / `587` | |
-| `SMTP_USER` / `SMTP_PASSWORD` | `resend` / Resend API key | |
-| `SMTP_FROM` | a Resend-verified sender | |
+| `MAIL_BACKEND` | `resend` | Default is `console`, which prints links to the log and sends nothing. **Not `smtp`** -- see below. |
+| `RESEND_API_KEY` | Resend API key | |
+| `MAIL_FROM` | a Resend-verified sender | |
 | `AWS_*` | from the bucket | Image storage. |
 | `GOOGLE_CLIENT_ID` | OAuth client id | Optional; omit to disable Google sign-in. |
 
 **Must stay unset:** `AUTH_DEV_MODE` (makes the JWT secret a publicly-known
 constant) and `ALLOW_DESTRUCTIVE_SEED` (unlocks a full database wipe).
+
+### Railway blocks outbound SMTP
+
+`MAIL_BACKEND=smtp` cannot work on Railway. Ports 25, 465 and 587 are blocked
+outbound to prevent spam abuse, so the connection to the mail provider times out
+after ~2 minutes and `POST /auth/register` returns a 500 with
+`TimeoutError: [Errno 110] Connection timed out` in the log. From the browser
+this looks like the signup button doing nothing at all.
+
+Use `MAIL_BACKEND=resend`, which posts to Resend's REST API over ordinary HTTPS
+on 443. The `smtp` backend is kept for environments that do permit outbound SMTP
+(and for anyone self-hosting elsewhere).
 
 ### The healthcheck needs its own host
 
