@@ -2,6 +2,10 @@ import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Card } from './Card'
 
+// The dark wash behind anything that takes over the screen. Exported so the
+// tutorial overlay dims the page the same shade this does.
+export const SCRIM = 'rgba(12,58,45,0.55)'
+
 // Full-screen dialog shell — dark scrim + centered white Card. Used by the
 // Recipes detail dialog; bespoke form modals keep their own markup.
 export function Modal({ title, onClose, children, maxWidth = 480 }) {
@@ -10,7 +14,7 @@ export function Modal({ title, onClose, children, maxWidth = 480 }) {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(12,58,45,0.55)',
+        backgroundColor: SCRIM,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

@@ -84,7 +84,7 @@ export default function GenerationForm({
 }) {
   const [activeTab, setActiveTab] = React.useState('settings')
   return (
-    <Card>
+    <Card data-tour="mealplan-form">
       <form onSubmit={onSubmit} className="space-y-8">
         <div
           role="tablist"
@@ -208,7 +208,7 @@ export default function GenerationForm({
             {error}
           </div>
         )}
-        <Button type="submit" className="mt-2">Generate plan</Button>
+        <Button type="submit" className="mt-2" data-tour="mealplan-generate">Generate plan</Button>
       </form>
     </Card>
   )

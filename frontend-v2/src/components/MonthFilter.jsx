@@ -11,9 +11,10 @@ export default function MonthFilter({
   onMonthsChange,
   mode = 'any',
   onModeChange,
+  ...rest
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" {...rest}>
       <SeasonalitySelect value={selectedMonths} onChange={onMonthsChange} />
       <select
         value={mode}

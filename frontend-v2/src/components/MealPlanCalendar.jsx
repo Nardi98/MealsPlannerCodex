@@ -116,7 +116,7 @@ export default function MealPlanCalendar({
 
   return (
     <>
-      <div className="flex justify-between">
+      <div className="flex justify-between" data-tour="mealplan-week-nav">
         <Button variant="ghost" onClick={() => onChangeWeek(-1)}>
           Previous week
         </Button>
@@ -124,7 +124,7 @@ export default function MealPlanCalendar({
           Next week
         </Button>
       </div>
-      <Card>
+      <Card data-tour="mealplan-calendar">
         <div className="grid grid-cols-8">
           <div />
           {weekDays.map((d) => {

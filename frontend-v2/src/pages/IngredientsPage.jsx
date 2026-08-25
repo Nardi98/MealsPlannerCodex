@@ -12,6 +12,7 @@ import {
 } from '../components'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { groupByCategory } from '../utils/groupIngredients'
+import { PageTour } from '../tutorial/PageTour'
 
 const COLLAPSE_KEY = 'ingredientSectionCollapsed'
 
@@ -174,6 +175,7 @@ export default function IngredientsPage() {
 
   return (
     <div className="space-y-4">
+      <PageTour id="ingredients" />
       <div className="flex flex-wrap items-center gap-2">
         <Input
           placeholder="Search ingredients…"
@@ -182,15 +184,16 @@ export default function IngredientsPage() {
           className="w-56"
         />
         <MonthFilter
+          data-tour="ingredients-months"
           selectedMonths={selectedMonths}
           onMonthsChange={setSelectedMonths}
           mode={mode}
           onModeChange={setMode}
         />
-        <Button variant="a1" onClick={() => setAdding(true)}>
+        <Button variant="a1" data-tour="ingredients-new" onClick={() => setAdding(true)}>
           + New ingredient
         </Button>
-        <Button variant="a2" onClick={() => setMerging(true)}>
+        <Button variant="a2" data-tour="ingredients-merge" onClick={() => setMerging(true)}>
           Merge ingredients
         </Button>
       </div>
@@ -213,7 +216,7 @@ export default function IngredientsPage() {
       </div>
 
       {/* Sections */}
-      <div className="space-y-4">
+      <div className="space-y-4" data-tour="ingredients-list">
         {groups
           .filter((g) => selected.has(g.category))
           .map((g) => {

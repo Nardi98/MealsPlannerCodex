@@ -10,6 +10,7 @@ import { Badge } from '../components/Badge'
 import { Card } from '../components/Card'
 import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
+import { PageTour } from '../tutorial/PageTour'
 import {
   AttributionLine,
   FavoriteSidesSelect,
@@ -88,6 +89,10 @@ export default function RecipesPage() {
   // says "maybe later" is not asked again this session but is offered the pack
   // again next time they sign in with a book that is still empty.
   const [showStarter, setShowStarter] = React.useState(false)
+  // The tutorial waits for this. `showStarter` is false until the first load
+  // comes back, so gating the tour on it alone would let the tour open in front
+  // of a starter modal that is about to appear.
+  const [loaded, setLoaded] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
   // The share dialog belongs to whichever recipe is open; closing or switching
@@ -129,6 +134,8 @@ export default function RecipesPage() {
         setIngredientRows(ingRes)
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
+      } finally {
+        setLoaded(true)
       }
     }
     load()
@@ -236,6 +243,9 @@ export default function RecipesPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Held back until the first load settles, so a brand-new account is
+          offered the starter pack before being taught about the grid. */}
+      <PageTour id="recipes" enabled={loaded && !showStarter} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
           Recipes
@@ -245,6 +255,7 @@ export default function RecipesPage() {
             <Button
               variant="ghost"
               aria-label="Filter"
+              data-tour="recipes-filter"
               onClick={() => setShowFilters((s) => !s)}
               Icon={FunnelIcon}
             />
@@ -282,18 +293,21 @@ export default function RecipesPage() {
           </div>
           <Input
             placeholder="Search recipes…"
+            data-tour="recipes-search"
             className="w-56"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <Button
             variant="ghost"
+            data-tour="recipes-import"
             onClick={() => setShowImport(true)}
           >
             Import from web
           </Button>
           <Button
             variant="accent"
+            data-tour="recipes-new"
             Icon={PlusIcon}
             onClick={() => {
               setEditing(null)
@@ -306,6 +320,7 @@ export default function RecipesPage() {
       </div>
 
       <div
+        data-tour="recipes-grid"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',

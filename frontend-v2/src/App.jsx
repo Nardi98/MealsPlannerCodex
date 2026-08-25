@@ -23,6 +23,7 @@ import SharedRecipePage from './pages/SharedRecipePage'
 import ChooseHandlePage from './pages/ChooseHandlePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { nextFromSearch } from './auth/nextDestination'
+import { TutorialProvider, ReplayTutorialButton } from './tutorial/TutorialProvider'
 
 // Where a freshly-authenticated user goes when nothing better is known.
 const DEFAULT_LANDING = '/recipes'
@@ -154,6 +155,7 @@ function Shell() {
         />
         <div className="hidden md:flex items-center gap-3">
           <Input placeholder="Search…" style={{ width: 220 }} />
+          <ReplayTutorialButton />
           <ProfileMenu />
         </div>
       </header>
@@ -250,7 +252,11 @@ function Gate() {
 
   return (
     <ReturnToNext>
-      <Shell />
+      {/* Wraps the shell, not the routes: the replay button lives in the header
+          and the tours live in the pages, so both need the same provider. */}
+      <TutorialProvider>
+        <Shell />
+      </TutorialProvider>
     </ReturnToNext>
   )
 }

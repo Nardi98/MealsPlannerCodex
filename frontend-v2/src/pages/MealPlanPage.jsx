@@ -10,6 +10,7 @@ import { ingredientsApi } from '../api/ingredientsApi'
 import { useMealPlan } from '../hooks/useMealPlan'
 import { useGeneration } from '../hooks/useGeneration'
 import { useSideDishes } from '../hooks/useSideDishes'
+import { PageTour } from '../tutorial/PageTour'
 
 export default function MealPlanPage() {
   const [tags, setTags] = React.useState([])
@@ -80,6 +81,7 @@ export default function MealPlanPage() {
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Meal Plan
       </h1>
+      <PageTour id="meal-plan" />
       <MealPlanCalendar
         weekDays={weekDays}
         plan={plan}
