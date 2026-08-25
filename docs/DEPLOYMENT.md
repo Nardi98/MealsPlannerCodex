@@ -47,7 +47,7 @@ next deploy. Configure the bucket before anyone uploads anything.
 | `DATABASE_URL` | reference to the Postgres service | Required; the app refuses to start without it. |
 | `JWT_SECRET` | a fresh random secret | Required. Never reuse the compose default — anyone holding it can forge sessions. |
 | `PUBLIC_BASE_URL` | `https://<api-domain>` | The origin share links are built on. Left empty it falls back to the request `Host`, which is attacker-controlled. |
-| `ALLOWED_HOSTS` | `<api-domain>` | `TrustedHostMiddleware`. Unset means `*`, and a forged `Host` yields a share link on someone else's origin that the sharer then forwards. |
+| `ALLOWED_HOSTS` | `<api-domain>,healthcheck.railway.app,${{RAILWAY_PRIVATE_DOMAIN}}` | `TrustedHostMiddleware`. Unset means `*`, and a forged `Host` yields a share link on someone else's origin that the sharer then forwards. **The two extra hosts are required** -- see below. |
 | `ALLOWED_ORIGINS` | `https://<web-domain>` | CORS allowlist. |
 | `FRONTEND_URL` | `https://<web-domain>` | Where verification and password-reset links point. |
 | `COOKIE_SECURE` | `1` | The refresh cookie is HTTPS-only. |
@@ -61,6 +61,25 @@ next deploy. Configure the bucket before anyone uploads anything.
 
 **Must stay unset:** `AUTH_DEV_MODE` (makes the JWT secret a publicly-known
 constant) and `ALLOW_DESTRUCTIVE_SEED` (unlocks a full database wipe).
+
+### The healthcheck needs its own host
+
+Railway's healthcheck does not probe the public domain -- it reaches the
+container over the internal network with its own `Host` header. Setting
+`ALLOWED_HOSTS` to just the public domain therefore makes `TrustedHostMiddleware`
+answer the probe with `400 Invalid host header`, the healthcheck never passes,
+and the deploy fails with *"1/1 replicas never became healthy"* even though the
+app started correctly and the migration ran. The runtime log shows the tell:
+`GET /health HTTP/1.1" 400 Bad Request`.
+
+Including `healthcheck.railway.app` and `${{RAILWAY_PRIVATE_DOMAIN}}` fixes it
+and costs nothing: the forged-Host attack this variable exists to stop is
+already closed independently by `PUBLIC_BASE_URL`, which is what share links are
+actually built from. `ALLOWED_HOSTS` is defence in depth, not the only defence.
+
+Note also that Railway's edge rejects an unknown `Host` with a 404 before the
+request reaches the app at all, so the allowlist is the second line, not the
+first.
 
 ## Variables — web
 
