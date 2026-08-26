@@ -2,6 +2,8 @@ import { expect, test } from 'vitest'
 import { placeBubble, BUBBLE_WIDTH, BUBBLE_HEIGHT, MARGIN } from '../placement'
 
 const VIEWPORT = { width: 1200, height: 800 }
+// A caller that draws no arrow and wants the bubble close to its target.
+const SMALL_GAP = 10
 
 test('a bubble placed below sits under the target and points up at it', () => {
   const got = placeBubble({ top: 100, left: 400, width: 200, height: 50 }, 'bottom', VIEWPORT)
@@ -75,4 +77,19 @@ test('the arrow is dropped when clamping moved the bubble off the target', () =>
 test('the arrow survives a purely horizontal clamp', () => {
   const got = placeBubble({ top: 100, left: 1180, width: 40, height: 40 }, 'bottom', VIEWPORT)
   expect(got.arrow).toBe('up')
+})
+
+test('a custom gap places the bubble closer to the target than the default', () => {
+  const rect = { top: 500, left: 400, width: 200, height: 50 }
+  const dflt = placeBubble(rect, 'top', VIEWPORT)
+  const tight = placeBubble(rect, 'top', VIEWPORT, undefined, SMALL_GAP)
+  expect(tight.top).toBeGreaterThan(dflt.top)
+  expect(tight.top + BUBBLE_HEIGHT).toBe(rect.top - SMALL_GAP)
+})
+
+test('a custom gap is also what the flip decision is made against', () => {
+  // Room for the bubble plus a small gap, but not plus the tour's big one.
+  const rect = { top: BUBBLE_HEIGHT + 30, left: 400, width: 200, height: 50 }
+  expect(placeBubble(rect, 'top', VIEWPORT).arrow).toBe('up')
+  expect(placeBubble(rect, 'top', VIEWPORT, undefined, SMALL_GAP).arrow).toBe('down')
 })

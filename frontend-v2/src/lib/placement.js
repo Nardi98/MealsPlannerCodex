@@ -10,7 +10,10 @@ export const BUBBLE_WIDTH = 300
 // low is how a bubble ends up hanging off the bottom edge.
 export const BUBBLE_HEIGHT = 190
 export const MARGIN = 12
-const GAP = 56 // room for the arrow to hang between bubble and target
+// How far a bubble sits from its target. The default leaves room for the tour's
+// squiggly arrow to hang between the two; callers that draw no arrow pass their
+// own, smaller `gap`.
+const ARROW_GAP = 56
 
 // How tall the bubble may render. The same budget the placement below works to,
 // so the bubble cannot be sized by one rule and positioned by another — `100vh`
@@ -30,7 +33,7 @@ function fit(value, extent, limit) {
   return { value: fitted, clamped: fitted !== value }
 }
 
-export function placeBubble(rect, placement = 'bottom', viewport, size) {
+export function placeBubble(rect, placement = 'bottom', viewport, size, gap = ARROW_GAP) {
   const vw = viewport.width
   const vh = viewport.height
   const w = size?.width || BUBBLE_WIDTH
@@ -48,11 +51,11 @@ export function placeBubble(rect, placement = 'bottom', viewport, size) {
 
   if (vertical) {
     const below = placement === 'bottom'
-    const roomBelow = vh - (rect.top + rect.height) >= h + GAP
-    const roomAbove = rect.top >= h + GAP
+    const roomBelow = vh - (rect.top + rect.height) >= h + gap
+    const roomAbove = rect.top >= h + gap
     // Flip only if the preferred side has no room and the other does.
     const useBelow = below ? roomBelow || !roomAbove : !roomAbove && roomBelow
-    const top = fit(useBelow ? rect.top + rect.height + GAP : rect.top - h - GAP, h, vh)
+    const top = fit(useBelow ? rect.top + rect.height + gap : rect.top - h - gap, h, vh)
     return {
       top: top.value,
       left: fit(rect.left + rect.width / 2 - w / 2, w, vw).value,
@@ -65,10 +68,10 @@ export function placeBubble(rect, placement = 'bottom', viewport, size) {
   }
 
   const right = placement === 'right'
-  const roomRight = vw - (rect.left + rect.width) >= w + GAP
-  const roomLeft = rect.left >= w + GAP
+  const roomRight = vw - (rect.left + rect.width) >= w + gap
+  const roomLeft = rect.left >= w + gap
   const useRight = right ? roomRight || !roomLeft : !roomLeft && roomRight
-  const left = fit(useRight ? rect.left + rect.width + GAP : rect.left - w - GAP, w, vw)
+  const left = fit(useRight ? rect.left + rect.width + gap : rect.left - w - gap, w, vw)
   return {
     top: fit(rect.top + rect.height / 2 - h / 2, h, vh).value,
     left: left.value,

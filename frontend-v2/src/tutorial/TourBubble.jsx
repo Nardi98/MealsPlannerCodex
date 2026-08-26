@@ -2,7 +2,7 @@ import React from 'react'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { SquigglyArrow } from './SquigglyArrow'
-import { BUBBLE_WIDTH } from './placement'
+import { BUBBLE_WIDTH } from '../lib/placement'
 
 // Where the arrow hangs, by the direction it points — the side the target is on.
 const ARROW_OFFSET = {

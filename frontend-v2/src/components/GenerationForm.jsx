@@ -17,6 +17,19 @@ import DateRangePicker from './DateRangePicker'
 import SegmentedControl from './SegmentedControl'
 import TagSelector from './TagSelector'
 import FridgeSelector from './FridgeSelector'
+import SettingTooltip from './SettingTooltip'
+import { SETTING_HELP } from './settingHelp'
+
+// Every control is wrapped in its own tooltip, keyed by the help entry it
+// explains. The wrapper carries the grid classes so the layout is unchanged.
+function Setting({ help, className, children }) {
+  const { title, body, presets } = SETTING_HELP[help]
+  return (
+    <SettingTooltip title={title} body={body} presets={presets} className={className}>
+      {children}
+    </SettingTooltip>
+  )
+}
 
 const TABS = [
   { value: 'settings', label: 'Settings' },
@@ -118,88 +131,96 @@ export default function GenerationForm({
         {activeTab === 'settings' && (
         <div className="space-y-8">
         <div className="grid grid-cols-3 gap-x-6 gap-y-12">
-          <DateRangePicker
-            label="Plan dates"
-            start={form.start}
-            end={form.end}
-            onChange={onRangeChange}
-          />
-          <SegmentedControl
-            label="Meals per day"
-            options={MEALS_OPTIONS}
-            value={Number(form.meals_per_day)}
-            onChange={(v) => onPresetChange('meals_per_day', v)}
-          />
-          <label className="flex flex-col text-sm">
-            <span className="mb-2 font-bold text-base">Recommendation style</span>
-            <Input
-              type="range"
-              name="epsilon"
-              min="0"
-              max="1"
-              step="0.01"
-              value={form.epsilon}
-              onChange={onChange}
+          <Setting help="dates">
+            <DateRangePicker
+              label="Plan dates"
+              start={form.start}
+              end={form.end}
+              onChange={onRangeChange}
             />
-            <div
-              className="flex justify-between text-xs mt-1"
-              style={{ color: 'var(--text-subtle)' }}
-            >
-              <span>Favorite food</span>
-              <span>Random selection</span>
-            </div>
-          </label>
+          </Setting>
+          <Setting help="meals_per_day">
+            <SegmentedControl
+              label="Meals per day"
+              options={MEALS_OPTIONS}
+              value={Number(form.meals_per_day)}
+              onChange={(v) => onPresetChange('meals_per_day', v)}
+            />
+          </Setting>
+          <Setting help="epsilon">
+            <label className="flex flex-col text-sm">
+              <span className="mb-2 font-bold text-base">Recommendation style</span>
+              <Input
+                type="range"
+                name="epsilon"
+                min="0"
+                max="1"
+                step="0.01"
+                value={form.epsilon}
+                onChange={onChange}
+              />
+              <div
+                className="flex justify-between text-xs mt-1"
+                style={{ color: 'var(--text-subtle)' }}
+              >
+                <span>Favorite food</span>
+                <span>Random selection</span>
+              </div>
+            </label>
+          </Setting>
         </div>
         <div className="grid grid-cols-4 gap-x-6 gap-y-12">
-          <div className="col-span-2">
+          <Setting help="leftovers" className="col-span-2">
             <SegmentedControl
               label="Leftovers"
               options={LEFTOVER_OPTIONS}
               value={form.leftovers}
               onChange={(v) => onPresetChange('leftovers', v)}
             />
-          </div>
-          <div className="col-span-2">
+          </Setting>
+          <Setting help="seasonality" className="col-span-2">
             <SegmentedControl
               label="Seasonality"
               options={SEASONALITY_OPTIONS}
               value={form.seasonality}
               onChange={(v) => onPresetChange('seasonality', v)}
             />
-          </div>
-          <div className="col-span-2">
+          </Setting>
+          <Setting help="recency" className="col-span-2">
             <SegmentedControl
               label="Variety"
               options={RECENCY_OPTIONS}
               value={form.recency}
               onChange={(v) => onPresetChange('recency', v)}
             />
-          </div>
-          <div className="col-span-1">
+          </Setting>
+          <Setting help="avoid_tags" className="col-span-1">
             <TagSelector
               label="Avoid tags"
               tags={tags}
               selected={form.avoid_tags}
               onChange={onAvoidChange}
             />
-          </div>
-          <div className="col-span-1">
+          </Setting>
+          <Setting help="reduce_tags" className="col-span-1">
             <TagSelector
               label="Reduce tags"
               tags={tags}
               selected={form.reduce_tags}
               onChange={onReduceChange}
             />
-          </div>
+          </Setting>
         </div>
         </div>
         )}
         {activeTab === 'fridge' && (
-          <FridgeSelector
-            ingredients={ingredients}
-            value={form.fridge}
-            onChange={onFridgeChange}
-          />
+          <Setting help="fridge">
+            <FridgeSelector
+              ingredients={ingredients}
+              value={form.fridge}
+              onChange={onFridgeChange}
+            />
+          </Setting>
         )}
         {message && (
           <div className="text-sm" style={{ color: 'var(--c-pos)' }}>

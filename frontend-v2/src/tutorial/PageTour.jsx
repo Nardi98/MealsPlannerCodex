@@ -2,7 +2,7 @@ import React from 'react'
 import { useTour } from './useTour'
 import { TourOverlay } from './TourOverlay'
 import { TourBubble } from './TourBubble'
-import { placeBubble, maxBubbleHeight } from './placement'
+import { placeBubble, maxBubbleHeight } from '../lib/placement'
 import { useTutorial } from './tutorialContext'
 import { TOURS } from './steps'
 

@@ -1,12 +1,19 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
-import { afterEach, expect, test, vi } from 'vitest'
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import GenerationForm from '../GenerationForm'
+import { HOVER_DELAY_MS } from '../SettingTooltip'
+import { SETTING_HELP } from '../settingHelp'
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
 })
 
@@ -88,4 +95,41 @@ test('the generate button is available regardless of the active tab', () => {
 test('marks its tab strip as the tutorial anchor, so the tour points at a strip and not the whole card', () => {
   const { container } = renderForm()
   expect(container.querySelectorAll('[data-tour="mealplan-tabs"]')).toHaveLength(1)
+})
+
+// --- per-setting help tooltips ---------------------------------------------
+
+const hoverFor = async (node, ms) => {
+  fireEvent.pointerEnter(node)
+  await act(async () => {
+    vi.advanceTimersByTime(ms)
+  })
+}
+
+// Each control, by the text you can find it from and the help key it explains.
+const SETTINGS = [
+  ['Plan dates', 'dates'],
+  ['Meals per day', 'meals_per_day'],
+  ['Recommendation style', 'epsilon'],
+  ['Leftovers', 'leftovers'],
+  ['Seasonality', 'seasonality'],
+  ['Variety', 'recency'],
+  ['Avoid tags', 'avoid_tags'],
+  ['Reduce tags', 'reduce_tags'],
+]
+
+test.each(SETTINGS)('resting on %s explains what it does', async (label, key) => {
+  renderForm()
+  const wrapper = screen.getByText(label).closest('[data-setting-tooltip]')
+  expect(wrapper).not.toBeNull()
+  await hoverFor(wrapper, HOVER_DELAY_MS)
+  expect(screen.getByRole('tooltip')).toHaveTextContent(SETTING_HELP[key].body.slice(0, 30))
+})
+
+test('the fridge selector is explained too', async () => {
+  const { container } = renderForm()
+  fireEvent.click(screen.getByRole('tab', { name: 'Your Fridge' }))
+  const wrapper = container.querySelector('[data-setting-tooltip]')
+  await hoverFor(wrapper, HOVER_DELAY_MS)
+  expect(screen.getByRole('tooltip')).toHaveTextContent(SETTING_HELP.fridge.body.slice(0, 30))
 })
