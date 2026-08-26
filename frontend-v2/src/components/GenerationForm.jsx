@@ -105,7 +105,7 @@ export default function GenerationForm({
           // The tutorial points here rather than at the whole card: a bubble
           // anchored on something taller than the window has nowhere to sit.
           data-tour="mealplan-tabs"
-          className="flex gap-6 border-b"
+          className="flex gap-6 border-b overflow-x-auto"
           style={{ borderColor: 'var(--border)' }}
         >
           {TABS.map((tab) => {
@@ -117,7 +117,7 @@ export default function GenerationForm({
                 role="tab"
                 aria-selected={selected}
                 onClick={() => setActiveTab(tab.value)}
-                className="-mb-px border-b-2 pb-2 text-sm font-bold transition-colors"
+                className="-mb-px shrink-0 whitespace-nowrap border-b-2 pb-2 text-sm font-bold transition-colors"
                 style={{
                   borderColor: selected ? 'var(--c-a2)' : 'transparent',
                   color: selected ? 'var(--c-a2)' : 'var(--text-subtle)',
@@ -130,7 +130,7 @@ export default function GenerationForm({
         </div>
         {activeTab === 'settings' && (
         <div className="space-y-8">
-        <div className="grid grid-cols-3 gap-x-6 gap-y-12">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-3 md:gap-y-12">
           <Setting help="dates">
             <DateRangePicker
               label="Plan dates"
@@ -169,8 +169,8 @@ export default function GenerationForm({
             </label>
           </Setting>
         </div>
-        <div className="grid grid-cols-4 gap-x-6 gap-y-12">
-          <Setting help="leftovers" className="col-span-2">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 md:grid-cols-4 md:gap-y-12">
+          <Setting help="leftovers" className="sm:col-span-2">
             <SegmentedControl
               label="Leftovers"
               options={LEFTOVER_OPTIONS}
@@ -178,7 +178,7 @@ export default function GenerationForm({
               onChange={(v) => onPresetChange('leftovers', v)}
             />
           </Setting>
-          <Setting help="seasonality" className="col-span-2">
+          <Setting help="seasonality" className="sm:col-span-2">
             <SegmentedControl
               label="Seasonality"
               options={SEASONALITY_OPTIONS}
@@ -186,7 +186,7 @@ export default function GenerationForm({
               onChange={(v) => onPresetChange('seasonality', v)}
             />
           </Setting>
-          <Setting help="recency" className="col-span-2">
+          <Setting help="recency" className="sm:col-span-2">
             <SegmentedControl
               label="Variety"
               options={RECENCY_OPTIONS}

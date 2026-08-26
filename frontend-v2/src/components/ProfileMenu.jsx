@@ -48,6 +48,9 @@ export default function ProfileMenu() {
               right: 0,
               top: 'calc(100% + 8px)',
               minWidth: 220,
+              // Clamp on narrow phones: `right: 0` plus a fixed min-width would
+              // otherwise push the panel off the left edge of the screen.
+              maxWidth: 'calc(100vw - 24px)',
               background: 'var(--surface-card)',
               borderRadius: 'var(--radius-lg)',
               boxShadow: 'var(--shadow-lg)',

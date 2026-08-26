@@ -4,6 +4,7 @@
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import MealPlanCalendar from '../MealPlanCalendar'
+import { stubViewport } from '../../test/stubViewport'
 
 afterEach(() => cleanup())
 
@@ -79,4 +80,49 @@ test('marks the first lunch cell as the tutorial anchor, so the tour points at o
   const anchors = container.querySelectorAll('[data-tour="mealplan-cell"]')
   expect(anchors).toHaveLength(1)
   expect(anchors[0].textContent).toContain('Lunch A')
+})
+
+// --- Mobile layout ----------------------------------------------------------
+//
+// A 7-day x 2-meal grid gives each day ~40px on a phone, so below `md` the
+// calendar stacks into one card per day instead. jsdom does not evaluate media
+// queries, hence the `matchMedia` stub rather than a class assertion.
+
+test('stacks into one section per day on mobile instead of the week grid', () => {
+  stubViewport(true)
+  const { container } = renderCalendar()
+
+  expect(container.querySelector('.grid-cols-8')).toBeNull()
+  expect(screen.getAllByTestId('mealplan-day')).toHaveLength(1)
+  // Each meal is labelled, since there is no longer a row header to read it from.
+  expect(screen.getByText('Lunch')).toBeTruthy()
+  expect(screen.getByText('Dinner')).toBeTruthy()
+})
+
+test('keeps the week grid on desktop', () => {
+  stubViewport(false)
+  const { container } = renderCalendar()
+
+  expect(container.querySelector('.grid-cols-8')).not.toBeNull()
+  expect(screen.queryAllByTestId('mealplan-day')).toHaveLength(0)
+})
+
+test('cell controls still work in the mobile layout', () => {
+  stubViewport(true)
+  const onArmSwap = vi.fn()
+  renderCalendar({ onArmSwap })
+
+  const swaps = screen.getAllByLabelText(/swap meal/i)
+  expect(swaps).toHaveLength(2)
+  fireEvent.click(swaps[1])
+  expect(onArmSwap).toHaveBeenCalledWith({ date: iso, mealIndex: 1 })
+})
+
+test('keeps the tutorial anchors in the mobile layout', () => {
+  stubViewport(true)
+  const { container } = renderCalendar()
+
+  expect(container.querySelector('[data-tour="mealplan-cell"]')).not.toBeNull()
+  expect(container.querySelector('[data-tour="mealplan-week-nav"]')).not.toBeNull()
+  expect(container.querySelector('[data-tour="mealplan-calendar"]')).not.toBeNull()
 })

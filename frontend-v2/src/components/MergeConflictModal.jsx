@@ -1,5 +1,7 @@
 import React from 'react'
 import { Card, Button } from './'
+import { ModalScrim } from './Modal'
+import { Z } from '../lib/layers'
 
 export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm }) {
   const [defaultAction, setDefaultAction] = React.useState('keep-old')
@@ -58,7 +60,7 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]">
+    <ModalScrim z={Z.nested}>
       <Card className="space-y-4 w-full max-w-md" style={{ color: 'var(--text-strong)' }}>
         <h3 className="text-lg font-medium">Resolve Conflicts</h3>
         <div className="space-y-1">
@@ -97,7 +99,7 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
           <Button onClick={handleConfirm}>Confirm</Button>
         </div>
       </Card>
-    </div>
+    </ModalScrim>
   )
 }
 

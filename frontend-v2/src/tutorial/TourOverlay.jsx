@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { SCRIM } from '../components/Modal'
+import { SCRIM } from '../lib/layers'
 
 // Above Modal (60) and ProfileMenu (50): the tutorial has to be able to talk
 // about a page that already has a dialog open.

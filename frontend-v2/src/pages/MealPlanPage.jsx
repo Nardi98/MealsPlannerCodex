@@ -5,6 +5,7 @@ import {
   MealPlanCalendar,
   GenerationForm,
 } from '../components'
+import MobileCollapse from '../components/MobileCollapse'
 import { tagsApi } from '../api/tagsApi'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { useMealPlan } from '../hooks/useMealPlan'
@@ -77,11 +78,15 @@ export default function MealPlanPage() {
   const activeMealType = activeCell?.mealIndex === 1 ? 'dinner' : 'lunch'
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <h1 className="text-xl font-medium" style={{ color: 'var(--text-strong)' }}>
         Meal Plan
       </h1>
       <PageTour id="meal-plan" />
+      {/* Visual order only — the DOM keeps the calendar first, so a screen
+          reader and the tab order still meet the page's subject before its
+          controls. Below `md` the settings fold up above it instead. */}
+      <div data-plan-section className="order-2 md:order-1">
       <MealPlanCalendar
         weekDays={weekDays}
         plan={plan}
@@ -94,6 +99,9 @@ export default function MealPlanPage() {
         onArmSwap={armSwap}
         armedCell={armedCell}
       />
+      </div>
+      <div data-plan-section className="order-1 md:order-2">
+      <MobileCollapse title="Plan settings" tourId="mealplan-settings-toggle">
       <GenerationForm
         form={generation.form}
         tags={tags}
@@ -108,6 +116,8 @@ export default function MealPlanPage() {
         onFridgeChange={generation.handleFridgeChange}
         onSubmit={generation.handleGenerate}
       />
+      </MobileCollapse>
+      </div>
       {generation.showOverwriteModal && (
         <OverwriteConfirmModal
           onCancel={generation.handleCancelOverwrite}

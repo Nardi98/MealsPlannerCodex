@@ -2,6 +2,7 @@ import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
 import CategorySelect from './CategorySelect'
+import { ModalScrim } from './Modal'
 
 export default function EditIngredientModal({ ingredient, onClose, onSave }) {
   const [name, setName] = React.useState(ingredient?.name || '')
@@ -15,7 +16,7 @@ export default function EditIngredientModal({ ingredient, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+    <ModalScrim>
       <div className="bg-white rounded-2xl p-6 w-full max-w-md" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <h3 className="text-lg font-medium">Edit Ingredient</h3>
@@ -54,6 +55,6 @@ export default function EditIngredientModal({ ingredient, onClose, onSave }) {
           </div>
         </form>
       </div>
-    </div>
+    </ModalScrim>
   )
 }

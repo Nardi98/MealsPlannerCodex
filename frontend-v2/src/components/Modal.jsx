@@ -1,16 +1,16 @@
 import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Card } from './Card'
+import { SCRIM, Z } from '../lib/layers'
 
-// The dark wash behind anything that takes over the screen. Exported so the
-// tutorial overlay dims the page the same shade this does.
-export const SCRIM = 'rgba(12,58,45,0.55)'
-
-// Full-screen dialog shell — dark scrim + centered white Card. Used by the
-// Recipes detail dialog; bespoke form modals keep their own markup.
-export function Modal({ title, onClose, children, maxWidth = 480 }) {
+// The full-screen wash every takeover shares. Extracted because the mobile
+// rules that belong here — keep the card off the screen edges, let a card
+// taller than the window scroll — were otherwise a line each author had to
+// remember to type, and nine of them had not.
+export function ModalScrim({ z = Z.modal, onClick, children }) {
   return (
     <div
+      onClick={onClick}
       style={{
         position: 'fixed',
         inset: 0,
@@ -18,10 +18,21 @@ export function Modal({ title, onClose, children, maxWidth = 480 }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 60,
+        padding: 16,
+        overflowY: 'auto',
+        zIndex: z,
       }}
-      onClick={onClose}
     >
+      {children}
+    </div>
+  )
+}
+
+// Full-screen dialog shell — dark scrim + centered white Card. Used by the
+// Recipes detail dialog; bespoke form modals keep their own markup.
+export function Modal({ title, onClose, children, maxWidth = 480 }) {
+  return (
+    <ModalScrim onClick={onClose}>
       <Card
         style={{
           position: 'relative',
@@ -30,6 +41,7 @@ export function Modal({ title, onClose, children, maxWidth = 480 }) {
           maxHeight: '90vh',
           overflowY: 'auto',
           padding: 24,
+          boxSizing: 'border-box',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -65,6 +77,6 @@ export function Modal({ title, onClose, children, maxWidth = 480 }) {
         )}
         {children}
       </Card>
-    </div>
+    </ModalScrim>
   )
 }

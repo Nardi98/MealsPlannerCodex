@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
+import { ModalScrim } from './Modal'
 
 export default function MealActionModal({
   date,
@@ -95,7 +96,7 @@ export default function MealActionModal({
   const mealName = meal === 'dinner' ? 'Dinner' : 'Lunch'
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+    <ModalScrim>
       <div
         className="relative bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
         style={{ color: 'var(--text-strong)' }}
@@ -261,7 +262,7 @@ export default function MealActionModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalScrim>
   )
 }
 

@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { render, screen, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 
@@ -22,6 +23,7 @@ vi.mock('../pages/SharedRecipePage', () => ({ default: () => <div>shared-recipe-
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
 import App from '../App'
+import { stubViewport } from '../test/stubViewport'
 
 const CONFIRMED = { email: 'demo@x.test', username: 'demo', username_confirmed: true }
 // The counterpart of CONFIRMED. Extracted because the UN-11 assertions check
@@ -224,4 +226,49 @@ test('an unconfirmed handle still cannot be routed past the gate by next', () =>
 
   expect(screen.getByText('choose-handle-page')).toBeInTheDocument()
   expect(screen.queryByText('shared-recipe-page')).not.toBeInTheDocument()
+})
+
+// --- Mobile shell -----------------------------------------------------------
+//
+// jsdom does not evaluate media queries, so the shell branches on `useIsMobile`
+// (which reads `matchMedia`) rather than on `md:` classes alone wherever the
+// *markup* has to differ. Stubbing `matchMedia` is therefore how a viewport is
+// chosen in these tests.
+
+test('offers a menu button on mobile that opens the navigation drawer', async () => {
+  stubViewport(true)
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  const burger = screen.getByRole('button', { name: /open menu/i })
+  expect(screen.queryByRole('dialog', { name: /main navigation/i })).not.toBeInTheDocument()
+
+  await userEvent.click(burger)
+  expect(screen.getByRole('dialog', { name: /main navigation/i })).toBeInTheDocument()
+  expect(burger).toHaveAttribute('aria-expanded', 'true')
+})
+
+test('keeps the account menu reachable on mobile', () => {
+  // Regression: the header's action block was `hidden md:flex`, which left
+  // phone users with no way to open preferences or log out at all.
+  stubViewport(true)
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  const account = screen.getByRole('button', { name: /account menu/i })
+  expect(account).toBeInTheDocument()
+  // jsdom does not apply Tailwind, so presence in the DOM proves nothing about
+  // visibility: assert instead that no ancestor is hidden below `md`.
+  expect(account.closest('.hidden')).toBeNull()
+})
+
+test('shows no menu button on desktop', () => {
+  stubViewport(false)
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  // Hidden by `md:hidden` rather than unmounted, so assert the class: jsdom
+  // does not apply Tailwind, and a DOM-absence assertion would forbid that.
+  expect(screen.getByRole('button', { name: /open menu/i })).toHaveClass('md:hidden')
+  expect(screen.getByRole('button', { name: /shared with me/i })).toBeInTheDocument()
 })

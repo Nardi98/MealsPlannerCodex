@@ -1,13 +1,12 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { Card } from './Card'
-import { placeBubble, maxBubbleHeight } from '../lib/placement'
+import { placeBubble, maxBubbleHeight, maxBubbleWidth } from '../lib/placement'
 
 // Long enough that it never fires while the pointer is only crossing the form on
 // its way somewhere else, short enough to feel like an answer to a question.
 export const HOVER_DELAY_MS = 2000
 
-const WIDTH = 300
 // No arrow to make room for — just enough clearance that the bubble reads as
 // sitting outside the control rather than on it.
 const GAP = 10
@@ -123,7 +122,7 @@ export default function SettingTooltip({ title, body, presets, className, childr
               zIndex: 90,
               // Never a drag target: the control underneath always wins.
               pointerEvents: 'none',
-              width: WIDTH,
+              width: maxBubbleWidth(viewport),
               boxSizing: 'border-box',
               maxHeight: maxBubbleHeight(viewport),
               overflowY: 'auto',

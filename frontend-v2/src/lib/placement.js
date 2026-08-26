@@ -3,6 +3,8 @@
 // Kept pure and separate from the components so the flipping rules — the part
 // that actually breaks on small screens — can be tested without a DOM.
 
+// The bubble's natural width. It is a maximum, not a fixed size: see
+// `maxBubbleWidth`, which narrows it on phones too small to hold it.
 export const BUBBLE_WIDTH = 300
 // The starting guess, used for the first paint and by callers that have nothing
 // better. Once the bubble has been rendered its real size is measured and passed
@@ -22,6 +24,13 @@ export function maxBubbleHeight(viewport) {
   return Math.max(0, viewport.height - 2 * MARGIN)
 }
 
+// How wide the bubble may render. A hard 300px left 20px of slack on a 320px
+// phone and nothing at all for a side placement to work with, so the bubble
+// gives up width before it gives up its margins.
+export function maxBubbleWidth(viewport) {
+  return Math.max(0, Math.min(BUBBLE_WIDTH, viewport.width - 2 * MARGIN))
+}
+
 // Keep `value` inside the viewport along one axis, and say whether it had to
 // move: a bubble that was pulled back over its target has nothing left to point
 // at. A bubble too big to fit at all is pinned to the near edge rather than
@@ -36,7 +45,7 @@ function fit(value, extent, limit) {
 export function placeBubble(rect, placement = 'bottom', viewport, size, gap = ARROW_GAP) {
   const vw = viewport.width
   const vh = viewport.height
-  const w = size?.width || BUBBLE_WIDTH
+  const w = size?.width || maxBubbleWidth(viewport)
   const h = size?.height || BUBBLE_HEIGHT
 
   if (!rect) {
@@ -70,6 +79,12 @@ export function placeBubble(rect, placement = 'bottom', viewport, size, gap = AR
   const right = placement === 'right'
   const roomRight = vw - (rect.left + rect.width) >= w + gap
   const roomLeft = rect.left >= w + gap
+
+  // Neither side fits — the usual case on a phone, where almost every target is
+  // as wide as the screen. Placing sideways anyway would clamp the bubble back
+  // over its target and drop the arrow; going vertical keeps both.
+  if (!roomRight && !roomLeft) return placeBubble(rect, 'bottom', viewport, size, gap)
+
   const useRight = right ? roomRight || !roomLeft : !roomLeft && roomRight
   const left = fit(useRight ? rect.left + rect.width + gap : rect.left - w - gap, w, vw)
   return {

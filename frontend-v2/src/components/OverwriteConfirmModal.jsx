@@ -1,5 +1,7 @@
 import React from 'react'
 import { Card, Button } from './'
+import { ModalScrim } from './Modal'
+import { Z } from '../lib/layers'
 
 export default function OverwriteConfirmModal({
   onCancel,
@@ -9,7 +11,7 @@ export default function OverwriteConfirmModal({
   items = [],
 }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]">
+    <ModalScrim z={Z.nested}>
       <Card className="space-y-4 w-full max-w-md" style={{ color: 'var(--text-strong)' }}>
         <h3 className="text-lg font-medium">{title}</h3>
         <div className="space-y-2 text-sm">
@@ -30,7 +32,7 @@ export default function OverwriteConfirmModal({
           <Button variant="danger" onClick={onConfirm}>Overwrite</Button>
         </div>
       </Card>
-    </div>
+    </ModalScrim>
   )
 }
 

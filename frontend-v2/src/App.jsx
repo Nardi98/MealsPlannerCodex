@@ -1,14 +1,10 @@
 import React from 'react'
-import { BrowserRouter, Navigate, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
-import {
-  CalendarDaysIcon,
-  BookmarkIcon,
-  ShoppingCartIcon,
-  BeakerIcon,
-  ArrowUpTrayIcon,
-  InboxArrowDownIcon,
-} from '@heroicons/react/24/outline'
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { Bars3Icon } from '@heroicons/react/24/outline'
 import { Input, ProfileMenu } from './components'
+import Sidebar from './components/Sidebar'
+import NavDrawer from './components/NavDrawer'
+import { useIsMobile } from './hooks/useIsMobile'
 import RecipesPage from './pages/RecipesPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
@@ -27,69 +23,6 @@ import { TutorialProvider, ReplayTutorialButton } from './tutorial/TutorialProvi
 
 // Where a freshly-authenticated user goes when nothing better is known.
 const DEFAULT_LANDING = '/recipes'
-
-const NAV = [
-  { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
-  { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', match: (p) => p === '/meal-plan' },
-  { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', match: (p) => p === '/shared-with-me' },
-  { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', match: (p) => p === '/ingredients' },
-  { label: 'Shopping List', path: '/shopping-list', Icon: ShoppingCartIcon, color: 'var(--cat-teal)', match: (p) => p === '/shopping-list' },
-  { label: 'Import/Export', path: '/import-export', Icon: ArrowUpTrayIcon, color: 'var(--cat-plum)', match: (p) => p === '/import-export' },
-]
-
-function Sidebar() {
-  const navigate = useNavigate()
-  const location = useLocation()
-
-  return (
-    <div
-      className="flex flex-col gap-1"
-      style={{
-        background: 'var(--surface-sidebar)',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-md)',
-        padding: 12,
-        width: 'var(--sidebar-width)',
-        height: '100%',
-        boxSizing: 'border-box',
-      }}
-    >
-      {NAV.map((item) => {
-        const { label, path, color, match } = item
-        const NavIcon = item.Icon
-        const active = match(location.pathname)
-        return (
-          <button
-            key={label}
-            type="button"
-            onClick={() => navigate(path)}
-            className="flex items-center gap-3 text-left"
-            style={{
-              padding: '11px 12px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              cursor: 'pointer',
-              width: '100%',
-              background: active ? 'rgba(255,255,255,0.16)' : 'transparent',
-            }}
-          >
-            <NavIcon className="h-5 w-5" style={{ color }} />
-            <span
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontWeight: 'var(--weight-medium)',
-                fontSize: 14,
-                color: 'var(--text-on-dark)',
-              }}
-            >
-              {label}
-            </span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
 
 // SH-23. Redirects to a `?next=` destination on the first authenticated render.
 //
@@ -123,8 +56,18 @@ function ReturnToNext({ children }) {
 function Shell() {
   const rowRef = React.useRef(null)
   const wrapRef = React.useRef(null)
+  const isMobile = useIsMobile()
+  const [menuOpen, setMenuOpen] = React.useState(false)
+  const closeMenu = React.useCallback(() => setMenuOpen(false), [])
+
+  // The burger is only hidden on desktop, not unmounted, so a `menuOpen` left
+  // over from a phone-width session would have it reporting itself as expanded.
+  React.useEffect(() => {
+    if (!isMobile) setMenuOpen(false)
+  }, [isMobile])
 
   React.useEffect(() => {
+    if (isMobile) return undefined
     const update = () => {
       if (!rowRef.current || !wrapRef.current) return
       // Bottom stays pinned to the viewport bottom (20px gutter); the top rises
@@ -140,25 +83,48 @@ function Shell() {
       window.removeEventListener('scroll', update)
       window.removeEventListener('resize', update)
     }
-  }, [])
+  }, [isMobile])
 
   return (
-    <div style={{ minHeight: '100vh', boxSizing: 'border-box', padding: 20 }}>
+    <div className="min-h-screen box-border p-3 md:p-5">
       <header
-        className="flex items-center justify-between"
-        style={{ padding: '4px 8px 18px 24px' }}
+        className="flex items-center justify-between gap-2 pb-4 pl-2 pr-2 pt-1 md:pb-[18px] md:pl-6"
       >
-        <img
-          src="/assets/Logo_mealplanner.png"
-          alt="Meal Planner logo"
-          style={{ height: 52, opacity: 0.9 }}
-        />
-        <div className="hidden md:flex items-center gap-3">
-          <Input placeholder="Search…" style={{ width: 220 }} />
-          <ReplayTutorialButton />
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            type="button"
+            aria-label="Open menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-0 bg-transparent cursor-pointer"
+          >
+            <Bars3Icon className="h-6 w-6" style={{ color: 'var(--c-pos)' }} />
+          </button>
+          <img
+            src="/assets/Logo_mealplanner.png"
+            alt="Meal Planner logo"
+            className="h-10 md:h-[52px]"
+            style={{ opacity: 0.9 }}
+          />
+        </div>
+        {/* Search and the tutorial replay move into the drawer on mobile; the
+            account menu stays put, because logging out must never be more than
+            one tap away. */}
+        <div className="flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-3">
+            <Input placeholder="Search…" style={{ width: 220 }} />
+            <ReplayTutorialButton />
+          </div>
           <ProfileMenu />
         </div>
       </header>
+
+      <NavDrawer
+        open={isMobile && menuOpen}
+        onClose={closeMenu}
+        header={<Input placeholder="Search…" className="w-full" />}
+        footer={<ReplayTutorialButton />}
+      />
 
       <div
         style={{
@@ -172,7 +138,7 @@ function Shell() {
       <div ref={rowRef} className="flex flex-col gap-5 md:flex-row md:items-start">
         <div
           ref={wrapRef}
-          className="flex-shrink-0 sticky top-5 overflow-hidden"
+          className="hidden md:block flex-shrink-0 sticky top-5 overflow-hidden"
           style={{ alignSelf: 'flex-start' }}
         >
           <Sidebar />
@@ -186,7 +152,7 @@ function Shell() {
             border: '1px solid var(--border-default)',
           }}
         >
-          <main style={{ padding: 24 }}>
+          <main className="p-4 md:p-6">
             <Routes>
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />

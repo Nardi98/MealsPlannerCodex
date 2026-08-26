@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { placeBubble, BUBBLE_WIDTH, BUBBLE_HEIGHT, MARGIN } from '../placement'
+import { placeBubble, maxBubbleWidth, BUBBLE_WIDTH, BUBBLE_HEIGHT, MARGIN } from '../placement'
 
 const VIEWPORT = { width: 1200, height: 800 }
 // A caller that draws no arrow and wants the bubble close to its target.
@@ -92,4 +92,42 @@ test('a custom gap is also what the flip decision is made against', () => {
   const rect = { top: BUBBLE_HEIGHT + 30, left: 400, width: 200, height: 50 }
   expect(placeBubble(rect, 'top', VIEWPORT).arrow).toBe('up')
   expect(placeBubble(rect, 'top', VIEWPORT, undefined, SMALL_GAP).arrow).toBe('down')
+})
+
+// --- Narrow viewports -------------------------------------------------------
+//
+// `BUBBLE_WIDTH` used to be a hard 300px, which on a 320px phone left 20px of
+// slack and no room at all for a `left`/`right` placement to resolve.
+const PHONE = { width: 320, height: 640 }
+
+test('the bubble narrows to fit a phone viewport', () => {
+  expect(maxBubbleWidth(PHONE)).toBe(320 - 2 * MARGIN)
+})
+
+test('the bubble never grows past its natural width on a wide viewport', () => {
+  expect(maxBubbleWidth({ width: 1440, height: 900 })).toBe(BUBBLE_WIDTH)
+})
+
+test('a side placement falls back to vertical when neither side has room', () => {
+  // A full-width target on a phone: nothing fits to its left or its right.
+  const rect = { top: 200, left: 0, width: 320, height: 40 }
+  const size = { width: maxBubbleWidth(PHONE), height: 190 }
+
+  const placed = placeBubble(rect, 'right', PHONE, size)
+
+  expect(placed.left).toBeGreaterThanOrEqual(MARGIN)
+  expect(placed.left + size.width).toBeLessThanOrEqual(PHONE.width - MARGIN)
+  // It moved above or below the target rather than pinning itself on top of it.
+  expect(['up', 'down']).toContain(placed.arrow)
+})
+
+test('a bubble placed on a phone stays inside the viewport', () => {
+  const rect = { top: 40, left: 260, width: 44, height: 44 }
+  const size = { width: maxBubbleWidth(PHONE), height: 190 }
+
+  const { top, left } = placeBubble(rect, 'bottom', PHONE, size)
+
+  expect(left).toBeGreaterThanOrEqual(MARGIN)
+  expect(left + size.width).toBeLessThanOrEqual(PHONE.width - MARGIN)
+  expect(top).toBeGreaterThanOrEqual(MARGIN)
 })

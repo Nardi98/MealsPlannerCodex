@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import MealPlanPage from '../MealPlanPage'
+import { stubViewport } from '../../test/stubViewport'
 import { mealPlansApi } from '../../api/mealPlansApi'
 import { tagsApi } from '../../api/tagsApi'
 import { feedbackApi } from '../../api/feedbackApi'
@@ -184,4 +185,29 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
     expect(mealPlansApi.generate).toHaveBeenCalledTimes(1)
   })
   expect(mealPlansApi.create).toHaveBeenCalledTimes(1)
+})
+
+test('on mobile the plan settings sit above the calendar, collapsed', async () => {
+  stubViewport(true)
+  const { container } = render(<MealPlanPage />)
+  await screen.findByText('Meal Plan')
+
+  const toggle = screen.getByRole('button', { name: /plan settings/i })
+  const calendar = container.querySelector('[data-tour="mealplan-calendar"]')
+
+  // Collapsed by default: the calendar is what the page is for.
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(container.querySelector('[data-tour="mealplan-tabs"]')).toBeNull()
+  // Visual order, which is CSS `order` rather than DOM order.
+  expect(toggle.closest('[data-plan-section]')).toHaveClass('order-1')
+  expect(calendar.closest('[data-plan-section]')).toHaveClass('order-2')
+})
+
+test('on desktop the settings render below the calendar, always open', async () => {
+  stubViewport(false)
+  const { container } = render(<MealPlanPage />)
+  await screen.findByText('Meal Plan')
+
+  expect(screen.queryByRole('button', { name: /plan settings/i })).not.toBeInTheDocument()
+  expect(container.querySelector('[data-tour="mealplan-tabs"]')).not.toBeNull()
 })

@@ -181,7 +181,7 @@ export default function IngredientsPage() {
           placeholder="Search ingredients…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-56"
+          className="w-full sm:w-56"
         />
         <MonthFilter
           data-tour="ingredients-months"

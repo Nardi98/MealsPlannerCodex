@@ -167,3 +167,17 @@ h1, h2, h3, h4 {
   background-color: var(--c-pos);
   color: #fff;
 }
+
+/* The recipe/shared card grid. 240px tracks are unreachable on a phone, so the
+   track narrows below `sm` rather than overflowing the page. */
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+@media (min-width: 640px) {
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}

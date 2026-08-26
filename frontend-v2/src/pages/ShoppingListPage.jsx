@@ -168,7 +168,7 @@ export default function ShoppingListPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-wrap justify-between items-end gap-3">
         <div>
           <h1
             className="text-2xl font-medium"
@@ -204,10 +204,10 @@ export default function ShoppingListPage() {
           </label>
         </div>
       </div>
-      <Card className="px-8 py-6">
-        <div className="flex justify-between text-xs">
+      <Card className="px-4 py-4 sm:px-8 sm:py-6">
+        <div className="flex flex-wrap justify-between gap-4 text-xs">
           {months.map((m) => (
-            <div key={m.toISOString()} className="flex basis-[30%] justify-center">
+            <div key={m.toISOString()} className="flex basis-full sm:basis-[30%] justify-center">
               <MonthGrid baseDate={m} startDate={start} endDate={end} />
             </div>
           ))}
@@ -230,10 +230,10 @@ export default function ShoppingListPage() {
             {occurrences.map((o) => (
               <li
                 key={`${o.planDate}-${o.mealNumber}`}
-                className="border rounded-xl p-3 flex items-center justify-between gap-3"
+                className="border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3"
                 style={{ borderColor: 'var(--border)' }}
               >
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs text-[color:var(--text-subtle)]">
                     {format(new Date(o.planDate), 'EEE d MMM')} ·{' '}
                     {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
@@ -271,7 +271,7 @@ export default function ShoppingListPage() {
         </Card>
         <Card className="p-4 space-y-2">
           <div
-            className="flex items-center justify-between pb-2 border-b"
+            className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b"
             style={{ borderColor: 'var(--border)' }}
           >
             <h2
@@ -280,7 +280,7 @@ export default function ShoppingListPage() {
             >
               Ingredients
             </h2>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="a2" onClick={() => setMerging(true)}>
                 Merge ingredients
               </Button>

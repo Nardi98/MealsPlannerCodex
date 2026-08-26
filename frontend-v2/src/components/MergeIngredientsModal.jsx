@@ -1,6 +1,8 @@
 import React from 'react'
 import { Button, Input } from './'
 import { ingredientsApi } from '../api/ingredientsApi'
+import { ModalScrim } from './Modal'
+import { Z } from '../lib/layers'
 
 const UNITS = ['g', 'kg', 'l', 'ml', 'piece']
 
@@ -85,7 +87,7 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]">
+    <ModalScrim z={Z.nested}>
       <div
         className="bg-white rounded-2xl p-6 w-full max-w-lg space-y-4"
         style={{ color: 'var(--text-strong)' }}
@@ -222,6 +224,6 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
           </Button>
         </div>
       </div>
-    </div>
+    </ModalScrim>
   )
 }

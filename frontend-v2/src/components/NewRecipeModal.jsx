@@ -5,6 +5,7 @@ import AddIngredientModal from './AddIngredientModal'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
+import { ModalScrim } from './Modal'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
@@ -233,7 +234,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <ModalScrim>
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <h2 className="text-lg font-medium">New Recipe</h2>
@@ -410,7 +411,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
           onSave={handleNewIngredient}
         />
       )}
-    </div>
+    </ModalScrim>
   )
 }
 

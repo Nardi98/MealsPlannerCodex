@@ -1,9 +1,11 @@
 import React from 'react'
 import { Button } from './'
+import { ModalScrim } from './Modal'
+import { Z } from '../lib/layers'
 
 export default function ConfirmIngredientChangeModal({ recipes = [], action = 'change', onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]">
+    <ModalScrim z={Z.nested}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-4" style={{ color: 'var(--text-strong)' }}>
         <h3 className="text-lg font-medium">
           {action === 'delete' ? 'Delete Ingredient' : 'Edit Ingredient'}
@@ -31,6 +33,6 @@ export default function ConfirmIngredientChangeModal({ recipes = [], action = 'c
           <Button variant="a1" onClick={onConfirm}>Confirm</Button>
         </div>
       </div>
-    </div>
+    </ModalScrim>
   )
 }

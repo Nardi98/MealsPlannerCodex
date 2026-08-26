@@ -261,7 +261,7 @@ export default function RecipesPage() {
             />
             {showFilters && (
               <div
-                className="absolute z-10 mt-2 w-56 rounded-2xl border bg-white p-2"
+                className="absolute right-0 z-10 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
                 style={{ borderColor: 'var(--border-default)' }}
               >
                 <FilterGroup
@@ -294,7 +294,7 @@ export default function RecipesPage() {
           <Input
             placeholder="Search recipes…"
             data-tour="recipes-search"
-            className="w-56"
+            className="w-full sm:w-56"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -321,11 +321,7 @@ export default function RecipesPage() {
 
       <div
         data-tour="recipes-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-          gap: 16,
-        }}
+        className="card-grid"
       >
         {filteredRecipes.map((r, i) => (
           <Card

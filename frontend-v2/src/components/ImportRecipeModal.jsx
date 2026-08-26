@@ -12,6 +12,7 @@ import {
 } from '../constants/recipeImport'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { recipesApi } from '../api/recipesApi'
+import { ModalScrim } from './Modal'
 
 // Build one reconciliation row per imported ingredient. An exact name match
 // (case-insensitive) against an existing ingredient defaults the row to reusing
@@ -173,7 +174,7 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <ModalScrim>
       <div
         className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto"
         style={{ color: 'var(--text-strong)' }}
@@ -316,6 +317,6 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
           </div>
         )}
       </div>
-    </div>
+    </ModalScrim>
   )
 }

@@ -60,13 +60,17 @@ export const MEAL_PLAN_STEPS = [
     placement: 'bottom',
   },
   {
-    target: ['[data-tour="mealplan-tabs"]', '[data-tour="mealplan-form"]'],
+    target: [
+      '[data-tour="mealplan-tabs"]',
+      '[data-tour="mealplan-form"]',
+      '[data-tour="mealplan-settings-toggle"]',
+    ],
     title: 'Tell the planner what you want',
     body: 'Pick the dates, lean on a tag, avoid an ingredient, or plan around what is already in your fridge.',
     placement: 'top',
   },
   {
-    target: '[data-tour="mealplan-generate"]',
+    target: ['[data-tour="mealplan-generate"]', '[data-tour="mealplan-settings-toggle"]'],
     title: 'Then let it plan',
     body: 'Recipes are scored on what you like, the season, and how recently you ate them — accepting and rejecting meals teaches it.',
     placement: 'top',

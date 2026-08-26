@@ -2,7 +2,7 @@ import React from 'react'
 import { useTour } from './useTour'
 import { TourOverlay } from './TourOverlay'
 import { TourBubble } from './TourBubble'
-import { placeBubble, maxBubbleHeight } from '../lib/placement'
+import { placeBubble, maxBubbleHeight, maxBubbleWidth } from '../lib/placement'
 import { useTutorial } from './tutorialContext'
 import { TOURS } from './steps'
 
@@ -47,6 +47,7 @@ export function PageTour({ id, steps, enabled = true }) {
       <TourBubble
         ref={bubble}
         maxHeight={maxBubbleHeight(viewport)}
+        width={maxBubbleWidth(viewport)}
         title={step.title}
         body={step.body}
         index={index}

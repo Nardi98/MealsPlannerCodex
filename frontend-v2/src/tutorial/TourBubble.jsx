@@ -2,7 +2,6 @@ import React from 'react'
 import { Card } from '../components/Card'
 import { Button } from '../components/Button'
 import { SquigglyArrow } from './SquigglyArrow'
-import { BUBBLE_WIDTH } from '../lib/placement'
 
 // Where the arrow hangs, by the direction it points — the side the target is on.
 const ARROW_OFFSET = {
@@ -41,7 +40,7 @@ function LinkButton({ onClick, underline, children }) {
 // to point at, in which case the bubble sits in the middle of the screen and
 // simply explains itself.
 export const TourBubble = React.forwardRef(function TourBubble(
-  { title, body, index, total, isLast, arrow, maxHeight, onNext, onBack, onSkip, style },
+  { title, body, index, total, isLast, arrow, maxHeight, width, onNext, onBack, onSkip, style },
   ref,
 ) {
   return (
@@ -52,10 +51,11 @@ export const TourBubble = React.forwardRef(function TourBubble(
       aria-label={title}
       style={{
         position: 'absolute',
-        width: BUBBLE_WIDTH,
+        width,
         boxSizing: 'border-box',
         // A step whose copy runs long scrolls inside the bubble rather than
-        // growing past the bottom of the window. The budget comes from the
+        // growing past the bottom of the window, and a narrow phone shrinks it
+        // rather than pushing it off-screen. Both budgets come from the
         // placement module so the bubble is sized and positioned by one rule.
         maxHeight,
         overflowY: 'auto',

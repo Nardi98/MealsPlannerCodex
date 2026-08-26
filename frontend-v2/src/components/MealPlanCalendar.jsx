@@ -1,11 +1,15 @@
 import React from 'react'
 import { Card } from './Card'
 import { Button } from './Button'
+import { useIsMobile } from '../hooks/useIsMobile'
 import {
   CheckIcon,
   XMarkIcon,
   ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
+
+// Index 0/1 here are the backend's `meal_number` 1/2.
+const MEAL_LABELS = ['Lunch', 'Dinner']
 
 /**
  * The week calendar grid: lunch/dinner rows for the current week, per-cell
@@ -24,6 +28,24 @@ export default function MealPlanCalendar({
   onArmSwap,
   armedCell,
 }) {
+  const isMobile = useIsMobile()
+
+  const days = React.useMemo(
+    () =>
+      weekDays.map((d) => ({
+        date: d,
+        key: d.toISOString(),
+        short: d.toLocaleDateString(undefined, { weekday: 'short' }),
+        long: d.toLocaleDateString(undefined, { weekday: 'long' }),
+        dm: `${d.getDate()}/${d.getMonth() + 1}`,
+        today: isToday(d),
+      })),
+    [weekDays, isToday],
+  )
+
+  // The day header's today-tint, which both layouts paint the same way.
+  const todayTint = (today) => (today ? { backgroundColor: 'var(--c-a3)' } : undefined)
+
   // One cell carries the tutorial's anchor: the step explains what a cell is,
   // and the whole calendar is taller than the window on most screens.
   const renderCell = (d, idx, isTourAnchor = false) => {
@@ -46,7 +68,7 @@ export default function MealPlanCalendar({
         key={`${idx}-${iso}`}
         data-cell
         data-tour={isTourAnchor ? 'mealplan-cell' : undefined}
-        className="relative border p-2 h-24 cursor-pointer"
+        className="relative border p-2 cursor-pointer min-h-16 md:h-24"
         onClick={() =>
           armedCell
             ? onArmSwap({ date: iso, mealIndex: idx })
@@ -119,7 +141,7 @@ export default function MealPlanCalendar({
 
   return (
     <>
-      <div className="flex justify-between" data-tour="mealplan-week-nav">
+      <div className="flex flex-wrap justify-between gap-2" data-tour="mealplan-week-nav">
         <Button variant="ghost" onClick={() => onChangeWeek(-1)}>
           Previous week
         </Button>
@@ -128,29 +150,48 @@ export default function MealPlanCalendar({
         </Button>
       </div>
       <Card data-tour="mealplan-calendar">
-        <div className="grid grid-cols-8">
-          <div />
-          {weekDays.map((d) => {
-            const weekday = d.toLocaleDateString(undefined, { weekday: 'short' })
-            const dm = `${d.getDate()}/${d.getMonth() + 1}`
-            return (
-              <div
-                key={d.toISOString()}
-                className={`p-2 text-center ${
-                  isToday(d) ? 'text-white rounded-t-lg' : ''
-                }`}
-                style={isToday(d) ? { backgroundColor: 'var(--c-a3)' } : undefined}
-              >
-                <div className="font-medium">{weekday}</div>
-                <div className="text-sm">{dm}</div>
+        {isMobile ? (
+          <div className="flex flex-col gap-3">
+            {days.map((day, i) => (
+              <div key={day.key} data-testid="mealplan-day" className="flex flex-col">
+                <div
+                  className={`px-2 py-1 rounded-t-lg font-medium ${day.today ? 'text-white' : ''}`}
+                  style={todayTint(day.today)}
+                >
+                  {day.long} {day.dm}
+                </div>
+                {MEAL_LABELS.map((label, idx) => (
+                  <div key={label}>
+                    <div className="px-2 pt-2 text-xs uppercase tracking-wide text-[color:var(--text-subtle)]">
+                      {label}
+                    </div>
+                    {renderCell(day.date, idx, i === 0 && idx === 0)}
+                  </div>
+                ))}
               </div>
-            )
-          })}
-          <div className="p-2 text-left font-medium">Lunch</div>
-          {weekDays.map((d, i) => renderCell(d, 0, i === 0))}
-          <div className="p-2 text-left font-medium">Dinner</div>
-          {weekDays.map((d) => renderCell(d, 1))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-8">
+            <div />
+            {days.map((day) => (
+              <div
+                key={day.key}
+                className={`p-2 text-center ${day.today ? 'text-white rounded-t-lg' : ''}`}
+                style={todayTint(day.today)}
+              >
+                <div className="font-medium">{day.short}</div>
+                <div className="text-sm">{day.dm}</div>
+              </div>
+            ))}
+            {MEAL_LABELS.map((label, idx) => (
+              <React.Fragment key={label}>
+                <div className="p-2 text-left font-medium">{label}</div>
+                {days.map((day, i) => renderCell(day.date, idx, idx === 0 && i === 0))}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
       </Card>
     </>
   )

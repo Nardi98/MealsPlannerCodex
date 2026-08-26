@@ -384,14 +384,7 @@ export function SharedWithMePage() {
       )}
 
       {entries.length > 0 && (
-        <div
-          style={{
-            marginTop: 20,
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-            gap: 16,
-          }}
-        >
+        <div className="card-grid" style={{ marginTop: 20 }}>
           {entries.map((entry) => (
             <SharedCard
               key={entry.share_id}

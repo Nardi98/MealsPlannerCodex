@@ -265,3 +265,64 @@ const formatExportText = (items, crossed, start, end) => [
       no `image_url`, dish icon + bulk badge, click → detail modal with Edit/Delete.
 - [ ] `image_url` round-trips backend↔frontend; New/Edit form exposes it.
 - [ ] Other four pages still render inside the new shell.
+- [ ] Usable at 320 / 375 / 768 / 1280px with no horizontal page scroll;
+      burger drawer opens/closes and the account menu stays reachable (§8).
+
+---
+
+## 8) Mobile & Responsive
+
+The app must be usable from **320px** upward. Tailwind's default breakpoints are
+in force; `md` (768px) is *the* dividing line between the phone shell and the
+desktop shell, and nothing else may invent a second one.
+
+### Rules
+- **Mobile-first.** Write the phone layout unprefixed and restore the desktop one
+  at `md:`. `grid-cols-3` with no prefix is a bug; `grid-cols-1 md:grid-cols-3`
+  is the shape. Prefix `col-span-*` too: an unprefixed `col-span-2` inside a
+  single-column grid creates an implicit second column and overflows the page,
+  so write `sm:col-span-2` and let the default span of 1 stand below it.
+- **Classes, not queries.** Prefer a `md:` class. Reach for the `useIsMobile()`
+  hook (`src/hooks/useIsMobile.js`) *only* where the phone needs different
+  **markup**, not different CSS. Three places qualify, each because something is
+  *unmounted* rather than merely hidden: the nav drawer (`App.jsx`), grid vs.
+  stack-of-days (`MealPlanCalendar.jsx`), and `MobileCollapse`. Visibility,
+  sizing, spacing, and **ordering** are always classes — reorder with `order-*`,
+  which leaves the DOM order (and so the reading and tab order) alone. In tests,
+  stub the viewport with `src/test/stubViewport.js`.
+- **Tap targets** are at least **44 × 44px** (the burger is `h-11 w-11`; sidebar
+  rows reach it via `11px` padding on a 22px line box).
+- **Nothing scrolls the page sideways.** Content that cannot narrow (tab strips,
+  wide rows) scrolls inside its own `overflow-x-auto` container.
+- Flex rows that pair a growing label with a fixed control get `flex-wrap` and
+  `min-w-0` on the label, or the control is pushed off the row.
+
+### Shell
+- **Below `md`:** the sidebar column is `hidden`; a **burger** button sits left of
+  the logo and opens `NavDrawer` — a scrim plus a left-anchored panel rendering
+  the same `Sidebar`, closing on scrim click, `Escape`, and route change. Search
+  sits at the top of the drawer, above the nav items; the tutorial replay sits
+  in its footer. **The account menu stays in
+  the header:** logging out is never more than one tap away.
+- **At `md` and up:** today's layout — sticky green sidebar column, full header.
+- Stacking order is `Z` in `src/lib/layers.js` — `drawer: 55` (above the page
+  and the profile dropdown at 50), `modal: 60`, `nested: 70` for a dialog raised
+  from inside another. The tutorial overlay sits above all of them at 100.
+  `SCRIM` lives there too; it is the only wash colour.
+
+### Page patterns
+- **Meal plan:** the 7-day grid is desktop-only. Below `md` it stacks into one
+  section per day, each labelling its Lunch/Dinner slots, and the plan settings
+  move above it (`order-1`) folded into a `MobileCollapse`, closed by default.
+- **Collapsing on mobile:** wrap the section in `MobileCollapse`, which is a
+  no-op on desktop. Because collapsed means unmounted, any tutorial step
+  anchored inside it needs the toggle's `tourId` appended to its target list.
+- **Card grids:** use the `.card-grid` class (`index.css`) — `minmax(240px, 1fr)`
+  tracks that narrow to `minmax(150px, 1fr)` below `sm`. Do not hand-roll a
+  second `auto-fill` grid.
+- **Modals:** every takeover renders inside `<ModalScrim>` (`components/Modal.jsx`),
+  which owns the wash, the padding that keeps a `w-full` card off the screen
+  edges, and the scroll that keeps a tall card reachable. Never hand-roll a
+  `fixed inset-0` scrim — that is how nine modals ended up without any of it.
+- **Popovers and dropdowns** anchored to a right-hand control are clamped with
+  `max-width: calc(100vw - …)`, or they run off the screen at 360px.
