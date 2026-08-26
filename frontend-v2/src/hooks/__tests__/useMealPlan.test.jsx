@@ -86,7 +86,7 @@ test('rejecting a leftover meal clears the leftover flag for the replacement', a
   await waitFor(() =>
     expect(mealPlansApi.create).toHaveBeenCalledWith({
       plan_date: startIso,
-      plan: { [startIso]: [{ main_id: 2, side_ids: [], leftover: false }] },
+      plan: { [startIso]: [{ main_id: 2, side_ids: [], leftover: false, meal_number: 1 }] },
     })
   )
   expect(result.current.plan[startIso][0].leftover).toBe(false)
@@ -350,6 +350,34 @@ test('rejecting a bulk source re-extracts its leftover slots as fresh meals', as
   await waitFor(() => expect(mealPlansApi.create).toHaveBeenCalled())
   const payload = mealPlansApi.create.mock.calls[0][0]
   // Both the source slot and its leftover slot get fresh, non-leftover recipes.
-  expect(payload.plan[startIso][0]).toEqual({ main_id: 2, side_ids: [], leftover: false })
-  expect(payload.plan[day2Iso][0]).toEqual({ main_id: 3, side_ids: [], leftover: false })
+  expect(payload.plan[startIso][0]).toEqual({ main_id: 2, side_ids: [], leftover: false, meal_number: 1 })
+  expect(payload.plan[day2Iso][0]).toEqual({ main_id: 3, side_ids: [], leftover: false, meal_number: 1 })
+})
+
+test('persisting a day with an empty lunch keeps dinner in slot 2', async () => {
+  // The backend serves a day as an array indexed by meal_number, so an empty
+  // lunch arrives as a null at index 0. Dropping it before posting would
+  // renumber dinner as slot 1 unless the slot travels with the meal.
+  feedbackApi.rejectRecipe.mockResolvedValue('Replacement')
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Solo' },
+    { id: 2, title: 'Replacement' },
+  ])
+  const dinner = { recipe: 'Solo', side_recipes: [], accepted: false, leftover: false, meal_number: 2 }
+  mealPlansApi.fetchRange
+    .mockResolvedValueOnce({ [startIso]: [null, dinner] })
+    .mockResolvedValueOnce({ [startIso]: [null, { ...dinner, recipe: 'Replacement' }] })
+  const { result } = renderHook(() => useMealPlan({ setError: vi.fn() }))
+  await waitFor(() => expect(result.current.plan[startIso]).toBeDefined())
+
+  await act(async () => {
+    await result.current.handleReject({ date: startIso, mealIndex: 1 })
+  })
+
+  await waitFor(() =>
+    expect(mealPlansApi.create).toHaveBeenCalledWith({
+      plan_date: startIso,
+      plan: { [startIso]: [{ main_id: 2, side_ids: [], leftover: false, meal_number: 2 }] },
+    })
+  )
 })

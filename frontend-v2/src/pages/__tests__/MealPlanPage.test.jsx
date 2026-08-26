@@ -120,6 +120,7 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
             main_id: 2,
             side_ids: [],
             leftover: false,
+            meal_number: 1,
           },
         ],
       },

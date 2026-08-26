@@ -1167,35 +1167,42 @@ def delete_ingredient(
     return Response(status_code=204)
 
 
+# A day is served as an array indexed by `meal_number` (Lunch=1, Dinner=2), so
+# an empty slot is a `None` hole rather than a missing element -- a day holding
+# only a dinner serves as `[null, {...}]`. The slot list must therefore admit
+# `None`, or such a day fails response validation with a 500.
+PlanOut = Dict[str, List[Optional[schemas.MealOut]]]
+
+
 # DEPRECATED: the legacy `/plan` routes below are kept for backward
 # compatibility only. Prefer the `/meal-plans` paths. Removal is scheduled no
 # earlier than 2026-10-01; do not add new behaviour to the `/plan` paths.
-@app.get("/plan", response_model=Dict[str, List[schemas.MealOut]])
-@app.get("/meal-plans", response_model=Dict[str, List[schemas.MealOut]])
+@app.get("/plan", response_model=PlanOut)
+@app.get("/meal-plans", response_model=PlanOut)
 def get_plan(
     db: Db,
     current_user: CurrentUser,
     plan_date: date | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-) -> Dict[str, List[schemas.MealOut]]:
+) -> PlanOut:
     return crud.get_plan(db, plan_date, start_date, end_date, current_user.id)
 
 
 @app.post(
     "/plan",
-    response_model=Dict[str, List[schemas.MealOut]],
+    response_model=PlanOut,
 )
 @app.post(
     "/meal-plans",
-    response_model=Dict[str, List[schemas.MealOut]],
+    response_model=PlanOut,
 )
 def set_plan(
     payload: schemas.MealPlanCreate,
     db: Db,
     current_user: CurrentUser,
     force: bool = False,
-) -> Dict[str, List[schemas.MealOut]]:
+) -> PlanOut:
     plan_dates = [
         day if isinstance(day, date) else date.fromisoformat(day)
         for day in payload.plan.keys()

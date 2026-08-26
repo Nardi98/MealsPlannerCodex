@@ -488,10 +488,11 @@ class Meal(Base):
     user_id = Column(Integer, nullable=False)
     plan_date = Column(Date, nullable=False)
     meal_number = Column(Integer, nullable=False)
-    # SET NULL, not CASCADE: deleting the recipe empties the slot rather than
-    # silently deleting the planned meal around it. ``crud.get_plan`` already
-    # skips meals whose recipe is gone.
-    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"))
+    # CASCADE, not SET NULL: a meal *is* its recipe, so deleting the recipe
+    # must take the row with it. SET NULL left a ghost row the read path
+    # skipped while its ``meal_number`` still occupied the day, which is how a
+    # deleted lunch used to break the whole plan.
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
     accepted = Column(Boolean, default=False)
     # Number of people this meal is cooked for; the shopping list multiplies the
     # recipe's (and its sides') ingredient amounts by it. Sides scale with their

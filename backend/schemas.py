@@ -263,6 +263,11 @@ class MealAssignment(BaseModel):
     main_id: int
     side_ids: List[int] = Field(default_factory=list)
     leftover: bool = False
+    # The slot this meal occupies (Lunch=1, Dinner=2). Optional: callers that
+    # send a day's meals in order can let position decide. Clients that drop an
+    # empty slot before posting must send it, or the meals after the gap shift
+    # up into the wrong slot.
+    meal_number: Optional[int] = Field(default=None, ge=1, le=2)
 
 
 class MealPlanCreate(BaseModel):

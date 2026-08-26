@@ -1,6 +1,10 @@
 import { request } from './client';
 
+// A day arrives as an array indexed by meal_number, so a slot with no meal is a
+// null hole rather than a missing element. It passes straight through: parsing
+// it as a meal throws, and one bad slot would blank the whole plan.
 function parseMeal(meal) {
+  if (!meal) return meal;
   let { recipe } = meal;
   let leftover = Boolean(meal.leftover);
   if (typeof recipe === 'string' && recipe.endsWith(' (leftover)')) {

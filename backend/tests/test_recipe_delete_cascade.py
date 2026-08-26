@@ -86,10 +86,10 @@ def test_deleting_a_side_that_is_also_a_favorite_keeps_the_main(
 def test_deleting_a_planned_main_dish_empties_its_slot(
     db_session, user, make_recipe
 ):
-    """Same defect class as the side above: Meal.recipe_id has no ondelete.
+    """Same defect class as the side above, seen through the read path.
 
-    ``crud.get_plan`` already skips meals whose recipe is gone, so emptying the
-    slot is the behaviour the read path expects.
+    ``Meal.recipe_id`` cascades, so the row goes with the recipe and the day
+    reads back empty. The companion test below asserts the row itself is gone.
     """
     main = make_recipe("Roast Chicken")
     db_session.flush()
@@ -101,3 +101,23 @@ def test_deleting_a_planned_main_dish_empties_its_slot(
     assert crud.get_plan(db_session, PLAN_DATE, user_id=user.id) == {
         PLAN_DATE.isoformat(): []
     }
+
+
+def test_deleting_a_planned_main_dish_removes_the_meal_row(
+    db_session, user, make_recipe
+):
+    """The slot must not survive as a ghost row with ``recipe_id IS NULL``.
+
+    ``Meal.recipe_id`` used to be ``ON DELETE SET NULL``, which left a row the
+    read path skipped but whose ``meal_number`` still occupied the day -- the
+    source of the 500 in ``tests/test_plan_missing_slot_api.py``.
+    """
+    main = make_recipe("Roast Chicken")
+    db_session.flush()
+    _plan_with(db_session, user, main, [])
+
+    db_session.delete(main)
+    db_session.flush()
+    db_session.expire_all()
+
+    assert _meal(db_session, user) is None

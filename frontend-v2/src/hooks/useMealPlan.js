@@ -24,14 +24,20 @@ const mealNumberOf = (meal, mealIndex) => meal?.meal_number ?? mealIndex + 1
 const persistDays = async (anchorDate, daysMap) => {
   const recipes = await recipesApi.fetchAll()
   const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
+  // The slot travels with the meal: dropping the empty slots of a gapped day
+  // would otherwise renumber every meal after the gap on the server, which
+  // numbers a day's meals by their position in this list.
   const serialise = (dayMeals) =>
-    dayMeals
-      .filter(Boolean)
-      .map((m) => ({
-        main_id: titleToId[m.recipe],
-        side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
-        leftover: m.leftover,
-      }))
+    dayMeals.flatMap((m, i) =>
+      m
+        ? [{
+            main_id: titleToId[m.recipe],
+            side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
+            leftover: m.leftover,
+            meal_number: mealNumberOf(m, i),
+          }]
+        : []
+    )
   const plan = Object.fromEntries(
     Object.entries(daysMap).map(([day, meals]) => [day, serialise(meals)])
   )

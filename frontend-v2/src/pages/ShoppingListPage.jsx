@@ -84,7 +84,8 @@ export default function ShoppingListPage() {
       const data = await mealPlansApi.fetchRange(startDate, endDate || startDate)
       const list = []
       Object.entries(data || {}).forEach(([day, meals]) => {
-        meals.forEach((m) => {
+        // A day is indexed by meal_number, so an unfilled slot arrives as null.
+        meals.filter(Boolean).forEach((m) => {
           list.push({
             planDate: day,
             mealNumber: m.meal_number,

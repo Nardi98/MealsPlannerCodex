@@ -769,18 +769,26 @@ def set_meal_plan(
                 main_id = meal
                 side_ids: List[int] = []
                 leftover = False
+                number = None
             elif isinstance(meal, dict):
                 main_id = meal.get("main_id")
                 side_ids = list(meal.get("side_ids", []) or [])
                 leftover = bool(meal.get("leftover", False))
+                number = meal.get("meal_number")
             else:
                 main_id = getattr(meal, "main_id")
                 side_ids = list(getattr(meal, "side_ids", []) or [])
                 leftover = bool(getattr(meal, "leftover", False))
+                number = getattr(meal, "meal_number", None)
 
-            new_recipe_by_number[index] = main_id
+            # Position is only a fallback: a caller that omitted an empty slot
+            # sends the slot explicitly so the meals after the gap are not
+            # shifted up into the wrong one.
+            number = index if number is None else number
+
+            new_recipe_by_number[number] = main_id
             meal_obj = Meal(
-                meal_number=index,
+                meal_number=number,
                 recipe_id=main_id,
                 accepted=False,
                 people=default_people,
@@ -790,7 +798,7 @@ def set_meal_plan(
                 ],
             )
             meal_plan.meals.append(meal_obj)
-            entries.append((meal_obj, plan_date, index, main_id, leftover))
+            entries.append((meal_obj, plan_date, number, main_id, leftover))
 
         # A source position whose recipe changed (or was removed) leaves its
         # leftovers orphaned; schedule them for cascade removal.
@@ -937,7 +945,7 @@ def get_plan(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     user_id: int | None = None,
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> Dict[str, List[Optional[Dict[str, Any]]]]:
     """Fetch a plan from the database.
 
     The database is the single source of truth. When ``start_date`` and

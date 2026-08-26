@@ -63,3 +63,19 @@ test('ingredient amounts are scaled by the meal people count', async () => {
   // A is cooked for 2 people, so 1 kg of ing1 becomes 2 kg.
   expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
 })
+
+test('a day with an empty lunch slot still builds a list', async () => {
+  // The backend serves a day as an array indexed by meal_number, so a slot with
+  // no meal arrives as a null the page must skip rather than dereference.
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      null,
+      { recipe: 'B', side_recipes: [], leftover: false, meal_number: 2, people: 2 },
+    ],
+  })
+
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('B')).toBeInTheDocument()
+})
