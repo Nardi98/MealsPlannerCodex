@@ -230,7 +230,7 @@ def test_the_copy_snapshots_the_immediate_source(
     assert made.copied_at is not None
 
 
-def test_the_source_counts_the_copy(
+def test_the_source_counts_a_copy_made_from_the_inbox(
     client, db_session, make_recipe, user, recipient
 ):
     """AT-7."""
@@ -256,7 +256,7 @@ def test_copying_twice_warns_the_second_time(
     ] is True
 
 
-def test_the_owner_cannot_copy_their_own_recipe(
+def test_the_owner_cannot_copy_their_own_recipe_from_the_inbox(
     db_session, make_recipe, user, recipient
 ):
     """CP-10: 403, since the caller demonstrably already holds the row."""

@@ -1,15 +1,106 @@
-"""Step 3b tests: recipes / ingredients / tags routes are private per user.
+"""Two accounts sharing one database never see each other's rows.
 
-Each request runs through the real FastAPI routes with ``get_db`` pinned to the
-test session and ``get_current_user`` overridden to a chosen user, so switching
-the override simulates a different logged-in account against shared storage.
+Two layers, kept in one module because they defend the same invariant:
+
+- *Schema* (step 3a): ownership columns, per-user uniqueness, and the
+  ``meal_plans`` PK -- proving two users can independently hold same-named
+  tags/ingredients and same-date plans, since uniqueness is scoped per user
+  rather than globally.
+- *Routes* (step 3b): recipes / ingredients / tags are private per user. Each
+  request runs through the real FastAPI routes with ``get_db`` pinned to the
+  test session and ``get_current_user`` overridden to a chosen user, so
+  switching the override simulates a different logged-in account against
+  shared storage.
+
+Plan-scoped isolation (settings, import/export ownership, registration
+seeding) lives in ``test_multiuser_plan_isolation.py``.
 """
+
+from datetime import date
+
+import pytest
 
 import crud
 from conftest import client_as as _client, db_client
 from main import app
+from models import Ingredient, Meal, MealPlan, Tag
 
 
+# ---------------------------------------------------------------------------
+# Schema layer
+# ---------------------------------------------------------------------------
+def test_two_users_same_named_tag(db_session, user, other_user):
+    a, b = user, other_user
+    db_session.add_all([
+        Tag(name="pasta", user_id=a.id),
+        Tag(name="pasta", user_id=b.id),
+    ])
+    db_session.commit()
+    assert db_session.query(Tag).filter_by(name="pasta").count() == 2
+
+
+def test_same_user_duplicate_tag_rejected(db_session, user):
+    a = user
+    db_session.add_all([
+        Tag(name="pasta", user_id=a.id),
+        Tag(name="pasta", user_id=a.id),
+    ])
+    with pytest.raises(Exception):
+        db_session.commit()
+    db_session.rollback()
+
+
+def test_two_users_same_named_ingredient(db_session, user, other_user):
+    a, b = user, other_user
+    db_session.add_all([
+        Ingredient(name="Tomato", user_id=a.id),
+        Ingredient(name="Tomato", user_id=b.id),
+    ])
+    db_session.commit()
+    assert db_session.query(Ingredient).filter_by(name="Tomato").count() == 2
+
+
+def test_same_user_duplicate_ingredient_rejected(db_session, user):
+    a = user
+    db_session.add_all([
+        Ingredient(name="Tomato", user_id=a.id),
+        Ingredient(name="Tomato", user_id=a.id),
+    ])
+    with pytest.raises(Exception):
+        db_session.commit()
+    db_session.rollback()
+
+
+def test_two_users_same_date_meal_plan(db_session, user, other_user):
+    a, b = user, other_user
+    day = date(2026, 1, 1)
+    db_session.add_all([
+        MealPlan(plan_date=day, user_id=a.id),
+        MealPlan(plan_date=day, user_id=b.id),
+    ])
+    db_session.commit()
+    assert db_session.query(MealPlan).filter_by(plan_date=day).count() == 2
+
+
+def test_meals_scoped_by_user(db_session, user, other_user):
+    a, b = user, other_user
+    day = date(2026, 1, 1)
+    db_session.add_all([
+        MealPlan(plan_date=day, user_id=a.id),
+        MealPlan(plan_date=day, user_id=b.id),
+    ])
+    db_session.flush()
+    db_session.add_all([
+        Meal(user_id=a.id, plan_date=day, meal_number=1),
+        Meal(user_id=b.id, plan_date=day, meal_number=1),
+    ])
+    db_session.commit()
+    assert db_session.query(Meal).filter_by(plan_date=day, meal_number=1).count() == 2
+
+
+# ---------------------------------------------------------------------------
+# Route layer
+# ---------------------------------------------------------------------------
 def _recipe_payload(title, **over):
     payload = {
         "title": title,
@@ -95,8 +186,6 @@ def test_tags_are_private_per_user(db_session):
 
 
 def test_feedback_is_scoped_to_owner(db_session):
-    from datetime import date
-
     a, b = _two_users(db_session)
     try:
         ca = _client(db_session, a)

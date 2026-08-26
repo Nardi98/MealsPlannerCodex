@@ -1,8 +1,11 @@
 """Step 3c tests: meal plans / settings / export are private per user.
 
-Mirrors ``test_multiuser_isolation`` (Step 3b) but covers the planner side of
-the app: plans, meals, side dishes, per-user plan settings, and scoped
-export/import/clear.
+The planner half of the per-user isolation split. This file owns plans,
+meals, side dishes, per-user plan settings, and scoped export/import/clear;
+``test_multiuser_isolation`` owns recipes, ingredients and tags, at both the
+schema and the route layer. The two are split because the planner side pulls
+in ``mealplanner.planner`` and ``DEFAULT_PLAN_SETTINGS``, a materially heavier
+dependency surface than the CRUD side.
 """
 
 from datetime import date
