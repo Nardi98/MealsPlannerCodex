@@ -26,8 +26,17 @@ from scoping import scope
 # usable without adding ingredients one by one. Loaded once at import from a
 # JSON fixture that non-coders can extend. Each entry is
 # ``{"name", "unit", "season_months": [int], "categories": [str]}``.
-_SYSTEM_INGREDIENTS_PATH = Path(__file__).resolve().parent.parent / "data" / "system_ingredients.json"
-SYSTEM_INGREDIENTS: list[dict] = json.loads(_SYSTEM_INGREDIENTS_PATH.read_text(encoding="utf-8"))
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+SYSTEM_INGREDIENTS: list[dict] = json.loads(
+    (_DATA_DIR / "system_ingredients.json").read_text(encoding="utf-8")
+)
+
+# Curated system tags, same story: one data file, read by the backend here and
+# by the starter pack's tests across the repo. Format tags carry the repetition
+# penalty; attribute tags do not (repeating them every meal is fine).
+SYSTEM_TAGS: list[dict] = json.loads(
+    (_DATA_DIR / "system_tags.json").read_text(encoding="utf-8")
+)
 
 
 # ---------------------------------------------------------------------------
@@ -75,17 +84,6 @@ def _create_recipe(
         recipe.tags.append(crud.get_or_create_tag(session, tag_name))
 
 
-# Curated system tags. Format tags carry the repetition penalty; attribute
-# tags do not (repeating them every meal is fine).
-_PENALIZED_SYSTEM_TAGS = [
-    "pasta", "soup", "risotto", "rice", "pizza", "salad", "stew", "roast",
-    "sandwich", "curry", "noodles", "gnocchi",
-]
-_NEUTRAL_SYSTEM_TAGS = [
-    "vegetarian", "vegan", "quick", "cheap", "spicy", "gluten-free", "breakfast",
-]
-
-
 def seed_system_tags(session: Session, user_id: int | None = None) -> None:
     """Idempotently upsert the curated system tags for ``user_id``.
 
@@ -99,8 +97,7 @@ def seed_system_tags(session: Session, user_id: int | None = None) -> None:
     startup for each existing account.
     """
 
-    curated = {name: True for name in _PENALIZED_SYSTEM_TAGS}
-    curated.update({name: False for name in _NEUTRAL_SYSTEM_TAGS})
+    curated = {entry["name"]: entry["penalize_repetition"] for entry in SYSTEM_TAGS}
 
     session.flush()
     stmt = scope(select(Tag).where(Tag.name.in_(curated)), Tag.user_id, user_id)

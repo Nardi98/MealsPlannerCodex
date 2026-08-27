@@ -191,5 +191,22 @@
   { "name": "Ricotta Salata", "unit": "g", "season_months": [], "categories": ["Dairy & Eggs", "Protein"] },
   { "name": "Smoked Salmon", "unit": "g", "season_months": [], "categories": ["Fish", "Protein"] },
   { "name": "Rice Vinegar", "unit": "ml", "season_months": [], "categories": ["Condiments & Oils"] },
-  { "name": "Harissa", "unit": "g", "season_months": [], "categories": ["Herbs & Spices", "Condiments & Oils"] }
+  { "name": "Harissa", "unit": "g", "season_months": [], "categories": ["Herbs & Spices", "Condiments & Oils"] },
+
+  { "name": "Bulgur", "unit": "g", "season_months": [], "categories": ["Grains & Pasta", "Carbs"] },
+  { "name": "Capers", "unit": "g", "season_months": [], "categories": ["Condiments & Oils", "Vegetables"] },
+  { "name": "Celeriac", "unit": "g", "season_months": [10, 11, 12, 1, 2], "categories": ["Vegetables"] },
+  { "name": "Cornstarch", "unit": "g", "season_months": [], "categories": ["Grains & Pasta", "Carbs"] },
+  { "name": "Hazelnuts", "unit": "g", "season_months": [], "categories": ["Nuts & Seeds", "High-calorie", "Plant-based"] },
+  { "name": "Miso Paste", "unit": "g", "season_months": [], "categories": ["Condiments & Oils", "Plant-based"] },
+  { "name": "Nutritional Yeast", "unit": "g", "season_months": [], "categories": ["Condiments & Oils", "Plant-based"] },
+  { "name": "Puff Pastry", "unit": "g", "season_months": [], "categories": ["Grains & Pasta", "Carbs", "High-calorie"] },
+  { "name": "Quark", "unit": "g", "season_months": [], "categories": ["Dairy & Eggs", "Protein"] },
+  { "name": "Radicchio", "unit": "g", "season_months": [10, 11, 12, 1, 2], "categories": ["Vegetables"] },
+  { "name": "Rice Paper", "unit": "piece", "season_months": [], "categories": ["Grains & Pasta", "Carbs"] },
+  { "name": "Smoked Paprika", "unit": "g", "season_months": [], "categories": ["Herbs & Spices"] },
+  { "name": "Smoked Tofu", "unit": "g", "season_months": [], "categories": ["Legumes", "Protein", "Plant-based"] },
+  { "name": "Soy Chunks", "unit": "g", "season_months": [], "categories": ["Legumes", "Protein", "Plant-based"] },
+  { "name": "Sun-dried Tomatoes", "unit": "g", "season_months": [], "categories": ["Vegetables", "Condiments & Oils"] },
+  { "name": "Swiss Chard", "unit": "g", "season_months": [3, 4, 5, 10, 11], "categories": ["Vegetables", "Fiber"] }
 ]

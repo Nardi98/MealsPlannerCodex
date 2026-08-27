@@ -1,0 +1,22 @@
+[
+  { "name": "pasta", "penalize_repetition": true },
+  { "name": "soup", "penalize_repetition": true },
+  { "name": "risotto", "penalize_repetition": true },
+  { "name": "rice", "penalize_repetition": true },
+  { "name": "pizza", "penalize_repetition": true },
+  { "name": "salad", "penalize_repetition": true },
+  { "name": "stew", "penalize_repetition": true },
+  { "name": "roast", "penalize_repetition": true },
+  { "name": "sandwich", "penalize_repetition": true },
+  { "name": "curry", "penalize_repetition": true },
+  { "name": "noodles", "penalize_repetition": true },
+  { "name": "gnocchi", "penalize_repetition": true },
+  { "name": "vegetarian", "penalize_repetition": false },
+  { "name": "vegan", "penalize_repetition": false },
+  { "name": "meat", "penalize_repetition": false },
+  { "name": "quick", "penalize_repetition": false },
+  { "name": "cheap", "penalize_repetition": false },
+  { "name": "spicy", "penalize_repetition": false },
+  { "name": "gluten-free", "penalize_repetition": false },
+  { "name": "breakfast", "penalize_repetition": false }
+]

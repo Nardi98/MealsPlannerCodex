@@ -4,6 +4,7 @@ from sqlalchemy import select
 from models import CATEGORIES, Recipe, Ingredient, RecipeIngredient, Tag, UnitEnum
 from mealplanner.seed import (
     SYSTEM_INGREDIENTS,
+    SYSTEM_TAGS,
     seed_sample_data,
     seed_system_ingredients,
     seed_system_tags,
@@ -150,3 +151,23 @@ def test_seed_system_ingredients_scoped_to_user(db_session, user):
 
     assert len(owned) == len(SYSTEM_INGREDIENTS)
     assert others == []
+
+
+def test_seed_system_tags_includes_meat(db_session):
+    # ``meat`` is descriptive, not a format tag: repeating it is fine, so it
+    # must not carry the repetition penalty.
+    seed_system_tags(db_session)
+
+    meat = db_session.execute(select(Tag).where(Tag.name == "meat")).scalar_one()
+    assert meat.is_system is True
+    assert meat.penalize_repetition is False
+
+
+def test_system_tags_fixture_is_valid():
+    # Guards hand-edits to data/system_tags.json, which the starter pack's
+    # frontend test reads as the tag vocabulary it is allowed to use.
+    names = [entry["name"] for entry in SYSTEM_TAGS]
+    assert len(names) == len(set(names)), "duplicate tag names in fixture"
+    for entry in SYSTEM_TAGS:
+        assert entry["name"] == entry["name"].lower(), entry
+        assert isinstance(entry["penalize_repetition"], bool), entry

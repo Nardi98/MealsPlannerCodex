@@ -144,6 +144,7 @@ TAGS: list[tuple[str, bool, bool]] = [
     ("curry", True, True),
     ("vegetarian", False, True),
     ("vegan", False, True),
+    ("meat", False, True),
     ("quick", False, True),
     ("cheap", False, True),
     ("spicy", False, True),

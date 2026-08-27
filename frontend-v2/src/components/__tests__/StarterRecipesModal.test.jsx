@@ -36,55 +36,55 @@ function renderModal(props = {}) {
   )
 }
 
+// Every test waits on the same first row, so the wait lives in the helper.
+async function renderAndWait(props) {
+  renderModal(props)
+  await screen.findByRole('heading', { level: 4, name: 'First courses' })
+}
+
 const addButton = () => screen.getByRole('button', { name: /^Add \d+ recipes?$/ })
 
-test('renders every recipe, grouped, with Other last', async () => {
-  renderModal()
-  await screen.findByText('Creamy Pasta e Ceci')
+test('renders every recipe, grouped by course', async () => {
+  await renderAndWait()
 
-  const groups = groupStarterRecipes(STARTER_RECIPES)
   const headings = screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent)
-  expect(headings).toEqual(groups.map((g) => g.label))
-  expect(headings[headings.length - 1]).toBe('Other')
-  expect(screen.getAllByRole('checkbox')).toHaveLength(STARTER_RECIPES.length + groups.length)
+  expect(headings).toEqual(['First courses', 'Mains', 'Sides'])
+  expect(screen.getAllByRole('checkbox')).toHaveLength(STARTER_RECIPES.length + headings.length)
 })
 
 test('every recipe starts selected', async () => {
-  renderModal()
-  await screen.findByText('Creamy Pasta e Ceci')
+  await renderAndWait()
   expect(addButton()).toHaveTextContent(`Add ${STARTER_RECIPES.length} recipes`)
-  expect(screen.getByLabelText('Creamy Pasta e Ceci')).toBeChecked()
+  expect(screen.getByLabelText('Pasta alla Norma')).toBeChecked()
 })
 
 test('deselect all empties the selection and disables the add button', async () => {
-  renderModal()
-  await screen.findByText('Creamy Pasta e Ceci')
+  await renderAndWait()
 
   fireEvent.click(screen.getByRole('button', { name: 'Deselect all' }))
 
-  expect(screen.getByLabelText('Creamy Pasta e Ceci')).not.toBeChecked()
+  expect(screen.getByLabelText('Pasta alla Norma')).not.toBeChecked()
   expect(addButton()).toBeDisabled()
 
   fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
   expect(addButton()).toHaveTextContent(`Add ${STARTER_RECIPES.length} recipes`)
 })
 
-test('a group checkbox toggles only that group', async () => {
-  renderModal()
-  await screen.findByText('Creamy Pasta e Ceci')
+test('a section checkbox toggles only that section', async () => {
+  await renderAndWait()
 
-  const pastaCount = groupStarterRecipes(STARTER_RECIPES).find((g) => g.key === 'pasta').recipes.length
-  fireEvent.click(screen.getByLabelText('Pasta', { selector: 'input' }))
+  const firstCount = groupStarterRecipes(STARTER_RECIPES)
+    .find((g) => g.key === 'first-course').recipes.length
+  fireEvent.click(screen.getByLabelText('First courses', { selector: 'input' }))
 
-  expect(screen.getByLabelText('Creamy Pasta e Ceci')).not.toBeChecked()
+  expect(screen.getByLabelText('Pasta alla Norma')).not.toBeChecked()
   expect(screen.getByLabelText('Shakshuka')).toBeChecked()
-  expect(addButton()).toHaveTextContent(`Add ${STARTER_RECIPES.length - pastaCount} recipes`)
+  expect(addButton()).toHaveTextContent(`Add ${STARTER_RECIPES.length - firstCount} recipes`)
 })
 
 test('importing creates only the ticked recipes and reuses the owned ingredients', async () => {
   const onImported = vi.fn()
-  renderModal({ onImported })
-  await screen.findByText('Creamy Pasta e Ceci')
+  await renderAndWait({ onImported })
 
   fireEvent.click(screen.getByRole('button', { name: 'Deselect all' }))
   fireEvent.click(screen.getByLabelText('Tuna and Cherry Tomato Pasta'))
@@ -113,8 +113,7 @@ test('importing creates only the ticked recipes and reuses the owned ingredients
 test('a failed creation keeps the modal open and reports what failed', async () => {
   const onImported = vi.fn()
   recipesApi.create.mockRejectedValueOnce(new Error('boom'))
-  renderModal({ onImported })
-  await screen.findByText('Creamy Pasta e Ceci')
+  await renderAndWait({ onImported })
 
   fireEvent.click(screen.getByRole('button', { name: 'Deselect all' }))
   fireEvent.click(screen.getByLabelText('Shakshuka'))
@@ -128,8 +127,7 @@ test('a failed creation keeps the modal open and reports what failed', async () 
 
 test('Maybe later closes without creating anything', async () => {
   const onClose = vi.fn()
-  renderModal({ onClose })
-  await screen.findByText('Creamy Pasta e Ceci')
+  await renderAndWait({ onClose })
 
   fireEvent.click(screen.getByRole('button', { name: 'Maybe later' }))
 
