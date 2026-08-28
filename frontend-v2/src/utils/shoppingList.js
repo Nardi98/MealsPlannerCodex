@@ -1,28 +1,51 @@
 import { format } from 'date-fns'
+import { basisOf } from './servings'
 
 // Round to 2 decimals, dropping floating-point noise (e.g. 0.333 * 3 -> 1).
 const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// The fractions worth spelling out; anything else falls back to a decimal.
+const FRACTIONS = { 0.25: '¼', 0.5: '½', 0.75: '¾' };
+
+/**
+ * How much of one recipe a meal actually cooks, as a label to show beside it.
+ *
+ * Quantities are stored for `servings` people, so a meal for `people` needs
+ * `people / servings` of the recipe. Null at exactly one batch -- there is
+ * nothing to point out when you cook the recipe as written.
+ */
+export function batchLabel(people, servings) {
+  const factor = people / basisOf(servings);
+  if (factor === 1) return null;
+
+  const whole = Math.floor(factor);
+  const fraction = FRACTIONS[round2(factor - whole)];
+  if (fraction) return `×${whole || ''}${fraction}`;
+  return `×${round2(factor)}`;
+}
 
 /**
  * Aggregate a shopping list from meal occurrences.
  *
  * Each item is one recipe instance (a meal's main dish, or one of its sides)
- * tagged with `people` — the number of people that meal is cooked for. Recipes
- * are authored for a single serving, so every ingredient amount is multiplied
- * by `people` before summing. A non-numeric amount stays `null` (shown without
- * a quantity), and any occurrence with a `null` amount makes the merged total
- * `null`. Summed amounts are rounded to 2 decimals.
+ * tagged with `people` -- the number of people that meal is cooked for -- and
+ * `servings`, the number the recipe's quantities were written for. Every
+ * ingredient amount is scaled by `people / servings` before summing. A
+ * non-numeric amount stays `null` (shown without a quantity), and any
+ * occurrence with a `null` amount makes the merged total `null`. Summed
+ * amounts are rounded to 2 decimals.
  */
 export function buildShoppingList(items = []) {
   const map = new Map();
 
-  items.forEach(({ people = 1, ingredients = [] }) => {
+  items.forEach(({ people = 1, servings, ingredients = [] }) => {
+    const scale = people / basisOf(servings);
     ingredients.forEach((ing) => {
       const name = (ing.name || '').trim();
       const unit = ing.unit || '';
       const key = name.toLowerCase() + '||' + unit;
       const amount =
-        typeof ing.amount === 'number' ? ing.amount * people : null;
+        typeof ing.amount === 'number' ? ing.amount * scale : null;
 
       if (map.has(key)) {
         const existing = map.get(key);

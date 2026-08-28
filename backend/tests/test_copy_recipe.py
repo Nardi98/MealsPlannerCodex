@@ -159,6 +159,15 @@ def test_quantities_and_units_survive_the_copy(db_session, source, copier):
     } == {"Tomato": 400.0, "Beef": 300.0}
 
 
+def test_the_servings_basis_survives_the_copy(db_session, source, copier):
+    """Quantities are copied verbatim, so the basis they were written for must
+    come with them -- otherwise the copy silently means something else."""
+    source.servings = 4
+    db_session.flush()
+    made = copy_module.copy_recipe(db_session, source, copier)
+    assert made.servings == 4
+
+
 def test_the_copy_starts_private_with_no_page_and_no_copies(
     db_session, source, copier
 ):

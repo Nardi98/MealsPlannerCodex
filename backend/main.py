@@ -847,6 +847,7 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
         "procedure": payload.procedure,
         "bulk_prep": payload.bulk_prep,
         "image_url": payload.image_url,
+        "servings": payload.servings,
         # ``RecipeIn`` has already rejected ``public`` (VIS-5), so anything
         # reaching here is ``private`` or ``unlisted``. Note the attribution
         # snapshot is deliberately absent: it is not a client-writable field

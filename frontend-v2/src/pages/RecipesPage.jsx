@@ -19,6 +19,7 @@ import {
   ShareRecipeModal,
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
+import { basisOf, peopleLabel } from '../utils/servings'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ingredientsApi } from '../api/ingredientsApi'
@@ -390,7 +391,8 @@ export default function RecipesPage() {
                 className="flex items-center gap-1"
                 style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}
               >
-                {r.course} · {(r.ingredients || []).length} ingredients
+                {r.course} · {(r.ingredients || []).length} ingredients ·
+                serves {basisOf(r.servings)}
               </div>
               <div className="mt-auto flex flex-wrap gap-1">
                 {(r.tags || []).slice(0, 2).map((t) => (
@@ -442,7 +444,10 @@ export default function RecipesPage() {
               </div>
             )}
             <div>
-              <div style={sectionHeadingStyle}>Ingredients</div>
+              <div style={sectionHeadingStyle}>
+                Ingredients for {basisOf(openRecipe.servings)}{' '}
+                {peopleLabel(basisOf(openRecipe.servings))}
+              </div>
               <ul
                 style={{
                   margin: '0 0 12px',

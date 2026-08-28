@@ -1078,7 +1078,7 @@ def set_meal_people(
     """Set how many people a specific meal is cooked for.
 
     The shopping list scales this meal's ingredients (and its sides') by
-    ``people``. Returns ``None`` when the slot is missing.
+    ``people / Recipe.servings``. Returns ``None`` when the slot is missing.
     """
 
     meal = _get_meal(session, plan_date, meal_number, user_id)
@@ -1441,20 +1441,21 @@ def clear_data(session: Session, user_id: int | None) -> None:
     session.commit()
 
 
-def _legacy_servings_basis(rec_info: Dict[str, Any]) -> float:
+def _payload_servings(rec_info: Dict[str, Any]) -> int:
     """How many people this payload entry's quantities were written for.
 
-    Exports predating the removal of ``Recipe.servings_default`` stated their
-    quantities for that many people; today a recipe is always stored per person.
-    Importing an old backup verbatim would silently multiply every shopping list
-    and share page by the old value, so quantities are divided by this basis on
-    the way in. Anything missing or unusable means "already per person".
+    That is exactly what ``Recipe.servings`` records, so the quantities are
+    imported untouched. ``servings_default`` is the same field's name in exports
+    written before the rename and is accepted as a fallback. Anything missing or
+    unusable means "written for one person", which is what every export lacking
+    the key meant.
     """
+    raw = rec_info.get("servings", rec_info.get("servings_default"))
     try:
-        basis = float(rec_info.get("servings_default") or 1)
+        basis = int(raw)
     except (TypeError, ValueError):
-        return 1.0
-    return basis if basis > 0 else 1.0
+        return 1
+    return basis if basis >= 1 else 1
 
 
 def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None) -> Recipe:
@@ -1473,6 +1474,7 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
         bulk_prep=rec_info.get("bulk_prep", False),
         course=rec_info.get("course", "main"),
         image_url=rec_info.get("image_url"),
+        servings=_payload_servings(rec_info),
         score=rec_info.get("score"),
         date_last_consumed=date.fromisoformat(consumed) if consumed else None,
     )
@@ -1561,7 +1563,6 @@ def import_data(
             if rec_id is not None:
                 recipe_id_map[rec_id] = recipe.id
 
-            basis = _legacy_servings_basis(rec_info)
             for ing_info in rec_info.get("ingredients", []):
                 months = ing_info.get("season_months")
                 if isinstance(months, str):
@@ -1574,13 +1575,10 @@ def import_data(
                     ingredient_obj.season_months = months
                 unit_val = ing_info.get("unit")
                 unit = UnitEnum(unit_val) if unit_val else None
-                quantity = ing_info.get("quantity")
-                if quantity is not None and basis != 1:
-                    quantity = round(quantity / basis, 2)
                 recipe.ingredients.append(
                     RecipeIngredient(
                         ingredient=ingredient_obj,
-                        quantity=quantity,
+                        quantity=ing_info.get("quantity"),
                         unit=unit,
                     )
                 )
@@ -1683,6 +1681,7 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                     "bulk_prep": recipe.bulk_prep,
                     "course": recipe.course,
                     "image_url": recipe.image_url,
+                    "servings": recipe.servings,
                     "score": recipe.score,
                     "date_last_consumed": (
                         recipe.date_last_consumed.isoformat()

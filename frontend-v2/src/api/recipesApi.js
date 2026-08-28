@@ -1,4 +1,5 @@
-import { request } from './client';
+import { request } from './client'
+import { basisOf } from '../utils/servings';
 
 const ALL_MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -9,6 +10,8 @@ function normaliseRecipe(recipe) {
     course: recipe.course,
     score: recipe.score,
     image_url: recipe.image_url ?? null,
+    // How many people the ingredient amounts below were written for.
+    servings: basisOf(recipe.servings),
     hot: recipe.bulk_prep ?? false,
     tags: (recipe.tags || []).map((t) => (t.name ? t.name : t)),
     ingredients: (recipe.ingredients || []).map((ing) => ({
@@ -44,6 +47,7 @@ function serialiseRecipe(recipe) {
     procedure: recipe.procedure,
     bulk_prep: recipe.hot || false,
     image_url: recipe.image_url || null,
+    servings: basisOf(recipe.servings),
     tags: recipe.tags || [],
     favorite_side_ids: recipe.favorite_side_ids || [],
     ingredients: (recipe.ingredients || []).map((ing) => ({

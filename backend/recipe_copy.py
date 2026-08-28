@@ -106,6 +106,9 @@ def _duplicate(
         procedure=source.procedure,
         course=source.course,
         image_url=source.image_url,
+        # Quantities are copied verbatim below, so the basis they were written
+        # for has to come with them or the copy means something else.
+        servings=source.servings,
         # CP-4. Spelled out rather than left to the column defaults so the
         # requirement is visible at the point it is satisfied.
         visibility="private",

@@ -12,8 +12,10 @@
 // * every tag must be one of the system tags seeded by
 //   backend/mealplanner/seed.py -- the pack introduces no tag vocabulary.
 //
-// Quantities are **per person**, the basis models.Recipe stores and the
-// shopping list scales from. `minutes` is shown in the modal to help the user
+// Quantities are written for one person unless the entry says otherwise with
+// `servings` -- the head-count models.Recipe stores and the shopping list
+// divides by. A recipe that would otherwise ask for a fraction of a countable
+// thing (half an egg) states a larger basis instead. `minutes` is shown in the modal to help the user
 // choose and is deliberately not persisted: Recipe has no time column.
 
 export const STARTER_RECIPES = [
@@ -90,15 +92,17 @@ export const STARTER_RECIPES = [
     title: 'Spaghetti Carbonara',
     minutes: 25,
     course: 'first-course',
+    // Written for two: carbonara for one needs half an egg, which nobody does.
+    servings: 2,
     bulk_prep: false,
     tags: ['pasta', 'meat', 'quick'],
     blurb: 'Eggs, cheese, pepper and pasta water -- no cream anywhere.',
     ingredients: [
-      { name: 'Spaghetti', quantity: 90, unit: 'g' },
-      { name: 'Bacon', quantity: 60, unit: 'g' },
-      { name: 'Egg', quantity: 1.5, unit: 'piece' },
-      { name: 'Parmesan', quantity: 30, unit: 'g' },
-      { name: 'Black Pepper', quantity: 2, unit: 'g' },
+      { name: 'Spaghetti', quantity: 180, unit: 'g' },
+      { name: 'Bacon', quantity: 120, unit: 'g' },
+      { name: 'Egg', quantity: 3, unit: 'piece' },
+      { name: 'Parmesan', quantity: 60, unit: 'g' },
+      { name: 'Black Pepper', quantity: 4, unit: 'g' },
     ],
     procedure: [
       'Render the bacon slowly until crisp and keep the fat.',

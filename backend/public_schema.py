@@ -56,8 +56,9 @@ class PublicRecipe(BaseModel):
 
     title: str
     image_url: str | None = None
-    # Not recipe state: always 1 from ``from_recipe``, set by ``scaled_to`` so
-    # the page can echo the chosen head-count back into its servings form.
+    # The head-count these quantities are for: the recipe's authored basis from
+    # ``from_recipe``, the requested target after ``scaled_to``, so the page can
+    # echo the chosen head-count back into its servings form.
     servings: int
     procedure: str | None = None
     ingredients: list[PublicIngredient] = []
@@ -86,7 +87,7 @@ class PublicRecipe(BaseModel):
         return cls(
             title=recipe.title,
             image_url=recipe.image_url,
-            servings=1,
+            servings=recipe.servings,
             procedure=recipe.procedure,
             ingredients=[
                 PublicIngredient(
@@ -106,16 +107,17 @@ class PublicRecipe(BaseModel):
     def scaled_to(self, servings: int) -> "PublicRecipe":
         """SP-2: a copy scaled to ``servings``, leaving ``self`` untouched.
 
-        Quantities come out of :meth:`from_recipe` per person, so the target
-        head-count *is* the factor. Scaling happens on the server so the page
-        works with JavaScript off. A non-positive or unchanged target is a no-op
-        rather than an error: the input arrives from a query string on an
-        unauthenticated page, so it must degrade rather than raise.
+        Quantities come out of :meth:`from_recipe` for ``self.servings`` people,
+        so the factor is the ratio between the target and that basis -- not the
+        target itself. Scaling happens on the server so the page works with
+        JavaScript off. A non-positive or unchanged target is a no-op rather than
+        an error: the input arrives from a query string on an unauthenticated
+        page, so it must degrade rather than raise.
         """
         if servings <= 0 or servings == self.servings:
             return self.model_copy(deep=True)
 
-        factor = float(servings)
+        factor = servings / self.servings
         scaled = self.model_copy(deep=True)
         scaled.servings = servings
         for line in scaled.ingredients:

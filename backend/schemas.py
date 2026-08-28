@@ -203,12 +203,16 @@ class RecipeSummary(BaseModel):
 
 
 class RecipeIn(BaseModel):
-    # Ingredient quantities are for one person; see ``models.Recipe``.
+    # Ingredient quantities are as authored, for ``servings`` people; see
+    # ``models.Recipe``. Readers scale by ``target / servings``.
     title: str
     procedure: Optional[str] = None
     bulk_prep: bool = False
     course: str = "main"
     image_url: Optional[str] = None
+    # The basis the quantities below were written for. Defaults to 1 so a client
+    # that predates the field still describes its payload correctly.
+    servings: int = Field(default=1, ge=1)
     tags: List[str] = []
     ingredients: List[IngredientIn] = []
     # Sides this main is habitually served with; the planner attaches one of
@@ -241,6 +245,7 @@ class RecipeOut(BaseModel):
     bulk_prep: bool
     course: str
     image_url: Optional[str] = None
+    servings: int = 1
     score: Optional[float] = None
     date_last_consumed: Optional[date] = None
     ingredients: List[IngredientOut] = []

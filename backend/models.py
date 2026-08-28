@@ -307,10 +307,11 @@ class UnitEnum(str, PyEnum):
 class Recipe(Base):
     """A meal that can be prepared and consumed.
 
-    Ingredient quantities are always stored **for one person**. Everything that
-    renders them scales up from there: the shopping list by ``Meal.people`` and
-    the public share page by its ``?servings=`` control. There is no column
-    recording a different basis, so nothing may write quantities in one.
+    Ingredient quantities are stored **exactly as authored**, for the number of
+    people in :attr:`servings`. Nothing rewrites them: everything that renders
+    them scales by ``target / servings`` -- the shopping list by ``Meal.people``,
+    the public share page by its ``?servings=`` control. Recipes predating this
+    column were written per person and so carry ``servings = 1``.
     """
 
     __tablename__ = "recipes"
@@ -325,6 +326,9 @@ class Recipe(Base):
     date_last_rejected = Column(Date)
     course = Column(String, nullable=False, default="main")
     image_url = Column(String, nullable=True)
+    # How many people the ingredient quantities above were written for. Never a
+    # scaling factor applied to storage -- only readers divide by it.
+    servings = Column(Integer, nullable=False, server_default="1", default=1)
 
     # --- Sharing (Part 1) ------------------------------------------------
     # VIS-2: private at the *database* level, so a row created by any path --
@@ -360,6 +364,7 @@ class Recipe(Base):
             "visibility IN ('private', 'unlisted', 'public')",
             name="ck_recipe_visibility",
         ),
+        CheckConstraint("servings >= 1", name="ck_recipe_servings_positive"),
     )
 
     # Relationship to ``RecipeIngredient`` association objects.
@@ -494,9 +499,11 @@ class Meal(Base):
     # deleted lunch used to break the whole plan.
     recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"))
     accepted = Column(Boolean, default=False)
-    # Number of people this meal is cooked for; the shopping list multiplies the
-    # recipe's (and its sides') ingredient amounts by it. Sides scale with their
-    # parent meal, so they carry no people column of their own.
+    # Number of people this meal is cooked for. The shopping list scales the
+    # recipe's (and its sides') ingredient amounts by ``people /
+    # Recipe.servings`` -- this is the numerator, the recipe's authored basis
+    # the denominator. Sides scale with their parent meal, so they carry no
+    # people column of their own.
     people = Column(
         Integer, nullable=False, server_default="2", default=DEFAULT_PEOPLE
     )

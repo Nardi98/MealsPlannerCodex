@@ -11,7 +11,11 @@ import {
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 import { authApi } from '../api/authApi'
-import { buildShoppingList, formatExportText } from '../utils/shoppingList'
+import {
+  buildShoppingList,
+  batchLabel,
+  formatExportText,
+} from '../utils/shoppingList'
 
 // Meal slots are numbered 1/2; the shopping list reads them back as dayparts.
 const MEAL_SLOT = { 1: 'Lunch', 2: 'Dinner' }
@@ -33,19 +37,46 @@ export default function ShoppingListPage() {
   const [crossed, setCrossed] = React.useState(new Set())
   const [merging, setMerging] = React.useState(false)
 
-  // Each occurrence contributes its main and every side, all scaled by the
-  // meal's own people count (sides scale with their parent meal).
-  const ingredients = React.useMemo(() => {
+  // One pass over the occurrences produces both halves of the page: the summed
+  // ingredient list, and the per-recipe batch labels the Recipes card shows.
+  // Every recipe is scaled from its own authored basis to the meal's people
+  // count (sides scale with their parent meal, which is why they carry the same
+  // head-count). A label is null when the meal cooks the recipe exactly as
+  // written, which is the common case and shows nothing.
+  const { ingredients, labelsByOccurrence } = React.useMemo(() => {
     const items = []
+    const labels = new Map()
+
     occurrences.forEach((o) => {
       const main = recipesByTitle.get(o.mainTitle)
-      if (main) items.push({ people: o.people, ingredients: main.ingredients })
-      o.sideTitles.forEach((title) => {
+      if (main) {
+        items.push({
+          people: o.people,
+          servings: main.servings,
+          ingredients: main.ingredients,
+        })
+      }
+      const sideLabels = o.sideTitles.map((title) => {
         const side = recipesByTitle.get(title)
-        if (side) items.push({ people: o.people, ingredients: side.ingredients })
+        if (side) {
+          items.push({
+            people: o.people,
+            servings: side.servings,
+            ingredients: side.ingredients,
+          })
+        }
+        return batchLabel(o.people, side?.servings)
+      })
+      labels.set(`${o.planDate}-${o.mealNumber}`, {
+        main: batchLabel(o.people, main?.servings),
+        sides: sideLabels,
       })
     })
-    return buildShoppingList(items)
+
+    return {
+      ingredients: buildShoppingList(items),
+      labelsByOccurrence: labels,
+    }
   }, [occurrences, recipesByTitle])
 
   const start = startDate ? new Date(startDate) : null
@@ -228,9 +259,12 @@ export default function ShoppingListPage() {
             </h2>
           </div>
           <ul className="space-y-2">
-            {occurrences.map((o) => (
+            {occurrences.map((o) => {
+              const key = `${o.planDate}-${o.mealNumber}`
+              const labels = labelsByOccurrence.get(key) || { sides: [] }
+              return (
               <li
-                key={`${o.planDate}-${o.mealNumber}`}
+                key={key}
                 className="border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3"
                 style={{ borderColor: 'var(--border)' }}
               >
@@ -240,10 +274,26 @@ export default function ShoppingListPage() {
                     {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
                     {o.leftover ? ' · leftover' : ''}
                   </div>
-                  <div>{o.mainTitle}</div>
+                  <div className="flex items-baseline gap-2">
+                    <span>{o.mainTitle}</span>
+                    {labels.main && (
+                      <span className="text-xs tabular-nums text-[color:var(--text-subtle)]">
+                        {labels.main}
+                      </span>
+                    )}
+                  </div>
                   {o.sideTitles.length > 0 && (
                     <div className="text-xs text-[color:var(--text-subtle)]">
-                      + {o.sideTitles.join(', ')}
+                      +{' '}
+                      {o.sideTitles.map((title, i) => (
+                        <React.Fragment key={title}>
+                          {i > 0 && ', '}
+                          {title}
+                          {labels.sides[i] && (
+                            <span className="tabular-nums"> {labels.sides[i]}</span>
+                          )}
+                        </React.Fragment>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -267,7 +317,8 @@ export default function ShoppingListPage() {
                   </Button>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </Card>
         <Card className="p-4 space-y-2">

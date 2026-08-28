@@ -6,6 +6,7 @@ import { ingredientsApi } from '../api/ingredientsApi'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ModalScrim } from './Modal'
+import { basisOf, peopleLabel } from '../utils/servings'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
@@ -114,6 +115,12 @@ const COURSES_WITH_SIDES = ['main']
 export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
   const [title, setTitle] = React.useState(initialRecipe?.title || '')
   const [course, setCourse] = React.useState(initialRecipe?.course || '')
+  // The head-count the ingredient quantities below are written for. Held as a
+  // string so the field can be cleared while typing; `servingsBasis` is the
+  // number everything else uses.
+  const [servings, setServings] = React.useState(
+    String(initialRecipe?.servings ?? 1),
+  )
   const [tags, setTags] = React.useState(initialRecipe?.tags || [])
   const [tagInput, setTagInput] = React.useState('')
   const [tagOptions, setTagOptions] = React.useState([])
@@ -190,11 +197,18 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
     loadOptions()
   }, [])
 
+  // The box is held as a string so it can be cleared while typing; a blank or
+  // nonsense one means "for one person".
+  const servingsBasis = basisOf(servings)
+
   const handleSubmit = (e) => {
     e.preventDefault()
     const recipe = {
       title,
       course,
+      // Only the basis is recorded. Quantities are saved exactly as typed --
+      // changing this number never rewrites them.
+      servings: servingsBasis,
       tags,
       ingredients: ingredients
         .filter((i) => i.name.trim())
@@ -264,6 +278,18 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
             </select>
           </div>
           <div className="space-y-1">
+            <label className="text-sm" htmlFor="recipe-servings">Serves</label>
+            <Input
+              id="recipe-servings"
+              type="number"
+              min={1}
+              step={1}
+              className="w-24"
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
             <label className="text-sm">Tags</label>
             <div className="flex items-start gap-6 flex-wrap">
               <TagDropdown
@@ -304,7 +330,9 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
           <div className="space-y-2">
             <label className="text-sm">Ingredients</label>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Enter the ingredients for a single serving of the recipe.
+              Quantities for {servingsBasis}{' '}
+              {peopleLabel(servingsBasis)} — enter them as the
+              recipe is written. Shopping lists scale from here.
             </p>
             {ingredients.map((ing, idx) => (
               <div key={idx} className="flex items-center gap-2">

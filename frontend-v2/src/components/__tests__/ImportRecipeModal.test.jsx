@@ -60,7 +60,7 @@ const pasteAndContinue = (raw) => {
 test('shows the chatbot prompt and a copy button', () => {
   render(<ImportRecipeModal onClose={() => {}} onCreated={() => {}} />)
   expect(screen.getByRole('button', { name: /copy prompt/i })).toBeInTheDocument()
-  expect(screen.getByText(/single serving/i)).toBeInTheDocument()
+  expect(screen.getByText(/EXACTLY as the recipe states it/i)).toBeInTheDocument()
 })
 
 test('shows an error for invalid pasted JSON and stays on the prompt step', () => {

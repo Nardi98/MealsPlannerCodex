@@ -51,8 +51,11 @@ def _create_recipe(
     tags: Iterable[str],
     *,
     course: str = "main",
+    servings: int = 1,
 ) -> None:
     """Create a recipe with ``ingredients`` and ``tags``.
+
+    ``ingredients`` are the quantities as authored, for ``servings`` people.
 
     This helper checks if a recipe with the given ``title`` already exists and
     only creates it when missing, making it safe to call repeatedly.
@@ -66,6 +69,7 @@ def _create_recipe(
         title=title,
         procedure=procedure,
         course=course,
+        servings=servings,
     )
     session.add(recipe)
 

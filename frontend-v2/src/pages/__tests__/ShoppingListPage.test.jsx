@@ -79,3 +79,64 @@ test('a day with an empty lunch slot still builds a list', async () => {
 
   expect(await screen.findByText('B')).toBeInTheDocument()
 })
+
+
+// --- the recipe's own servings basis ----------------------------------------
+
+test('ingredient amounts are divided by the basis the recipe was written for', async () => {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: [], leftover: false, meal_number: 1, people: 2 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'A',
+      servings: 4,
+      ingredients: [{ name: 'ing1', amount: 800, unit: 'g' }],
+    },
+  ])
+
+  render(<ShoppingListPage />)
+
+  // Written for 4, cooked for 2: half the recipe.
+  expect(await screen.findByText('ing1: 400 g')).toBeInTheDocument()
+})
+
+test('an occurrence cooking part of a recipe says so', async () => {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: ['S'], leftover: false, meal_number: 1, people: 2 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'A', servings: 4, ingredients: [] },
+    { id: 2, title: 'S', servings: 1, ingredients: [] },
+  ])
+
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('×½')).toBeInTheDocument()
+  // The side is written for one, so two people means two of it.
+  expect(screen.getByText('×2')).toBeInTheDocument()
+})
+
+test('an occurrence cooking exactly one batch is not annotated', async () => {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: [], leftover: false, meal_number: 1, people: 4 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'A', servings: 4, ingredients: [] },
+  ])
+
+  render(<ShoppingListPage />)
+
+  await screen.findByText('A')
+  expect(screen.queryByText(/^×/)).toBeNull()
+})

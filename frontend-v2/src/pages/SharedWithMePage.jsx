@@ -2,6 +2,7 @@ import React from 'react'
 import { InboxArrowDownIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { Badge, Button, Card, Modal, AttributionLine } from '../components'
 import { sharedWithMeApi } from '../api/sharedWithMeApi'
+import { basisOf, peopleLabel } from '../utils/servings'
 
 // Recipes other people addressed to this account (SWM-1 / SWM-2 / SWM-3).
 //
@@ -203,7 +204,8 @@ function SharedRecipeDetail({ entry, onClose, onCopy, copying, copyResult, copyE
               color: 'var(--text-strong)',
             }}
           >
-            Ingredients
+            Ingredients for {basisOf(recipe.servings)}{' '}
+            {peopleLabel(basisOf(recipe.servings))}
           </h4>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-sm)' }}>
             {(recipe.ingredients || []).map((ing, i) => (

@@ -10,6 +10,8 @@ export const UNITS = ['g', 'kg', 'l', 'ml', 'piece']
 // matches for the user to confirm rather than making them hunt the full list.
 export const IMPORT_SUGGESTION_THRESHOLD = 0.7
 
+import { basisOf } from '../utils/servings'
+
 export const IMPORT_PROMPT = `You are helping me import a recipe into my meal planner.
 Read the recipe I give you (a URL or pasted text) and reply with ONLY a JSON
 object — no markdown, no commentary — matching exactly this shape:
@@ -19,6 +21,7 @@ object — no markdown, no commentary — matching exactly this shape:
   "course": "main | first-course | side",
   "procedure": "string, the preparation steps",
   "bulk_prep": false,
+  "servings": 1,
   "tags": ["lowercase", "keywords"],
   "ingredients": [
     { "name": "string", "quantity": 0, "unit": "g | kg | l | ml | piece", "season_months": [1,2,3] }
@@ -28,9 +31,37 @@ object — no markdown, no commentary — matching exactly this shape:
 Rules:
 - "course" must be one of: main, first-course, side.
 - "unit" must be one of: g, kg, l, ml, piece.
-- Scale every ingredient "quantity" to a SINGLE serving (one person).
+- Copy every ingredient "quantity" EXACTLY as the recipe states it. Never scale
+  or divide them.
+- "servings" is how many people the recipe as written feeds. Use the number the
+  source states; if it states none, use 1.
 - "quantity" must be a number; "season_months" is optional (numbers 1-12) and may be omitted.
-- Output the JSON object and nothing else.`
+
+If you cannot read a recipe from what I gave you -- the page is unreachable or
+behind a login, it is not a recipe, or the ingredients are unusable -- do NOT
+invent one. Reply instead with one plain sentence saying why: no JSON, no
+braces, no markdown, just the sentence.`
+
+// The longest chatbot sentence the modal's error list can show without the
+// dialog turning into a wall of text.
+const MAX_REASON = 300
+
+/**
+ * Read a reply that is not JSON.
+ *
+ * The prompt tells the chatbot to answer a recipe it cannot read with one plain
+ * sentence saying why, so prose is a real answer and is shown as-is. A reply
+ * that was *meant* to be the JSON object -- a stray markdown fence, a truncated
+ * brace -- is a formatting slip rather than the chatbot explaining itself, and
+ * saying "not valid JSON" is the more useful thing to tell the reader.
+ */
+function asChatbotReason(raw) {
+  const text = String(raw).trim()
+  if (!text || /^[[{`]/.test(text)) return 'Pasted text is not valid JSON.'
+  return text.length > MAX_REASON
+    ? `${text.slice(0, MAX_REASON - 1)}…`
+    : text
+}
 
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
@@ -46,7 +77,7 @@ export function parseImportedRecipe(raw) {
   try {
     data = JSON.parse(raw)
   } catch {
-    return { recipe: null, errors: ['Pasted text is not valid JSON.'] }
+    return { recipe: null, errors: [asChatbotReason(raw)] }
   }
 
   const errors = []
@@ -61,6 +92,10 @@ export function parseImportedRecipe(raw) {
   if (!COURSES.includes(course)) {
     errors.push(`"course" must be one of: ${COURSES.join(', ')}.`)
   }
+
+  // How many people the quantities above are written for. A source that states
+  // no head-count, or a nonsense one, is read as written for one person.
+  const servings = basisOf(data.servings)
 
   const rawIngredients = Array.isArray(data.ingredients) ? data.ingredients : []
   const ingredients = rawIngredients.map((ing, i) => {
@@ -96,6 +131,7 @@ export function parseImportedRecipe(raw) {
     recipe: {
       title,
       course,
+      servings,
       procedure: typeof data.procedure === 'string' ? data.procedure : '',
       hot: Boolean(data.bulk_prep),
       image_url: null,

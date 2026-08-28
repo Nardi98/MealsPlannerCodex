@@ -205,3 +205,38 @@ def test_recipe_matching_an_existing_ingredient_by_name_keeps_its_season(
     assert res.status_code == 201
 
     assert _season_of(client, ingredient_id) == [4, 5]
+
+
+def test_recipe_servings_round_trip(api_client) -> None:
+    """Quantities are stored as authored; ``servings`` records their basis."""
+    client = api_client
+    payload = {
+        "title": "Ribollita",
+        "course": "main",
+        "servings": 4,
+        "ingredients": [{"name": "Cavolo nero", "quantity": 800, "unit": "g"}],
+    }
+    res = client.post("/recipes", json=payload)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["servings"] == 4
+    assert data["ingredients"][0]["quantity"] == 800
+
+    res = client.put(f"/recipes/{data['id']}", json=dict(payload, servings=6))
+    assert res.status_code == 200
+    assert res.json()["servings"] == 6
+    # Changing the basis never rewrites what was typed.
+    assert res.json()["ingredients"][0]["quantity"] == 800
+
+
+def test_recipe_defaults_to_one_serving(api_client) -> None:
+    res = api_client.post("/recipes", json={"title": "Toast", "course": "main"})
+    assert res.status_code == 201
+    assert res.json()["servings"] == 1
+
+
+def test_recipe_rejects_non_positive_servings(api_client) -> None:
+    res = api_client.post(
+        "/recipes", json={"title": "Nothing", "course": "main", "servings": 0}
+    )
+    assert res.status_code == 422

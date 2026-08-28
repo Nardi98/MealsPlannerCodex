@@ -134,8 +134,8 @@ def test_export_includes_related_objects(db_session, user):
 
 _FULL_RECIPE_PAYLOAD = {
     "title": "Stew",
-    # Exports written before ``servings_default`` was dropped still carry the
-    # key. The importer must not choke on it.
+    # Exports written before the field was renamed carry ``servings_default``;
+    # it means the same thing and is read as ``servings``.
     "servings_default": 4,
     "procedure": "Simmer everything.",
     "bulk_prep": True,
@@ -154,6 +154,7 @@ def _assert_full_recipe(recipe):
     assert recipe.course == "first-course"
     assert recipe.score == 3.5
     assert recipe.date_last_consumed == date(2024, 2, 3)
+    assert recipe.servings == 4
 
 
 def test_import_merge_builds_all_recipe_fields(db_session):
@@ -204,10 +205,10 @@ def test_clear_data(db_session, user):
     assert db_session.query(Meal).count() == 0
 
 
-def test_legacy_export_quantities_are_rebased_onto_one_person(db_session):
-    """A pre-removal export stated its quantities for ``servings_default``
-    people. Importing them verbatim would multiply every shopping list by that
-    number, so the importer divides them back down to one person."""
+def test_legacy_servings_default_becomes_the_recipe_basis(db_session):
+    """A pre-rename export stated its quantities for ``servings_default``
+    people. That is exactly what ``Recipe.servings`` now records, so the
+    quantities are imported untouched and the basis carried across."""
     payload = {
         "recipes": [
             {
@@ -228,15 +229,48 @@ def test_legacy_export_quantities_are_rebased_onto_one_person(db_session):
     )
 
     recipe = db_session.query(Recipe).one()
+    assert recipe.servings == 4
     quantities = sorted(
         (link.quantity for link in recipe.ingredients),
         key=lambda q: (q is None, q),
     )
-    assert quantities == [200.0, None]
+    assert quantities == [800.0, None]
 
 
-def test_import_leaves_quantities_alone_without_a_legacy_servings_key(db_session):
-    """Current exports are already per person; nothing must be rescaled."""
+def test_import_servings_wins_over_a_legacy_key(db_session):
+    payload = {
+        "recipes": [
+            {
+                "title": "Ragu",
+                "servings": 6,
+                "servings_default": 4,
+                "ingredients": [],
+                "tags": [],
+            }
+        ],
+        "tags": [],
+        "meal_plans": [],
+    }
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
+    assert db_session.query(Recipe).one().servings == 6
+
+
+def test_import_defaults_servings_to_one_when_absent(db_session):
+    payload = {
+        "recipes": [{"title": "Toast", "ingredients": [], "tags": []}],
+        "tags": [],
+        "meal_plans": [],
+    }
+    crud.import_data(
+        io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=None
+    )
+    assert db_session.query(Recipe).one().servings == 1
+
+
+def test_import_never_rescales_quantities(db_session):
+    """Quantities are stored as authored; the importer only records the basis."""
     payload = {
         "recipes": [
             {
@@ -253,3 +287,11 @@ def test_import_leaves_quantities_alone_without_a_legacy_servings_key(db_session
     )
 
     assert db_session.query(Recipe).one().ingredients[0].quantity == 200.0
+
+
+def test_export_records_the_recipe_servings_basis(db_session):
+    db_session.add(Recipe(title="Ribollita", servings=4))
+    db_session.commit()
+
+    data = json.loads(crud.export_data(db_session, user_id=None))
+    assert data["recipes"][0]["servings"] == 4

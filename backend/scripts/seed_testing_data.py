@@ -324,6 +324,8 @@ def link_copies(
             procedure=source.procedure,
             course=source.course,
             bulk_prep=source.bulk_prep,
+            # Quantities below are copied verbatim, so their basis comes too.
+            servings=source.servings,
             user_id=copier.id,
             visibility="private",
             copy_count=0,
@@ -366,6 +368,10 @@ class SeedRecipe(NamedTuple):
     bulk_prep: bool
     ingredients: list[tuple[str, float, UnitEnum]]
     tags: list[str]
+    # How many people the quantities above are written for. Most rows are
+    # authored per person and so leave this at 1; the few written for a family
+    # say so, which is what real recipes look like and what readers divide by.
+    servings: int = 1
 
 
 # The sides each main is habitually served with. Kept beside ``RECIPES`` rather
@@ -399,10 +405,11 @@ RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
      [("Penne", 100, UnitEnum.G), ("Tomato", 150, UnitEnum.G),
       ("Garlic", 5, UnitEnum.G)],
      ['pasta', 'vegetarian', 'spicy']),
+    # Written for four: a quarter of an egg is not a thing anyone measures.
     ('Spaghetti Carbonara', 'first-course', False,
-     [("Spaghetti", 100, UnitEnum.G), ("Egg", 1, UnitEnum.PIECE),
-      ("Bacon", 50, UnitEnum.G), ("Parmesan", 25, UnitEnum.G)],
-     ['pasta']),
+     [("Spaghetti", 400, UnitEnum.G), ("Egg", 4, UnitEnum.PIECE),
+      ("Bacon", 200, UnitEnum.G), ("Parmesan", 100, UnitEnum.G)],
+     ['pasta'], 4),
     ('Mushroom Risotto', 'first-course', False,
      [("Arborio Rice", 100, UnitEnum.G), ("Mushroom", 100, UnitEnum.G),
       ("Onion", 25, UnitEnum.G), ("Parmesan", 20, UnitEnum.G)],
@@ -431,10 +438,11 @@ RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
      [("Chicken Thigh", 150, UnitEnum.G), ("Potato", 100, UnitEnum.G),
       ("Garlic", 5, UnitEnum.G)],
      ['roast']),
+    # A pot dish, written for the pot rather than in awkward fractions.
     ('Beef Stew', 'main', True,
-     [("Beef Steak", 125, UnitEnum.G), ("Carrot", 37.5, UnitEnum.G),
-      ("Potato", 75, UnitEnum.G), ("Onion", 25, UnitEnum.G)],
-     ['stew', 'cheap']),
+     [("Beef Steak", 500, UnitEnum.G), ("Carrot", 150, UnitEnum.G),
+      ("Potato", 300, UnitEnum.G), ("Onion", 100, UnitEnum.G)],
+     ['stew', 'cheap'], 4),
     ('Beef Chili', 'main', True,
      [("Ground Beef", 100, UnitEnum.G), ("Kidney Beans", 50, UnitEnum.G),
       ("Tomato", 75, UnitEnum.G)],
@@ -647,12 +655,13 @@ def populate(session) -> None:
         ingredients[name] = ing
 
     recipes_by_title: dict[str, Recipe] = {}
-    for title, course, bulk, ing_list, tag_list in RECIPES:
+    for title, course, bulk, ing_list, tag_list, servings in RECIPES:
         recipe = Recipe(
             title=title,
             procedure=f"Prepare {title.lower()}.",
             course=course,
             bulk_prep=bulk,
+            servings=servings,
             user_id=demo_user.id,
         )
         for ing_name, qty, unit in ing_list:

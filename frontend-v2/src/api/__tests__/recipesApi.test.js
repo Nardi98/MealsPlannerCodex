@@ -39,23 +39,37 @@ function sentBody() {
   return JSON.parse(globalThis.fetch.mock.calls[0][1].body)
 }
 
-// A recipe's ingredient quantities are always stored for one person, so there
-// is no servings field to round-trip.
+// A recipe's ingredient quantities are stored as authored, for `servings`
+// people. The field round-trips in both directions.
 
-test('serialiseRecipe sends no servings field', async () => {
-  mockJson({ id: 1, title: 'Ribollita' }, 201)
+test('serialiseRecipe sends the servings basis', async () => {
+  mockJson({ id: 1, title: 'Ribollita', servings: 4 }, 201)
 
-  await recipesApi.create({ title: 'Ribollita', servings_default: 4 })
+  await recipesApi.create({ title: 'Ribollita', servings: 4 })
 
-  expect(sentBody()).not.toHaveProperty('servings_default')
+  expect(sentBody().servings).toBe(4)
 })
 
-test('normaliseRecipe drops a servings field the backend no longer sends', async () => {
-  mockJson({ id: 1, title: 'Ribollita', servings_default: 6 })
+test('serialiseRecipe defaults an absent servings basis to one', async () => {
+  mockJson({ id: 1, title: 'Toast' }, 201)
+
+  await recipesApi.create({ title: 'Toast' })
+
+  expect(sentBody().servings).toBe(1)
+})
+
+test('normaliseRecipe exposes the servings basis', async () => {
+  mockJson({ id: 1, title: 'Ribollita', servings: 6 })
 
   const recipe = await recipesApi.fetch(1)
 
-  expect(recipe).not.toHaveProperty('servings_default')
+  expect(recipe.servings).toBe(6)
+})
+
+test('normaliseRecipe defaults servings to one when the backend omits it', async () => {
+  mockJson({ id: 1, title: 'Toast' })
+
+  expect((await recipesApi.fetch(1)).servings).toBe(1)
 })
 
 // --- attribution + visibility passthrough (AT-3 / AT-7) ----------------------

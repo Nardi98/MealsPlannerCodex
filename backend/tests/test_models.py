@@ -9,6 +9,7 @@ from datetime import date
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from models import (
     Recipe,
     Ingredient,
@@ -44,6 +45,26 @@ def test_recipe_insert_defaults(db_session):
     assert r.date_last_consumed is None
     assert r.bulk_prep is False
     assert r.course == "main"
+    # Quantities are stored as authored, for this many people.
+    assert r.servings == 1
+
+
+def test_recipe_servings_must_be_at_least_one(db_session):
+    db_session.add(Recipe(title="Impossible", servings=0))
+    with pytest.raises(IntegrityError):
+        db_session.commit()
+    db_session.rollback()
+
+
+def test_recipe_keeps_its_authored_servings(db_session):
+    r = Recipe(title="Ribollita", servings=4)
+    ing = Ingredient(name="Cavolo nero")
+    r.ingredients.append(RecipeIngredient(ingredient=ing, quantity=800, unit="g"))
+    db_session.add(r)
+    db_session.commit()
+    db_session.refresh(r)
+    assert r.servings == 4
+    assert r.ingredients[0].quantity == 800
 
 
 def test_ingredient_relationship(db_session):

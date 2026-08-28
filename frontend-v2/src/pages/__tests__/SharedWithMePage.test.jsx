@@ -63,13 +63,24 @@ test('lists every recipe shared with the account', async () => {
   expect(screen.getByText(/@anna/)).toBeInTheDocument()
 })
 
-test('shows no serving count, because quantities are per person', async () => {
-  sharedWithMeApi.fetchAll.mockResolvedValue([entry()])
+test('says how many people the shared quantities are written for', async () => {
+  // The quantities are shown exactly as the author wrote them, so the reader
+  // has to be told the basis or "Kale 800 g" reads as one portion.
+  sharedWithMeApi.fetchAll.mockResolvedValue([entry({}, { servings: 4 })])
 
   render(<SharedWithMePage />)
-  await screen.findByText('Ribollita')
+  await userEvent.click(await screen.findByText('Ribollita'))
 
-  expect(screen.queryByText(/Serves/i)).toBeNull()
+  expect(screen.getByText(/ingredients for 4 people/i)).toBeInTheDocument()
+})
+
+test('a recipe written for one person says so too', async () => {
+  sharedWithMeApi.fetchAll.mockResolvedValue([entry({}, { servings: 1 })])
+
+  render(<SharedWithMePage />)
+  await userEvent.click(await screen.findByText('Ribollita'))
+
+  expect(screen.getByText(/ingredients for 1 person/i)).toBeInTheDocument()
 })
 
 test('says so plainly when nothing has been shared', async () => {

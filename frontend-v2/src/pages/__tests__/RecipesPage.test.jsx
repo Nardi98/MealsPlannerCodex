@@ -346,7 +346,7 @@ test('closing the detail modal also drops the share dialog', async () => {
   fireEvent.click(screen.getAllByLabelText('Close')[0])
   fireEvent.click(await screen.findByText('Risotto'))
 
-  await screen.findByText('Ingredients')
+  await screen.findByText(/Ingredients for/i)
   expect(screen.queryByText(/Anyone with the link can open this recipe/i)).toBeNull()
 })
 
@@ -384,7 +384,7 @@ test('shows no attribution line for an original recipe', async () => {
 
   render(<RecipesPage />)
   fireEvent.click(await screen.findByText('Risotto'))
-  await screen.findByText('Ingredients')
+  await screen.findByText(/Ingredients for/i)
 
   expect(screen.queryByText(/^Adapted from/)).toBeNull()
 })
@@ -439,4 +439,42 @@ test('marks the first recipe card as the tutorial anchor, not the whole grid', a
   const anchors = container.querySelectorAll('[data-tour="recipes-card"]')
   expect(anchors).toHaveLength(1)
   expect(anchors[0].textContent).toContain('Spaghetti')
+})
+
+
+// --- the servings basis -----------------------------------------------------
+
+test('a recipe card says how many people its quantities are written for', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Ribollita', course: 'main', servings: 4, ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  await screen.findByText('Ribollita')
+  expect(screen.getByText(/serves 4/i)).toBeInTheDocument()
+})
+
+test('the opened recipe says how many people its quantities are written for', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Ribollita',
+      course: 'main',
+      servings: 4,
+      ingredients: [{ id: 1, name: 'Cavolo nero', amount: 800, unit: 'g' }],
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  fireEvent.click(await screen.findByText('Ribollita'))
+
+  await waitFor(() =>
+    expect(screen.getAllByText(/ingredients for 4 people/i).length).toBeGreaterThan(0),
+  )
 })

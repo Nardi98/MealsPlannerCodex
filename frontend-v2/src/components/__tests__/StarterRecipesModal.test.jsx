@@ -97,6 +97,9 @@ test('importing creates only the ticked recipes and reuses the owned ingredients
   expect(payload.title).toBe('Tuna and Cherry Tomato Pasta')
   expect(payload.course).toBe('first-course')
   expect(payload.tags).toEqual(['pasta', 'quick', 'cheap'])
+  // The pack's quantities go in as authored, so their basis goes with them --
+  // one person here, since this entry states no other.
+  expect(payload.servings).toBe(1)
 
   // Matched against the account's own row, so the import reuses it rather than
   // creating a near-duplicate ingredient.

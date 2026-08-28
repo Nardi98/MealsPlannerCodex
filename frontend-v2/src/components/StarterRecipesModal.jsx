@@ -4,6 +4,7 @@ import { Button } from './Button'
 import { Badge } from './Badge'
 import { STARTER_RECIPES, groupStarterRecipes } from '../constants/starterRecipes'
 import { recipesApi } from '../api/recipesApi'
+import { basisOf } from '../utils/servings'
 
 // Offered on the first visit to an empty recipe book (RecipesPage). Everything
 // is ticked to begin with: the friction this removes is having to type a first
@@ -88,6 +89,10 @@ export default function StarterRecipesModal({ onClose, onImported, ingredients =
         await recipesApi.create({
           title: recipe.title,
           course: recipe.course,
+          // The pack's quantities are imported as authored, so the basis they
+          // were written for has to come with them. Most entries state none,
+          // meaning one person.
+          servings: basisOf(recipe.servings),
           hot: recipe.bulk_prep,
           tags: recipe.tags,
           procedure: recipe.procedure,

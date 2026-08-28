@@ -64,6 +64,27 @@ test('every entry is well formed', () => {
   }
 })
 
+test('a stated head-count is a whole number of people', () => {
+  // Omitting `servings` means "written for one person"; stating it must mean
+  // something the shopping list can divide by.
+  for (const recipe of STARTER_RECIPES) {
+    if (recipe.servings === undefined) continue
+    expect(Number.isInteger(recipe.servings), recipe.slug).toBe(true)
+    expect(recipe.servings, recipe.slug).toBeGreaterThanOrEqual(1)
+  }
+})
+
+test('no quantity asks the cook to measure a fraction of a countable thing', () => {
+  // A piece is a whole object. Half an egg is the awkwardness the servings
+  // basis exists to avoid, so a recipe needing one is written for more people.
+  for (const recipe of STARTER_RECIPES) {
+    for (const ing of recipe.ingredients) {
+      if (ing.unit !== 'piece') continue
+      expect(Number.isInteger(ing.quantity), `${recipe.slug}: ${ing.name}`).toBe(true)
+    }
+  }
+})
+
 test('quick is exactly the recipes that take 25 minutes or less', () => {
   for (const recipe of STARTER_RECIPES) {
     expect(recipe.tags.includes('quick'), recipe.slug).toBe(recipe.minutes <= 25)

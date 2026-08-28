@@ -128,3 +128,64 @@ test('a brand-new recipe starts with no favorite sides', () => {
     expect.objectContaining({ favorite_side_ids: [] })
   )
 })
+
+
+// --- servings basis ---------------------------------------------------------
+
+test('saves a new recipe as written for one person by default', async () => {
+  const onSave = vi.fn()
+  render(<NewRecipeModal onClose={() => {}} onSave={onSave} />)
+
+  fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Toast' } })
+  selectCourse('main')
+  fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled())
+  expect(onSave.mock.calls[0][0].servings).toBe(1)
+})
+
+test('saves the servings basis the cook typed', async () => {
+  const onSave = vi.fn()
+  render(<NewRecipeModal onClose={() => {}} onSave={onSave} />)
+
+  fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Ribollita' } })
+  selectCourse('main')
+  fireEvent.change(screen.getByLabelText(/serves/i), { target: { value: '4' } })
+  fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled())
+  expect(onSave.mock.calls[0][0].servings).toBe(4)
+})
+
+test('tells the cook which head-count the quantities are for', () => {
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} />)
+
+  fireEvent.change(screen.getByLabelText(/serves/i), { target: { value: '4' } })
+
+  expect(screen.getByText(/quantities for 4 people/i)).toBeInTheDocument()
+})
+
+test('changing the servings basis never rewrites the typed quantities', async () => {
+  const onSave = vi.fn()
+  render(
+    <NewRecipeModal
+      onClose={() => {}}
+      onSave={onSave}
+      initialRecipe={{
+        title: 'Ribollita',
+        course: 'main',
+        servings: 4,
+        ingredients: [{ id: 1, name: 'Cavolo nero', amount: 800, unit: 'g' }],
+      }}
+    />,
+  )
+
+  expect(screen.getByLabelText(/serves/i)).toHaveValue(4)
+  fireEvent.change(screen.getByLabelText(/serves/i), { target: { value: '8' } })
+  fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled())
+  const saved = onSave.mock.calls[0][0]
+  expect(saved.servings).toBe(8)
+  expect(saved.ingredients[0].amount).toBe(800)
+})

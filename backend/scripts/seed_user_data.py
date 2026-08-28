@@ -175,7 +175,7 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
         ingredients[name] = ing
 
     owned_recipes: dict[str, Recipe] = {}
-    for title, course, bulk, ing_list, tag_list in recipes:
+    for title, course, bulk, ing_list, tag_list, servings in recipes:
         exists = session.execute(
             select(Recipe).where(
                 Recipe.title == title, Recipe.user_id == user.id
@@ -189,6 +189,7 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
             procedure=f"Prepare {title.lower()}.",
             course=course,
             bulk_prep=bulk,
+            servings=servings,
             user_id=user.id,
         )
         for ing_name, qty, unit in ing_list:

@@ -99,13 +99,13 @@ def test_servings_query_scales_the_ingredient_quantities(
 ):
     _share, token, _recipe = shared_recipe
     body = page_client().get(f"/s/{token}?servings=4").text
-    # Stored quantities are per person, so four people want four times them.
+    # This recipe is authored for one, so four people want four times it.
     assert "800" in body  # 200 g of pasta
     assert "1600" in body  # 400 g of tomato
 
 
 def test_page_renders_for_one_person_by_default(page_client, shared_recipe):
-    """A recipe is stored per person, so an unscaled page renders for one."""
+    """An unscaled page renders for the basis the recipe was authored for."""
     _share, token, _recipe = shared_recipe
     body = page_client().get(f"/s/{token}").text
     assert 'value="1"' in body

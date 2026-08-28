@@ -99,8 +99,7 @@ def test_from_recipe_maps_the_permitted_fields(db_session, user):
     public = PublicRecipe.from_recipe(recipe, user)
 
     assert public.title == "Pasta al forno"
-    # A stored recipe is always authored for one person, so an unscaled
-    # projection always renders for one.
+    # An unscaled projection renders for the basis the recipe was authored for.
     assert public.servings == 1
     assert public.course == "main"
     assert public.image_url == "/media/x.jpg"
@@ -198,9 +197,35 @@ def test_scale_returns_a_new_recipe_with_scaled_quantities(db_session, user):
 
     scaled = public.scaled_to(8)
 
-    # The stored quantity is per person, so eight people want eight times it.
+    # The recipe is authored for one, so eight people want eight times it.
     assert scaled.servings == 8
     assert scaled.ingredients[0].quantity == 2000.0
+    assert public.ingredients[0].quantity == 250.0
+
+
+def test_projection_carries_the_recipes_authored_servings(db_session, user):
+    recipe = _seed(db_session, user)
+    recipe.servings = 4
+    db_session.commit()
+
+    assert PublicRecipe.from_recipe(recipe, user).servings == 4
+
+
+def test_scaling_is_relative_to_the_authored_basis(db_session, user):
+    """A recipe written for 4 scaled to 8 doubles -- it does not octuple."""
+    recipe = _seed(db_session, user)
+    recipe.servings = 4
+    db_session.commit()
+    public = PublicRecipe.from_recipe(recipe, user)
+
+    scaled = public.scaled_to(8)
+
+    assert scaled.servings == 8
+    assert scaled.ingredients[0].quantity == 500.0
+
+    halved = public.scaled_to(2)
+    assert halved.ingredients[0].quantity == 125.0
+    # The projection it came from is untouched.
     assert public.ingredients[0].quantity == 250.0
 
 
