@@ -5,6 +5,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { afterEach, expect, test, vi } from 'vitest'
 import MealPlanCalendar from '../MealPlanCalendar'
 import { stubViewport } from '../../test/stubViewport'
+import { formatWeekRange } from '../../lib/weekRange'
 
 afterEach(() => cleanup())
 
@@ -69,10 +70,16 @@ test('with nothing armed, clicking a square selects it (opens modal)', () => {
   expect(onSelectCell).toHaveBeenCalledWith({ date: iso, mealIndex: 1 })
 })
 
-test('the armed cell is tinted yellow', () => {
+test('the armed cell is tinted yellow and outlined', () => {
   renderCalendar({ armedCell: { date: iso, mealIndex: 0 } })
-  const armed = screen.getByText('Lunch A').closest('div[data-cell]')
+  // The swap banner also names the armed meal, so scope to the grid cell.
+  const armed = screen
+    .getAllByText('Lunch A')
+    .map((el) => el.closest('div[data-cell]'))
+    .find(Boolean)
   expect(armed.getAttribute('style')).toMatch(/255, ?185, ?2/)
+  // Colour alone is not a state cue: the armed cell is outlined too.
+  expect(armed.getAttribute('style')).toMatch(/outline/)
 })
 
 test('marks the first lunch cell as the tutorial anchor, so the tour points at one meal', () => {
@@ -125,4 +132,134 @@ test('keeps the tutorial anchors in the mobile layout', () => {
   expect(container.querySelector('[data-tour="mealplan-cell"]')).not.toBeNull()
   expect(container.querySelector('[data-tour="mealplan-week-nav"]')).not.toBeNull()
   expect(container.querySelector('[data-tour="mealplan-calendar"]')).not.toBeNull()
+})
+
+// --- Day view, week strip and the view toggle -------------------------------
+//
+// The stacked mobile layout gave no sense of where you were in the week and no
+// date context at all. Below `md` the calendar now opens on a single day, with
+// a seven-day strip acting as both overview and navigator.
+
+const week = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i))
+const isoOf = (d) => `2024-01-0${d.getDate()}`
+
+function renderWeek(props = {}) {
+  const plan = {
+    '2024-01-01': [
+      { recipe: 'Lunch A', side_recipes: [], accepted: true, leftover: false },
+      { recipe: 'Dinner B', side_recipes: [], accepted: false, leftover: false },
+    ],
+    '2024-01-03': [
+      { recipe: 'Wednesday lunch', side_recipes: [], accepted: false, leftover: false },
+    ],
+  }
+  return render(
+    <MealPlanCalendar
+      weekDays={week}
+      plan={plan}
+      fmt={isoOf}
+      isToday={(d) => d.getDate() === 1}
+      onSelectCell={vi.fn()}
+      onAccept={vi.fn()}
+      onReject={vi.fn()}
+      onChangeWeek={vi.fn()}
+      onArmSwap={vi.fn()}
+      onCancelSwap={vi.fn()}
+      onToday={vi.fn()}
+      armedCell={null}
+      {...props}
+    />,
+  )
+}
+
+test('day view shows one day and a seven-day strip to move between them', () => {
+  stubViewport(true)
+  window.localStorage.clear()
+  renderWeek()
+
+  expect(screen.getAllByTestId('day-strip-day')).toHaveLength(7)
+  expect(screen.getAllByTestId('mealplan-day')).toHaveLength(1)
+})
+
+test('day view opens on today when today is inside the viewed week', () => {
+  stubViewport(true)
+  window.localStorage.clear()
+  renderWeek()
+  // The strip marks today for screen readers and the day header repeats it.
+  expect(screen.getAllByText(/today/i).length).toBeGreaterThan(0)
+  expect(screen.getByText('Lunch A')).toBeTruthy()
+})
+
+test('tapping a day in the strip switches the day shown', () => {
+  stubViewport(true)
+  window.localStorage.clear()
+  renderWeek()
+
+  expect(screen.queryByText('Wednesday lunch')).toBeNull()
+  fireEvent.click(screen.getAllByTestId('day-strip-day')[2])
+  expect(screen.getByText('Wednesday lunch')).toBeTruthy()
+})
+
+test('the week toggle shows every day and is remembered across remounts', () => {
+  stubViewport(true)
+  window.localStorage.clear()
+  renderWeek()
+
+  fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+  expect(screen.getAllByTestId('mealplan-day')).toHaveLength(7)
+
+  cleanup()
+  renderWeek()
+  expect(screen.getAllByTestId('mealplan-day')).toHaveLength(7)
+  window.localStorage.clear()
+})
+
+// --- The swap banner --------------------------------------------------------
+//
+// Arming used to be signalled by a yellow tint and nothing else, with no way
+// out but pressing the same cell again.
+
+test('arming a swap explains itself and offers a cancel', () => {
+  stubViewport(false)
+  const onCancelSwap = vi.fn()
+  renderWeek({ armedCell: { date: '2024-01-01', mealIndex: 0 }, onCancelSwap })
+
+  const banner = screen.getByTestId('swap-banner')
+  expect(banner.textContent).toContain('Lunch A')
+  fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+  expect(onCancelSwap).toHaveBeenCalled()
+})
+
+test('no banner is shown when nothing is armed', () => {
+  stubViewport(false)
+  renderWeek()
+  expect(screen.queryByTestId('swap-banner')).toBeNull()
+})
+
+// --- Orientation and status -------------------------------------------------
+
+test('states the week being viewed', () => {
+  stubViewport(false)
+  renderWeek()
+  // The month name is locale-dependent, so compare against the formatter
+  // itself. Previously there was no week label anywhere in the calendar.
+  expect(formatWeekRange(week)).toMatch(/1/)
+  expect(screen.getByText(formatWeekRange(week))).toBeTruthy()
+})
+
+test('shows accepted / pending as a labelled chip on desktop too', () => {
+  stubViewport(false)
+  renderWeek()
+  expect(screen.getAllByText('Accepted').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('Pending').length).toBeGreaterThan(0)
+})
+
+test('accept and reject controls are reachable by an accessible name', () => {
+  stubViewport(false)
+  const onAccept = vi.fn()
+  renderWeek({ onAccept })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Accept Dinner B' }))
+  expect(onAccept).toHaveBeenCalledWith({ date: '2024-01-01', mealIndex: 1 })
+  expect(screen.getByRole('button', { name: 'Reject Dinner B' })).toBeTruthy()
 })

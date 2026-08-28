@@ -102,6 +102,18 @@ export function useMealPlan({ setError }) {
     })
   }
 
+  // Jump back to the week containing today. The calendar offers this whenever
+  // the viewed week does not contain today, so wandering forward is reversible
+  // without counting weeks back.
+  const goToToday = () => {
+    setArmedCell(null)
+    setViewStart(startOfWeek(today))
+  }
+
+  // Drop a pending swap without having to re-press the same cell — the old
+  // flow's only exit, and one nobody discovered.
+  const cancelSwap = () => setArmedCell(null)
+
   // Reload the visible week so server-side cascade effects (recomputed leftover
   // links, cross-day changes) are reflected.
   const refetchWeek = async () => {
@@ -281,6 +293,8 @@ export function useMealPlan({ setError }) {
     plan,
     setPlan,
     changeWeek,
+    goToToday,
+    cancelSwap,
     handleAccept,
     handleReject,
     handleSwap,

@@ -109,7 +109,9 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
 
   await screen.findByText('Bulk')
   await user.click(screen.getByText('Bulk'))
-  await user.click(await screen.findByRole('button', { name: /reject/i }))
+  // The calendar cell now has its own labelled "Reject Bulk" control, so match
+  // the modal's button exactly rather than by substring.
+  await user.click(await screen.findByRole('button', { name: 'Reject' }))
 
   await waitFor(() => {
     expect(mealPlansApi.create).toHaveBeenCalledWith({

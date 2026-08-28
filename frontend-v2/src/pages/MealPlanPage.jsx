@@ -25,6 +25,8 @@ export default function MealPlanPage() {
     plan,
     setPlan,
     changeWeek,
+    goToToday,
+    cancelSwap,
     handleAccept,
     handleReject,
     handleSwap,
@@ -97,6 +99,8 @@ export default function MealPlanPage() {
         onReject={rejectCell}
         onChangeWeek={changeWeek}
         onArmSwap={armSwap}
+        onCancelSwap={cancelSwap}
+        onToday={goToToday}
         armedCell={armedCell}
       />
       </div>
