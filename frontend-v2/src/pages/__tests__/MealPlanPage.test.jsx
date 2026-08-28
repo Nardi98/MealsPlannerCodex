@@ -190,7 +190,7 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
   expect(mealPlansApi.create).toHaveBeenCalledTimes(1)
 })
 
-test('on mobile the plan settings sit above the calendar, collapsed', async () => {
+test('on mobile the plan settings sit below the calendar, collapsed', async () => {
   stubViewport(true)
   const { container } = render(<MealPlanPage />)
   await screen.findByText('Meal Plan')
@@ -201,9 +201,17 @@ test('on mobile the plan settings sit above the calendar, collapsed', async () =
   // Collapsed by default: the calendar is what the page is for.
   expect(toggle).toHaveAttribute('aria-expanded', 'false')
   expect(container.querySelector('[data-tour="mealplan-tabs"]')).toBeNull()
-  // Visual order, which is CSS `order` rather than DOM order.
-  expect(toggle.closest('[data-plan-section]')).toHaveClass('order-1')
-  expect(calendar.closest('[data-plan-section]')).toHaveClass('order-2')
+
+  // The settings used to be pulled above the calendar with CSS `order`, which
+  // put a control panel between the heading and the plan itself. Visual order
+  // now follows the DOM at every width, so tab order agrees with the page.
+  const sections = [...container.querySelectorAll('[data-plan-section]')]
+  sections.forEach((section) => {
+    expect(section.className).not.toContain('order-')
+  })
+  expect(sections.indexOf(calendar.closest('[data-plan-section]'))).toBeLessThan(
+    sections.indexOf(toggle.closest('[data-plan-section]')),
+  )
 })
 
 test('on desktop the settings render below the calendar, always open', async () => {

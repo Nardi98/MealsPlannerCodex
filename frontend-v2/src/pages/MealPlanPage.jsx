@@ -85,10 +85,10 @@ export default function MealPlanPage() {
         Meal Plan
       </h1>
       <PageTour id="meal-plan" />
-      {/* Visual order only — the DOM keeps the calendar first, so a screen
-          reader and the tab order still meet the page's subject before its
-          controls. Below `md` the settings fold up above it instead. */}
-      <div data-plan-section className="order-2 md:order-1">
+      {/* Calendar first at every width: it is what the page is about, and on a
+          phone the settings sat between the heading and the plan you came to
+          look at. Visual order now matches the DOM, so the tab order agrees. */}
+      <div data-plan-section>
       <MealPlanCalendar
         weekDays={weekDays}
         plan={plan}
@@ -104,7 +104,7 @@ export default function MealPlanPage() {
         armedCell={armedCell}
       />
       </div>
-      <div data-plan-section className="order-1 md:order-2">
+      <div data-plan-section>
       <MobileCollapse title="Plan settings" tourId="mealplan-settings-toggle">
       <GenerationForm
         form={generation.form}

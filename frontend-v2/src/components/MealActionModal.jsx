@@ -98,17 +98,23 @@ export default function MealActionModal({
   return (
     <ModalScrim>
       <div
-        className="relative bg-white rounded-2xl p-6 w-full max-w-md space-y-4"
-        style={{ color: 'var(--text-strong)' }}
+        className="relative bg-white rounded-2xl p-4 md:p-6 w-full max-w-lg space-y-4"
+        style={{
+          color: 'var(--text-strong)',
+          // Own the scroll rather than relying on the scrim, matching `Modal`.
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
       >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4"
+          aria-label="Close"
+          className="absolute top-2 right-2 inline-flex h-11 w-11 items-center justify-center"
         >
           <XMarkIcon className="h-5 w-5" />
         </button>
-        <h3 className="text-lg font-medium pr-8">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
+        <h3 className="text-lg font-medium pr-12">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
         <div className="flex items-center justify-between">
           <div className="font-medium">{recipe}</div>
           <Button variant="danger" onClick={() => onReject?.()}>
@@ -123,18 +129,28 @@ export default function MealActionModal({
             {sides.map((s, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between text-sm"
+                className="flex items-center justify-between gap-2 text-sm"
               >
-                <span>{s}</span>
-                <div className="flex gap-1">
-                  <NoSymbolIcon
-                    className="h-4 w-4 cursor-pointer"
+                <span className="min-w-0">{s}</span>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Reject side dish ${s}`}
+                    title={`Reject side dish ${s}`}
+                    className="inline-flex h-11 w-11 items-center justify-center"
                     onClick={() => onRejectSide?.(i)}
-                  />
-                  <TrashIcon
-                    className="h-4 w-4 cursor-pointer"
+                  >
+                    <NoSymbolIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove side dish ${s}`}
+                    title={`Remove side dish ${s}`}
+                    className="inline-flex h-11 w-11 items-center justify-center"
                     onClick={() => onRemoveSide?.(i)}
-                  />
+                  >
+                    <TrashIcon className="h-5 w-5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -153,7 +169,7 @@ export default function MealActionModal({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="w-full flex justify-between items-center"
+            className="min-h-11 w-full flex justify-between items-center"
           >
             <span className="font-medium">Swap</span>
             <ChevronDownIcon
@@ -169,10 +185,14 @@ export default function MealActionModal({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
-                <FunnelIcon
-                  className="h-5 w-5 cursor-pointer"
+                <button
+                  type="button"
+                  aria-label="Filter recipes by tag"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center"
                   onClick={() => setTagFilterOpen((o) => !o)}
-                />
+                >
+                  <FunnelIcon className="h-5 w-5" />
+                </button>
               </div>
               {tagFilterOpen && (
                 <TagSelector
@@ -182,17 +202,18 @@ export default function MealActionModal({
                 />
               )}
               <div
-                className="mt-2 max-h-40 overflow-y-auto border rounded-xl p-2"
+                className="mt-2 max-h-64 overflow-y-auto border rounded-xl p-2"
                 style={{ borderColor: 'var(--border)' }}
               >
                 {filtered.map((r) => (
-                  <div
+                  <button
                     key={r.id}
-                    className="p-1 cursor-pointer hover:bg-gray-100 rounded"
+                    type="button"
+                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
                     onClick={() => handleSwapClick(r.title)}
                   >
                     {r.title}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -202,7 +223,7 @@ export default function MealActionModal({
           <button
             type="button"
             onClick={() => setSideSwapOpen((o) => !o)}
-            className="w-full flex justify-between items-center"
+            className="min-h-11 w-full flex justify-between items-center"
           >
             <span className="font-medium">Swap side dish</span>
             <ChevronDownIcon
@@ -213,7 +234,7 @@ export default function MealActionModal({
             <div className="mt-4 space-y-2">
               {sides.length > 0 && (
                 <select
-                  className="w-full border rounded px-2 py-1"
+                  className="min-h-11 w-full border rounded px-2 py-1"
                   style={{ borderColor: 'var(--border)' }}
                   value={selectedSideIndex}
                   onChange={(e) => setSelectedSideIndex(parseInt(e.target.value))}
@@ -232,10 +253,14 @@ export default function MealActionModal({
                   value={sideQuery}
                   onChange={(e) => setSideQuery(e.target.value)}
                 />
-                <FunnelIcon
-                  className="h-5 w-5 cursor-pointer"
+                <button
+                  type="button"
+                  aria-label="Filter side dishes by tag"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center"
                   onClick={() => setSideTagFilterOpen((o) => !o)}
-                />
+                >
+                  <FunnelIcon className="h-5 w-5" />
+                </button>
               </div>
               {sideTagFilterOpen && (
                 <TagSelector
@@ -245,17 +270,18 @@ export default function MealActionModal({
                 />
               )}
               <div
-                className="mt-2 max-h-40 overflow-y-auto border rounded-xl p-2"
+                className="mt-2 max-h-64 overflow-y-auto border rounded-xl p-2"
                 style={{ borderColor: 'var(--border)' }}
               >
                 {sideFiltered.map((r) => (
-                  <div
+                  <button
                     key={r.id}
-                    className="p-1 cursor-pointer hover:bg-gray-100 rounded"
+                    type="button"
+                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
                     onClick={() => handleSwapSideClick(r.title)}
                   >
                     {r.title}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>

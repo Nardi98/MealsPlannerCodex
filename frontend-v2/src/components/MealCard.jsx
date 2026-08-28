@@ -102,10 +102,19 @@ export default function MealCard({
         <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-subtle)' }}>
           {label}
         </span>
-        <MealStatusChip accepted={meal.accepted} leftover={meal.leftover} />
+        <MealStatusChip accepted={meal.accepted} />
       </div>
 
-      <div className="min-w-0 font-medium">{meal.recipe}</div>
+      <div className="min-w-0 font-medium">
+        {meal.recipe}
+        {meal.leftover && (
+          <img
+            src="/assets/icons/left_overs_icon.png"
+            alt="Leftover"
+            className="inline ml-1 h-4 w-4"
+          />
+        )}
+      </div>
 
       {meal.side_recipes && meal.side_recipes.length > 0 && (
         <div className="text-xs" style={{ color: 'var(--text-subtle)' }}>

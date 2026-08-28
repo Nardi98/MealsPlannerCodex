@@ -7,14 +7,14 @@ import { Badge } from './Badge'
  * which is invisible to anyone who cannot separate the three overlapping tints
  * (today / accepted / armed) and unreadable on a phone in daylight. The chip is
  * the non-colour cue; the tints stay as reinforcement.
+ *
+ * Leftovers are deliberately not shown here — they already have their own icon
+ * beside the recipe title, and a second marker for the same fact is noise.
  */
-export default function MealStatusChip({ accepted, leftover }) {
+export default function MealStatusChip({ accepted }) {
   return (
-    <span className="inline-flex flex-wrap items-center gap-1">
-      <Badge tone={accepted ? 'pos' : 'caramel'}>
-        {accepted ? 'Accepted' : 'Pending'}
-      </Badge>
-      {leftover && <Badge tone="sage">Leftover</Badge>}
-    </span>
+    <Badge tone={accepted ? 'pos' : 'caramel'}>
+      {accepted ? 'Accepted' : 'Pending'}
+    </Badge>
   )
 }

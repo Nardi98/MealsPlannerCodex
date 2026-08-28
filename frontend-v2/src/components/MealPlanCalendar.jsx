@@ -219,7 +219,7 @@ export default function MealPlanCalendar({
               </div>
             )}
             <div className="mt-1">
-              <MealStatusChip accepted={meal.accepted} leftover={meal.leftover} />
+              <MealStatusChip accepted={meal.accepted} />
             </div>
             <div className="mt-auto flex justify-end">
               {iconAction('swap', ArrowsRightLeftIcon, 'Swap meal', 'var(--c-a2)', onArmSwap)}
