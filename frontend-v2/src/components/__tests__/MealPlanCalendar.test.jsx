@@ -205,7 +205,7 @@ test('the week toggle shows every day and is remembered across remounts', () => 
   window.localStorage.clear()
   renderWeek()
 
-  fireEvent.click(screen.getByRole('tab', { name: 'Week' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Week' }))
   expect(screen.getAllByTestId('mealplan-day')).toHaveLength(7)
 
   cleanup()

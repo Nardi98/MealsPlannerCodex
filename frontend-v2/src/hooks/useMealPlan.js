@@ -75,7 +75,12 @@ export function useMealPlan({ setError }) {
     [viewStart]
   )
 
-  const isToday = (d) => d.toDateString() === today.toDateString()
+  // Stable identity: the calendar memoises its whole week on this, so a fresh
+  // closure per render silently disabled that memo.
+  const isToday = React.useCallback(
+    (d) => d.toDateString() === today.toDateString(),
+    [today],
+  )
 
   React.useEffect(() => {
     async function load() {

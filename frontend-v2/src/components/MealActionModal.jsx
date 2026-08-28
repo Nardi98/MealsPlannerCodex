@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Input, TagSelector } from './'
+import { Button, IconButton, Input, TagSelector } from './'
 import {
   FunnelIcon,
   ChevronDownIcon,
@@ -106,14 +106,12 @@ export default function MealActionModal({
           overflowY: 'auto',
         }}
       >
-        <button
-          type="button"
+        <IconButton
+          Icon={XMarkIcon}
+          label="Close"
           onClick={onClose}
-          aria-label="Close"
-          className="absolute top-2 right-2 inline-flex h-11 w-11 items-center justify-center"
-        >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
+          className="absolute top-2 right-2"
+        />
         <h3 className="text-lg font-medium pr-12">{`${weekday}, ${dateStr} — ${mealName}`}</h3>
         <div className="flex items-center justify-between">
           <div className="font-medium">{recipe}</div>
@@ -133,24 +131,16 @@ export default function MealActionModal({
               >
                 <span className="min-w-0">{s}</span>
                 <div className="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    aria-label={`Reject side dish ${s}`}
-                    title={`Reject side dish ${s}`}
-                    className="inline-flex h-11 w-11 items-center justify-center"
+                  <IconButton
+                    Icon={NoSymbolIcon}
+                    label={`Reject side dish ${s}`}
                     onClick={() => onRejectSide?.(i)}
-                  >
-                    <NoSymbolIcon className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove side dish ${s}`}
-                    title={`Remove side dish ${s}`}
-                    className="inline-flex h-11 w-11 items-center justify-center"
+                  />
+                  <IconButton
+                    Icon={TrashIcon}
+                    label={`Remove side dish ${s}`}
                     onClick={() => onRemoveSide?.(i)}
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
+                  />
                 </div>
               </div>
             ))}
@@ -185,14 +175,11 @@ export default function MealActionModal({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
-                <button
-                  type="button"
-                  aria-label="Filter recipes by tag"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center"
+                <IconButton
+                  Icon={FunnelIcon}
+                  label="Filter recipes by tag"
                   onClick={() => setTagFilterOpen((o) => !o)}
-                >
-                  <FunnelIcon className="h-5 w-5" />
-                </button>
+                />
               </div>
               {tagFilterOpen && (
                 <TagSelector
@@ -253,14 +240,11 @@ export default function MealActionModal({
                   value={sideQuery}
                   onChange={(e) => setSideQuery(e.target.value)}
                 />
-                <button
-                  type="button"
-                  aria-label="Filter side dishes by tag"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center"
+                <IconButton
+                  Icon={FunnelIcon}
+                  label="Filter side dishes by tag"
                   onClick={() => setSideTagFilterOpen((o) => !o)}
-                >
-                  <FunnelIcon className="h-5 w-5" />
-                </button>
+                />
               </div>
               {sideTagFilterOpen && (
                 <TagSelector

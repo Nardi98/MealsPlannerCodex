@@ -8,7 +8,7 @@ import { formatWeekRange } from '../lib/weekRange'
  * date context was a `D/M` in each column header, so on a phone — where the
  * columns are gone — you could scroll a plan with no idea where you were.
  */
-export default function CalendarWeekHeader({ weekDays, onChangeWeek, onToday, containsToday }) {
+export default function CalendarWeekHeader({ weekDays, onChangeWeek, onToday }) {
   return (
     <div
       className="flex flex-wrap items-center justify-between gap-2"
@@ -25,16 +25,14 @@ export default function CalendarWeekHeader({ weekDays, onChangeWeek, onToday, co
         <span className="font-medium" style={{ color: 'var(--text-strong)' }}>
           {formatWeekRange(weekDays)}
         </span>
-        {!containsToday && (
-          <button
-            type="button"
-            onClick={onToday}
-            className="text-xs underline"
-            style={{ color: 'var(--c-a1)' }}
-          >
-            Back to today
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onToday}
+          className="min-h-11 text-xs underline"
+          style={{ color: 'var(--c-a1)' }}
+        >
+          Back to today
+        </button>
       </div>
       <Button
         variant="ghost"
