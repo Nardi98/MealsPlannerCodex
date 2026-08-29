@@ -107,17 +107,17 @@ test('filters recipes by tags and ingredients', async () => {
   await screen.findByText('Salad')
 
   fireEvent.click(screen.getByLabelText('Filter'))
-  fireEvent.click(screen.getByText('Tags'))
-  fireEvent.click(screen.getByLabelText('Italian'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
 
   await waitFor(() => {
     expect(screen.getByText('Spaghetti')).toBeInTheDocument()
     expect(screen.queryByText('Salad')).toBeNull()
   })
 
-  fireEvent.click(screen.getByLabelText('Italian'))
-  fireEvent.click(screen.getByText('Ingredients'))
-  fireEvent.click(screen.getByLabelText('Lettuce'))
+  fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Ingredients' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lettuce' }))
 
   await waitFor(() => {
     expect(screen.getByText('Salad')).toBeInTheDocument()
@@ -139,8 +139,8 @@ test('filters recipes by course', async () => {
   await screen.findByText('Cake')
 
   fireEvent.click(screen.getByLabelText('Filter'))
-  fireEvent.click(screen.getByText('Course'))
-  fireEvent.click(screen.getByLabelText('dessert'))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'dessert' }))
 
   await waitFor(() => {
     expect(screen.getByText('Cake')).toBeInTheDocument()
@@ -543,4 +543,28 @@ test('cancelling the delete confirmation keeps the recipe', async () => {
   // Cancelling leaves the detail modal open, so the title is on screen twice:
   // the grid card behind it and the modal heading.
   expect(screen.getAllByText('Risotto')).toHaveLength(2)
+})
+
+// --- filters ----------------------------------------------------------------
+
+test('filter options are buttons, not sub-floor checkboxes', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+
+  const chip = screen.getByRole('button', { name: 'quick' })
+  expect(chip).toHaveAttribute('aria-pressed', 'false')
+
+  fireEvent.click(chip)
+  expect(screen.getByRole('button', { name: 'quick' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
 })

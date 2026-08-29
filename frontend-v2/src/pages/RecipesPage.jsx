@@ -1,9 +1,5 @@
 import React from 'react'
-import {
-  FunnelIcon,
-  ChevronDownIcon,
-  PlusIcon,
-} from '@heroicons/react/24/outline'
+import { FunnelIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
@@ -17,6 +13,7 @@ import {
   FavoriteSidesSelect,
   ImportRecipeModal,
   NewRecipeModal,
+  RecipeFilters,
   ShareRecipeModal,
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
@@ -120,9 +117,6 @@ export default function RecipesPage() {
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
   const [selectedCourses, setSelectedCourses] = React.useState([])
-  const [tagsOpen, setTagsOpen] = React.useState(false)
-  const [ingredientsOpen, setIngredientsOpen] = React.useState(false)
-  const [coursesOpen, setCoursesOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -181,6 +175,22 @@ export default function RecipesPage() {
     setSelectedCourses((cs) =>
       cs.includes(course) ? cs.filter((c) => c !== course) : [...cs, course]
     )
+
+  // One list drives the popover, the sheet and the active-filter chips, so a
+  // new group cannot be added to one surface and forgotten on the others.
+  const filterGroups = React.useMemo(
+    () => [
+      { label: 'Course', options: courseOptions, selected: selectedCourses, onSelect: toggleCourse },
+      { label: 'Tags', options: tags, selected: selectedTags, onSelect: toggleTag },
+      {
+        label: 'Ingredients',
+        options: ingredientNames,
+        selected: selectedIngredients,
+        onSelect: toggleIngredient,
+      },
+    ],
+    [courseOptions, selectedCourses, tags, selectedTags, ingredientNames, selectedIngredients],
+  )
 
   const handleSave = async (recipe) => {
     try {
@@ -270,30 +280,7 @@ export default function RecipesPage() {
                 className="absolute right-0 z-10 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
                 style={{ borderColor: 'var(--border-default)' }}
               >
-                <FilterGroup
-                  label="Course"
-                  open={coursesOpen}
-                  onToggle={() => setCoursesOpen((o) => !o)}
-                  options={courseOptions}
-                  selected={selectedCourses}
-                  onSelect={toggleCourse}
-                />
-                <FilterGroup
-                  label="Tags"
-                  open={tagsOpen}
-                  onToggle={() => setTagsOpen((o) => !o)}
-                  options={tags}
-                  selected={selectedTags}
-                  onSelect={toggleTag}
-                />
-                <FilterGroup
-                  label="Ingredients"
-                  open={ingredientsOpen}
-                  onToggle={() => setIngredientsOpen((o) => !o)}
-                  options={ingredientNames}
-                  selected={selectedIngredients}
-                  onSelect={toggleIngredient}
-                />
+                <RecipeFilters groups={filterGroups} />
               </div>
             )}
           </div>
@@ -589,37 +576,6 @@ export default function RecipesPage() {
             setShowImport(false)
           }}
         />
-      )}
-    </div>
-  )
-}
-
-function FilterGroup({ label, open, onToggle, options, selected, onSelect }) {
-  return (
-    <div className="mt-2 first:mt-0">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between text-sm"
-        onClick={onToggle}
-      >
-        {label}
-        <ChevronDownIcon
-          className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
-      {open && (
-        <div className="mt-1 max-h-40 overflow-y-auto">
-          {options.map((o) => (
-            <label key={o} className="flex items-center gap-1 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(o)}
-                onChange={() => onSelect(o)}
-              />
-              {o}
-            </label>
-          ))}
-        </div>
       )}
     </div>
   )
