@@ -20,7 +20,7 @@ export default function ActiveFilterChips({ filters, onClearAll }) {
           type="button"
           aria-label={`Remove filter ${value}`}
           onClick={onRemove}
-          className="inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-xs"
+          className="inline-flex min-h-11 items-center gap-1 rounded-full border px-3 text-xs"
           style={{ borderColor: 'var(--border-default)', color: 'var(--text-strong)' }}
         >
           {value}
@@ -31,7 +31,7 @@ export default function ActiveFilterChips({ filters, onClearAll }) {
         type="button"
         aria-label="Clear all filters"
         onClick={onClearAll}
-        className="min-h-9 px-2 text-xs underline"
+        className="min-h-11 px-2 text-xs underline"
         style={{ color: 'var(--c-neg)' }}
       >
         Clear all

@@ -280,8 +280,12 @@ export default function ShoppingListPage() {
               )}
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {/* `min-w-11`: a one-character label inside the button's own
+                  `px-3` came to about 28px wide, so §8.4's 44 x 44 was met in
+                  one dimension only. */}
               <Button
                 variant="a2"
+                className="min-w-11"
                 onClick={() => changeMealPeople(o, -1)}
                 aria-label="Fewer people"
               >
@@ -292,6 +296,7 @@ export default function ShoppingListPage() {
               </span>
               <Button
                 variant="a2"
+                className="min-w-11"
                 onClick={() => changeMealPeople(o, 1)}
                 aria-label="More people"
               >
