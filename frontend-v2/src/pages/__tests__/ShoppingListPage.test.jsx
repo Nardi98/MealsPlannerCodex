@@ -9,6 +9,7 @@ import ShoppingListPage from '../ShoppingListPage'
 import { mealPlansApi } from '../../api/mealPlansApi'
 import { recipesApi } from '../../api/recipesApi'
 import { authApi } from '../../api/authApi'
+import { stubViewport } from '../../test/stubViewport'
 
 vi.mock('../../api/mealPlansApi', () => ({
   mealPlansApi: {
@@ -139,4 +140,22 @@ test('an occurrence cooking exactly one batch is not annotated', async () => {
 
   await screen.findByText('A')
   expect(screen.queryByText(/^×/)).toBeNull()
+})
+
+// --- mobile layout ----------------------------------------------------------
+
+test('shows a single month on mobile', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+  await screen.findByText('ing1: 2 kg')
+
+  expect(screen.getAllByTestId('shopping-month')).toHaveLength(1)
+})
+
+test('keeps three months on desktop', async () => {
+  stubViewport(false)
+  render(<ShoppingListPage />)
+  await screen.findByText('A')
+
+  expect(screen.getAllByTestId('shopping-month')).toHaveLength(3)
 })

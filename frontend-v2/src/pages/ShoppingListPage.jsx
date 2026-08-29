@@ -8,6 +8,7 @@ import {
   DateRangePicker,
   MergeIngredientsModal,
 } from '../components'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 import { authApi } from '../api/authApi'
@@ -21,6 +22,7 @@ import {
 const MEAL_SLOT = { 1: 'Lunch', 2: 'Dinner' }
 
 export default function ShoppingListPage() {
+  const isMobile = useIsMobile()
   const [startDate, setStartDate] = React.useState(() =>
     new Date().toISOString().slice(0, 10),
   )
@@ -99,16 +101,19 @@ export default function ShoppingListPage() {
     URL.revokeObjectURL(url)
   }
 
+  // The grid is read-only: it only tints a range the picker directly above
+  // already states in words. Three of them full-width is two screens before
+  // any content on a phone, so one is confirmation enough there.
   const months = React.useMemo(() => {
     if (!startDate) return []
     const base = new Date(startDate)
     const first = new Date(base.getFullYear(), base.getMonth(), 1)
-    return Array.from({ length: 3 }, (_, i) => {
+    return Array.from({ length: isMobile ? 1 : 3 }, (_, i) => {
       const d = new Date(first)
       d.setMonth(first.getMonth() + i)
       return d
     })
-  }, [startDate])
+  }, [startDate, isMobile])
 
   const handleLoad = React.useCallback(async () => {
     try {
@@ -212,7 +217,7 @@ export default function ShoppingListPage() {
             Select a date range to highlight days covered by this grocery list.
           </p>
         </div>
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <DateRangePicker
             label="Date range"
             align="right"
@@ -236,10 +241,14 @@ export default function ShoppingListPage() {
           </label>
         </div>
       </div>
-      <Card className="px-4 py-4 sm:px-8 sm:py-6">
+      <Card className="px-4 py-4 md:px-8 md:py-6">
         <div className="flex flex-wrap justify-between gap-4 text-xs">
           {months.map((m) => (
-            <div key={m.toISOString()} className="flex basis-full sm:basis-[30%] justify-center">
+            <div
+              key={m.toISOString()}
+              data-testid="shopping-month"
+              className="flex basis-full justify-center md:basis-[30%]"
+            >
               <MonthGrid baseDate={m} startDate={start} endDate={end} />
             </div>
           ))}
