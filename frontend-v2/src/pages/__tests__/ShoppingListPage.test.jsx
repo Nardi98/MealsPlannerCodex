@@ -48,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   cleanup()
 })
 
@@ -257,13 +258,25 @@ test('ticked items are left out of the export', async () => {
   // jsdom implements neither of these, so assign them rather than spying.
   URL.createObjectURL = vi.fn(() => 'blob:x')
   URL.revokeObjectURL = vi.fn()
-  const blobSpy = vi.spyOn(globalThis, 'Blob')
+  // A stub class, not vi.spyOn: a spy replaces Blob with a plain function,
+  // which `new Blob(...)` then throws on -- after the call is recorded, so the
+  // assertion passes while the export has actually blown up.
+  const written = []
+  class FakeBlob {
+    constructor(parts, options) {
+      written.push(parts)
+      this.parts = parts
+      this.type = options?.type
+    }
+  }
+  vi.stubGlobal('Blob', FakeBlob)
 
   render(<ShoppingListPage />)
   fireEvent.click(await screen.findByRole('button', { name: /ing1: 2 kg/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Export open items' }))
 
-  const text = blobSpy.mock.calls[0][0][0]
+  expect(written).toHaveLength(1)
+  const text = written[0][0]
   expect(text).not.toMatch(/ing1/)
   expect(text).toMatch(/ing2/)
 })
