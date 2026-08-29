@@ -10,9 +10,12 @@ import { useIsMobile } from '../hooks/useIsMobile'
 // it is asked for. `tourId` exists because of that — a tutorial step anchored
 // inside the children has nothing to point at while they are gone, so the
 // toggle carries the fallback anchor.
-export default function MobileCollapse({ title, tourId, children }) {
+//
+// `defaultOpen` is the caller's call: folding away is right for a section a
+// visit rarely needs, wrong for one it usually came to use.
+export default function MobileCollapse({ title, tourId, defaultOpen = false, children }) {
   const isMobile = useIsMobile()
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(defaultOpen)
 
   if (!isMobile) return children
 

@@ -105,7 +105,7 @@ export default function MealPlanPage() {
       />
       </div>
       <div data-plan-section>
-      <MobileCollapse title="Plan settings" tourId="mealplan-settings-toggle">
+      <MobileCollapse title="Plan settings" tourId="mealplan-settings-toggle" defaultOpen>
       <GenerationForm
         form={generation.form}
         tags={tags}

@@ -190,7 +190,7 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
   expect(mealPlansApi.create).toHaveBeenCalledTimes(1)
 })
 
-test('on mobile the plan settings sit below the calendar, collapsed', async () => {
+test('on mobile the plan settings sit below the calendar, open', async () => {
   stubViewport(true)
   const { container } = render(<MealPlanPage />)
   await screen.findByText('Meal Plan')
@@ -198,9 +198,11 @@ test('on mobile the plan settings sit below the calendar, collapsed', async () =
   const toggle = screen.getByRole('button', { name: /plan settings/i })
   const calendar = container.querySelector('[data-tour="mealplan-calendar"]')
 
-  // Collapsed by default: the calendar is what the page is for.
-  expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  expect(container.querySelector('[data-tour="mealplan-tabs"]')).toBeNull()
+  // Open by default: the settings are what most visits come to change, and a
+  // collapsed panel made every generation a two-tap job. The toggle stays, so
+  // the calendar is still one tap from filling the screen.
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(container.querySelector('[data-tour="mealplan-tabs"]')).not.toBeNull()
 
   // The settings used to be pulled above the calendar with CSS `order`, which
   // put a control panel between the heading and the plan itself. Visual order
