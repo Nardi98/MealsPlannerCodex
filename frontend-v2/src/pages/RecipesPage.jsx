@@ -13,6 +13,7 @@ import { Modal } from '../components/Modal'
 import { PageTour } from '../tutorial/PageTour'
 import {
   AttributionLine,
+  ConfirmModal,
   FavoriteSidesSelect,
   ImportRecipeModal,
   NewRecipeModal,
@@ -98,10 +99,12 @@ export default function RecipesPage() {
   const [loaded, setLoaded] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   // The share dialog belongs to whichever recipe is open; closing or switching
   // the detail modal must not carry it over to the next one.
   React.useEffect(() => {
     setSharing(false)
+    setConfirmingDelete(false)
   }, [opened])
   const [search, setSearch] = React.useState('')
   const [showFilters, setShowFilters] = React.useState(false)
@@ -496,11 +499,10 @@ export default function RecipesPage() {
             )}
             <div className="flex justify-end gap-2">
               {/* SH-12: the share control lives in the existing detail modal. */}
-              <Button size="sm" variant="secondary" onClick={() => setSharing(true)}>
+              <Button variant="secondary" onClick={() => setSharing(true)}>
                 Share
               </Button>
               <Button
-                size="sm"
                 variant="accent"
                 onClick={() => {
                   setEditing(openRecipe)
@@ -510,12 +512,38 @@ export default function RecipesPage() {
               >
                 Edit
               </Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(openRecipe.id)}>
+            </div>
+            {/* Separated from the pair above and guarded: this is the one
+                action in the app with no undo, and it used to sit on a 36px
+                target immediately beside Edit. */}
+            <div
+              className="mt-1 border-t pt-3"
+              style={{ borderColor: 'var(--border-default)' }}
+            >
+              <Button
+                variant="ghost"
+                className="w-full"
+                style={{ color: 'var(--c-neg)' }}
+                onClick={() => setConfirmingDelete(true)}
+              >
                 Delete
               </Button>
             </div>
           </div>
         </Modal>
+      )}
+
+      {openRecipe && confirmingDelete && (
+        <ConfirmModal
+          title={`Delete ${openRecipe.title}?`}
+          message="This can't be undone."
+          confirmLabel="Delete recipe"
+          onConfirm={() => {
+            setConfirmingDelete(false)
+            handleDelete(openRecipe.id)
+          }}
+          onCancel={() => setConfirmingDelete(false)}
+        />
       )}
 
       {openRecipe && (

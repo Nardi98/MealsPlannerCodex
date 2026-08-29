@@ -308,7 +308,9 @@ test('deletes a recipe from the detail modal', async () => {
 
   render(<RecipesPage />)
   fireEvent.click(await screen.findByText('Risotto'))
-  fireEvent.click(await screen.findByText('Delete'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  // The delete is now guarded: the first click only asks.
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete recipe' }))
 
   await waitFor(() => expect(screen.queryByText('Risotto')).toBeNull())
   expect(recipesApi.delete).toHaveBeenCalledWith(1)
@@ -522,4 +524,23 @@ test('the card meta line keeps full words on desktop', async () => {
   expect(
     await screen.findByText('main · 2 ingredients · serves 4'),
   ).toBeInTheDocument()
+})
+
+test('cancelling the delete confirmation keeps the recipe', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+  recipesApi.delete = vi.fn().mockResolvedValue(null)
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+  expect(recipesApi.delete).not.toHaveBeenCalled()
+  // Cancelling leaves the detail modal open, so the title is on screen twice:
+  // the grid card behind it and the modal heading.
+  expect(screen.getAllByText('Risotto')).toHaveLength(2)
 })
