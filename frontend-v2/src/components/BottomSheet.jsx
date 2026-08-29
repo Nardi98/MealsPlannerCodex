@@ -1,6 +1,8 @@
+import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { IconButton } from './IconButton'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { SCRIM, Z } from '../lib/layers'
 
 /**
@@ -17,7 +19,9 @@ import { SCRIM, Z } from '../lib/layers'
  * the content is.
  */
 export default function BottomSheet({ title, onClose, footer, children }) {
+  const panel = React.useRef(null)
   useEscapeKey(true, onClose)
+  useFocusTrap(true, panel)
 
   return (
     <div
@@ -32,6 +36,7 @@ export default function BottomSheet({ title, onClose, footer, children }) {
       }}
     >
       <div
+        ref={panel}
         role="dialog"
         aria-modal="true"
         aria-label={title}

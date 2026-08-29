@@ -68,3 +68,47 @@ test('renders a footer when given one', () => {
 
   expect(screen.getByRole('button', { name: 'Show 3' })).toBeInTheDocument()
 })
+
+test('takes focus on open and gives it back on close', () => {
+  const opener = document.createElement('button')
+  document.body.appendChild(opener)
+  opener.focus()
+
+  const { unmount } = render(
+    <BottomSheet title="Filters" onClose={() => {}}>
+      <button type="button">chip</button>
+    </BottomSheet>,
+  )
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+
+  unmount()
+
+  expect(document.activeElement).toBe(opener)
+  opener.remove()
+})
+
+test('Tab does not escape into the page behind it', () => {
+  render(
+    <BottomSheet title="Filters" onClose={() => {}}>
+      <button type="button">chip</button>
+    </BottomSheet>,
+  )
+  screen.getByRole('button', { name: 'chip' }).focus()
+
+  fireEvent.keyDown(document, { key: 'Tab' })
+
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+})
+
+test('stops the page behind it scrolling', () => {
+  const { unmount } = render(
+    <BottomSheet title="Filters" onClose={() => {}}>
+      <p>body</p>
+    </BottomSheet>,
+  )
+  expect(document.body.style.overflow).toBe('hidden')
+
+  unmount()
+
+  expect(document.body.style.overflow).not.toBe('hidden')
+})

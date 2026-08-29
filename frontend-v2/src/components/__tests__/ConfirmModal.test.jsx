@@ -43,3 +43,30 @@ test('Escape cancels', () => {
 
   expect(onCancel).toHaveBeenCalledTimes(1)
 })
+
+// Cancel is the safe default and comes first in the tab order, so it is also
+// what a keyboard lands on when the gate opens.
+test('takes focus on open and gives it back on close', () => {
+  const opener = document.createElement('button')
+  document.body.appendChild(opener)
+  opener.focus()
+
+  const { unmount } = render(
+    <ConfirmModal {...props} onConfirm={() => {}} onCancel={() => {}} />,
+  )
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+
+  unmount()
+
+  expect(document.activeElement).toBe(opener)
+  opener.remove()
+})
+
+test('Tab does not escape into the dialog it was raised from', () => {
+  render(<ConfirmModal {...props} onConfirm={() => {}} onCancel={() => {}} />)
+  screen.getByRole('button', { name: 'Delete' }).focus()
+
+  fireEvent.keyDown(document, { key: 'Tab' })
+
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Cancel' }))
+})
