@@ -107,14 +107,12 @@ function Shell() {
             style={{ opacity: 0.9 }}
           />
         </div>
-        {/* Search and the tutorial replay move into the drawer on mobile; the
-            account menu stays put, because logging out must never be more than
-            one tap away. */}
+        {/* Only the search moves into the drawer on mobile. Help and the account
+            menu stay put: a tutorial nobody can find is a tutorial nobody runs,
+            and logging out must never be more than one tap away. */}
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-3">
-            <Input placeholder="Search…" style={{ width: 220 }} />
-            <ReplayTutorialButton />
-          </div>
+          <Input placeholder="Search…" style={{ width: 220 }} className="hidden md:block" />
+          <ReplayTutorialButton />
           <ProfileMenu />
         </div>
       </header>
@@ -123,7 +121,6 @@ function Shell() {
         open={isMobile && menuOpen}
         onClose={closeMenu}
         header={<Input placeholder="Search…" className="w-full" />}
-        footer={<ReplayTutorialButton />}
       />
 
       <div

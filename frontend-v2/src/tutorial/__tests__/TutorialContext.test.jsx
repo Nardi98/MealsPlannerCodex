@@ -38,6 +38,20 @@ test('the replay button restarts a tour the user has already finished', () => {
   expect(screen.getByText('Only step')).toBeInTheDocument()
 })
 
+test('the replay button meets the 44px tap target', () => {
+  // It is a header control on a phone now, not a desktop-only affordance, so
+  // design guide §8.4 applies to it like every other icon action.
+  markAllToursDone()
+  render(
+    <TutorialProvider>
+      <ReplayTutorialButton />
+      <PageTour id="recipes" steps={STEPS} />
+    </TutorialProvider>,
+  )
+  const button = screen.getByRole('button', { name: 'Replay tutorial' })
+  expect(button).toHaveClass('h-11', 'w-11')
+})
+
 test('the button disappears again when the page with the tour unmounts', () => {
   markAllToursDone()
   const { rerender } = render(

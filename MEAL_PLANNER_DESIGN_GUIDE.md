@@ -301,9 +301,9 @@ desktop shell, and nothing else may invent a second one.
 - **Below `md`:** the sidebar column is `hidden`; a **burger** button sits left of
   the logo and opens `NavDrawer` — a scrim plus a left-anchored panel rendering
   the same `Sidebar`, closing on scrim click, `Escape`, and route change. Search
-  sits at the top of the drawer, above the nav items; the tutorial replay sits
-  in its footer. **The account menu stays in
-  the header:** logging out is never more than one tap away.
+  sits at the top of the drawer, above the nav items. **The tutorial replay and
+  the account menu stay in the header:** a tutorial nobody can find is a
+  tutorial nobody runs, and logging out is never more than one tap away.
 - **At `md` and up:** today's layout — sticky green sidebar column, full header.
 - Stacking order is `Z` in `src/lib/layers.js` — `fab: 50` (above the page,
   under everything that covers it), `drawer: 55` (above the page and the profile
@@ -314,7 +314,8 @@ desktop shell, and nothing else may invent a second one.
 ### Page patterns
 - **Meal plan:** the 7-day grid is desktop-only. Below `md` it stacks into one
   section per day, each labelling its Lunch/Dinner slots, and the plan settings
-  move above it (`order-1`) folded into a `MobileCollapse`, closed by default.
+  sit below it in a `MobileCollapse` that is **open by default** — settings are
+  what most visits come to change, and the toggle still folds them away.
 - **Collapsing on mobile:** wrap the section in `MobileCollapse`, which is a
   no-op on desktop. Because collapsed means unmounted, any tutorial step
   anchored inside it needs the toggle's `tourId` appended to its target list.
