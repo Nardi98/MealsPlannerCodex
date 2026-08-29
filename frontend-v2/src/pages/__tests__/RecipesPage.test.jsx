@@ -117,6 +117,10 @@ test('filters recipes by tags and ingredients', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
   fireEvent.click(screen.getByRole('button', { name: 'Ingredients' }))
+  // The ingredient group lists nothing until it is searched.
+  fireEvent.change(screen.getByPlaceholderText('Search Ingredients…'), {
+    target: { value: 'lettuce' },
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Lettuce' }))
 
   await waitFor(() => {
@@ -814,4 +818,38 @@ test('the empty state clears the search and the filters together', async () => {
   expect(await screen.findByText('Spaghetti')).toBeInTheDocument()
   expect(screen.getByPlaceholderText('Search recipes…')).toHaveValue('')
   expect(screen.getByLabelText('Filter')).not.toHaveTextContent('1')
+})
+
+// An account's ingredient catalogue is the one filter list long enough that
+// showing all of it is the problem; course and tags are short.
+test('only the ingredient filter is searchable', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Spaghetti',
+      tags: ['Italian'],
+      ingredients: [{ name: 'Tomato' }],
+      course: 'main',
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'Italian' }])
+  ingredientsApi.fetchAll.mockResolvedValue([
+    { id: 1, name: 'Tomato' },
+    { id: 2, name: 'Lettuce' },
+  ])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ingredients' }))
+  expect(screen.queryByRole('button', { name: 'Lettuce' })).toBeNull()
+  fireEvent.change(screen.getByPlaceholderText('Search Ingredients…'), {
+    target: { value: 'let' },
+  })
+  expect(screen.getByRole('button', { name: 'Lettuce' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  expect(screen.getByRole('button', { name: 'Italian' })).toBeInTheDocument()
+  expect(screen.queryByPlaceholderText(/^Search Tags/)).toBeNull()
 })

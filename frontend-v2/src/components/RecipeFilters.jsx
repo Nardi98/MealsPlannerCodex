@@ -1,5 +1,6 @@
 import React from 'react'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
+import { Input } from './Input'
 
 /**
  * The three recipe filter groups -- course, tags, ingredients -- as collapsible
@@ -15,14 +16,89 @@ import { ChevronDownIcon } from '@heroicons/react/24/outline'
  * minimum height, sized for dense inline rows, and raising it to 44px would
  * change every other place it appears.
  *
- * `groups` is `[{ label, options, selected, onSelect }]`.
+ * `groups` is `[{ label, options, selected, onSelect, searchable }]`.
  */
+
+function Chip({ option, active, onSelect }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onSelect(option)}
+      className="min-h-11 rounded-full border px-4 text-sm"
+      style={{
+        borderColor: active ? 'var(--c-a2)' : 'var(--border-default)',
+        backgroundColor: active
+          ? 'color-mix(in srgb, var(--c-a2) 14%, transparent)'
+          : 'transparent',
+        color: active ? 'var(--c-a2)' : 'var(--text-strong)',
+      }}
+    >
+      {option}
+    </button>
+  )
+}
+
+/**
+ * The options of one open group.
+ *
+ * A component of its own so that `query` unmounts with the group: collapsing
+ * and reopening starts clean without an effect having to notice.
+ *
+ * A `searchable` group lists nothing until something is typed. The ingredient
+ * group is the whole of an account's catalogue -- rendering it as 44px chips
+ * meant hundreds of them in one sheet, which is the problem the chips were
+ * supposed to solve rather than a smaller version of it. Selected options are
+ * the exception and always show: a filter you have switched on has to stay
+ * reachable, or turning it off means guessing the name of what you picked.
+ */
+function FilterOptions({ label, options, selected, onSelect, searchable }) {
+  const [query, setQuery] = React.useState('')
+
+  const matches = React.useMemo(() => {
+    if (!searchable) return options
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return options.filter((o) => o.toLowerCase().includes(q))
+  }, [options, query, searchable])
+
+  // Selected first and only once, so a selected match is not listed twice.
+  const listed = searchable
+    ? [...selected, ...matches.filter((o) => !selected.includes(o))]
+    : matches
+
+  return (
+    <div className="flex flex-col gap-2 pb-2">
+      {searchable && (
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${label}…`}
+          aria-label={`Search ${label}`}
+        />
+      )}
+      {listed.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {listed.map((option) => (
+            <Chip
+              key={option}
+              option={option}
+              active={selected.includes(option)}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function RecipeFilters({ groups }) {
   const [openLabel, setOpenLabel] = React.useState(null)
 
   return (
     <div className="flex flex-col gap-2">
-      {groups.map(({ label, options, selected, onSelect }) => {
+      {groups.map(({ label, options, selected, onSelect, searchable }) => {
         const open = openLabel === label
         return (
           <div key={label}>
@@ -45,29 +121,13 @@ export default function RecipeFilters({ groups }) {
               />
             </button>
             {open && (
-              <div className="flex flex-wrap gap-2 pb-2">
-                {options.map((option) => {
-                  const active = selected.includes(option)
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => onSelect(option)}
-                      className="min-h-11 rounded-full border px-4 text-sm"
-                      style={{
-                        borderColor: active ? 'var(--c-a2)' : 'var(--border-default)',
-                        backgroundColor: active
-                          ? 'color-mix(in srgb, var(--c-a2) 14%, transparent)'
-                          : 'transparent',
-                        color: active ? 'var(--c-a2)' : 'var(--text-strong)',
-                      }}
-                    >
-                      {option}
-                    </button>
-                  )
-                })}
-              </div>
+              <FilterOptions
+                label={label}
+                options={options}
+                selected={selected}
+                onSelect={onSelect}
+                searchable={searchable}
+              />
             )}
           </div>
         )

@@ -210,6 +210,9 @@ export default function RecipesPage() {
         selected: selectedIngredients,
         onSelect: toggleIngredient,
         clear: () => setSelectedIngredients([]),
+        // The only group long enough to need it: course and tags are a handful
+        // each, while this is the account's whole catalogue.
+        searchable: true,
       },
     ],
     [courseOptions, selectedCourses, tags, selectedTags, ingredientNames, selectedIngredients],
@@ -339,7 +342,10 @@ export default function RecipesPage() {
             </Button>
             {showFilters && !isMobile && (
               <div
-                className="absolute right-0 z-10 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
+                // 20rem, up from 14: the chips inside grew from 13px checkboxes to
+                // `px-4 min-h-11`, and a long ingredient name wrapped three
+                // times in 224px. Still clamped to the viewport, per §8.
+                className="absolute right-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
                 style={{ borderColor: 'var(--border-default)' }}
               >
                 <RecipeFilters groups={filterGroups} />
