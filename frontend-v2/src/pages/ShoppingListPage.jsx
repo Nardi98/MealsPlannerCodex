@@ -233,6 +233,11 @@ export default function ShoppingListPage() {
           Recipes
         </h2>
       </div>
+      {occurrences.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: 'var(--text-subtle)' }}>
+          No meals planned in this range.
+        </p>
+      ) : (
       <ul className="space-y-2">
         {occurrences.map((o) => {
           const key = `${o.planDate}-${o.mealNumber}`
@@ -297,6 +302,7 @@ export default function ShoppingListPage() {
           )
         })}
       </ul>
+      )}
     </Card>
   )
 
@@ -321,6 +327,11 @@ export default function ShoppingListPage() {
           </Button>
         </div>
       </div>
+      {ingredients.length === 0 ? (
+        <p className="py-6 text-center text-sm" style={{ color: 'var(--text-subtle)' }}>
+          Nothing to buy for this range yet.
+        </p>
+      ) : (
       <ul className="space-y-2">
         {ingredients.map((ing) => {
           const isCrossed = isCrossedOff(ing)
@@ -368,6 +379,7 @@ export default function ShoppingListPage() {
           )
         })}
       </ul>
+      )}
     </Card>
   )
 

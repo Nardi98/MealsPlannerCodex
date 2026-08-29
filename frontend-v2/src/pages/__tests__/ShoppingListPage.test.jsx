@@ -267,3 +267,16 @@ test('ticked items are left out of the export', async () => {
   expect(text).not.toMatch(/ing1/)
   expect(text).toMatch(/ing2/)
 })
+
+test('says so when the range holds no meals', async () => {
+  mealPlansApi.fetchRange.mockResolvedValue({})
+
+  render(<ShoppingListPage />)
+
+  expect(
+    await screen.findByText('No meals planned in this range.'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText('Nothing to buy for this range yet.'),
+  ).toBeInTheDocument()
+})
