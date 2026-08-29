@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDownIcon } from '@heroicons/react/24/outline'
 import { Input } from './Input'
+import ToggleChip from './ToggleChip'
 
 /**
  * The three recipe filter groups -- course, tags, ingredients -- as collapsible
@@ -12,32 +13,12 @@ import { Input } from './Input'
  * §8.4 requires, and three of them nested their own scroll areas inside a
  * popover inside the page scroll.
  *
- * `ToggleChip` is deliberately not reused: it is `px-2.5 py-1 text-xs` with no
- * minimum height, sized for dense inline rows, and raising it to 44px would
- * change every other place it appears.
+ * The chips are `ToggleChip size="lg"` -- the same component the dense inline
+ * rows use, at the 44px size. It carries the accent recipe so this file does
+ * not own a second copy of it.
  *
  * `groups` is `[{ label, options, selected, onSelect, searchable }]`.
  */
-
-function Chip({ option, active, onSelect }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={() => onSelect(option)}
-      className="min-h-11 rounded-full border px-4 text-sm"
-      style={{
-        borderColor: active ? 'var(--c-a2)' : 'var(--border-default)',
-        backgroundColor: active
-          ? 'color-mix(in srgb, var(--c-a2) 14%, transparent)'
-          : 'transparent',
-        color: active ? 'var(--c-a2)' : 'var(--text-strong)',
-      }}
-    >
-      {option}
-    </button>
-  )
-}
 
 /**
  * The options of one open group.
@@ -55,17 +36,13 @@ function Chip({ option, active, onSelect }) {
 function FilterOptions({ label, options, selected, onSelect, searchable }) {
   const [query, setQuery] = React.useState('')
 
-  const matches = React.useMemo(() => {
+  // Selected first and only once, so a selected match is not listed twice.
+  const listed = React.useMemo(() => {
     if (!searchable) return options
     const q = query.trim().toLowerCase()
-    if (!q) return []
-    return options.filter((o) => o.toLowerCase().includes(q))
-  }, [options, query, searchable])
-
-  // Selected first and only once, so a selected match is not listed twice.
-  const listed = searchable
-    ? [...selected, ...matches.filter((o) => !selected.includes(o))]
-    : matches
+    const hits = q ? options.filter((o) => o.toLowerCase().includes(q)) : []
+    return [...selected, ...hits.filter((o) => !selected.includes(o))]
+  }, [options, query, searchable, selected])
 
   return (
     <div className="flex flex-col gap-2 pb-2">
@@ -77,18 +54,18 @@ function FilterOptions({ label, options, selected, onSelect, searchable }) {
           aria-label={`Search ${label}`}
         />
       )}
-      {listed.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {listed.map((option) => (
-            <Chip
-              key={option}
-              option={option}
-              active={selected.includes(option)}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2">
+        {listed.map((option) => (
+          <ToggleChip
+            key={option}
+            size="lg"
+            active={selected.includes(option)}
+            onClick={() => onSelect(option)}
+          >
+            {option}
+          </ToggleChip>
+        ))}
+      </div>
     </div>
   )
 }

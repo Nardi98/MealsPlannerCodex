@@ -56,7 +56,7 @@ function UnitSelect({ label, value, onChange }) {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       required
-      className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+      className="rounded-xl border px-3 py-2 text-sm"
       style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
     >
       <option value="">Select unit</option>
@@ -205,7 +205,7 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
                 value={raw}
                 onChange={(e) => setRaw(e.target.value)}
                 rows={5}
-                className="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+                className="w-full rounded-xl border px-3 py-2 text-sm"
                 style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
               />
             </div>

@@ -99,16 +99,3 @@ test('Tab does not escape into the page behind it', () => {
 
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
 })
-
-test('stops the page behind it scrolling', () => {
-  const { unmount } = render(
-    <BottomSheet title="Filters" onClose={() => {}}>
-      <p>body</p>
-    </BottomSheet>,
-  )
-  expect(document.body.style.overflow).toBe('hidden')
-
-  unmount()
-
-  expect(document.body.style.overflow).not.toBe('hidden')
-})

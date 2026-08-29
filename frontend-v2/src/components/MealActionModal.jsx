@@ -196,7 +196,7 @@ export default function MealActionModal({
                   <button
                     key={r.id}
                     type="button"
-                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100"
                     onClick={() => handleSwapClick(r.title)}
                   >
                     {r.title}
@@ -261,7 +261,7 @@ export default function MealActionModal({
                   <button
                     key={r.id}
                     type="button"
-                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+                    className="flex min-h-11 w-full items-center rounded px-2 text-left hover:bg-gray-100 focus:bg-gray-100"
                     onClick={() => handleSwapSideClick(r.title)}
                   >
                     {r.title}

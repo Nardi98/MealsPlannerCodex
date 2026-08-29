@@ -9,12 +9,15 @@ export function Button({ variant='primary', size='md', Icon, children, className
     a2:        { bg: 'var(--c-a2)', fg: 'var(--text-on-accent)' },
     ghost:     { bg: 'transparent', fg: 'var(--text-strong)', border: 'var(--border)' },
   }[variant]
-  // Design guide §8.4: 44px (`min-h-11`) is the floor for a tap target. `sm`
-  // is reserved for dense inline rows and gets 36px, still finger-sized.
+  // Design guide §8.4: 44px is the floor for a tap target, in both dimensions.
+  // The width matters for the single-character buttons -- the shopping list's
+  // people steppers were 44 tall and 28 wide. Text labels are wider than the
+  // minimum anyway, so it costs them nothing. `sm` is reserved for dense inline
+  // rows and gets 36px, still finger-sized.
   const sizeMap = {
-    sm: 'min-h-9 px-2 py-1 text-xs',
-    md: 'min-h-11 px-3 py-2 text-sm',
-    lg: 'min-h-11 px-4 py-2.5 text-sm',
+    sm: 'min-h-9 min-w-9 px-2 py-1 text-xs',
+    md: 'min-h-11 min-w-11 px-3 py-2 text-sm',
+    lg: 'min-h-11 min-w-11 px-4 py-2.5 text-sm',
   }[size]
 
   return (

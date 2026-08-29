@@ -71,12 +71,14 @@ export function useFocusTrap(active, containerRef) {
       if (e.key !== 'Tab') return
       const focusable = focusableWithin(container)
       if (focusable.length === 0) return
-      const edge = e.shiftKey ? focusable[0] : focusable[focusable.length - 1]
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const [edge, wrapsTo] = e.shiftKey ? [first, last] : [last, first]
       // Only the edges are handled; anywhere else the browser's own order is
       // better than anything reimplemented here.
       if (document.activeElement !== edge) return
       e.preventDefault()
-      ;(e.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus()
+      wrapsTo.focus()
     }
     document.addEventListener('keydown', onKeyDown)
     lockPageScroll()

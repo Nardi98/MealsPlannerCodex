@@ -27,12 +27,8 @@ export default function Sidebar({ onNavigate }) {
 
   return (
     <div
-      className="flex flex-col gap-1"
+      className="surface-dark flex flex-col gap-1"
       style={{
-        background: 'var(--surface-sidebar)',
-        // The one dark surface in the app. The default focus ring is dark
-        // green and would vanish against it, so this subtree rings in gold.
-        '--focus-ring': 'var(--c-a2)',
         borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-md)',
         padding: 12,

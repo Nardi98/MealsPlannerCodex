@@ -357,6 +357,9 @@ desktop shell, and nothing else may invent a second one.
   back to the opener on close, and a refcounted page-scroll lock so a nested
   dialog closing does not hand scrolling back to a page still covered. Anything
   rendering through `ModalScrim` gets it already.
+  **Known deviation:** `NavDrawer` declares `aria-modal` but hand-rolls its own
+  scrim and Escape listener and does not trap. It is the one overlay still
+  outstanding; do not copy it.
 - **Focus is always visible.** `index.css` rings every interactive element on
   `:focus-visible` with `outline` (not `box-shadow`, which rounded chips and
   `overflow-hidden` cards clip). The colour is `--focus-ring`; a dark surface

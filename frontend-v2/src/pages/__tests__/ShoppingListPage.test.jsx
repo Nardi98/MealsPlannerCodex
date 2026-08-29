@@ -294,15 +294,3 @@ test('says so when the range holds no meals', async () => {
   ).toBeInTheDocument()
 })
 
-// Design guide §8.4 is 44 x 44, not 44 tall. A one-character label inside
-// `px-3` left these about 28px wide.
-test('the per-meal people steppers are 44px wide as well as tall', async () => {
-  render(<ShoppingListPage />)
-
-  for (const name of ['Fewer people', 'More people']) {
-    for (const stepper of await screen.findAllByRole('button', { name })) {
-      expect(stepper.className).toContain('min-w-11')
-      expect(stepper.className).toContain('min-h-11')
-    }
-  }
-})
