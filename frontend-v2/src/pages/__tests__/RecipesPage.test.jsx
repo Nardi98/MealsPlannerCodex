@@ -15,6 +15,7 @@ import RecipesPage from '../RecipesPage'
 import { recipesApi } from '../../api/recipesApi'
 import { tagsApi } from '../../api/tagsApi'
 import { ingredientsApi } from '../../api/ingredientsApi'
+import { stubViewport } from '../../test/stubViewport'
 
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: {
@@ -477,4 +478,48 @@ test('the opened recipe says how many people its quantities are written for', as
   await waitFor(() =>
     expect(screen.getAllByText(/ingredients for 4 people/i).length).toBeGreaterThan(0),
   )
+})
+
+// --- card meta line ---------------------------------------------------------
+
+test('the card meta line is abbreviated on mobile so it fits one line', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Ribollita',
+      course: 'main',
+      servings: 4,
+      tags: [],
+      ingredients: [{ name: 'Cavolo nero' }, { name: 'Fagioli' }],
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  expect(await screen.findByText('main · 2 ingr · 4p')).toBeInTheDocument()
+})
+
+test('the card meta line keeps full words on desktop', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Ribollita',
+      course: 'main',
+      servings: 4,
+      tags: [],
+      ingredients: [{ name: 'Cavolo nero' }, { name: 'Fagioli' }],
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  expect(
+    await screen.findByText('main · 2 ingredients · serves 4'),
+  ).toBeInTheDocument()
 })

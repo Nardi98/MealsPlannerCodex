@@ -20,6 +20,7 @@ import {
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
+import { useIsMobile } from '../hooks/useIsMobile'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ingredientsApi } from '../api/ingredientsApi'
@@ -81,6 +82,7 @@ const StarterRecipesModal = React.lazy(() => import('../components/StarterRecipe
 const STARTER_DISMISSED_KEY = 'starterRecipesDismissed'
 
 export default function RecipesPage() {
+  const isMobile = useIsMobile()
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
@@ -377,6 +379,7 @@ export default function RecipesPage() {
             </div>
             <div className="flex flex-1 flex-col gap-1.5" style={{ padding: 12 }}>
               <div
+                className="line-clamp-2"
                 style={{
                   fontFamily: 'var(--font-display)',
                   fontWeight: 'var(--weight-semibold)',
@@ -387,12 +390,13 @@ export default function RecipesPage() {
               >
                 {r.title}
               </div>
-              <div
-                className="flex items-center gap-1"
-                style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}
-              >
-                {r.course} · {(r.ingredients || []).length} ingredients ·
-                serves {basisOf(r.servings)}
+              {/* Plain flowing text, not a flex row: flex makes each text run
+                  an unbreakable item, so the line broke between "7" and
+                  "ingredients" and stranded the portion count. */}
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                {isMobile
+                  ? `${r.course} · ${(r.ingredients || []).length} ingr · ${basisOf(r.servings)}p`
+                  : `${r.course} · ${(r.ingredients || []).length} ingredients · serves ${basisOf(r.servings)}`}
               </div>
               <div className="mt-auto flex flex-wrap gap-1">
                 {(r.tags || []).slice(0, 2).map((t) => (
