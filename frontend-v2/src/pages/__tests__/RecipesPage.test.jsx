@@ -568,3 +568,86 @@ test('filter options are buttons, not sub-floor checkboxes', async () => {
     'true',
   )
 })
+
+test('the funnel counts the active filters', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  // jest-dom's toHaveTextContent('') matches anything, so assert the negative
+  // against the value that will appear rather than against emptiness.
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('1')
+
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+
+  expect(screen.getByLabelText('Filter')).toHaveTextContent('1')
+})
+
+test('an active filter shows as a removable chip', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+
+  expect(screen.queryByText('Pizza')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter quick' }))
+
+  expect(await screen.findByText('Pizza')).toBeInTheDocument()
+})
+
+test('clear all drops every filter at once', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'first-course', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'main' }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }))
+
+  expect(await screen.findByText('Pizza')).toBeInTheDocument()
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('2')
+})
+
+test('Escape closes the filter popover', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  expect(screen.getByRole('button', { name: 'Course' })).toBeInTheDocument()
+
+  fireEvent.keyDown(document, { key: 'Escape' })
+
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Course' })).toBeNull(),
+  )
+})

@@ -8,6 +8,7 @@ import { Icon } from '../components/Icon'
 import { Modal } from '../components/Modal'
 import { PageTour } from '../tutorial/PageTour'
 import {
+  ActiveFilterChips,
   AttributionLine,
   ConfirmModal,
   FavoriteSidesSelect,
@@ -192,6 +193,41 @@ export default function RecipesPage() {
     [courseOptions, selectedCourses, tags, selectedTags, ingredientNames, selectedIngredients],
   )
 
+  // Derived from the same list, so a group cannot be filtered on without also
+  // being explained here.
+  const activeFilters = React.useMemo(
+    () =>
+      filterGroups.flatMap(({ selected, onSelect }) =>
+        selected.map((value) => ({ value, onRemove: () => onSelect(value) })),
+      ),
+    [filterGroups],
+  )
+
+  const clearAllFilters = () => {
+    setSelectedCourses([])
+    setSelectedTags([])
+    setSelectedIngredients([])
+  }
+
+  // The popover had no way out but the funnel itself. DateRangePicker two
+  // files away already dismisses on outside-click and Escape; this is that.
+  const filterRef = React.useRef(null)
+  React.useEffect(() => {
+    if (!showFilters) return undefined
+    const onDown = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setShowFilters(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [showFilters])
+
   const handleSave = async (recipe) => {
     try {
       if (editing) {
@@ -267,14 +303,24 @@ export default function RecipesPage() {
           Recipes
         </h1>
         <div className="flex items-center gap-2">
-          <div className="relative">
+          <div className="relative" ref={filterRef}>
             <Button
               variant="ghost"
               aria-label="Filter"
               data-tour="recipes-filter"
+              className="relative"
               onClick={() => setShowFilters((s) => !s)}
               Icon={FunnelIcon}
-            />
+            >
+              {activeFilters.length > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
+                  style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
+                >
+                  {activeFilters.length}
+                </span>
+              )}
+            </Button>
             {showFilters && (
               <div
                 className="absolute right-0 z-10 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
@@ -311,6 +357,8 @@ export default function RecipesPage() {
           </Button>
         </div>
       </div>
+
+      <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
 
       <div
         data-tour="recipes-grid"

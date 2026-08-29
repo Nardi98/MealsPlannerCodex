@@ -1,5 +1,6 @@
 export { default as AddIngredientModal } from './AddIngredientModal'
 export { default as AttributionLine } from './AttributionLine'
+export { default as ActiveFilterChips } from './ActiveFilterChips'
 export { default as Avatar } from './Avatar'
 export { Badge } from './Badge'
 export { Button } from './Button'
