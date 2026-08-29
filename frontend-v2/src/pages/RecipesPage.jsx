@@ -1,5 +1,10 @@
 import React from 'react'
-import { FunnelIcon, PlusIcon } from '@heroicons/react/24/outline'
+import {
+  FunnelIcon,
+  GlobeAltIcon,
+  PencilSquareIcon,
+  PlusIcon,
+} from '@heroicons/react/24/outline'
 import { Input } from '../components/Input'
 import { Button } from '../components/Button'
 import { Badge } from '../components/Badge'
@@ -12,6 +17,7 @@ import {
   AttributionLine,
   BottomSheet,
   ConfirmModal,
+  Fab,
   FavoriteSidesSelect,
   ImportRecipeModal,
   NewRecipeModal,
@@ -87,6 +93,7 @@ export default function RecipesPage() {
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
+  const [showAddSheet, setShowAddSheet] = React.useState(false)
   // The starter-recipe offer (SR): shown once the first load comes back empty.
   // Dismissal lives in sessionStorage rather than on the account, so a user who
   // says "maybe later" is not asked again this session but is offered the pack
@@ -303,7 +310,7 @@ export default function RecipesPage() {
         <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
           Recipes
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative" ref={filterRef}>
             <Button
               variant="ghost"
@@ -331,31 +338,40 @@ export default function RecipesPage() {
               </div>
             )}
           </div>
+          {/* `min-w-0` is the fix for the squeezed row: without it a flex
+              item refuses to go below its content width, so the input claimed
+              the row and then starved every button beside it. */}
           <Input
             placeholder="Search recipes…"
             data-tour="recipes-search"
-            className="w-full sm:w-56"
+            className="min-w-0 flex-1 md:w-56 md:flex-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <Button
-            variant="ghost"
-            data-tour="recipes-import"
-            onClick={() => setShowImport(true)}
-          >
-            Import from web
-          </Button>
-          <Button
-            variant="accent"
-            data-tour="recipes-new"
-            Icon={PlusIcon}
-            onClick={() => {
-              setEditing(null)
-              setShowModal(true)
-            }}
-          >
-            New recipe
-          </Button>
+          {!isMobile && (
+            <>
+              <Button
+                variant="ghost"
+                data-tour="recipes-import"
+                className="whitespace-nowrap"
+                onClick={() => setShowImport(true)}
+              >
+                Import from web
+              </Button>
+              <Button
+                variant="accent"
+                data-tour="recipes-new"
+                Icon={PlusIcon}
+                className="whitespace-nowrap"
+                onClick={() => {
+                  setEditing(null)
+                  setShowModal(true)
+                }}
+              >
+                New recipe
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -363,7 +379,7 @@ export default function RecipesPage() {
 
       <div
         data-tour="recipes-grid"
-        className="card-grid"
+        className="card-grid pb-24 md:pb-0"
       >
         {filteredRecipes.map((r, i) => (
           <Card
@@ -615,6 +631,46 @@ export default function RecipesPage() {
             }}
           />
         </React.Suspense>
+      )}
+
+      {isMobile && (
+        <Fab
+          Icon={PlusIcon}
+          label="Add a recipe"
+          data-tour="recipes-new"
+          onClick={() => setShowAddSheet(true)}
+        />
+      )}
+
+      {showAddSheet && (
+        <BottomSheet title="Add a recipe" onClose={() => setShowAddSheet(false)}>
+          <div className="flex flex-col gap-2 pb-2">
+            <Button
+              variant="accent"
+              Icon={PencilSquareIcon}
+              className="w-full justify-start"
+              onClick={() => {
+                setShowAddSheet(false)
+                setEditing(null)
+                setShowModal(true)
+              }}
+            >
+              Write it myself
+            </Button>
+            <Button
+              variant="ghost"
+              Icon={GlobeAltIcon}
+              className="w-full justify-start"
+              data-tour="recipes-import"
+              onClick={() => {
+                setShowAddSheet(false)
+                setShowImport(true)
+              }}
+            >
+              Import from a website
+            </Button>
+          </div>
+        </BottomSheet>
       )}
 
       {showFilters && isMobile && (

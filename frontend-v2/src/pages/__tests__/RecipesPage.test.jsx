@@ -702,3 +702,76 @@ test('the sheet footer reports the filtered count and closes the sheet', async (
     expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull(),
   )
 })
+
+// --- mobile header ----------------------------------------------------------
+
+test('the mobile header holds only search and filter', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  expect(screen.queryByRole('button', { name: 'Import from web' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^New recipe$/ })).toBeNull()
+  expect(screen.getByLabelText('Filter')).toBeInTheDocument()
+})
+
+test('the mobile add button offers both ways to create a recipe', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
+
+  expect(screen.getByRole('button', { name: 'Write it myself' })).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Import from a website' }),
+  ).toBeInTheDocument()
+})
+
+test('the add sheet opens the import dialog', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Import from a website' }))
+
+  // The add sheet gives way to the import dialog rather than stacking.
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Write it myself' })).toBeNull(),
+  )
+})
+
+test('desktop keeps both header buttons and shows no FAB', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  expect(screen.getByRole('button', { name: 'Import from web' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /New recipe/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Add a recipe' })).toBeNull()
+})
