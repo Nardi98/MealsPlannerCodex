@@ -1,6 +1,6 @@
-import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { IconButton } from './IconButton'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 import { SCRIM, Z } from '../lib/layers'
 
 /**
@@ -17,13 +17,7 @@ import { SCRIM, Z } from '../lib/layers'
  * the content is.
  */
 export default function BottomSheet({ title, onClose, footer, children }) {
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeKey(true, onClose)
 
   return (
     <div

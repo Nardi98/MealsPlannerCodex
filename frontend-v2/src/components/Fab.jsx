@@ -5,8 +5,8 @@ import { Z } from '../lib/layers'
  *
  * 56px rather than the 44px floor: this is the one control a thumb goes for
  * without looking. It sits above `env(safe-area-inset-bottom)` so a home
- * indicator does not eat it, and below `Z.drawer` so the nav drawer and every
- * dialog still cover it.
+ * indicator does not eat it, and at `Z.fab` -- below the drawer -- so the nav
+ * drawer and every dialog still cover it.
  *
  * A page that renders one must pad the bottom of its scrolling content by at
  * least the button's height plus its offset, or the last row hides underneath.
@@ -24,7 +24,7 @@ export default function Fab({ Icon, label, onClick, ...props }) {
         bottom: 'calc(16px + env(safe-area-inset-bottom))',
         backgroundColor: 'var(--c-a2)',
         color: 'var(--text-on-accent)',
-        zIndex: Z.drawer - 1,
+        zIndex: Z.fab,
       }}
       {...props}
     >

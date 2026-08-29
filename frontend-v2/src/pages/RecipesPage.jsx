@@ -26,6 +26,7 @@ import {
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -189,13 +190,26 @@ export default function RecipesPage() {
   // new group cannot be added to one surface and forgotten on the others.
   const filterGroups = React.useMemo(
     () => [
-      { label: 'Course', options: courseOptions, selected: selectedCourses, onSelect: toggleCourse },
-      { label: 'Tags', options: tags, selected: selectedTags, onSelect: toggleTag },
+      {
+        label: 'Course',
+        options: courseOptions,
+        selected: selectedCourses,
+        onSelect: toggleCourse,
+        clear: () => setSelectedCourses([]),
+      },
+      {
+        label: 'Tags',
+        options: tags,
+        selected: selectedTags,
+        onSelect: toggleTag,
+        clear: () => setSelectedTags([]),
+      },
       {
         label: 'Ingredients',
         options: ingredientNames,
         selected: selectedIngredients,
         onSelect: toggleIngredient,
+        clear: () => setSelectedIngredients([]),
       },
     ],
     [courseOptions, selectedCourses, tags, selectedTags, ingredientNames, selectedIngredients],
@@ -211,29 +225,23 @@ export default function RecipesPage() {
     [filterGroups],
   )
 
-  const clearAllFilters = () => {
-    setSelectedCourses([])
-    setSelectedTags([])
-    setSelectedIngredients([])
-  }
+  // Derived from the group list too: a fourth filter could otherwise be added
+  // above and silently survive "clear all".
+  const clearAllFilters = () => filterGroups.forEach((group) => group.clear())
 
   // The popover had no way out but the funnel itself. DateRangePicker two
   // files away already dismisses on outside-click and Escape; this is that.
   const filterRef = React.useRef(null)
+  const closeFilters = React.useCallback(() => setShowFilters(false), [])
+  // The sheet handles its own Escape; this is only for the desktop popover.
+  useEscapeKey(showFilters && !isMobile, closeFilters)
   React.useEffect(() => {
     if (!showFilters || isMobile) return undefined
     const onDown = (e) => {
       if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
     }
-    const onKey = (e) => {
-      if (e.key === 'Escape') setShowFilters(false)
-    }
     document.addEventListener('mousedown', onDown)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDown)
-      document.removeEventListener('keydown', onKey)
-    }
+    return () => document.removeEventListener('mousedown', onDown)
   }, [showFilters, isMobile])
 
   const handleSave = async (recipe) => {

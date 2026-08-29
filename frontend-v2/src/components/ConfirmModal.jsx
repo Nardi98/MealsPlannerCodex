@@ -1,8 +1,8 @@
-import React from 'react'
 import { ModalScrim } from './Modal'
 import { Card } from './Card'
 import { Button } from './Button'
 import { Z } from '../lib/layers'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 
 /**
  * A yes/no gate in front of an action that cannot be undone.
@@ -21,13 +21,7 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }) {
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
+  useEscapeKey(true, onCancel)
 
   return (
     <ModalScrim z={Z.nested} onClick={onCancel}>
