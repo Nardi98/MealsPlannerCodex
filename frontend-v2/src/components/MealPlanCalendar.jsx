@@ -10,7 +10,7 @@ import MealStatusChip from './MealStatusChip'
 import SwapBanner from './SwapBanner'
 import CalendarWeekHeader from './CalendarWeekHeader'
 import CalendarDayStrip from './CalendarDayStrip'
-import CalendarViewToggle from './CalendarViewToggle'
+import ViewToggle from './ViewToggle'
 
 // Index 0/1 here are the backend's `meal_number` 1/2.
 const MEAL_LABELS = ['Lunch', 'Dinner']
@@ -230,7 +230,7 @@ export default function MealPlanCalendar({
         )}
         {isMobile ? (
           <div className="flex flex-col gap-3">
-            <CalendarViewToggle value={view} onChange={setView} options={VIEWS} />
+            <ViewToggle value={view} onChange={setView} options={VIEWS} />
             {view === 'day' && (
               <CalendarDayStrip
                 days={days}
