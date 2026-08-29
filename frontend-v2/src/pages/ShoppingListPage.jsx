@@ -1,5 +1,6 @@
 import React from 'react'
 import { format } from 'date-fns'
+import { CheckIcon } from '@heroicons/react/24/outline'
 import {
   Card,
   Button,
@@ -39,7 +40,14 @@ export default function ShoppingListPage() {
   const [occurrences, setOccurrences] = React.useState([])
   const [recipesByTitle, setRecipesByTitle] = React.useState(() => new Map())
   const [people, setPeople] = React.useState(2)
-  const [crossed, setCrossed] = React.useState(new Set())
+  // Ingredient key -> the amount that was on screen when it was ticked.
+  //
+  // Keying on the amount as well as the key is what makes a head-count change
+  // untick the rows it actually affected: a row counts as ticked only while
+  // the amount still matches, so the invalidation is a comparison at render
+  // time rather than an effect that has to notice the change and go hunting
+  // for stale entries.
+  const [crossed, setCrossed] = React.useState(() => new Map())
   const [merging, setMerging] = React.useState(false)
 
   // One pass over the occurrences produces both halves of the page: the summed
@@ -87,10 +95,14 @@ export default function ShoppingListPage() {
   const start = startDate ? new Date(startDate) : null
   const end = endDate ? new Date(endDate) : null
 
+  // One definition, used by the list and by the export, so the two can never
+  // disagree about what counts as ticked.
+  const isCrossedOff = (ing) => crossed.get(ing.key) === ing.amount
+
   const handleExport = () => {
     if (!start) return
     const items = ingredients
-      .filter((ing) => !crossed.has(ing.key))
+      .filter((ing) => !isCrossedOff(ing))
       .map(({ name, amount, unit }) => ({ name, amount, unit }))
     const text = formatExportText(items, start, end || start)
     const blob = new Blob([text], { type: 'text/plain' })
@@ -140,7 +152,7 @@ export default function ShoppingListPage() {
           a.planDate.localeCompare(b.planDate) || a.mealNumber - b.mealNumber,
       )
       setOccurrences(list)
-      setCrossed(new Set())
+      setCrossed(new Map())
     } catch (err) {
       console.error('Failed to load shopping list', err)
     }
@@ -311,28 +323,47 @@ export default function ShoppingListPage() {
       </div>
       <ul className="space-y-2">
         {ingredients.map((ing) => {
-          const isCrossed = crossed.has(ing.key)
+          const isCrossed = isCrossedOff(ing)
           const label =
             ing.amount !== null
               ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
               : ing.name
           return (
-            <li
-              key={ing.key}
-              onClick={() =>
-                setCrossed((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(ing.key)) next.delete(ing.key)
-                  else next.add(ing.key)
-                  return next
-                })
-              }
-              className={`border rounded-xl p-3 cursor-pointer${
-                isCrossed ? ' line-through text-[color:var(--text-subtle)]' : ''
-              }`}
-              style={{ borderColor: 'var(--border)' }}
-            >
-              {label}
+            <li key={ing.key}>
+              <button
+                type="button"
+                aria-pressed={isCrossed}
+                onClick={() =>
+                  setCrossed((prev) => {
+                    const next = new Map(prev)
+                    if (next.get(ing.key) === ing.amount) next.delete(ing.key)
+                    else next.set(ing.key, ing.amount)
+                    return next
+                  })
+                }
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded"
+                  style={{
+                    border: `1.5px solid ${
+                      isCrossed ? 'var(--c-pos)' : 'var(--border-default)'
+                    }`,
+                    backgroundColor: isCrossed ? 'var(--c-pos)' : 'transparent',
+                    color: '#fff',
+                  }}
+                >
+                  {isCrossed && <CheckIcon className="h-3.5 w-3.5" />}
+                </span>
+                <span
+                  className={isCrossed ? 'line-through' : undefined}
+                  style={{ color: isCrossed ? 'var(--text-subtle)' : undefined }}
+                >
+                  {label}
+                </span>
+              </button>
             </li>
           )
         })}

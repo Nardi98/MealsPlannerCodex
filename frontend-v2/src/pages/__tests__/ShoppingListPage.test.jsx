@@ -210,3 +210,60 @@ test('the batch label flows inline with the recipe title', async () => {
   expect(label.parentElement).toHaveTextContent('A×½')
   expect(label.parentElement.className).not.toMatch(/flex/)
 })
+
+// --- ticking off ------------------------------------------------------------
+
+test('an ingredient row is a button that toggles pressed', async () => {
+  render(<ShoppingListPage />)
+  const row = await screen.findByRole('button', { name: /ing1: 2 kg/ })
+
+  expect(row).toHaveAttribute('aria-pressed', 'false')
+
+  fireEvent.click(row)
+
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
+test('a ticked ingredient unticks when its quantity changes', async () => {
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing1: 2 kg/ }))
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  // Meal A goes from 2 people to 3, so ing1 becomes 3 kg.
+  fireEvent.click(screen.getAllByRole('button', { name: 'More people' })[0])
+
+  const row = await screen.findByRole('button', { name: /ing1: 3 kg/ })
+  expect(row).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('a quantity change leaves other ticks alone', async () => {
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing2: 3 kg/ }))
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'More people' })[0])
+
+  expect(
+    await screen.findByRole('button', { name: /ing2: 3 kg/ }),
+  ).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('ticked items are left out of the export', async () => {
+  // jsdom implements neither of these, so assign them rather than spying.
+  URL.createObjectURL = vi.fn(() => 'blob:x')
+  URL.revokeObjectURL = vi.fn()
+  const blobSpy = vi.spyOn(globalThis, 'Blob')
+
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing1: 2 kg/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Export open items' }))
+
+  const text = blobSpy.mock.calls[0][0][0]
+  expect(text).not.toMatch(/ing1/)
+  expect(text).toMatch(/ing2/)
+})
