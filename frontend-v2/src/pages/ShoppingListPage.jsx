@@ -3,6 +3,7 @@ import { format } from 'date-fns'
 import {
   Card,
   Button,
+  ViewToggle,
   Input,
   MonthGrid,
   DateRangePicker,
@@ -23,6 +24,8 @@ const MEAL_SLOT = { 1: 'Lunch', 2: 'Dinner' }
 
 export default function ShoppingListPage() {
   const isMobile = useIsMobile()
+  // Ingredients first: it is the half you hold up in a shop.
+  const [tab, setTab] = React.useState('ingredients')
   const [startDate, setStartDate] = React.useState(() =>
     new Date().toISOString().slice(0, 10),
   )
@@ -203,6 +206,138 @@ export default function ShoppingListPage() {
     }
   }
 
+  // Extracted so the mobile branch can show one at a time without the JSX
+  // being written twice; the desktop branch renders the pair exactly as before.
+  const recipesCard = (
+    <Card className="p-4 space-y-2">
+      <div
+        className="pb-4 border-b"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        <h2
+          className="text-lg font-medium"
+          style={{ color: 'var(--text-strong)' }}
+        >
+          Recipes
+        </h2>
+      </div>
+      <ul className="space-y-2">
+        {occurrences.map((o) => {
+          const key = `${o.planDate}-${o.mealNumber}`
+          const labels = labelsByOccurrence.get(key) || { sides: [] }
+          return (
+          <li
+            key={key}
+            className="border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3"
+            style={{ borderColor: 'var(--border)' }}
+          >
+            <div className="min-w-0">
+              <div className="text-xs text-[color:var(--text-subtle)]">
+                {format(new Date(o.planDate), 'EEE d MMM')} ·{' '}
+                {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
+                {o.leftover ? ' · leftover' : ''}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span>{o.mainTitle}</span>
+                {labels.main && (
+                  <span className="text-xs tabular-nums text-[color:var(--text-subtle)]">
+                    {labels.main}
+                  </span>
+                )}
+              </div>
+              {o.sideTitles.length > 0 && (
+                <div className="text-xs text-[color:var(--text-subtle)]">
+                  +{' '}
+                  {o.sideTitles.map((title, i) => (
+                    <React.Fragment key={title}>
+                      {i > 0 && ', '}
+                      {title}
+                      {labels.sides[i] && (
+                        <span className="tabular-nums"> {labels.sides[i]}</span>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="a2"
+                onClick={() => changeMealPeople(o, -1)}
+                aria-label="Fewer people"
+              >
+                –
+              </Button>
+              <span className="w-6 text-center tabular-nums">
+                {o.people}
+              </span>
+              <Button
+                variant="a2"
+                onClick={() => changeMealPeople(o, 1)}
+                aria-label="More people"
+              >
+                +
+              </Button>
+            </div>
+          </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+
+  const ingredientsCard = (
+    <Card className="p-4 space-y-2">
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        <h2
+          className="text-lg font-medium"
+          style={{ color: 'var(--text-strong)' }}
+        >
+          Ingredients
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="a2" onClick={() => setMerging(true)}>
+            Merge ingredients
+          </Button>
+          <Button variant="a2" onClick={handleExport}>
+            Export open items
+          </Button>
+        </div>
+      </div>
+      <ul className="space-y-2">
+        {ingredients.map((ing) => {
+          const isCrossed = crossed.has(ing.key)
+          const label =
+            ing.amount !== null
+              ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
+              : ing.name
+          return (
+            <li
+              key={ing.key}
+              onClick={() =>
+                setCrossed((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(ing.key)) next.delete(ing.key)
+                  else next.add(ing.key)
+                  return next
+                })
+              }
+              className={`border rounded-xl p-3 cursor-pointer${
+                isCrossed ? ' line-through text-[color:var(--text-subtle)]' : ''
+              }`}
+              style={{ borderColor: 'var(--border)' }}
+            >
+              {label}
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-end gap-3">
@@ -254,132 +389,24 @@ export default function ShoppingListPage() {
           ))}
         </div>
       </Card>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4 space-y-2">
-          <div
-            className="pb-4 border-b"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            <h2
-              className="text-lg font-medium"
-              style={{ color: 'var(--text-strong)' }}
-            >
-              Recipes
-            </h2>
-          </div>
-          <ul className="space-y-2">
-            {occurrences.map((o) => {
-              const key = `${o.planDate}-${o.mealNumber}`
-              const labels = labelsByOccurrence.get(key) || { sides: [] }
-              return (
-              <li
-                key={key}
-                className="border rounded-xl p-3 flex flex-wrap items-center justify-between gap-3"
-                style={{ borderColor: 'var(--border)' }}
-              >
-                <div className="min-w-0">
-                  <div className="text-xs text-[color:var(--text-subtle)]">
-                    {format(new Date(o.planDate), 'EEE d MMM')} ·{' '}
-                    {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
-                    {o.leftover ? ' · leftover' : ''}
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span>{o.mainTitle}</span>
-                    {labels.main && (
-                      <span className="text-xs tabular-nums text-[color:var(--text-subtle)]">
-                        {labels.main}
-                      </span>
-                    )}
-                  </div>
-                  {o.sideTitles.length > 0 && (
-                    <div className="text-xs text-[color:var(--text-subtle)]">
-                      +{' '}
-                      {o.sideTitles.map((title, i) => (
-                        <React.Fragment key={title}>
-                          {i > 0 && ', '}
-                          {title}
-                          {labels.sides[i] && (
-                            <span className="tabular-nums"> {labels.sides[i]}</span>
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    variant="a2"
-                    onClick={() => changeMealPeople(o, -1)}
-                    aria-label="Fewer people"
-                  >
-                    –
-                  </Button>
-                  <span className="w-6 text-center tabular-nums">
-                    {o.people}
-                  </span>
-                  <Button
-                    variant="a2"
-                    onClick={() => changeMealPeople(o, 1)}
-                    aria-label="More people"
-                  >
-                    +
-                  </Button>
-                </div>
-              </li>
-              )
-            })}
-          </ul>
-        </Card>
-        <Card className="p-4 space-y-2">
-          <div
-            className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            <h2
-              className="text-lg font-medium"
-              style={{ color: 'var(--text-strong)' }}
-            >
-              Ingredients
-            </h2>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="a2" onClick={() => setMerging(true)}>
-                Merge ingredients
-              </Button>
-              <Button variant="a2" onClick={handleExport}>
-                Export open items
-              </Button>
-            </div>
-          </div>
-          <ul className="space-y-2">
-            {ingredients.map((ing) => {
-              const isCrossed = crossed.has(ing.key)
-              const label =
-                ing.amount !== null
-                  ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
-                  : ing.name
-              return (
-                <li
-                  key={ing.key}
-                  onClick={() =>
-                    setCrossed((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(ing.key)) next.delete(ing.key)
-                      else next.add(ing.key)
-                      return next
-                    })
-                  }
-                  className={`border rounded-xl p-3 cursor-pointer${
-                    isCrossed ? ' line-through text-[color:var(--text-subtle)]' : ''
-                  }`}
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  {label}
-                </li>
-              )
-            })}
-          </ul>
-        </Card>
-      </div>
+      {isMobile ? (
+        <div className="flex flex-col gap-3">
+          <ViewToggle
+            value={tab}
+            onChange={setTab}
+            options={[
+              ['ingredients', 'Ingredients'],
+              ['meals', 'Meals'],
+            ]}
+          />
+          {tab === 'ingredients' ? ingredientsCard : recipesCard}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {recipesCard}
+          {ingredientsCard}
+        </div>
+      )}
       {merging && (
         <MergeIngredientsModal
           onClose={() => setMerging(false)}

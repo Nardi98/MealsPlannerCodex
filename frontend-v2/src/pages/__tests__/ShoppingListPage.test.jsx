@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import React from 'react'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import ShoppingListPage from '../ShoppingListPage'
@@ -158,4 +158,33 @@ test('keeps three months on desktop', async () => {
   await screen.findByText('A')
 
   expect(screen.getAllByTestId('shopping-month')).toHaveLength(3)
+})
+
+test('mobile opens on the ingredients tab and hides the meal list', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('ing1: 2 kg')).toBeInTheDocument()
+  // 'A' is a meal title, which lives on the other tab.
+  expect(screen.queryByText('A')).toBeNull()
+})
+
+test('mobile can switch to the meal list', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+  await screen.findByText('ing1: 2 kg')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Meals' }))
+
+  expect(await screen.findByText('A')).toBeInTheDocument()
+  expect(screen.queryByText('ing1: 2 kg')).toBeNull()
+})
+
+test('desktop shows both lists at once and no tabs', async () => {
+  stubViewport(false)
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('A')).toBeInTheDocument()
+  expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Meals' })).toBeNull()
 })
