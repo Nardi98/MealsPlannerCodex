@@ -305,9 +305,10 @@ desktop shell, and nothing else may invent a second one.
   in its footer. **The account menu stays in
   the header:** logging out is never more than one tap away.
 - **At `md` and up:** today's layout — sticky green sidebar column, full header.
-- Stacking order is `Z` in `src/lib/layers.js` — `drawer: 55` (above the page
-  and the profile dropdown at 50), `modal: 60`, `nested: 70` for a dialog raised
-  from inside another. The tutorial overlay sits above all of them at 100.
+- Stacking order is `Z` in `src/lib/layers.js` — `fab: 50` (above the page,
+  under everything that covers it), `drawer: 55` (above the page and the profile
+  dropdown at 50), `modal: 60`, `nested: 70` for a dialog raised from inside
+  another. The tutorial overlay sits above all of them at 100.
   `SCRIM` lives there too; it is the only wash colour.
 
 ### Page patterns
@@ -322,7 +323,41 @@ desktop shell, and nothing else may invent a second one.
   second `auto-fill` grid.
 - **Modals:** every takeover renders inside `<ModalScrim>` (`components/Modal.jsx`),
   which owns the wash, the padding that keeps a `w-full` card off the screen
-  edges, and the scroll that keeps a tall card reachable. Never hand-roll a
-  `fixed inset-0` scrim — that is how nine modals ended up without any of it.
+  edges, the scroll that keeps a tall card reachable, and the focus trap below.
+  Never hand-roll a `fixed inset-0` scrim — that is how nine modals ended up
+  without any of it. `BottomSheet` is the **one sanctioned exception**: it lays
+  out its own wash because `ModalScrim` centres its child and a sheet is
+  bottom-anchored, and it takes `SCRIM`, `Z` and the focus trap from the same
+  modules so only the alignment differs.
 - **Popovers and dropdowns** anchored to a right-hand control are clamped with
   `max-width: calc(100vw - …)`, or they run off the screen at 360px.
+
+### Overlay primitives
+- **`BottomSheet`** — a panel anchored to the bottom of the viewport, for
+  controls a thumb presses repeatedly. `footer` pins a primary action below the
+  scrolling body. Below `md` it is the phone form of a popover; the desktop
+  surface renders the same content and the two must never drift.
+- **`Fab`** — a page's primary action, 56px, bottom-right, above
+  `env(safe-area-inset-bottom)`, at `Z.fab` so every dialog still covers it. A
+  page that renders one **must** pad the bottom of its scrolling content by at
+  least the button's height plus its offset, or the last row hides underneath.
+- **`ConfirmModal`** — the gate in front of anything that cannot be undone.
+  Cancel is the safe default and comes first in the tab order; the confirm
+  button carries the verb ("Delete recipe"), never a bare "OK". Rendered at
+  `Z.nested` when raised from inside another dialog.
+- **`ViewToggle`** — a two-state switch, `aria-pressed` on plain buttons.
+  `SegmentedControl` remains the tablist primitive; do not use a `role="tablist"`
+  that ignores arrow keys.
+
+### Focus
+- **Every overlay traps focus.** `role="dialog" aria-modal="true"` is a promise
+  that focus cannot leave, and a dialog you can Tab out of is a worse promise
+  than no dialog role at all. `useFocusTrap` (`hooks/useFocusTrap.js`) is that
+  contract: focus in on open, Tab and Shift+Tab wrapping at the edges, focus
+  back to the opener on close, and a refcounted page-scroll lock so a nested
+  dialog closing does not hand scrolling back to a page still covered. Anything
+  rendering through `ModalScrim` gets it already.
+- **Focus is always visible.** `index.css` rings every interactive element on
+  `:focus-visible` with `outline` (not `box-shadow`, which rounded chips and
+  `overflow-hidden` cards clip). The colour is `--focus-ring`; a dark surface
+  overrides that token for its own subtree rather than adding a rule.
