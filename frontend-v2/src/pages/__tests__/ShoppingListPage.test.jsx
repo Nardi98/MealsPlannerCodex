@@ -188,3 +188,25 @@ test('desktop shows both lists at once and no tabs', async () => {
   expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Meals' })).toBeNull()
 })
+
+test('the batch label flows inline with the recipe title', async () => {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: [], leftover: false, meal_number: 1, people: 2 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'A', servings: 4, ingredients: [] },
+  ])
+
+  render(<ShoppingListPage />)
+
+  const label = await screen.findByText('×½')
+  // Same text flow as the title, not a separate flex item beside it. The gap
+  // is a margin rather than a space, which is deliberate: with no break
+  // opportunity between them the label stays bound to the last word instead
+  // of stranding on a line of its own again.
+  expect(label.parentElement).toHaveTextContent('A×½')
+  expect(label.parentElement.className).not.toMatch(/flex/)
+})

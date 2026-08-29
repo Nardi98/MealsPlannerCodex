@@ -237,10 +237,12 @@ export default function ShoppingListPage() {
                 {MEAL_SLOT[o.mealNumber] || `Meal ${o.mealNumber}`}
                 {o.leftover ? ' · leftover' : ''}
               </div>
-              <div className="flex items-baseline gap-2">
-                <span>{o.mainTitle}</span>
+              {/* Inline flow, not a flex row: as two flex items a long title
+                  pushed the batch label onto its own unaligned line. */}
+              <div>
+                {o.mainTitle}
                 {labels.main && (
-                  <span className="text-xs tabular-nums text-[color:var(--text-subtle)]">
+                  <span className="ml-2 text-xs tabular-nums text-[color:var(--text-subtle)]">
                     {labels.main}
                   </span>
                 )}
