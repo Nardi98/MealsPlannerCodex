@@ -26,6 +26,12 @@
   --border-default: var(--border);
   --text-on-dark: #F8FAF9;
   --text-on-accent: #121212;
+  /* The keyboard focus ring. A token rather than a literal because it has to
+     be legible against whatever it lands on: dark green reads on the page, on
+     the white card and — thanks to the ring's offset, which puts it outside
+     the control on the page behind — on the gold FAB and the filled green
+     toggle segment too. A dark surface overrides it to gold. */
+  --focus-ring: var(--c-pos);
 
   --accent-primary: var(--c-a2);
   --accent-secondary: var(--c-a1);
@@ -102,6 +108,20 @@ body {
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
+}
+
+/* Keyboard focus, everywhere, once.
+
+   Before this the whole app had two focus rules, both scoped to one widget, so
+   every button, chip, FAB and tick row fell back to the UA outline — which is
+   all but invisible on the gold FAB and the filled green toggle segment. Doing
+   it globally is the only version a component added next week inherits.
+
+   `outline`, not `box-shadow`: rounded chips and the `overflow-hidden` recipe
+   cards clip a shadow, and an outline follows the border radius on its own. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ---- Sliding segmented control (SegmentedControl.jsx) ---- */
