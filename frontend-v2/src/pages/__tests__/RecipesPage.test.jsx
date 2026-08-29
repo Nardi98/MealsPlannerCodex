@@ -651,3 +651,54 @@ test('Escape closes the filter popover', async () => {
     expect(screen.queryByRole('button', { name: 'Course' })).toBeNull(),
   )
 })
+
+test('the filter opens a bottom sheet on mobile', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument()
+})
+
+test('the filter stays a popover on desktop', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Course' })).toBeInTheDocument()
+})
+
+test('the sheet footer reports the filtered count and closes the sheet', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show 2 recipes' }))
+
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull(),
+  )
+})

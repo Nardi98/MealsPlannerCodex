@@ -10,6 +10,7 @@ import { PageTour } from '../tutorial/PageTour'
 import {
   ActiveFilterChips,
   AttributionLine,
+  BottomSheet,
   ConfirmModal,
   FavoriteSidesSelect,
   ImportRecipeModal,
@@ -213,7 +214,7 @@ export default function RecipesPage() {
   // files away already dismisses on outside-click and Escape; this is that.
   const filterRef = React.useRef(null)
   React.useEffect(() => {
-    if (!showFilters) return undefined
+    if (!showFilters || isMobile) return undefined
     const onDown = (e) => {
       if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
     }
@@ -226,7 +227,7 @@ export default function RecipesPage() {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [showFilters])
+  }, [showFilters, isMobile])
 
   const handleSave = async (recipe) => {
     try {
@@ -321,7 +322,7 @@ export default function RecipesPage() {
                 </span>
               )}
             </Button>
-            {showFilters && (
+            {showFilters && !isMobile && (
               <div
                 className="absolute right-0 z-10 mt-2 w-[min(14rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
                 style={{ borderColor: 'var(--border-default)' }}
@@ -614,6 +615,26 @@ export default function RecipesPage() {
             }}
           />
         </React.Suspense>
+      )}
+
+      {showFilters && isMobile && (
+        <BottomSheet
+          title="Filters"
+          onClose={() => setShowFilters(false)}
+          footer={
+            <Button
+              variant="accent"
+              className="w-full"
+              onClick={() => setShowFilters(false)}
+            >
+              {`Show ${filteredRecipes.length} ${
+                filteredRecipes.length === 1 ? 'recipe' : 'recipes'
+              }`}
+            </Button>
+          }
+        >
+          <RecipeFilters groups={filterGroups} />
+        </BottomSheet>
       )}
 
       {showImport && (
