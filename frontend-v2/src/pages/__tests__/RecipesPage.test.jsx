@@ -775,3 +775,43 @@ test('desktop keeps both header buttons and shows no FAB', async () => {
   expect(screen.getByRole('button', { name: /New recipe/ })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Add a recipe' })).toBeNull()
 })
+
+test('says so when no recipe matches the search', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'zzz' },
+  })
+
+  expect(screen.getByText('No recipes match your search.')).toBeInTheDocument()
+})
+
+test('the empty state clears the search and the filters together', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'main' }))
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'zzz' },
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search and filters' }))
+
+  expect(await screen.findByText('Spaghetti')).toBeInTheDocument()
+  expect(screen.getByPlaceholderText('Search recipes…')).toHaveValue('')
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('1')
+})

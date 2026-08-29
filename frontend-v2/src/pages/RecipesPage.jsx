@@ -465,6 +465,30 @@ export default function RecipesPage() {
         ))}
       </div>
 
+      {/* Held back on a brand-new account, which gets the starter-pack offer
+          instead -- two empty states firing at once is worse than none. */}
+      {loaded && recipes.length > 0 && filteredRecipes.length === 0 && (
+        <div
+          className="flex flex-col items-center gap-3 py-12 text-center"
+          style={{ color: 'var(--text-subtle)' }}
+        >
+          <p style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+            No recipes match your search.
+          </p>
+          {(activeFilters.length > 0 || search) && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setSearch('')
+                clearAllFilters()
+              }}
+            >
+              Clear search and filters
+            </Button>
+          )}
+        </div>
+      )}
+
       {openRecipe && (
         <Modal title={openRecipe.title} onClose={() => setOpened(null)}>
           <div className="flex flex-col gap-3">
