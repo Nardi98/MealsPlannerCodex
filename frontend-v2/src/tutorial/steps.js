@@ -27,7 +27,9 @@ export const RECIPES_STEPS = [
     placement: 'bottom',
   },
   {
-    target: '[data-tour="recipes-import"]',
+    // Below md this anchor lives inside the add sheet, which is unmounted
+    // while the sheet is closed; the FAB that opens it is the fallback.
+    target: ['[data-tour="recipes-import"]', '[data-tour="recipes-new"]'],
     title: 'Or let a chatbot do the typing',
     body: 'Copy the prompt you get here into any chatbot, along with the recipe, and paste back the JSON it returns — ingredients and all.',
     placement: 'bottom',

@@ -109,7 +109,9 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
 
   await screen.findByText('Bulk')
   await user.click(screen.getByText('Bulk'))
-  await user.click(await screen.findByRole('button', { name: /reject/i }))
+  // The calendar cell now has its own labelled "Reject Bulk" control, so match
+  // the modal's button exactly rather than by substring.
+  await user.click(await screen.findByRole('button', { name: 'Reject' }))
 
   await waitFor(() => {
     expect(mealPlansApi.create).toHaveBeenCalledWith({
@@ -188,7 +190,7 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
   expect(mealPlansApi.create).toHaveBeenCalledTimes(1)
 })
 
-test('on mobile the plan settings sit above the calendar, collapsed', async () => {
+test('on mobile the plan settings sit below the calendar, open', async () => {
   stubViewport(true)
   const { container } = render(<MealPlanPage />)
   await screen.findByText('Meal Plan')
@@ -196,12 +198,22 @@ test('on mobile the plan settings sit above the calendar, collapsed', async () =
   const toggle = screen.getByRole('button', { name: /plan settings/i })
   const calendar = container.querySelector('[data-tour="mealplan-calendar"]')
 
-  // Collapsed by default: the calendar is what the page is for.
-  expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  expect(container.querySelector('[data-tour="mealplan-tabs"]')).toBeNull()
-  // Visual order, which is CSS `order` rather than DOM order.
-  expect(toggle.closest('[data-plan-section]')).toHaveClass('order-1')
-  expect(calendar.closest('[data-plan-section]')).toHaveClass('order-2')
+  // Open by default: the settings are what most visits come to change, and a
+  // collapsed panel made every generation a two-tap job. The toggle stays, so
+  // the calendar is still one tap from filling the screen.
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  expect(container.querySelector('[data-tour="mealplan-tabs"]')).not.toBeNull()
+
+  // The settings used to be pulled above the calendar with CSS `order`, which
+  // put a control panel between the heading and the plan itself. Visual order
+  // now follows the DOM at every width, so tab order agrees with the page.
+  const sections = [...container.querySelectorAll('[data-plan-section]')]
+  sections.forEach((section) => {
+    expect(section.className).not.toContain('order-')
+  })
+  expect(sections.indexOf(calendar.closest('[data-plan-section]'))).toBeLessThan(
+    sections.indexOf(toggle.closest('[data-plan-section]')),
+  )
 })
 
 test('on desktop the settings render below the calendar, always open', async () => {

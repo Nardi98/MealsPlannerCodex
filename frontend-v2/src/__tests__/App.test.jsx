@@ -5,6 +5,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
+import { PageTour } from '../tutorial/PageTour'
 
 let authState
 
@@ -13,7 +14,18 @@ vi.mock('../auth/AuthContext', () => ({
   useAuth: () => authState,
 }))
 vi.mock('../pages/LoginPage', () => ({ default: () => <div>login-screen</div> }))
-vi.mock('../pages/RecipesPage', () => ({ default: () => <div>recipes-page</div> }))
+// The header's help button only appears while a page has registered a tour, so
+// the stand-in for Recipes mounts the real `PageTour` — an imitation of its
+// registration protocol would go stale the moment that protocol changed. No
+// steps, so nothing auto-starts.
+vi.mock('../pages/RecipesPage', () => ({
+  default: () => (
+    <>
+      <div>recipes-page</div>
+      <PageTour id="recipes" steps={[]} />
+    </>
+  ),
+}))
 vi.mock('../pages/MealPlanPage', () => ({ default: () => <div>meal-plan-page</div> }))
 vi.mock('../pages/IngredientsPage', () => ({ default: () => <div>ingredients-page</div> }))
 vi.mock('../pages/ShoppingListPage', () => ({ default: () => <div>shopping-page</div> }))
@@ -271,4 +283,24 @@ test('shows no menu button on desktop', () => {
   // does not apply Tailwind, and a DOM-absence assertion would forbid that.
   expect(screen.getByRole('button', { name: /open menu/i })).toHaveClass('md:hidden')
   expect(screen.getByRole('button', { name: /shared with me/i })).toBeInTheDocument()
+})
+
+test('keeps the tutorial reachable from the header on mobile', async () => {
+  // Regression: the replay button lived in a `hidden md:flex` block and was
+  // reachable only by opening the nav drawer, which nobody opens looking for
+  // help. It now sits in the header at every width, left of the account menu —
+  // and only there, so the drawer must not show a second copy.
+  stubViewport(true)
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  const replay = screen.getByRole('button', { name: /replay tutorial/i })
+  expect(replay.closest('.hidden')).toBeNull()
+
+  const account = screen.getByRole('button', { name: /account menu/i })
+  expect(replay.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+  await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
+  expect(screen.getByRole('dialog', { name: /main navigation/i })).toBeInTheDocument()
+  expect(screen.getAllByRole('button', { name: /replay tutorial/i })).toHaveLength(1)
 })

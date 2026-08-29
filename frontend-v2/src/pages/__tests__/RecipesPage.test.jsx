@@ -15,6 +15,7 @@ import RecipesPage from '../RecipesPage'
 import { recipesApi } from '../../api/recipesApi'
 import { tagsApi } from '../../api/tagsApi'
 import { ingredientsApi } from '../../api/ingredientsApi'
+import { stubViewport } from '../../test/stubViewport'
 
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: {
@@ -106,17 +107,21 @@ test('filters recipes by tags and ingredients', async () => {
   await screen.findByText('Salad')
 
   fireEvent.click(screen.getByLabelText('Filter'))
-  fireEvent.click(screen.getByText('Tags'))
-  fireEvent.click(screen.getByLabelText('Italian'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
 
   await waitFor(() => {
     expect(screen.getByText('Spaghetti')).toBeInTheDocument()
     expect(screen.queryByText('Salad')).toBeNull()
   })
 
-  fireEvent.click(screen.getByLabelText('Italian'))
-  fireEvent.click(screen.getByText('Ingredients'))
-  fireEvent.click(screen.getByLabelText('Lettuce'))
+  fireEvent.click(screen.getByRole('button', { name: 'Italian' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Ingredients' }))
+  // The ingredient group lists nothing until it is searched.
+  fireEvent.change(screen.getByPlaceholderText('Search Ingredients…'), {
+    target: { value: 'lettuce' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Lettuce' }))
 
   await waitFor(() => {
     expect(screen.getByText('Salad')).toBeInTheDocument()
@@ -138,8 +143,8 @@ test('filters recipes by course', async () => {
   await screen.findByText('Cake')
 
   fireEvent.click(screen.getByLabelText('Filter'))
-  fireEvent.click(screen.getByText('Course'))
-  fireEvent.click(screen.getByLabelText('dessert'))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'dessert' }))
 
   await waitFor(() => {
     expect(screen.getByText('Cake')).toBeInTheDocument()
@@ -307,7 +312,9 @@ test('deletes a recipe from the detail modal', async () => {
 
   render(<RecipesPage />)
   fireEvent.click(await screen.findByText('Risotto'))
-  fireEvent.click(await screen.findByText('Delete'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  // The delete is now guarded: the first click only asks.
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete recipe' }))
 
   await waitFor(() => expect(screen.queryByText('Risotto')).toBeNull())
   expect(recipesApi.delete).toHaveBeenCalledWith(1)
@@ -477,4 +484,372 @@ test('the opened recipe says how many people its quantities are written for', as
   await waitFor(() =>
     expect(screen.getAllByText(/ingredients for 4 people/i).length).toBeGreaterThan(0),
   )
+})
+
+// --- card meta line ---------------------------------------------------------
+
+test('the card meta line is abbreviated on mobile so it fits one line', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Ribollita',
+      course: 'main',
+      servings: 4,
+      tags: [],
+      ingredients: [{ name: 'Cavolo nero' }, { name: 'Fagioli' }],
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  expect(await screen.findByText('main · 2 ingr · 4p')).toBeInTheDocument()
+})
+
+test('the card meta line keeps full words on desktop', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Ribollita',
+      course: 'main',
+      servings: 4,
+      tags: [],
+      ingredients: [{ name: 'Cavolo nero' }, { name: 'Fagioli' }],
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  expect(
+    await screen.findByText('main · 2 ingredients · serves 4'),
+  ).toBeInTheDocument()
+})
+
+test('cancelling the delete confirmation keeps the recipe', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Risotto', course: 'main', tags: [], ingredients: [], procedure: '' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+  recipesApi.delete = vi.fn().mockResolvedValue(null)
+
+  render(<RecipesPage />)
+  fireEvent.click(await screen.findByText('Risotto'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+  expect(recipesApi.delete).not.toHaveBeenCalled()
+  // Cancelling leaves the detail modal open, so the title is on screen twice:
+  // the grid card behind it and the modal heading.
+  expect(screen.getAllByText('Risotto')).toHaveLength(2)
+})
+
+// --- filters ----------------------------------------------------------------
+
+test('filter options are buttons, not sub-floor checkboxes', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+
+  const chip = screen.getByRole('button', { name: 'quick' })
+  expect(chip).toHaveAttribute('aria-pressed', 'false')
+
+  fireEvent.click(chip)
+  expect(screen.getByRole('button', { name: 'quick' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
+test('the funnel counts the active filters', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  // jest-dom's toHaveTextContent('') matches anything, so assert the negative
+  // against the value that will appear rather than against emptiness.
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('1')
+
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+
+  expect(screen.getByLabelText('Filter')).toHaveTextContent('1')
+})
+
+test('an active filter shows as a removable chip', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+
+  expect(screen.queryByText('Pizza')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove filter quick' }))
+
+  expect(await screen.findByText('Pizza')).toBeInTheDocument()
+})
+
+test('clear all drops every filter at once', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'first-course', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  fireEvent.click(screen.getByRole('button', { name: 'quick' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'main' }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear all filters' }))
+
+  expect(await screen.findByText('Pizza')).toBeInTheDocument()
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('2')
+})
+
+test('Escape closes the filter popover', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  expect(screen.getByRole('button', { name: 'Course' })).toBeInTheDocument()
+
+  fireEvent.keyDown(document, { key: 'Escape' })
+
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Course' })).toBeNull(),
+  )
+})
+
+test('the filter opens a bottom sheet on mobile', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  expect(screen.getByRole('dialog', { name: 'Filters' })).toBeInTheDocument()
+})
+
+test('the filter stays a popover on desktop', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Course' })).toBeInTheDocument()
+})
+
+test('the sheet footer reports the filtered count and closes the sheet', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+    { id: 2, title: 'Pizza', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Show 2 recipes' }))
+
+  await waitFor(() =>
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).toBeNull(),
+  )
+})
+
+// --- mobile header ----------------------------------------------------------
+
+test('the mobile header holds only search and filter', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  expect(screen.queryByRole('button', { name: 'Import from web' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^New recipe$/ })).toBeNull()
+  expect(screen.getByLabelText('Filter')).toBeInTheDocument()
+})
+
+test('the mobile add button offers both ways to create a recipe', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
+
+  expect(screen.getByRole('button', { name: 'Write it myself' })).toBeInTheDocument()
+  expect(
+    screen.getByRole('button', { name: 'Import from a website' }),
+  ).toBeInTheDocument()
+})
+
+test('the add sheet opens the import dialog', async () => {
+  stubViewport(true)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Import from a website' }))
+
+  // The add sheet gives way to the import dialog rather than stacking.
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: 'Write it myself' })).toBeNull(),
+  )
+})
+
+test('desktop keeps both header buttons and shows no FAB', async () => {
+  stubViewport(false)
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  expect(screen.getByRole('button', { name: 'Import from web' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /New recipe/ })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Add a recipe' })).toBeNull()
+})
+
+test('says so when no recipe matches the search', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: [], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'zzz' },
+  })
+
+  expect(screen.getByText('No recipes match your search.')).toBeInTheDocument()
+})
+
+test('the empty state clears the search and the filters together', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', tags: ['quick'], ingredients: [] },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+  fireEvent.click(screen.getByRole('button', { name: 'Course' }))
+  fireEvent.click(screen.getByRole('button', { name: 'main' }))
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'zzz' },
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Clear search and filters' }))
+
+  expect(await screen.findByText('Spaghetti')).toBeInTheDocument()
+  expect(screen.getByPlaceholderText('Search recipes…')).toHaveValue('')
+  expect(screen.getByLabelText('Filter')).not.toHaveTextContent('1')
+})
+
+// An account's ingredient catalogue is the one filter list long enough that
+// showing all of it is the problem; course and tags are short.
+test('only the ingredient filter is searchable', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'Spaghetti',
+      tags: ['Italian'],
+      ingredients: [{ name: 'Tomato' }],
+      course: 'main',
+    },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([{ name: 'Italian' }])
+  ingredientsApi.fetchAll.mockResolvedValue([
+    { id: 1, name: 'Tomato' },
+    { id: 2, name: 'Lettuce' },
+  ])
+
+  render(<RecipesPage />)
+  await screen.findByText('Spaghetti')
+  fireEvent.click(screen.getByLabelText('Filter'))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Ingredients' }))
+  expect(screen.queryByRole('button', { name: 'Lettuce' })).toBeNull()
+  fireEvent.change(screen.getByPlaceholderText('Search Ingredients…'), {
+    target: { value: 'let' },
+  })
+  expect(screen.getByRole('button', { name: 'Lettuce' })).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
+  expect(screen.getByRole('button', { name: 'Italian' })).toBeInTheDocument()
+  expect(screen.queryByPlaceholderText(/^Search Tags/)).toBeNull()
 })

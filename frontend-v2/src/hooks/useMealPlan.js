@@ -75,7 +75,12 @@ export function useMealPlan({ setError }) {
     [viewStart]
   )
 
-  const isToday = (d) => d.toDateString() === today.toDateString()
+  // Stable identity: the calendar memoises its whole week on this, so a fresh
+  // closure per render silently disabled that memo.
+  const isToday = React.useCallback(
+    (d) => d.toDateString() === today.toDateString(),
+    [today],
+  )
 
   React.useEffect(() => {
     async function load() {
@@ -101,6 +106,18 @@ export function useMealPlan({ setError }) {
       return d
     })
   }
+
+  // Jump back to the week containing today. The calendar offers this whenever
+  // the viewed week does not contain today, so wandering forward is reversible
+  // without counting weeks back.
+  const goToToday = () => {
+    setArmedCell(null)
+    setViewStart(startOfWeek(today))
+  }
+
+  // Drop a pending swap without having to re-press the same cell — the old
+  // flow's only exit, and one nobody discovered.
+  const cancelSwap = () => setArmedCell(null)
 
   // Reload the visible week so server-side cascade effects (recomputed leftover
   // links, cross-day changes) are reflected.
@@ -281,6 +298,8 @@ export function useMealPlan({ setError }) {
     plan,
     setPlan,
     changeWeek,
+    goToToday,
+    cancelSwap,
     handleAccept,
     handleReject,
     handleSwap,

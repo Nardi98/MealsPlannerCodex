@@ -2,13 +2,14 @@
  * @vitest-environment jsdom
  */
 import React from 'react'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import ShoppingListPage from '../ShoppingListPage'
 import { mealPlansApi } from '../../api/mealPlansApi'
 import { recipesApi } from '../../api/recipesApi'
 import { authApi } from '../../api/authApi'
+import { stubViewport } from '../../test/stubViewport'
 
 vi.mock('../../api/mealPlansApi', () => ({
   mealPlansApi: {
@@ -47,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   cleanup()
 })
 
@@ -140,3 +142,155 @@ test('an occurrence cooking exactly one batch is not annotated', async () => {
   await screen.findByText('A')
   expect(screen.queryByText(/^×/)).toBeNull()
 })
+
+// --- mobile layout ----------------------------------------------------------
+
+test('shows a single month on mobile', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+  await screen.findByText('ing1: 2 kg')
+
+  expect(screen.getAllByTestId('shopping-month')).toHaveLength(1)
+})
+
+test('keeps three months on desktop', async () => {
+  stubViewport(false)
+  render(<ShoppingListPage />)
+  await screen.findByText('A')
+
+  expect(screen.getAllByTestId('shopping-month')).toHaveLength(3)
+})
+
+test('mobile opens on the ingredients tab and hides the meal list', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('ing1: 2 kg')).toBeInTheDocument()
+  // 'A' is a meal title, which lives on the other tab.
+  expect(screen.queryByText('A')).toBeNull()
+})
+
+test('mobile can switch to the meal list', async () => {
+  stubViewport(true)
+  render(<ShoppingListPage />)
+  await screen.findByText('ing1: 2 kg')
+
+  fireEvent.click(screen.getByRole('button', { name: 'Meals' }))
+
+  expect(await screen.findByText('A')).toBeInTheDocument()
+  expect(screen.queryByText('ing1: 2 kg')).toBeNull()
+})
+
+test('desktop shows both lists at once and no tabs', async () => {
+  stubViewport(false)
+  render(<ShoppingListPage />)
+
+  expect(await screen.findByText('A')).toBeInTheDocument()
+  expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Meals' })).toBeNull()
+})
+
+test('the batch label flows inline with the recipe title', async () => {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: [], leftover: false, meal_number: 1, people: 2 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'A', servings: 4, ingredients: [] },
+  ])
+
+  render(<ShoppingListPage />)
+
+  const label = await screen.findByText('×½')
+  // Same text flow as the title, not a separate flex item beside it. The gap
+  // is a margin rather than a space, which is deliberate: with no break
+  // opportunity between them the label stays bound to the last word instead
+  // of stranding on a line of its own again.
+  expect(label.parentElement).toHaveTextContent('A×½')
+  expect(label.parentElement.className).not.toMatch(/flex/)
+})
+
+// --- ticking off ------------------------------------------------------------
+
+test('an ingredient row is a button that toggles pressed', async () => {
+  render(<ShoppingListPage />)
+  const row = await screen.findByRole('button', { name: /ing1: 2 kg/ })
+
+  expect(row).toHaveAttribute('aria-pressed', 'false')
+
+  fireEvent.click(row)
+
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+})
+
+test('a ticked ingredient unticks when its quantity changes', async () => {
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing1: 2 kg/ }))
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  // Meal A goes from 2 people to 3, so ing1 becomes 3 kg.
+  fireEvent.click(screen.getAllByRole('button', { name: 'More people' })[0])
+
+  const row = await screen.findByRole('button', { name: /ing1: 3 kg/ })
+  expect(row).toHaveAttribute('aria-pressed', 'false')
+})
+
+test('a quantity change leaves other ticks alone', async () => {
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing2: 3 kg/ }))
+
+  fireEvent.click(screen.getAllByRole('button', { name: 'More people' })[0])
+
+  expect(
+    await screen.findByRole('button', { name: /ing2: 3 kg/ }),
+  ).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('ticked items are left out of the export', async () => {
+  // jsdom implements neither of these, so assign them rather than spying.
+  URL.createObjectURL = vi.fn(() => 'blob:x')
+  URL.revokeObjectURL = vi.fn()
+  // A stub class, not vi.spyOn: a spy replaces Blob with a plain function,
+  // which `new Blob(...)` then throws on -- after the call is recorded, so the
+  // assertion passes while the export has actually blown up.
+  const written = []
+  class FakeBlob {
+    constructor(parts, options) {
+      written.push(parts)
+      this.parts = parts
+      this.type = options?.type
+    }
+  }
+  vi.stubGlobal('Blob', FakeBlob)
+
+  render(<ShoppingListPage />)
+  fireEvent.click(await screen.findByRole('button', { name: /ing1: 2 kg/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Export open items' }))
+
+  expect(written).toHaveLength(1)
+  const text = written[0][0]
+  expect(text).not.toMatch(/ing1/)
+  expect(text).toMatch(/ing2/)
+})
+
+test('says so when the range holds no meals', async () => {
+  mealPlansApi.fetchRange.mockResolvedValue({})
+
+  render(<ShoppingListPage />)
+
+  expect(
+    await screen.findByText('No meals planned in this range.'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText('Nothing to buy for this range yet.'),
+  ).toBeInTheDocument()
+})
+

@@ -26,6 +26,12 @@
   --border-default: var(--border);
   --text-on-dark: #F8FAF9;
   --text-on-accent: #121212;
+  /* The keyboard focus ring. A token rather than a literal because it has to
+     be legible against whatever it lands on: dark green reads on the page, on
+     the white card and — thanks to the ring's offset, which puts it outside
+     the control on the page behind — on the gold FAB and the filled green
+     toggle segment too. A dark surface overrides it to gold. */
+  --focus-ring: var(--c-pos);
 
   --accent-primary: var(--c-a2);
   --accent-secondary: var(--c-a1);
@@ -104,6 +110,31 @@ h1, h2, h3, h4 {
   font-family: var(--font-display);
 }
 
+/* Keyboard focus, everywhere, once.
+
+   Before this, focus was styled one element at a time: thirteen inputs and
+   buttons carried the same `focus:outline-none focus:ring-2` triplet, two
+   widgets had their own rule here, and everything else — every Button, chip,
+   FAB, ViewToggle and tick row — fell back to the UA outline, which is all but
+   invisible on the gold FAB and the filled green toggle segment. Doing it
+   globally is the only version a component added next week inherits.
+
+   `outline`, not `box-shadow`: rounded chips and the `overflow-hidden` recipe
+   cards clip a shadow, and an outline follows the border radius on its own. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The one dark surface in the app. The default ring is dark green and would
+   vanish against it, so the subtree rings in gold. A class rather than an
+   inline style on Sidebar, so the pairing lives beside the token it overrides
+   and a second dark surface inherits it instead of copying it. */
+.surface-dark {
+  background: var(--surface-sidebar);
+  --focus-ring: var(--c-a2);
+}
+
 /* ---- Sliding segmented control (SegmentedControl.jsx) ---- */
 .segu { position: relative; display: flex; gap: 3px; padding: 0 2px; }
 .segu-btn {
@@ -116,8 +147,6 @@ h1, h2, h3, h4 {
 .segu-btn:hover  { opacity: .82; }
 .segu-btn:active { transform: scale(.97); }
 .segu-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(255, 185, 2, .4);
   border-radius: var(--radius-md, 8px);
 }
 .segu-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -150,10 +179,6 @@ h1, h2, h3, h4 {
   color: var(--text-strong);
   font-family: var(--font-body);
   margin: 0;
-}
-.rdp-root .rdp-day_button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--c-a2);
 }
 .rdp-root .rdp-range_middle {
   background-color: color-mix(in srgb, var(--c-a1) 30%, white);

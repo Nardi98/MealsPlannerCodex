@@ -48,6 +48,18 @@ test('the toggle opens and closes the section', async () => {
   expect(screen.queryByText('the settings')).not.toBeInTheDocument()
 })
 
+test('starts expanded on mobile when the caller asks for it', () => {
+  stubViewport(true)
+  render(
+    <MobileCollapse title="Plan settings" defaultOpen>
+      <p>the settings</p>
+    </MobileCollapse>,
+  )
+
+  expect(screen.getByText('the settings')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /plan settings/i })).toHaveAttribute('aria-expanded', 'true')
+})
+
 test('puts a caller-supplied tour anchor on the toggle, so a collapsed section is still reachable', () => {
   stubViewport(true)
   const { container } = render(

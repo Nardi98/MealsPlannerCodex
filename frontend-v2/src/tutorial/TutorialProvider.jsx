@@ -1,5 +1,6 @@
 import React from 'react'
 import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
+import { IconButton } from '../components/IconButton'
 import { TutorialContext, useTutorial } from './tutorialContext'
 
 // Lets the header's help button replay whichever page's tour is on screen,
@@ -44,21 +45,11 @@ export function ReplayTutorialButton() {
   const { hasTour, replay } = useTutorial()
   if (!hasTour) return null
   return (
-    <button
-      type="button"
+    <IconButton
+      Icon={QuestionMarkCircleIcon}
+      label="Replay tutorial"
       onClick={replay}
-      aria-label="Replay tutorial"
-      title="Replay tutorial"
-      style={{
-        background: 'none',
-        border: 'none',
-        padding: 4,
-        cursor: 'pointer',
-        display: 'inline-flex',
-        color: 'var(--text-muted)',
-      }}
-    >
-      <QuestionMarkCircleIcon className="h-6 w-6" />
-    </button>
+      color="var(--text-muted)"
+    />
   )
 }

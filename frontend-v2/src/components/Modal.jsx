@@ -2,14 +2,24 @@ import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Card } from './Card'
 import { SCRIM, Z } from '../lib/layers'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 
 // The full-screen wash every takeover shares. Extracted because the mobile
 // rules that belong here — keep the card off the screen edges, let a card
 // taller than the window scroll — were otherwise a line each author had to
 // remember to type, and nine of them had not.
+//
+// The focus trap lives here for the same reason: every dialog in the app comes
+// through this component, so trapping here is the only way to make the
+// `aria-modal` each of them declares true. The scrim bounds the trap rather
+// than the card, because the card belongs to the caller.
 export function ModalScrim({ z = Z.modal, onClick, children }) {
+  const scrim = React.useRef(null)
+  useFocusTrap(true, scrim)
+
   return (
     <div
+      ref={scrim}
       onClick={onClick}
       style={{
         position: 'fixed',

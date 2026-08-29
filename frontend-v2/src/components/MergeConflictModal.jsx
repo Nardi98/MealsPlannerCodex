@@ -68,7 +68,7 @@ export default function MergeConflictModal({ conflicts = [], onCancel, onConfirm
           <select
             value={defaultAction}
             onChange={(e) => setDefaultAction(e.target.value)}
-            className="rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--c-a2)]"
+            className="rounded-xl border px-3 py-2 text-sm"
             style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
           >
             <option value="keep-old">Keep old</option>
