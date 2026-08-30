@@ -5,6 +5,7 @@ import { render, screen, fireEvent, cleanup, within } from '@testing-library/rea
 import { afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import DateRangePicker from '../DateRangePicker'
+import { stubViewport } from '../../test/stubViewport'
 
 afterEach(() => {
   cleanup()
@@ -65,4 +66,42 @@ test('normalizes an earlier second pick so start precedes end', () => {
   const last = onChange.mock.calls.at(-1)[0]
   expect(new Date(last.start) <= new Date(last.end)).toBe(true)
   expect(last).toEqual({ start: '2024-01-12', end: '2024-01-20' })
+})
+
+test('opens the calendar in a bottom sheet dialog on mobile', () => {
+  stubViewport(true)
+  render(<DateRangePicker label="Date range" start="2024-01-01" end="2024-01-07" onChange={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByRole('grid')).toBeInTheDocument()
+})
+
+test('picking a range in the mobile sheet still reports the ordered range', () => {
+  stubViewport(true)
+  const onChange = vi.fn()
+  render(<DateRangePicker label="Date range" start="2024-01-01" end="2024-01-07" onChange={onChange} />)
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  const grid = screen.getByRole('grid')
+  fireEvent.click(within(grid).getByRole('button', { name: /January 20(?!\d)/ }))
+  fireEvent.click(within(grid).getByRole('button', { name: /January 12(?!\d)/ }))
+  expect(onChange).toHaveBeenLastCalledWith({ start: '2024-01-12', end: '2024-01-20' })
+})
+
+test('the mobile sheet closes from its own close control', () => {
+  stubViewport(true)
+  render(<DateRangePicker label="Date range" start="2024-01-01" end="2024-01-07" onChange={() => {}} />)
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  fireEvent.click(screen.getByRole('button', { name: /close/i }))
+  expect(screen.queryByRole('grid')).not.toBeInTheDocument()
+})
+
+test('a half-finished range does not carry over to the next open', () => {
+  const onChange = vi.fn()
+  render(<DateRangePicker start="2024-01-01" end="2024-01-07" onChange={onChange} />)
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  fireEvent.click(within(screen.getByRole('grid')).getByRole('button', { name: /January 20(?!\d)/ }))
+  fireEvent.click(screen.getByRole('button', { name: /close/i }))
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  fireEvent.click(within(screen.getByRole('grid')).getByRole('button', { name: /January 12(?!\d)/ }))
+  expect(onChange).toHaveBeenLastCalledWith({ start: '2024-01-12', end: '2024-01-12' })
 })
