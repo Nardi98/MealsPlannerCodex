@@ -78,3 +78,20 @@ test('the recipes a merge will touch are named before it happens', async () => {
   await openPair()
   expect(await screen.findByText('Salad')).toBeInTheDocument()
 })
+
+test('a refused merge shows the reason the server gave', async () => {
+  // The backend refuses a merge it cannot carry out and says why: which
+  // recipe blocks it, and which conversion factor is missing. `request()`
+  // unwraps FastAPI's {detail} into the Error message, and that sentence is
+  // the whole point -- a generic "failed" tells the user nothing about the
+  // factor they need to go and fill in.
+  const detail =
+    'Cannot merge: recipe "Salad" measures Tomatoes by volume and ' +
+    'Tomato has no grams_per_ml'
+  ingredientsApi.merge.mockRejectedValue(new Error(detail))
+
+  await openPair()
+  fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
+
+  expect(await screen.findByText(detail)).toBeInTheDocument()
+})

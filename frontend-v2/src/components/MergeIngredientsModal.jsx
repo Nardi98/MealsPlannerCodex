@@ -69,7 +69,11 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
       onMerged?.()
     } catch (err) {
       console.error('Failed to merge ingredients', err)
-      setError('Failed to merge ingredients')
+      // The server refuses a merge it cannot carry out and says why -- which
+      // recipe blocks it, and which conversion factor is missing. That
+      // sentence is the actionable part, so show it rather than a generic
+      // failure the user can do nothing with.
+      setError(err?.message || 'Failed to merge ingredients')
     }
   }
 
