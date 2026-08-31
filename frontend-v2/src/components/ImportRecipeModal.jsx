@@ -13,6 +13,7 @@ import {
 import { ingredientsApi } from '../api/ingredientsApi'
 import { recipesApi } from '../api/recipesApi'
 import { ModalScrim } from './Modal'
+import { backfillFor, learnedFacts } from '../utils/importLearning'
 
 // Build one reconciliation row per imported ingredient. An exact name match
 // (case-insensitive) against an existing ingredient defaults the row to reusing
@@ -30,9 +31,15 @@ function buildRows(ingredients, existing, suggestionsByIndex) {
       matched: Boolean(match),
       existingId: match ? match.id : suggestions[0]?.id,
       name: ing.name,
+      // Already normalised to a base unit by the parser: the source's `cup`
+      // became `ml` at the door.
       unit: ing.unit || '',
       season: ing.season_months || [],
       categories: [],
+      // Physical facts about the ingredient, to be back-filled onto whichever
+      // pantry row this resolves to. Never overwritten onto a stored value.
+      grams_per_ml: ing.grams_per_ml ?? null,
+      grams_per_piece: ing.grams_per_piece ?? null,
       suggestions,
     }
   })
@@ -49,24 +56,6 @@ function ErrorList({ errors }) {
   )
 }
 
-function UnitSelect({ label, value, onChange }) {
-  return (
-    <select
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      required
-      className="rounded-xl border px-3 py-2 text-sm"
-      style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
-    >
-      <option value="">Select unit</option>
-      {UNITS.map((u) => (
-        <option key={u} value={u}>{u}</option>
-      ))}
-    </select>
-  )
-}
-
 export default function ImportRecipeModal({ onClose, onCreated }) {
   const [step, setStep] = React.useState('prompt')
   const [raw, setRaw] = React.useState('')
@@ -76,6 +65,9 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
   const [rows, setRows] = React.useState([])
   const [existing, setExisting] = React.useState([])
   const [busy, setBusy] = React.useState(false)
+  // The quiet receipt: only genuinely new facts, informational, dismissible,
+  // and blocking nothing.
+  const [learned, setLearned] = React.useState([])
 
   const copyPrompt = async () => {
     try {
@@ -119,32 +111,49 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
   const confirmIngredients = async () => {
     setBusy(true)
     try {
-      const resolved = []
-      for (const row of rows) {
-        if (row.mode === 'existing') {
-          const ing = existing.find((e) => e.id === row.existingId)
-          resolved.push({
-            id: ing?.id,
-            name: ing?.name ?? row.name,
-            amount: row.amount,
-            unit: ing?.unit ?? row.unit,
-          })
-        } else {
+      // The rows are independent, so create them together rather than in a
+      // queue of round trips.
+      const taught = []
+      const resolved = await Promise.all(
+        rows.map(async (row) => {
+          if (row.mode === 'existing') {
+            const ing = existing.find((e) => e.id === row.existingId)
+            // The recipe payload carries the factors and the *server* applies
+            // the database-wins rule, so nothing is written from here. This is
+            // only the receipt: what the save is about to teach the pantry.
+            const gained = backfillFor(ing, row)
+            if (ing && Object.keys(gained).length) {
+              taught.push({ name: ing.name, ...gained })
+            }
+            return {
+              id: ing?.id,
+              name: ing?.name ?? row.name,
+              amount: row.amount,
+              unit: row.unit,
+              ...gained,
+            }
+          }
+
+          const gained = backfillFor(null, row)
           const created = await ingredientsApi.create({
             name: row.name,
-            unit: row.unit,
-            season: row.season,
+            season_months: row.season,
             categories: row.categories,
+            ...gained,
           })
-          resolved.push({
+          if (Object.keys(gained).length) {
+            taught.push({ name: created.name, ...gained })
+          }
+          return {
             id: created.id,
             name: created.name,
             amount: row.amount,
-            unit: created.unit ?? row.unit,
-          })
-        }
-      }
+            unit: row.unit,
+          }
+        }),
+      )
       setRecipe((r) => ({ ...r, ingredients: resolved }))
+      setLearned(learnedFacts(taught))
       setStep('editor')
     } catch (err) {
       console.error('Failed to reconcile ingredients', err)
@@ -167,6 +176,23 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
     return (
       <NewRecipeModal
         initialRecipe={recipe}
+        notice={
+          learned.length > 0 && (
+            <div
+              className="rounded-xl border px-3 py-2 text-xs"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-subtle)' }}
+            >
+              <span>Learned: {learned.join(' · ')}</span>{' '}
+              <button
+                type="button"
+                onClick={() => setLearned([])}
+                className="underline"
+              >
+                dismiss
+              </button>
+            </div>
+          )
+        }
         onClose={onClose}
         onSave={handleSave}
       />
@@ -277,11 +303,6 @@ export default function ImportRecipeModal({ onClose, onCreated }) {
                           aria-label={`${row.name} name`}
                           value={row.name}
                           onChange={(e) => updateRow(idx, { name: e.target.value })}
-                        />
-                        <UnitSelect
-                          label={`${row.name} unit`}
-                          value={row.unit}
-                          onChange={(v) => updateRow(idx, { unit: v })}
                         />
                       </div>
                       <div className="space-y-1">

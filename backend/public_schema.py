@@ -93,7 +93,7 @@ class PublicRecipe(BaseModel):
                 PublicIngredient(
                     name=link.ingredient.name,
                     quantity=link.quantity,
-                    unit=_unit_str(link.unit or link.ingredient.unit),
+                    unit=_unit_str(link.unit),
                 )
                 for link in recipe.ingredients
             ],

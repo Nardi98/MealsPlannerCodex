@@ -19,13 +19,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import crud
-from models import Ingredient, Recipe, RecipeIngredient, Tag, UnitEnum
+from models import DimensionEnum, Ingredient, Recipe, RecipeIngredient, Tag, UnitEnum
 from scoping import scope
 
 # Curated starter ingredient library handed to every new account so the app is
 # usable without adding ingredients one by one. Loaded once at import from a
 # JSON fixture that non-coders can extend. Each entry is
-# ``{"name", "unit", "season_months": [int], "categories": [str]}``.
+# ``{"name", "season_months": [int], "categories": [str]}`` plus the optional
+# ``grams_per_ml`` / ``grams_per_piece`` / ``preferred_dimension``. An absent
+# conversion is a statement that the measurement does not apply, so a pantry
+# arrives already able to unify what it can and honest about what it cannot.
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SYSTEM_INGREDIENTS: list[dict] = json.loads(
     (_DATA_DIR / "system_ingredients.json").read_text(encoding="utf-8")
@@ -144,7 +147,9 @@ def seed_system_ingredients(session: Session, user_id: int | None = None) -> Non
         session.add(
             Ingredient(
                 name=entry["name"],
-                unit=UnitEnum(entry["unit"]),
+                grams_per_ml=entry.get("grams_per_ml"),
+                grams_per_piece=entry.get("grams_per_piece"),
+                preferred_dimension=DimensionEnum(entry["preferred_dimension"]),
                 season_months=entry["season_months"],
                 categories=entry["categories"],
                 user_id=user_id,

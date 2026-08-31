@@ -7,6 +7,9 @@ import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
 import { ModalScrim } from './Modal'
 import { basisOf, peopleLabel } from '../utils/servings'
+import UnitField from './UnitField'
+import { toBaseUnit } from '../utils/units'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
@@ -112,7 +115,8 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
 // COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
 const COURSES_WITH_SIDES = ['main']
 
-export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
+export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice }) {
+  const unitSystem = useUnitSystem()
   const [title, setTitle] = React.useState(initialRecipe?.title || '')
   const [course, setCourse] = React.useState(initialRecipe?.course || '')
   // The head-count the ingredient quantities below are written for. Held as a
@@ -212,12 +216,21 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
       tags,
       ingredients: ingredients
         .filter((i) => i.name.trim())
-        .map((ing) => ({
-          id: ing.id,
-          name: ing.name,
-          amount: parseFloat(ing.amount) || 0,
-          unit: ing.unit,
-        })),
+        .map((ing) => {
+          // Whatever they wrote it in becomes the base unit of its dimension
+          // at the door, which is the only vocabulary storage accepts.
+          const base = toBaseUnit(parseFloat(ing.amount) || 0, ing.unit || 'g')
+          return {
+            id: ing.id,
+            name: ing.name,
+            amount: base ? base.amount : parseFloat(ing.amount) || 0,
+            unit: base ? base.unit : 'g',
+            // Physical facts an import learned travel with the line to the
+            // server, which back-fills them onto the pantry row.
+            grams_per_ml: ing.grams_per_ml ?? null,
+            grams_per_piece: ing.grams_per_piece ?? null,
+          }
+        }),
       procedure,
       image_url: imageUrl.trim() || null,
       hot: bulkPrep,
@@ -252,6 +265,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <h2 className="text-lg font-medium">New Recipe</h2>
+          {notice}
           <div className="space-y-1">
             <label className="text-sm" htmlFor="recipe-title">Title</label>
             <Input
@@ -342,25 +356,29 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe }) {
                   onChange={(val) => {
                     updateIngredient(idx, 'name', val)
                     updateIngredient(idx, 'id', undefined)
-                    updateIngredient(idx, 'unit', '')
                   }}
                   onSelect={(opt) => {
                     updateIngredient(idx, 'id', opt.id)
                     updateIngredient(idx, 'name', opt.name)
-                    updateIngredient(idx, 'unit', opt.unit)
                   }}
                   onAddNew={() => setAddingIdx(idx)}
                 />
                 <Input
                   type="number"
+                  min="0"
+                  step="any"
                   value={ing.amount}
                   onChange={(e) => updateIngredient(idx, 'amount', e.target.value)}
                   className="w-24"
                   placeholder="amt"
                 />
-                <span className="w-12 text-sm" style={{ color: 'var(--text-strong)' }}>
-                  {ing.unit}
-                </span>
+                <UnitField
+                  id={`ingredient-unit-${idx}`}
+                  amount={ing.amount}
+                  unit={ing.unit || 'g'}
+                  system={unitSystem}
+                  onChange={(next) => updateIngredient(idx, 'unit', next.unit)}
+                />
                 <Button
                   type="button"
                   variant="ghost"

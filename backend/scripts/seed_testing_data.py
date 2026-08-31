@@ -41,6 +41,7 @@ from models import (  # noqa: E402
     RecipeShare,
     Tag,
     User,
+    DimensionEnum,
     UnitEnum,
 )
 from auth_users import hash_password  # noqa: E402
@@ -62,72 +63,104 @@ GUEST_USER_EMAIL = "guest@mealplanner.test"
 GUEST_USER_USERNAME = "guest_cook"
 
 # ---------------------------------------------------------------------------
-# Ingredients: (name, unit, season_months, categories)  -- 56 entries
+# Ingredients: (name, preferred_dimension, season_months, categories)
 # ``season_months`` uses 1-12; an empty list means "available year round".
 # ``categories`` are drawn from ``models.CATEGORIES``; an empty list renders
 # under the synthetic "Uncategorized" section in the UI.
 # NOTE: "Tomato" and "Tomatoes" are an intentional near-duplicate pair (with
-# differing units) so the merge tool has something to find in a fresh DB.
+# differing *dimensions*) so the merge tool has something to find in a fresh DB.
+#
+# Conversions come from CONVERSIONS below and are deliberately partial: an
+# ingredient with neither is a normal ingredient, and the seeded data must
+# exercise that path rather than pretend it is rare.
 # ---------------------------------------------------------------------------
-INGREDIENTS: list[tuple[str, UnitEnum, list[int], list[str]]] = [
-    ("Spaghetti", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
-    ("Penne", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
-    ("Rice", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
-    ("Arborio Rice", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
-    ("Bread", UnitEnum.PIECE, [], ["Grains & Pasta", "Carbs"]),
-    ("Flour", UnitEnum.G, [], ["Grains & Pasta", "Carbs"]),
-    ("Oats", UnitEnum.G, [], ["Grains & Pasta", "Carbs", "Fiber"]),
-    ("Potato", UnitEnum.G, [9, 10, 11, 12, 1], ["Vegetables", "Carbs"]),
-    ("Sweet Potato", UnitEnum.G, [10, 11, 12], ["Vegetables", "Carbs", "Fiber"]),
-    ("Tomato", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
-    ("Tomatoes", UnitEnum.PIECE, [6, 7, 8, 9], ["Vegetables"]),
-    ("Cherry Tomato", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
-    ("Onion", UnitEnum.G, [], ["Vegetables"]),
-    ("Garlic", UnitEnum.G, [], ["Vegetables", "Herbs & Spices"]),
-    ("Carrot", UnitEnum.G, [], ["Vegetables", "Fiber"]),
-    ("Celery", UnitEnum.G, [], ["Vegetables", "Fiber"]),
-    ("Zucchini", UnitEnum.G, [6, 7, 8, 9], ["Vegetables"]),
-    ("Eggplant", UnitEnum.G, [7, 8, 9], ["Vegetables"]),
-    ("Bell Pepper", UnitEnum.G, [7, 8, 9], ["Vegetables"]),
-    ("Spinach", UnitEnum.G, [3, 4, 5, 10, 11], ["Vegetables", "Fiber"]),
-    ("Broccoli", UnitEnum.G, [10, 11, 12, 1, 2], ["Vegetables", "Fiber"]),
-    ("Cauliflower", UnitEnum.G, [10, 11, 12, 1], ["Vegetables", "Fiber"]),
-    ("Green Beans", UnitEnum.G, [6, 7, 8], ["Vegetables", "Fiber"]),
-    ("Peas", UnitEnum.G, [4, 5, 6], ["Legumes", "Fiber", "Plant-based"]),
-    ("Mushroom", UnitEnum.G, [9, 10, 11], ["Vegetables"]),
-    ("Pumpkin", UnitEnum.G, [10, 11, 12], ["Vegetables", "Fiber"]),
-    ("Lettuce", UnitEnum.G, [4, 5, 6, 9, 10], ["Vegetables"]),
-    ("Cucumber", UnitEnum.G, [6, 7, 8], ["Vegetables"]),
-    ("Cabbage", UnitEnum.G, [11, 12, 1, 2], ["Vegetables", "Fiber"]),
-    ("Chickpeas", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
-    ("Lentils", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
-    ("Black Beans", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
-    ("Kidney Beans", UnitEnum.G, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
-    ("Chicken Breast", UnitEnum.G, [], ["Meat", "Protein"]),
-    ("Chicken Thigh", UnitEnum.G, [], ["Meat", "Protein"]),
-    ("Ground Beef", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
-    ("Beef Steak", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
-    ("Pork Loin", UnitEnum.G, [], ["Meat", "Protein"]),
-    ("Sausage", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
-    ("Bacon", UnitEnum.G, [], ["Meat", "Protein", "High-calorie"]),
-    ("Salmon", UnitEnum.G, [], ["Fish", "Protein"]),
-    ("Tuna", UnitEnum.G, [], ["Fish", "Protein"]),
-    ("Shrimp", UnitEnum.G, [], ["Fish", "Protein"]),
-    ("Egg", UnitEnum.PIECE, [], ["Dairy & Eggs", "Protein"]),
-    ("Milk", UnitEnum.ML, [], ["Dairy & Eggs", "Beverages"]),
-    ("Butter", UnitEnum.G, [], ["Dairy & Eggs", "High-calorie"]),
-    ("Cheddar Cheese", UnitEnum.G, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
-    ("Parmesan", UnitEnum.G, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
-    ("Mozzarella", UnitEnum.G, [], ["Dairy & Eggs", "Protein"]),
-    ("Yogurt", UnitEnum.G, [], ["Dairy & Eggs", "Protein"]),
-    ("Olive Oil", UnitEnum.ML, [], ["Condiments & Oils", "High-calorie"]),
-    ("Basil", UnitEnum.G, [6, 7, 8, 9], ["Herbs & Spices", "Plant-based"]),
-    ("Parsley", UnitEnum.G, [], ["Herbs & Spices", "Plant-based"]),
-    ("Soy Sauce", UnitEnum.ML, [], ["Condiments & Oils"]),
-    ("Coconut Milk", UnitEnum.ML, [], ["Beverages", "High-calorie", "Plant-based"]),
-    ("Curry Paste", UnitEnum.G, [], []),
-    ("Baking Soda", UnitEnum.G, [], []),
+INGREDIENTS: list[tuple[str, DimensionEnum, list[int], list[str]]] = [
+    ("Spaghetti", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs"]),
+    ("Penne", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs"]),
+    ("Rice", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs"]),
+    ("Arborio Rice", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs"]),
+    ("Bread", DimensionEnum.PIECE, [], ["Grains & Pasta", "Carbs"]),
+    ("Flour", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs"]),
+    ("Oats", DimensionEnum.MASS, [], ["Grains & Pasta", "Carbs", "Fiber"]),
+    ("Potato", DimensionEnum.MASS, [9, 10, 11, 12, 1], ["Vegetables", "Carbs"]),
+    ("Sweet Potato", DimensionEnum.MASS, [10, 11, 12], ["Vegetables", "Carbs", "Fiber"]),
+    ("Tomato", DimensionEnum.MASS, [6, 7, 8, 9], ["Vegetables"]),
+    ("Tomatoes", DimensionEnum.PIECE, [6, 7, 8, 9], ["Vegetables"]),
+    ("Cherry Tomato", DimensionEnum.MASS, [6, 7, 8, 9], ["Vegetables"]),
+    ("Onion", DimensionEnum.MASS, [], ["Vegetables"]),
+    ("Garlic", DimensionEnum.MASS, [], ["Vegetables", "Herbs & Spices"]),
+    ("Carrot", DimensionEnum.MASS, [], ["Vegetables", "Fiber"]),
+    ("Celery", DimensionEnum.MASS, [], ["Vegetables", "Fiber"]),
+    ("Zucchini", DimensionEnum.MASS, [6, 7, 8, 9], ["Vegetables"]),
+    ("Eggplant", DimensionEnum.MASS, [7, 8, 9], ["Vegetables"]),
+    ("Bell Pepper", DimensionEnum.MASS, [7, 8, 9], ["Vegetables"]),
+    ("Spinach", DimensionEnum.MASS, [3, 4, 5, 10, 11], ["Vegetables", "Fiber"]),
+    ("Broccoli", DimensionEnum.MASS, [10, 11, 12, 1, 2], ["Vegetables", "Fiber"]),
+    ("Cauliflower", DimensionEnum.MASS, [10, 11, 12, 1], ["Vegetables", "Fiber"]),
+    ("Green Beans", DimensionEnum.MASS, [6, 7, 8], ["Vegetables", "Fiber"]),
+    ("Peas", DimensionEnum.MASS, [4, 5, 6], ["Legumes", "Fiber", "Plant-based"]),
+    ("Mushroom", DimensionEnum.MASS, [9, 10, 11], ["Vegetables"]),
+    ("Pumpkin", DimensionEnum.MASS, [10, 11, 12], ["Vegetables", "Fiber"]),
+    ("Lettuce", DimensionEnum.MASS, [4, 5, 6, 9, 10], ["Vegetables"]),
+    ("Cucumber", DimensionEnum.MASS, [6, 7, 8], ["Vegetables"]),
+    ("Cabbage", DimensionEnum.MASS, [11, 12, 1, 2], ["Vegetables", "Fiber"]),
+    ("Chickpeas", DimensionEnum.MASS, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Lentils", DimensionEnum.MASS, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Black Beans", DimensionEnum.MASS, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Kidney Beans", DimensionEnum.MASS, [], ["Legumes", "Protein", "Fiber", "Plant-based"]),
+    ("Chicken Breast", DimensionEnum.MASS, [], ["Meat", "Protein"]),
+    ("Chicken Thigh", DimensionEnum.MASS, [], ["Meat", "Protein"]),
+    ("Ground Beef", DimensionEnum.MASS, [], ["Meat", "Protein", "High-calorie"]),
+    ("Beef Steak", DimensionEnum.MASS, [], ["Meat", "Protein", "High-calorie"]),
+    ("Pork Loin", DimensionEnum.MASS, [], ["Meat", "Protein"]),
+    ("Sausage", DimensionEnum.MASS, [], ["Meat", "Protein", "High-calorie"]),
+    ("Bacon", DimensionEnum.MASS, [], ["Meat", "Protein", "High-calorie"]),
+    ("Salmon", DimensionEnum.MASS, [], ["Fish", "Protein"]),
+    ("Tuna", DimensionEnum.MASS, [], ["Fish", "Protein"]),
+    ("Shrimp", DimensionEnum.MASS, [], ["Fish", "Protein"]),
+    ("Egg", DimensionEnum.PIECE, [], ["Dairy & Eggs", "Protein"]),
+    ("Milk", DimensionEnum.VOLUME, [], ["Dairy & Eggs", "Beverages"]),
+    ("Butter", DimensionEnum.MASS, [], ["Dairy & Eggs", "High-calorie"]),
+    ("Cheddar Cheese", DimensionEnum.MASS, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
+    ("Parmesan", DimensionEnum.MASS, [], ["Dairy & Eggs", "Protein", "High-calorie"]),
+    ("Mozzarella", DimensionEnum.MASS, [], ["Dairy & Eggs", "Protein"]),
+    ("Yogurt", DimensionEnum.MASS, [], ["Dairy & Eggs", "Protein"]),
+    ("Olive Oil", DimensionEnum.VOLUME, [], ["Condiments & Oils", "High-calorie"]),
+    ("Basil", DimensionEnum.MASS, [6, 7, 8, 9], ["Herbs & Spices", "Plant-based"]),
+    ("Parsley", DimensionEnum.MASS, [], ["Herbs & Spices", "Plant-based"]),
+    ("Soy Sauce", DimensionEnum.VOLUME, [], ["Condiments & Oils"]),
+    ("Coconut Milk", DimensionEnum.VOLUME, [], ["Beverages", "High-calorie", "Plant-based"]),
+    ("Curry Paste", DimensionEnum.MASS, [], []),
+    ("Baking Soda", DimensionEnum.MASS, [], []),
 ]
+
+# What each ingredient's physics are, where they are real. ``grams_per_ml`` is
+# a density, ``grams_per_piece`` the weight of one. Every ingredient absent
+# here has neither, which is a statement and not a gap: nothing knows what a
+# millilitre of egg is, and nothing invents one.
+CONVERSIONS: dict[str, tuple[float | None, float | None]] = {
+    # name: (grams_per_ml, grams_per_piece)
+    "Bread": (None, 40),
+    "Egg": (None, 50),
+    "Tomato": (None, 120),
+    "Tomatoes": (None, 120),
+    "Onion": (None, 150),
+    "Garlic": (None, 5),
+    "Potato": (None, 170),
+    "Carrot": (None, 60),
+    "Lemon": (None, 100),
+    "Zucchini": (None, 200),
+    "Milk": (1.03, None),
+    "Olive Oil": (0.92, None),
+    "Soy Sauce": (1.2, None),
+    "Coconut Milk": (0.98, None),
+    "Flour": (0.53, None),
+    "Rice": (0.85, None),
+    "Yogurt": (1.03, None),
+    # Butter is both weighed and counted, so it reaches all three dimensions.
+    "Butter": (0.911, 227),
+}
+
 
 # ---------------------------------------------------------------------------
 # Tags: (name, penalize_repetition, is_system)  -- 14 entries (>= 10 required)
@@ -347,7 +380,9 @@ def link_copies(
                 template = ingredients[name]
                 own = Ingredient(
                     name=name,
-                    unit=template.unit,
+                    preferred_dimension=template.preferred_dimension,
+                    grams_per_ml=template.grams_per_ml,
+                    grams_per_piece=template.grams_per_piece,
                     season_months=template.season_months,
                     categories=template.categories,
                     user_id=copier.id,
@@ -520,8 +555,12 @@ RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
      [("Eggplant", 100, UnitEnum.G), ("Tomato", 75, UnitEnum.G),
       ("Mozzarella", 37.5, UnitEnum.G), ("Parmesan", 12.5, UnitEnum.G)],
      ['vegetarian']),
+    # Deliberately counted where every other recipe weighs it, and Bell Pepper
+    # has no piece weight -- so the shopping list splits it into two rows and
+    # offers to combine them. Without a pair like this the split-row path, and
+    # the "combine" affordance that closes it, cannot be reached by hand.
     ('Stuffed Bell Peppers', 'main', True,
-     [("Bell Pepper", 100, UnitEnum.G), ("Rice", 37.5, UnitEnum.G),
+     [("Bell Pepper", 2, UnitEnum.PIECE), ("Rice", 37.5, UnitEnum.G),
       ("Ground Beef", 50, UnitEnum.G)],
      ['stew']),
     ('Black Bean Tacos', 'main', False,
@@ -643,10 +682,12 @@ def populate(session) -> None:
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
-    for name, unit, months, categories in INGREDIENTS:
+    for name, dimension, months, categories in INGREDIENTS:
         ing = Ingredient(
             name=name,
-            unit=unit,
+            preferred_dimension=dimension,
+            grams_per_ml=CONVERSIONS.get(name, (None, None))[0],
+            grams_per_piece=CONVERSIONS.get(name, (None, None))[1],
             season_months=months,
             categories=categories,
             user_id=demo_user.id,

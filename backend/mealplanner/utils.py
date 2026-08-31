@@ -74,35 +74,4 @@ def format_date(value: Union[date, datetime], fmt: str = "%Y-%m-%d") -> str:
     return value.strftime(fmt)
 
 
-_GRAM_CONVERSIONS = {
-    "g": 1.0,
-    "kg": 1000.0,
-    "oz": 28.349523125,
-    "lb": 453.59237,
-}
-
-
-def convert_units(value: float, from_unit: str, to_unit: str) -> float:
-    """Convert *value* from ``from_unit`` to ``to_unit``.
-
-    Only a handful of common weight units are supported: ``g``, ``kg``, ``oz``
-    and ``lb``.  The conversion is performed by first converting to grams and
-    then to the requested unit.  Negative values are rejected because weights
-    cannot be negative in this context.
-    """
-
-    if value < 0:
-        raise ValueError("value must be non-negative")
-
-    from_unit = from_unit.lower()
-    to_unit = to_unit.lower()
-
-    try:
-        grams = value * _GRAM_CONVERSIONS[from_unit]
-        result = grams / _GRAM_CONVERSIONS[to_unit]
-    except KeyError as exc:
-        raise ValueError("unsupported unit conversion") from exc
-    return result
-
-
-__all__ = ["parse_date", "format_date", "convert_units"]
+__all__ = ["parse_date", "format_date"]

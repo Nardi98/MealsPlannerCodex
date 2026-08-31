@@ -1,5 +1,6 @@
 import React from 'react'
 import { Card, Button, SeasonalityGrid, Badge } from './'
+import { BASE_UNITS, reachableDimensions } from '../utils/units'
 
 /**
  * Displays an ingredient and optionally shows its details when expanded.
@@ -11,7 +12,8 @@ import { Card, Button, SeasonalityGrid, Badge } from './'
  */
 export default function IngredientCard({
   name,
-  unit,
+  grams_per_ml = null,
+  grams_per_piece = null,
   season = [],
   categories = [],
   expanded: expandedProp,
@@ -19,6 +21,11 @@ export default function IngredientCard({
   onEdit,
   onDelete,
 }) {
+  // What this ingredient can be expressed in, derived from its conversions
+  // rather than stored. A single-dimension ingredient is a normal ingredient,
+  // so there is no warning state and nothing to complete.
+  const measures = reachableDimensions({ grams_per_ml, grams_per_piece })
+
   const [internalExpanded, setInternalExpanded] = React.useState(false)
   const isControlled = expandedProp !== undefined
   const expanded = isControlled ? expandedProp : internalExpanded
@@ -47,9 +54,15 @@ export default function IngredientCard({
       </div>
       {expanded && (
         <div className="mt-3 flex flex-col gap-2">
-          <div className="text-xs" style={{ color: 'var(--text-subtle)' }}>
-            Unit: {unit}
-          </div>
+          {measures.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {measures.map((dimension) => (
+                <Badge key={dimension} tone="a1">
+                  {BASE_UNITS[dimension]}
+                </Badge>
+              ))}
+            </div>
+          )}
           <SeasonalityGrid months={season} />
           {categories.length > 0 && (
             <div className="flex flex-wrap gap-1">

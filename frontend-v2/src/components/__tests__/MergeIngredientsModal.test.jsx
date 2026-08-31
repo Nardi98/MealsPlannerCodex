@@ -16,9 +16,11 @@ vi.mock('../../api/ingredientsApi', () => ({
   },
 }))
 
+// Tomato is weighed and Tomatoes are counted. That used to demand a
+// hand-supplied bridge; the survivor's own conversions supply it now.
 const PAIR = {
-  a: { id: 1, name: 'Tomato', unit: 'g', recipe_count: 2 },
-  b: { id: 2, name: 'Tomatoes', unit: 'piece', recipe_count: 1 },
+  a: { id: 1, name: 'Tomato', grams_per_piece: 120, recipe_count: 2 },
+  b: { id: 2, name: 'Tomatoes', grams_per_piece: null, recipe_count: 1 },
   score: 0.9,
 }
 
@@ -35,44 +37,44 @@ afterEach(() => {
 
 async function openPair() {
   render(<MergeIngredientsModal onClose={() => {}} onMerged={() => {}} />)
-  const pairButton = await screen.findByText(/Tomato \(g\)/)
-  fireEvent.click(pairButton)
-  await screen.findByText('Surviving unit')
+  fireEvent.click(await screen.findByRole('button', { name: /Tomato.*Tomatoes/ }))
+  await screen.findByText(/Keep \(survivor\)/)
 }
 
-test('unit mismatch reveals conversion-factor input', async () => {
+test('the merge asks only which ingredient survives', async () => {
   await openPair()
-  // survivor default = A (Tomato, g); source = B (Tomatoes, piece) => units differ
-  expect(screen.getByLabelText('Conversion factor')).toBeInTheDocument()
-})
 
-test('leave as-is sends conversion_factor null', async () => {
-  await openPair()
-  fireEvent.click(screen.getByLabelText(/Leave source units as-is/))
   fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
-  await waitFor(() => expect(ingredientsApi.merge).toHaveBeenCalled())
-  expect(ingredientsApi.merge).toHaveBeenCalledWith(
-    expect.objectContaining({
-      source_id: 2,
-      target_id: 1,
-      conversion_factor: null,
-    })
-  )
-})
 
-test('confirm calls merge with correct source/target and factor', async () => {
-  await openPair()
-  fireEvent.change(screen.getByLabelText('Conversion factor'), {
-    target: { value: '150' },
+  await waitFor(() => expect(ingredientsApi.merge).toHaveBeenCalled())
+  expect(ingredientsApi.merge).toHaveBeenCalledWith({
+    source_id: 2,
+    target_id: 1,
   })
+})
+
+test('no unit or conversion is asked for any more', async () => {
+  await openPair()
+
+  expect(screen.queryByLabelText('Surviving unit')).toBeNull()
+  expect(screen.queryByLabelText('Conversion factor')).toBeNull()
+  expect(screen.queryByLabelText(/Leave source units as-is/)).toBeNull()
+})
+
+test('flipping the survivor flips which one is merged away', async () => {
+  await openPair()
+
+  fireEvent.click(screen.getByRole('radio', { name: /Tomatoes/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Merge' }))
+
   await waitFor(() => expect(ingredientsApi.merge).toHaveBeenCalled())
-  expect(ingredientsApi.merge).toHaveBeenCalledWith(
-    expect.objectContaining({
-      source_id: 2,
-      target_id: 1,
-      surviving_unit: 'g',
-      conversion_factor: 150,
-    })
-  )
+  expect(ingredientsApi.merge).toHaveBeenCalledWith({
+    source_id: 1,
+    target_id: 2,
+  })
+})
+
+test('the recipes a merge will touch are named before it happens', async () => {
+  await openPair()
+  expect(await screen.findByText('Salad')).toBeInTheDocument()
 })

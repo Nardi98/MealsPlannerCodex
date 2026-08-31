@@ -176,7 +176,7 @@ def test_remove_tag_from_recipe(db_session):
 def test_update_ingredient_quantity(db_session):
     r = Recipe(title="Bread", course="main")
     base = Ingredient(name="Flour")
-    ri = RecipeIngredient(ingredient=base, quantity=1, unit="kg")
+    ri = RecipeIngredient(ingredient=base, quantity=1000, unit="g")
     r.ingredients.append(ri)
     db_session.add(r)
     db_session.commit()
@@ -185,7 +185,7 @@ def test_update_ingredient_quantity(db_session):
     db_session.commit()
 
     assert ri.quantity == 2.5
-    assert ri.unit == "kg"
+    assert ri.unit == "g"
     assert base.season_months == []
 
 

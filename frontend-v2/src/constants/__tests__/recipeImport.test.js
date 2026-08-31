@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
 import { IMPORT_PROMPT, parseImportedRecipe } from '../recipeImport'
 
 const validPayload = {
@@ -36,8 +36,24 @@ describe('parseImportedRecipe', () => {
       favorite_side_ids: [],
     })
     expect(recipe.ingredients).toEqual([
-      { id: undefined, name: 'Basil', amount: 50, unit: 'g', season_months: [5, 6, 7, 8] },
-      { id: undefined, name: 'Pasta', amount: 100, unit: 'g', season_months: [] },
+      {
+        id: undefined,
+        name: 'Basil',
+        amount: 50,
+        unit: 'g',
+        season_months: [5, 6, 7, 8],
+        grams_per_ml: null,
+        grams_per_piece: null,
+      },
+      {
+        id: undefined,
+        name: 'Pasta',
+        amount: 100,
+        unit: 'g',
+        season_months: [],
+        grams_per_ml: null,
+        grams_per_piece: null,
+      },
     ])
   })
 
@@ -198,4 +214,76 @@ test('an "error" key in a valid object is not treated as a failure', () => {
   )
   expect(errors).toEqual([])
   expect(recipe.title).toBe('Toast')
+})
+
+// The prompt stops asking the chatbot to convert or to match a pantry it
+// cannot see, and asks only for physical facts, which are the same for
+// everyone. The app -- the only party that knows the pantry -- does the rest.
+describe('importing physical facts rather than conversions', () => {
+  const reply = (ingredient) =>
+    JSON.stringify({
+      title: 'Soffritto',
+      course: 'main',
+      procedure: 'Chop.',
+      servings: 2,
+      tags: [],
+      ingredients: [ingredient],
+    })
+
+  it('accepts the units people actually write', () => {
+    const { recipe, errors } = parseImportedRecipe(
+      reply({ name: 'flour', quantity: 1, unit: 'cup', grams_per_ml: 0.53 }),
+    )
+    expect(errors).toEqual([])
+    expect(recipe.ingredients[0]).toMatchObject({ amount: 236.6, unit: 'ml' })
+  })
+
+  it('normalises a count-ish word to a piece', () => {
+    // The piece weight is then per clove, which is what we want.
+    const { recipe } = parseImportedRecipe(
+      reply({ name: 'garlic', quantity: 3, unit: 'clove', grams_per_piece: 5 }),
+    )
+    expect(recipe.ingredients[0]).toMatchObject({ amount: 3, unit: 'piece' })
+    expect(recipe.ingredients[0].grams_per_piece).toBe(5)
+  })
+
+  it('carries the conversions through for the app to back-fill', () => {
+    const { recipe } = parseImportedRecipe(
+      reply({ name: 'onion', quantity: 2, unit: 'piece', grams_per_piece: 150 }),
+    )
+    expect(recipe.ingredients[0]).toMatchObject({
+      grams_per_piece: 150,
+      grams_per_ml: null,
+    })
+  })
+
+  it('treats an omitted conversion as a valid answer, not an error', () => {
+    // Omitting one means "this dimension does not apply to this ingredient".
+    const { recipe, errors } = parseImportedRecipe(
+      reply({ name: 'egg', quantity: 2, unit: 'piece' }),
+    )
+    expect(errors).toEqual([])
+    expect(recipe.ingredients[0].grams_per_ml).toBeNull()
+  })
+
+  it('still refuses a unit nobody measures anything in', () => {
+    const { errors } = parseImportedRecipe(
+      reply({ name: 'rice', quantity: 1, unit: 'bag' }),
+    )
+    expect(errors.join(' ')).toMatch(/unit/i)
+  })
+
+  it('ignores a conversion that is not a positive number', () => {
+    const { recipe, errors } = parseImportedRecipe(
+      reply({ name: 'onion', quantity: 2, unit: 'piece', grams_per_piece: 0 }),
+    )
+    expect(errors).toEqual([])
+    expect(recipe.ingredients[0].grams_per_piece).toBeNull()
+  })
+
+  it('asks the chatbot for facts, not for a conversion into my units', () => {
+    expect(IMPORT_PROMPT).toMatch(/grams_per_piece/)
+    expect(IMPORT_PROMPT).toMatch(/grams_per_ml/)
+    expect(IMPORT_PROMPT).not.toMatch(/must be one of: g, kg, l, ml, piece/)
+  })
 })

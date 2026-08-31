@@ -2,12 +2,14 @@ import React from 'react'
 import { Input, Button } from './'
 import SeasonalitySelect from './SeasonalitySelect'
 import CategorySelect from './CategorySelect'
+import ConversionFields from './ConversionFields'
+import { toConversions, fromConversions } from '../utils/conversionDraft'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { ModalScrim } from './Modal'
 
-export default function AddIngredientModal({ onClose, onSave }) {
+export default function AddIngredientModal({ onClose, onSave, autoFocusField }) {
   const [name, setName] = React.useState('')
-  const [unit, setUnit] = React.useState('')
+  const [conversions, setConversions] = React.useState(() => fromConversions())
   const [season, setSeason] = React.useState([])
   const [categories, setCategories] = React.useState([])
   const [similar, setSimilar] = React.useState([])
@@ -28,7 +30,7 @@ export default function AddIngredientModal({ onClose, onSave }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    await onSave?.({ name, unit, season, categories })
+    await onSave?.({ name, season_months: season, categories, ...toConversions(conversions) })
     onClose?.()
   }
 
@@ -52,23 +54,11 @@ export default function AddIngredientModal({ onClose, onSave }) {
               </div>
             )}
           </div>
-          <div className="space-y-1">
-            <label className="text-sm">Unit</label>
-            <select
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              required
-              className="rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
-            >
-              <option value="">Select unit</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="l">l</option>
-              <option value="ml">ml</option>
-              <option value="piece">piece</option>
-            </select>
-          </div>
+          <ConversionFields
+            value={conversions}
+            onChange={setConversions}
+            autoFocusField={autoFocusField}
+          />
           <div className="space-y-1">
             <label className="text-sm">Seasonality</label>
             <SeasonalitySelect value={season} onChange={setSeason} />

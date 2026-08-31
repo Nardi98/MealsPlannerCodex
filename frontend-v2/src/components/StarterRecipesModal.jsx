@@ -14,8 +14,10 @@ const GROUPS = groupStarterRecipes(STARTER_RECIPES)
 const ALL_SLUGS = STARTER_RECIPES.map((recipe) => recipe.slug)
 
 // Match a pack ingredient against a row the account already owns and hand the
-// backend that row's id and unit, so the import reuses the seeded ingredient
-// instead of creating a near-duplicate. A name miss is left to
+// backend that row's id, so the import reuses the seeded ingredient instead of
+// creating a near-duplicate. The *line* keeps the unit the pack states -- the
+// ingredient no longer owns one, and its conversions (seeded alongside it in
+// system_ingredients.json) are what unify the two. A name miss is left to
 // `crud.get_or_create_ingredient`, which creates the row under this user --
 // the pack's ingredients are all tested to exist, so it should not happen.
 function resolveIngredients(recipe, ownedByName) {
@@ -25,7 +27,7 @@ function resolveIngredients(recipe, ownedByName) {
       ...(owned ? { id: owned.id } : {}),
       name: ing.name,
       amount: ing.quantity,
-      unit: owned?.unit || ing.unit,
+      unit: ing.unit,
     }
   })
 }

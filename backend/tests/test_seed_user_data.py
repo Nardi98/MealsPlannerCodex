@@ -78,3 +78,27 @@ def test_seed_profiles_is_idempotent(db_session):
         user = get_or_create_user(db_session, profile.email, profile.password)
         count = db_session.query(Recipe).filter_by(user_id=user.id).count()
         assert count == len(profile.recipes)
+
+
+def test_the_seed_measures_one_ingredient_two_ways_with_no_conversion():
+    """The seeded plan must exercise the shopping list's split-row path.
+
+    Giving ingredients null conversions is not enough on its own: a row only
+    splits when *two recipes* measure the same ingredient in different
+    dimensions and nothing can reconcile them. Without such a pair the
+    "combine" affordance -- the single friction point in the whole design --
+    cannot be reached by hand in a freshly seeded database.
+    """
+    from scripts.seed_testing_data import CONVERSIONS, RECIPES
+
+    by_ingredient: dict[str, set] = {}
+    for recipe in RECIPES:
+        for name, _quantity, unit in recipe.ingredients:
+            by_ingredient.setdefault(name, set()).add(unit)
+
+    split = {
+        name: units
+        for name, units in by_ingredient.items()
+        if len(units) > 1 and name not in CONVERSIONS
+    }
+    assert split, "no seeded ingredient is measured two ways without a conversion"

@@ -319,7 +319,7 @@ def test_the_copys_ingredients_live_in_my_own_namespace(
 ):
     """CP-3."""
     source = make_recipe("Ragu")
-    ingredient = crud.get_or_create_ingredient(db_session, None, "Beef", "g", user.id)
+    ingredient = crud.get_or_create_ingredient(db_session, None, "Beef", user.id)
     source.ingredients.append(
         models.RecipeIngredient(ingredient=ingredient, quantity=200, unit="g")
     )

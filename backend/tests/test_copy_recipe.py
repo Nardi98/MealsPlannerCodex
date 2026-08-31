@@ -51,7 +51,7 @@ def client(db_session, copier):
 
 
 def _add_ingredient(db_session, recipe, name, quantity, owner_id, unit=UnitEnum.G):
-    ingredient = crud.get_or_create_ingredient(db_session, None, name, unit, owner_id)
+    ingredient = crud.get_or_create_ingredient(db_session, None, name, owner_id)
     recipe.ingredients.append(
         models.RecipeIngredient(ingredient=ingredient, quantity=quantity, unit=unit)
     )
@@ -120,9 +120,9 @@ def test_ingredient_resolution_is_never_asked_to_use_an_id(
     seen = []
     real = crud.get_or_create_ingredient
 
-    def spy(session, ingredient_id, name, unit=None, user_id=None):
+    def spy(session, ingredient_id, name, user_id=None, **factors):
         seen.append((ingredient_id, user_id))
-        return real(session, ingredient_id, name, unit, user_id)
+        return real(session, ingredient_id, name, user_id, **factors)
 
     monkeypatch.setattr(crud, "get_or_create_ingredient", spy)
     copy_module.copy_recipe(db_session, source, copier)
@@ -140,7 +140,7 @@ def test_a_colliding_name_binds_to_the_copiers_own_row(
     accounts hold rows with the same *name* and different ids, and resolving by
     anything but "name within my namespace" picks the wrong one.
     """
-    mine = crud.get_or_create_ingredient(db_session, None, "Tomato", UnitEnum.G, copier.id)
+    mine = crud.get_or_create_ingredient(db_session, None, "Tomato", copier.id)
     my_tag = crud.get_or_create_tag(db_session, "sunday", copier.id)
     db_session.flush()
     theirs = {link.ingredient.name: link.ingredient for link in source.ingredients}

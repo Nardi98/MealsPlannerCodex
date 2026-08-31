@@ -1,8 +1,12 @@
 import React from 'react'
 import { Modal } from './Modal'
+import { useOptionalAuth } from '../auth/AuthContext'
 import { Button } from './Button'
 import SegmentedControl from './SegmentedControl'
 import { planSettingsApi } from '../api/planSettingsApi'
+import { ingredientsApi } from '../api/ingredientsApi'
+import UnitSystemSetting from './UnitSystemSetting'
+import { reachableDimensions } from '../utils/units'
 
 // Tag-penalty preset -> weight. This is a per-user profile setting (how hard
 // "reduce tags" are pushed down), kept out of the per-plan form.
@@ -24,8 +28,28 @@ const presetFromWeight = (weight) => {
  */
 export default function PreferencesModal({ onClose }) {
   const [tagPenalty, setTagPenalty] = React.useState('reduce')
+  const auth = useOptionalAuth()
+  // The popup is only worth raising when some ingredient could actually move,
+  // so an account whose pantry cannot switch is never asked.
+  const [switchable, setSwitchable] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
+
+  React.useEffect(() => {
+    let active = true
+    ingredientsApi
+      .fetchAll()
+      .then((ings) => {
+        if (!active) return
+        setSwitchable(
+          (ings || []).some((i) => reachableDimensions(i).length > 1),
+        )
+      })
+      .catch(() => active && setSwitchable(false))
+    return () => {
+      active = false
+    }
+  }, [])
 
   React.useEffect(() => {
     let active = true
@@ -58,6 +82,11 @@ export default function PreferencesModal({ onClose }) {
   return (
     <Modal title="Preferences" onClose={onClose}>
       <div className="space-y-4">
+        <UnitSystemSetting
+          value={auth?.user?.unit_system || 'metric'}
+          switchable={switchable}
+          onChange={() => auth?.refreshUser?.()}
+        />
         <SegmentedControl
           label="Reduced tags"
           options={TAG_PENALTY_OPTIONS}

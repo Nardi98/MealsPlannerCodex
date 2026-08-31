@@ -27,7 +27,7 @@ def make_recipe(**overrides) -> PublicRecipe:
         servings=4,
         procedure="Boil the water.\n\nDrain and bake.",
         ingredients=[
-            PublicIngredient(name="Farina", quantity=250.0, unit="g"),
+            PublicIngredient(name="Farina", quantity=250.0),
             PublicIngredient(name="Sale", quantity=None, unit=None),
         ],
         tags=["comfort", "domenica"],

@@ -26,6 +26,9 @@ import {
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
+import Quantity from '../components/Quantity'
+import { alternateForms } from '../utils/units'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { recipesApi } from '../api/recipesApi'
@@ -89,6 +92,7 @@ const StarterRecipesModal = React.lazy(() => import('../components/StarterRecipe
 const STARTER_DISMISSED_KEY = 'starterRecipesDismissed'
 
 export default function RecipesPage() {
+  const unitSystem = useUnitSystem()
   const isMobile = useIsMobile()
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
@@ -555,7 +559,13 @@ export default function RecipesPage() {
               >
                 {(openRecipe.ingredients || []).map((ing, i) => (
                   <li key={ing.id || i}>
-                    {[ing.amount, ing.unit, ing.name || ing].filter(Boolean).join(' ')}
+                    <Quantity
+                      amount={ing.amount}
+                      unit={ing.unit}
+                      alternates={alternateForms(ing)}
+                      system={unitSystem}
+                    />{' '}
+                    {ing.name || ing}
                   </li>
                 ))}
               </ul>

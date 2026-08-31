@@ -40,6 +40,7 @@ from database import SessionLocal  # noqa: E402
 from models import Ingredient, Recipe, RecipeIngredient, Tag, User  # noqa: E402
 from auth_users import hash_password  # noqa: E402
 from scripts.seed_testing_data import (  # noqa: E402
+    CONVERSIONS,
     INGREDIENTS,
     RECIPES,
     TAGS,
@@ -154,7 +155,7 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
-    for name, unit, months, categories in INGREDIENTS:
+    for name, dimension, months, categories in INGREDIENTS:
         if name not in wanted_ingredients:
             continue
         ing = session.execute(
@@ -165,7 +166,9 @@ def populate_for_user(session, user: User, recipes: list[SeedRecipe]) -> dict[st
         if ing is None:
             ing = Ingredient(
                 name=name,
-                unit=unit,
+                preferred_dimension=dimension,
+                grams_per_ml=CONVERSIONS.get(name, (None, None))[0],
+                grams_per_piece=CONVERSIONS.get(name, (None, None))[1],
                 season_months=months,
                 categories=categories,
                 user_id=user.id,

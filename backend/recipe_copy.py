@@ -130,8 +130,11 @@ def _duplicate(
             session,
             None,  # CP-3: never the source's id. See the module docstring.
             link.ingredient.name,
-            link.unit or link.ingredient.unit,
             copier.id,
+            # CP: conversions follow the import rule -- they fill a gap in the
+            # copier's pantry and never overwrite what it already knew.
+            grams_per_ml=link.ingredient.grams_per_ml,
+            grams_per_piece=link.ingredient.grams_per_piece,
         )
         made.ingredients.append(
             models.RecipeIngredient(
