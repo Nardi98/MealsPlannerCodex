@@ -19,7 +19,20 @@ import { toConversions } from '../utils/conversionDraft'
 const LABELS = { mass: 'Weight', volume: 'Volume', piece: 'Count' }
 
 export default function ConversionFields({ value, onChange, autoFocusField }) {
-  const set = (key) => (e) => onChange({ ...value, [key]: e.target.value })
+  // Filling a factor in is what unlocks a dimension, so clearing it has to
+  // retire that dimension again -- otherwise the select silently falls back to
+  // "Automatic" while the draft still holds a preference nothing can reach,
+  // and that unreachable preference is what gets saved.
+  const set = (key) => (e) => {
+    const next = { ...value, [key]: e.target.value }
+    if (
+      next.preferredDimension &&
+      !reachableDimensions(toConversions(next)).includes(next.preferredDimension)
+    ) {
+      next.preferredDimension = ''
+    }
+    onChange(next)
+  }
   const reachable = reachableDimensions(toConversions(value))
 
   return (
