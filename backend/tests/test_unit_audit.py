@@ -31,9 +31,12 @@ def _make(session, name, **factors):
 def test_merge_keeps_an_unconvertible_quantity(db_session) -> None:
     """Neither ingredient can cross mass <-> piece, so nothing may be lost.
 
-    The design says an unconvertible line "keeps its own dimension and the
-    merged ingredient simply spans two". Whatever the mechanism, the amount the
-    user wrote down must survive the merge in some form.
+    The design's "the merged ingredient simply spans two" cannot apply inside
+    one recipe: the composite key ``(recipe_id, ingredient_id)`` permits a
+    single row, so there is no second row for the unconvertible line to
+    occupy. The decided mechanism is therefore a refusal that names the recipe
+    and the missing factor. The invariant the design actually protects is
+    unchanged and asserted here: the amount the user wrote down survives.
     """
     source = _make(db_session, "Tomatoes")
     target = _make(db_session, "Tomato")
@@ -54,7 +57,12 @@ def test_merge_keeps_an_unconvertible_quantity(db_session) -> None:
     )
     db_session.flush()
 
-    crud.merge_ingredients(db_session, source.id, target.id)
+    with pytest.raises(ValueError) as refusal:
+        crud.merge_ingredients(db_session, source.id, target.id)
+
+    # The refusal has to be actionable: which recipe blocks the merge, and
+    # which factor would unblock it.
+    assert "Sauce" in str(refusal.value)
 
     surviving = (
         db_session.execute(
@@ -65,8 +73,12 @@ def test_merge_keeps_an_unconvertible_quantity(db_session) -> None:
         .scalars()
         .all()
     )
-    # The 2 pieces are gone entirely: one row, holding only the target's 100 g.
-    assert len(surviving) == 2 or surviving[0].quantity != 100
+    # Both lines are still there, untouched -- the merge wrote nothing.
+    assert len(surviving) == 2
+    assert {(r.quantity, r.unit) for r in surviving} == {
+        (2, UnitEnum.PIECE),
+        (100, UnitEnum.G),
+    }
 
 
 # --- 6. the bulk switch must never touch a counted ingredient ---------------
