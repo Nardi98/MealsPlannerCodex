@@ -412,8 +412,10 @@ def find_duplicate_pairs(
     return pairs
 
 
-#: How the ingredient editor names each conversion factor, so a refusal
-#: can point at the field to fill in rather than at a column name.
+#: How the ingredient editor names each conversion factor, so a refusal can
+#: point at the field to fill in rather than at a column name. These strings
+#: mirror the field labels in ``frontend-v2/src/components/ConversionFields.jsx``
+#: and must be changed with them.
 _FACTOR_LABELS = {
     DimensionEnum.VOLUME: "\u201c100 ml weighs\u201d",
     DimensionEnum.PIECE: "\u201cOne piece weighs\u201d",
@@ -552,30 +554,48 @@ def merge_ingredients(
         .scalars()
         .all()
     )
-    # What the target will know once the union below runs. A factor the
-    # source contributes can convert a line the target could not have
-    # converted on its own. The check reads it
-    # instead of the target itself so that nothing is written before a refusal:
-    # a factor the source contributes may be exactly what makes the merge
-    # possible, but a merge that is about to be declined must leave no trace.
+    # Every target line a source line could collide with, in one query.
+    # ``session.get`` per line is an N+1, and it does not cache a miss -- the
+    # common outcome -- so the fold loop below would re-issue every one.
+    collisions: Dict[int, RecipeIngredient] = {}
+    if source_lines:
+        collisions = {
+            existing.recipe_id: existing
+            for existing in session.execute(
+                select(RecipeIngredient).where(
+                    RecipeIngredient.ingredient_id == target_id,
+                    RecipeIngredient.recipe_id.in_(
+                        [line.recipe_id for line in source_lines]
+                    ),
+                )
+            )
+            .scalars()
+            .all()
+        }
+
+    # What the target will know once the union below runs: a factor the source
+    # contributes may be exactly what makes the merge possible. The check reads
+    # this preview rather than the target itself so that a merge about to be
+    # declined leaves no trace. ``_backfill_conversions`` owns the "target
+    # wins, source fills the nulls" rule, so it is applied to a throwaway
+    # stand-in here rather than restated -- a field added to it is then
+    # automatically considered by the refusal too.
     merged = SimpleNamespace(
-        grams_per_ml=(
-            target.grams_per_ml
-            if target.grams_per_ml is not None
-            else source.grams_per_ml
-        ),
-        grams_per_piece=(
-            target.grams_per_piece
-            if target.grams_per_piece is not None
-            else source.grams_per_piece
-        ),
+        grams_per_ml=None, grams_per_piece=None, preferred_dimension=None
     )
+    for donor in (target, source):
+        _backfill_conversions(
+            merged,
+            donor.grams_per_ml,
+            donor.grams_per_piece,
+            donor.preferred_dimension,
+        )
     # Refuse before a single row is touched. The composite key permits one row
     # per recipe and ingredient, so a collision the factors cannot bridge
     # leaves the amount the user wrote down nowhere to go -- and dropping it
     # quietly is worse than declining the merge.
     for line in source_lines:
-        existing = session.get(RecipeIngredient, (line.recipe_id, target_id))
+        existing = collisions.get(line.recipe_id)
         if existing is None or line.quantity is None:
             continue
         aim = unit_conversion.dimension_of(existing.unit)
@@ -605,7 +625,7 @@ def merge_ingredients(
     )
 
     for line in source_lines:
-        existing = session.get(RecipeIngredient, (line.recipe_id, target_id))
+        existing = collisions.get(line.recipe_id)
         # Aim at the line already on that recipe, or else at however the user
         # says they measure the surviving ingredient.
         aim = (

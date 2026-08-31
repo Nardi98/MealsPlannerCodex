@@ -254,12 +254,6 @@ export function missingFactorsFor(dimensions, ingredient) {
  * nobody has taught the app anything about, and is not an error.
  */
 export function alternateForms(amount, unit, ingredient) {
-  // Callers hold whole ingredient lines, so one is accepted in place of the
-  // three parts it would otherwise be taken apart into.
-  if (amount !== null && typeof amount === 'object') {
-    return alternateForms(amount.amount ?? null, amount.unit, amount)
-  }
-
   const from = dimensionOf(unit)
   if (amount === null || from === null) return []
 

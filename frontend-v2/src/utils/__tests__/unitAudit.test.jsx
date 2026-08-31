@@ -20,15 +20,12 @@ afterEach(cleanup)
 // --- 1. the recipe page's call to alternateForms ---------------------------
 
 describe('the recipe page shows every alternate form', () => {
-  // RecipesPage renders `alternateForms(ing)` -- one argument, where the
-  // module takes (amount, unit, ingredient).
+  // RecipesPage used to render `alternateForms(ing)` -- one argument, where
+  // the module takes (amount, unit, ingredient), so it silently got nothing
+  // back. The call site is what was wrong, so the call site is what was fixed.
   const line = { amount: 200, unit: 'g', grams_per_piece: 100 }
 
   it('offers a count beside a weight the ingredient can be counted in', () => {
-    expect(alternateForms(line)).toEqual([{ amount: 2, unit: 'piece' }])
-  })
-
-  it('is what the three-argument call already returns', () => {
     expect(alternateForms(line.amount, line.unit, line)).toEqual([
       { amount: 2, unit: 'piece' },
     ])

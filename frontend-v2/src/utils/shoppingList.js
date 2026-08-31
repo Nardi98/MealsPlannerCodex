@@ -110,8 +110,10 @@ export function buildShoppingList(items = []) {
 
 function toRows(entry) {
   const dimensions = [...entry.byDimension.keys()]
-  const known = dimensions.filter((d) => d !== UNKNOWN_DIMENSION)
-  const hasUnknown = known.length !== dimensions.length
+  // DIMENSION_ORDER is the canonical list of real dimensions, so membership in
+  // it is the same question `convert` and `missingFactorsFor` ask.
+  const known = dimensions.filter((d) => DIMENSION_ORDER.includes(d))
+  const hasUnknown = entry.byDimension.has(UNKNOWN_DIMENSION)
   const reachable = reachableDimensions(entry)
   const identity = { key: entry.key, id: entry.id, name: entry.name }
 
