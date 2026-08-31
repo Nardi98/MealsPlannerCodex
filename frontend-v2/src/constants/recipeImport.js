@@ -130,7 +130,11 @@ export function parseImportedRecipe(raw) {
     if (!isFiniteNumber(ing?.quantity)) {
       errors.push(`${label}: "quantity" must be a number.`)
     }
-    if (ing?.unit != null && !UNITS.includes(ing.unit)) {
+    // Storage has no unitless quantity, so a missing unit is rejected here
+    // rather than left for the API to refuse with an opaque 422.
+    if (ing?.unit == null || ing.unit === '') {
+      errors.push(`${label}: a "unit" is required.`)
+    } else if (!UNITS.includes(ing.unit)) {
       errors.push(`${label}: "unit" must be one of ${UNITS.join(', ')}.`)
     }
     const season = Array.isArray(ing?.season_months) ? ing.season_months : []

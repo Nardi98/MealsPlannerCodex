@@ -562,7 +562,7 @@ export default function RecipesPage() {
                     <Quantity
                       amount={ing.amount}
                       unit={ing.unit}
-                      alternates={alternateForms(ing)}
+                      alternates={alternateForms(ing.amount, ing.unit, ing)}
                       system={unitSystem}
                     />{' '}
                     {ing.name || ing}

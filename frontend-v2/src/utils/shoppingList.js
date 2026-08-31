@@ -29,6 +29,10 @@ export function batchLabel(people, servings) {
   return `×${formatCount(factor, round2)}`
 }
 
+// The bucket an unrecognised (or absent) unit falls into. It is deliberately
+// not one of DIMENSION_ORDER: nothing converts into or out of it.
+const UNKNOWN_DIMENSION = '__unknown__'
+
 /**
  * Which dimension a row should lead with.
  *
@@ -37,11 +41,11 @@ export function batchLabel(people, servings) {
  * a preference nothing can reach is moot rather than an error. Otherwise the
  * recipes decide by weight of numbers, ties going to mass.
  */
-function primaryDimension(entry, reachable) {
+function primaryDimension(entry, reachable, known) {
   if (entry.preferred && reachable.includes(entry.preferred)) {
     return entry.preferred
   }
-  return [...entry.byDimension.keys()].sort((a, b) => {
+  return [...known].sort((a, b) => {
     const counts =
       entry.byDimension.get(b).count - entry.byDimension.get(a).count
     if (counts !== 0) return counts
@@ -72,7 +76,7 @@ export function buildShoppingList(items = []) {
     ingredients.forEach((ing) => {
       const name = (ing.name || '').trim()
       const key = ing.id != null ? `#${ing.id}` : name.toLowerCase()
-      const dimension = dimensionOf(ing.unit) || ''
+      const dimension = dimensionOf(ing.unit) ?? UNKNOWN_DIMENSION
       const amount = typeof ing.amount === 'number' ? ing.amount * scale : null
 
       if (!entries.has(key)) {
@@ -106,18 +110,22 @@ export function buildShoppingList(items = []) {
 
 function toRows(entry) {
   const dimensions = [...entry.byDimension.keys()]
+  const known = dimensions.filter((d) => d !== UNKNOWN_DIMENSION)
+  const hasUnknown = known.length !== dimensions.length
   const reachable = reachableDimensions(entry)
   const identity = { key: entry.key, id: entry.id, name: entry.name }
 
   // Everything the recipes used can be restated in one dimension: one row.
-  // Reachability is set membership, so there is nothing to compute here.
-  const primary = primaryDimension(entry, reachable)
-  const unifiable = dimensions.every(
-    (d) => d === primary || reachable.includes(d),
-  )
+  // Reachability is set membership, so there is nothing to compute here. An
+  // unrecognised unit can never join that row -- there is no factor that
+  // reaches a dimension we cannot name -- so its presence forces the split.
+  const primary = primaryDimension(entry, reachable, known)
+  const unifiable =
+    !hasUnknown &&
+    known.every((d) => d === primary || reachable.includes(d))
 
   if (unifiable) {
-    const total = dimensions.reduce((sum, d) => {
+    const total = known.reduce((sum, d) => {
       const subtotal = entry.byDimension.get(d).total
       if (sum === null || subtotal === null) return null
       return sum + (d === primary ? subtotal : convert(subtotal, d, primary, entry))
@@ -140,8 +148,13 @@ function toRows(entry) {
   // Otherwise the entry honestly spans two dimensions. One row each, both
   // carrying the ingredient's identity so they tick off together, and both
   // flagged with the factor that would close the gap.
-  const missing = missingFactorsFor(dimensions, entry)
-  const split = DIMENSION_ORDER.filter((d) => entry.byDimension.has(d))
+  const missing = missingFactorsFor(known, entry)
+  // The unknown bucket sorts last, but it is always emitted: an amount the app
+  // cannot place is still an amount the user has to buy.
+  const split = [
+    ...DIMENSION_ORDER.filter((d) => entry.byDimension.has(d)),
+    ...(hasUnknown ? [UNKNOWN_DIMENSION] : []),
+  ]
   const amounts = split.map((d) => {
     const { total } = entry.byDimension.get(d)
     return total === null ? null : roundIn(d, total)
