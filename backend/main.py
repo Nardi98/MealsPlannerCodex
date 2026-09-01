@@ -737,6 +737,23 @@ def set_default_people(
     return current_user
 
 
+@app.put("/auth/me/unit-system", response_model=schemas.UserOut)
+def set_unit_system(
+    payload: schemas.UnitSystemIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> models.User:
+    """Set which system this account reads amounts in.
+
+    Display only. The database is always metric, so this cannot alter a single
+    stored quantity -- which is what makes it safe to toggle freely.
+    """
+    current_user.unit_system = payload.unit_system
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @app.get("/recipes", response_model=List[schemas.RecipeOut])
 def read_recipes(
     db: Db,
@@ -817,7 +834,14 @@ def _payload_to_data(payload: schemas.RecipeIn, db: Session, user_id: int) -> di
         if ing.id is None and not ing.name:
             continue
         ingredient_obj = crud.get_or_create_ingredient(
-            db, ing.id, ing.name, ing.unit, user_id
+            db,
+            ing.id,
+            ing.name,
+            user_id,
+            # A recipe line may arrive from an import carrying physical facts
+            # about the ingredient. They fill gaps and overwrite nothing.
+            grams_per_ml=ing.grams_per_ml,
+            grams_per_piece=ing.grams_per_piece,
         )
         # Seasonality belongs to the shared ingredient row, and the row is owned
         # by the ``/ingredients`` endpoints -- a recipe payload only *names* it.
@@ -953,6 +977,22 @@ def _ingredient_recipe_count(db: Session, ingredient_id: int) -> int:
     ) or 0
 
 
+def _ingredient_summary(
+    ingredient: models.Ingredient, recipe_count: int
+) -> schemas.IngredientSummary:
+    """The wire shape of an ingredient, built in exactly one place."""
+    return schemas.IngredientSummary(
+        id=ingredient.id,
+        name=ingredient.name,
+        season_months=ingredient.season_months or [],
+        categories=ingredient.categories or [],
+        grams_per_ml=ingredient.grams_per_ml,
+        grams_per_piece=ingredient.grams_per_piece,
+        preferred_dimension=ingredient.preferred_dimension,
+        recipe_count=recipe_count,
+    )
+
+
 @app.get("/ingredients", response_model=List[schemas.IngredientSummary])
 def search_ingredients(
     db: Db,
@@ -974,14 +1014,7 @@ def search_ingredients(
         stmt = stmt.where(models.Ingredient.name.ilike(f"{search}%")).limit(10)
     rows = db.execute(stmt).all()
     return [
-        schemas.IngredientSummary(
-            id=ing.id,
-            name=ing.name,
-            season_months=ing.season_months or [],
-            unit=ing.unit,
-            categories=ing.categories or [],
-            recipe_count=count,
-        )
+        _ingredient_summary(ing, count)
         for ing, count in rows
     ]
 
@@ -1001,14 +1034,7 @@ def similar_ingredients(
         db, name, exclude_id=exclude_id, threshold=threshold, user_id=current_user.id
     )
     return [
-        schemas.IngredientSummary(
-            id=ing.id,
-            name=ing.name,
-            season_months=ing.season_months or [],
-            unit=ing.unit,
-            categories=ing.categories or [],
-            recipe_count=_ingredient_recipe_count(db, ing.id),
-        )
+        _ingredient_summary(ing, _ingredient_recipe_count(db, ing.id))
         for ing in matches
     ]
 
@@ -1027,14 +1053,7 @@ def duplicate_ingredients(
     )
 
     def summary(ing: models.Ingredient) -> schemas.IngredientSummary:
-        return schemas.IngredientSummary(
-            id=ing.id,
-            name=ing.name,
-            season_months=ing.season_months or [],
-            unit=ing.unit,
-            categories=ing.categories or [],
-            recipe_count=_ingredient_recipe_count(db, ing.id),
-        )
+        return _ingredient_summary(ing, _ingredient_recipe_count(db, ing.id))
 
     return [
         schemas.DuplicatePair(a=summary(a), b=summary(b), score=score)
@@ -1056,22 +1075,36 @@ def merge_ingredients_endpoint(
             db,
             payload.source_id,
             payload.target_id,
-            surviving_unit=payload.surviving_unit,
-            conversion_factor=payload.conversion_factor,
             user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if merged is None:
         raise HTTPException(status_code=404, detail="Ingredient not found")
-    return schemas.IngredientSummary(
-        id=merged.id,
-        name=merged.name,
-        season_months=merged.season_months or [],
-        unit=merged.unit,
-        categories=merged.categories or [],
-        recipe_count=_ingredient_recipe_count(db, merged.id),
-    )
+    return _ingredient_summary(merged, _ingredient_recipe_count(db, merged.id))
+
+
+@app.post(
+    "/ingredients/preferred-dimension",
+    response_model=schemas.PreferredDimensionResult,
+)
+def switch_preferred_dimension(
+    payload: schemas.PreferredDimensionIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> schemas.PreferredDimensionResult:
+    """Switch every ingredient that can reach ``preferred_dimension`` to it.
+
+    Writes a display preference, never a quantity. See
+    ``crud.switch_preferred_dimension`` for the rules.
+    """
+    try:
+        switched, skipped = crud.switch_preferred_dimension(
+            db, payload.preferred_dimension, user_id=current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return schemas.PreferredDimensionResult(switched=switched, skipped=skipped)
 
 
 @app.post(
@@ -1087,18 +1120,37 @@ def create_ingredient(
     ingredient = crud.create_ingredient(
         db,
         payload.name,
-        payload.unit,
         payload.season_months,
         payload.categories,
         user_id=current_user.id,
+        grams_per_ml=payload.grams_per_ml,
+        grams_per_piece=payload.grams_per_piece,
+        preferred_dimension=payload.preferred_dimension,
     )
-    return schemas.IngredientSummary(
-        id=ingredient.id,
-        name=ingredient.name,
-        season_months=ingredient.season_months or [],
-        unit=ingredient.unit,
-        categories=ingredient.categories or [],
-        recipe_count=0,
+    return _ingredient_summary(ingredient, 0)
+
+
+@app.get(
+    "/ingredients/{ingredient_id}",
+    response_model=schemas.IngredientSummary,
+)
+def read_ingredient(
+    ingredient_id: int,
+    db: Db,
+    current_user: CurrentUser,
+) -> schemas.IngredientSummary:
+    """One ingredient by id, scoped to its owner.
+
+    The shopping list's "combine" link needs the whole row -- the seasonality
+    and categories the editor saves back as well as the conversions -- and
+    fetching the entire pantry to pick one out of it would be a poor way to
+    get there.
+    """
+    ingredient = crud.get_ingredient(db, ingredient_id, current_user.id)
+    if ingredient is None:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+    return _ingredient_summary(
+        ingredient, _ingredient_recipe_count(db, ingredient.id)
     )
 
 
@@ -1117,17 +1169,14 @@ def update_ingredient(
         raise HTTPException(status_code=404, detail="Ingredient not found")
     ingredient.name = payload.name
     ingredient.season_months = payload.season_months
-    ingredient.unit = payload.unit
     ingredient.categories = payload.categories
+    # The user's own edits are authoritative, including clearing a factor back
+    # to NULL -- "this measurement makes no sense for this ingredient".
+    ingredient.grams_per_ml = payload.grams_per_ml
+    ingredient.grams_per_piece = payload.grams_per_piece
+    ingredient.preferred_dimension = payload.preferred_dimension
     db.commit()
-    return schemas.IngredientSummary(
-        id=ingredient.id,
-        name=ingredient.name,
-        season_months=ingredient.season_months or [],
-        unit=ingredient.unit,
-        categories=ingredient.categories or [],
-        recipe_count=_ingredient_recipe_count(db, ingredient.id),
-    )
+    return _ingredient_summary(ingredient, _ingredient_recipe_count(db, ingredient.id))
 
 
 @app.get(

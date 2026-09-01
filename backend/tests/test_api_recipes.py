@@ -17,7 +17,7 @@ def test_recipe_crud(api_client) -> None:
         "bulk_prep": False,
         "course": "main",
         "tags": ["vegan"],
-        "ingredients": [{"name": "Water", "quantity": 1, "unit": "l"}],
+        "ingredients": [{"name": "Water", "quantity": 1000, "unit": "ml"}],
     }
     res = client.post("/recipes", json=payload)
     assert res.status_code == 201
@@ -52,7 +52,7 @@ def test_create_recipe_ignores_blank_ingredients(api_client) -> None:
         "title": "Tea",
         "course": "main",
         "ingredients": [
-            {"name": "Water", "quantity": 1, "unit": "l"},
+            {"name": "Water", "quantity": 1000, "unit": "ml"},
             {},
         ],
     }
@@ -129,7 +129,7 @@ def test_recipe_create_does_not_overwrite_an_existing_ingredients_season(
     client = api_client
     res = client.post(
         "/ingredients",
-        json={"name": "Tomato", "unit": "g", "season_months": [6, 7, 8, 9]},
+        json={"name": "Tomato", "season_months": [6, 7, 8, 9]},
     )
     assert res.status_code == 201
     ingredient_id = res.json()["id"]
@@ -163,7 +163,7 @@ def test_recipe_update_does_not_overwrite_an_existing_ingredients_season(
     client = api_client
     res = client.post(
         "/ingredients",
-        json={"name": "Pumpkin", "unit": "g", "season_months": [9, 10, 11, 12]},
+        json={"name": "Pumpkin", "season_months": [9, 10, 11, 12]},
     )
     ingredient_id = res.json()["id"]
 

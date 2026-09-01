@@ -1,10 +1,8 @@
 import React from 'react'
-import { Button, Input } from './'
+import { Button } from './'
 import { ingredientsApi } from '../api/ingredientsApi'
 import { ModalScrim } from './Modal'
 import { Z } from '../lib/layers'
-
-const UNITS = ['g', 'kg', 'l', 'ml', 'piece']
 
 /**
  * Tool to review candidate duplicate ingredient pairs and merge a chosen pair.
@@ -17,9 +15,6 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
   const [loading, setLoading] = React.useState(true)
   const [selected, setSelected] = React.useState(null)
   const [survivor, setSurvivor] = React.useState('a')
-  const [survivingUnit, setSurvivingUnit] = React.useState('')
-  const [conversionFactor, setConversionFactor] = React.useState('')
-  const [leaveAsIs, setLeaveAsIs] = React.useState(false)
   const [affected, setAffected] = React.useState([])
   const [error, setError] = React.useState(null)
 
@@ -42,21 +37,17 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
 
   const target = selected ? selected[survivor] : null
   const source = selected ? selected[survivor === 'a' ? 'b' : 'a'] : null
-  const unitsDiffer = source && source.unit !== survivingUnit
 
   const selectPair = (pair) => {
-    // Surviving unit and affected recipes are derived by the effect below.
+    // Affected recipes are derived by the effect below.
     setSelected(pair)
     setSurvivor('a')
-    setConversionFactor('')
-    setLeaveAsIs(false)
     setError(null)
   }
 
-  // Keep surviving unit and affected recipes in sync when the survivor flips.
+  // Keep the affected recipe list in sync when the survivor flips.
   React.useEffect(() => {
     if (!selected) return
-    setSurvivingUnit(selected[survivor].unit || '')
     const src = selected[survivor === 'a' ? 'b' : 'a']
     ingredientsApi
       .recipes(src.id)
@@ -66,23 +57,23 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
 
   const handleConfirm = async () => {
     if (!source || !target) return
-    let conversion = null
-    if (!leaveAsIs && unitsDiffer && conversionFactor !== '') {
-      conversion = parseFloat(conversionFactor)
-    }
     try {
+      // No bridge to hand over any more: the survivor's own conversions
+      // supply it, and lines they cannot reach keep their own dimension.
       await ingredientsApi.merge({
         source_id: source.id,
         target_id: target.id,
-        surviving_unit: survivingUnit || null,
-        conversion_factor: conversion,
       })
       setSelected(null)
       await loadPairs()
       onMerged?.()
     } catch (err) {
       console.error('Failed to merge ingredients', err)
-      setError('Failed to merge ingredients')
+      // The server refuses a merge it cannot carry out and says why -- which
+      // recipe blocks it, and which conversion factor is missing. That
+      // sentence is the actionable part, so show it rather than a generic
+      // failure the user can do nothing with.
+      setError(err?.message || 'Failed to merge ingredients')
     }
   }
 
@@ -115,11 +106,11 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <span className="font-medium">
-                    {pair.a.name} ({pair.a.unit})
+                    {pair.a.name}
                   </span>{' '}
                   ↔{' '}
                   <span className="font-medium">
-                    {pair.b.name} ({pair.b.unit})
+                    {pair.b.name}
                   </span>
                   <span className="ml-2 text-xs text-[color:var(--text-subtle)]">
                     {Math.round(pair.score * 100)}% · {pair.a.recipe_count}/
@@ -145,56 +136,12 @@ export default function MergeIngredientsModal({ onClose, onMerged }) {
                       checked={survivor === key}
                       onChange={() => setSurvivor(key)}
                     />
-                    {selected[key].name} ({selected[key].unit})
+                    {selected[key].name}
                   </label>
                 ))}
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Surviving unit</label>
-              <select
-                aria-label="Surviving unit"
-                value={survivingUnit}
-                onChange={(e) => setSurvivingUnit(e.target.value)}
-                className="rounded-xl border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
-              >
-                {UNITS.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {unitsDiffer && (
-              <div className="space-y-1">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={leaveAsIs}
-                    onChange={(e) => setLeaveAsIs(e.target.checked)}
-                  />
-                  Leave source units as-is (no conversion)
-                </label>
-                {!leaveAsIs && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>
-                      1 {source.unit} =
-                    </span>
-                    <Input
-                      type="number"
-                      aria-label="Conversion factor"
-                      value={conversionFactor}
-                      onChange={(e) => setConversionFactor(e.target.value)}
-                      className="w-24"
-                    />
-                    <span>{survivingUnit}</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="space-y-1">
               <label className="text-sm font-medium">

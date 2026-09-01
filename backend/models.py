@@ -198,6 +198,12 @@ class User(Base):
     default_people = Column(
         Integer, nullable=False, server_default="2", default=DEFAULT_PEOPLE
     )
+    # Which system this account reads amounts in, ``metric`` or ``us``.
+    # Display only: the database is always metric, and the frontend applies
+    # this at render time, so toggling cannot touch stored data.
+    unit_system = Column(
+        String, nullable=False, server_default="metric", default="metric"
+    )
     # Whether the account has proven control of its email address. Local sign-ups
     # start ``False`` and must click a verification link before they can log in;
     # Google accounts inherit the verified claim from the ID token.
@@ -295,12 +301,31 @@ def takes_favorite_sides(course: str) -> bool:
 
 
 class UnitEnum(str, PyEnum):
-    """Allowed measurement units for ingredients."""
+    """The units a quantity may be *stored* in: one base unit per dimension.
+
+    ``kg`` and ``l`` are deliberately absent. They are ways of writing a stored
+    amount down -- formatting, on the same footing as ``cup`` or ``oz`` -- and
+    the frontend's ``utils/units.js`` owns that translation at the edges. A
+    narrow storage vocabulary is what makes aggregating two recipes well
+    defined; the wide vocabulary never reaches the database.
+    """
 
     G = "g"
-    KG = "kg"
-    L = "l"
     ML = "ml"
+    PIECE = "piece"
+
+
+class DimensionEnum(str, PyEnum):
+    """What a quantity measures: weigh it, measure it, or count it.
+
+    A *dimension*, not a unit, on purpose. Whether mass reads as ``g``, ``kg``
+    or ``oz`` is already decided by the account's metric/US setting, so storing
+    a unit here would encode the same choice twice and permit the two to
+    contradict each other.
+    """
+
+    MASS = "mass"
+    VOLUME = "volume"
     PIECE = "piece"
 
 
@@ -397,8 +422,19 @@ class Ingredient(Base):
     user_id = _owner_fk_column(index=False)
     name = Column(String, nullable=False)
     season_months = Column(IntList)
-    unit = Column(Enum(UnitEnum, name="unit_enum"))
     categories = Column(StrList, nullable=True)
+    # The two numbers that let a reader cross a dimension: a density and the
+    # weight of one of them. NULL is a *recorded fact* -- pieces of milk is a
+    # category error, not absent data -- so the converter refuses to cross a
+    # NULL rather than inventing a factor, water's density included.
+    grams_per_ml = Column(Float, nullable=True)
+    grams_per_piece = Column(Float, nullable=True)
+    # Which dimension leads when this ingredient is displayed. NULL falls back
+    # to whichever dimension most of the contributing recipes used. Display
+    # only: it never rewrites a stored quantity.
+    preferred_dimension = Column(
+        Enum(DimensionEnum, name="dimension_enum"), nullable=True
+    )
 
     recipes = relationship(
         "RecipeIngredient", back_populates="ingredient", cascade="all, delete-orphan"
@@ -438,6 +474,20 @@ class RecipeIngredient(Base):
     @property
     def season_months(self) -> list[int] | None:  # pragma: no cover
         return self.ingredient.season_months
+
+    # The line's own unit is authoritative, but restating it in another
+    # dimension needs the ingredient's physics, so a reader gets both at once.
+    @property
+    def grams_per_ml(self) -> float | None:  # pragma: no cover
+        return self.ingredient.grams_per_ml
+
+    @property
+    def grams_per_piece(self) -> float | None:  # pragma: no cover
+        return self.ingredient.grams_per_piece
+
+    @property
+    def preferred_dimension(self) -> DimensionEnum | None:  # pragma: no cover
+        return self.ingredient.preferred_dimension
 
 
 class Tag(Base):

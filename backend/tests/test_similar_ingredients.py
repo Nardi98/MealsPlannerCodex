@@ -12,11 +12,11 @@ from models import Ingredient, UnitEnum
 
 
 def test_find_similar_matches_plural(db_session) -> None:
-    tomato = Ingredient(name="Tomato", unit=UnitEnum.G)
+    tomato = Ingredient(name="Tomato")
     db_session.add_all(
         [
             tomato,
-            Ingredient(name="Onion", unit=UnitEnum.G),
+            Ingredient(name="Onion"),
         ]
     )
     db_session.flush()
@@ -27,7 +27,7 @@ def test_find_similar_matches_plural(db_session) -> None:
 
 
 def test_find_similar_respects_exclude_id(db_session) -> None:
-    tomato = Ingredient(name="Tomato", unit=UnitEnum.G)
+    tomato = Ingredient(name="Tomato")
     db_session.add(tomato)
     db_session.flush()
     matches = crud.find_similar_ingredients(
@@ -38,14 +38,14 @@ def test_find_similar_respects_exclude_id(db_session) -> None:
 
 def test_similar_endpoint(api_client) -> None:
     client = api_client
-    client.post("/ingredients", json={"name": "Tomato", "unit": "g"})
+    client.post("/ingredients", json={"name": "Tomato"})
     res = client.get("/ingredients/similar", params={"name": "Tomatoes"})
     assert res.status_code == 200
     assert any(i["name"] == "Tomato" for i in res.json())
 
 
 def test_looser_threshold_returns_more_matches(db_session) -> None:
-    basil = Ingredient(name="Basil", unit=UnitEnum.G)
+    basil = Ingredient(name="Basil")
     db_session.add(basil)
     db_session.flush()
     # "Fresh Basil" is too different for the default 0.8 threshold ...
@@ -57,7 +57,7 @@ def test_looser_threshold_returns_more_matches(db_session) -> None:
 
 def test_similar_endpoint_accepts_threshold(api_client) -> None:
     client = api_client
-    client.post("/ingredients", json={"name": "Basil", "unit": "g"})
+    client.post("/ingredients", json={"name": "Basil"})
 
     strict = client.get("/ingredients/similar", params={"name": "Fresh Basil"})
     assert strict.status_code == 200

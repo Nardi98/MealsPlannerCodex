@@ -69,14 +69,17 @@ test('shows an error for invalid pasted JSON and stays on the prompt step', () =
   expect(screen.getByText(/valid json/i)).toBeInTheDocument()
 })
 
-test('valid JSON reveals reconciliation: matched ingredient linked, new one needs a unit', async () => {
+test('valid JSON reveals reconciliation: matched ingredient linked, new one is named', async () => {
   render(<ImportRecipeModal onClose={() => {}} onCreated={() => {}} />)
   pasteAndContinue(payload)
 
   // Matched existing ingredient is shown as linked.
   await screen.findByText(/matches existing/i)
-  // The new ingredient ("Pasta") exposes a unit selector for creation.
-  expect(screen.getByLabelText(/pasta unit/i)).toBeInTheDocument()
+  // The new ingredient ("Pasta") is created from the reply as it stands: the
+  // source decided the unit and the parser already normalised it, so the flow
+  // gains no new question here.
+  expect(screen.getByLabelText(/pasta name/i)).toBeInTheDocument()
+  expect(screen.queryByLabelText(/pasta unit/i)).toBeNull()
 })
 
 test('confirming creates new ingredients then opens the pre-filled editor', async () => {

@@ -2,7 +2,10 @@ import React from 'react'
 import { authApi } from '../api/authApi'
 import { setAuthToken, setUnauthorizedHandler } from '../api/client'
 
-const AuthContext = React.createContext(null)
+// Exported for `useOptionalAuth` below. `useAuth` stays strict: a screen that
+// needs an account and cannot find one is a bug worth throwing over.
+// eslint-disable-next-line react-refresh/only-export-components
+export const AuthContext = React.createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = React.useState(null)
@@ -99,4 +102,18 @@ export function useAuth() {
   const ctx = React.useContext(AuthContext)
   if (ctx === null) throw new Error('useAuth must be used within an AuthProvider')
   return ctx
+}
+
+/**
+ * The account, or null where there is no provider.
+ *
+ * For components that only *read* a preference off the account and render
+ * perfectly well without one -- a quantity does not need to know who is
+ * looking at it. Keeping those components from requiring a provider is what
+ * lets them be unit-tested in isolation, and is why this is separate from
+ * `useAuth` rather than a loosening of it.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useOptionalAuth() {
+  return React.useContext(AuthContext)
 }

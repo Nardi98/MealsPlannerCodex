@@ -8,12 +8,16 @@ import {
   Input,
   MonthGrid,
   DateRangePicker,
+  EditIngredientModal,
   MergeIngredientsModal,
 } from '../components'
+import Quantity from '../components/Quantity'
 import { useIsMobile } from '../hooks/useIsMobile'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 import { mealPlansApi } from '../api/mealPlansApi'
 import { recipesApi } from '../api/recipesApi'
 import { authApi } from '../api/authApi'
+import { ingredientsApi } from '../api/ingredientsApi'
 import {
   buildShoppingList,
   batchLabel,
@@ -49,6 +53,10 @@ export default function ShoppingListPage() {
   // for stale entries.
   const [crossed, setCrossed] = React.useState(() => new Map())
   const [merging, setMerging] = React.useState(false)
+  // Where a row cannot be unified, tapping its marker opens that ingredient's
+  // editor on the field that would close the gap.
+  const [fixing, setFixing] = React.useState(null)
+  const unitSystem = useUnitSystem()
 
   // One pass over the occurrences produces both halves of the page: the summed
   // ingredient list, and the per-recipe batch labels the Recipes card shows.
@@ -97,14 +105,36 @@ export default function ShoppingListPage() {
 
   // One definition, used by the list and by the export, so the two can never
   // disagree about what counts as ticked.
-  const isCrossedOff = (ing) => crossed.get(ing.key) === ing.amount
+  // Ticking operates on the *ingredient*, not on a row: an ingredient that
+  // splits into a weighed row and a counted row is still one thing to buy, so
+  // both rows carry one signature and tick together. The signature changes
+  // with the amounts, so a head-count change unticks what it changed.
+  const isCrossedOff = (ing) => crossed.get(ing.key) === ing.signature
+
+  // The row carries the ingredient's identity but not its seasonality or
+  // categories, and the editor saves the whole row -- so fetch the real one
+  // rather than saving a half-filled copy over it.
+  const openConversionEditor = async (row) => {
+    if (row.id == null) return
+    try {
+      setFixing({
+        ingredient: await ingredientsApi.get(row.id),
+        field: row.missing[0],
+      })
+    } catch (err) {
+      // Silence here reads to the user as a dead button, which is worse than
+      // an error: they cannot tell a failure from a misclick.
+      console.error('Failed to open the ingredient editor', err)
+      alert('Could not open that ingredient.')
+    }
+  }
 
   const handleExport = () => {
     if (!start) return
     const items = ingredients
       .filter((ing) => !isCrossedOff(ing))
       .map(({ name, amount, unit }) => ({ name, amount, unit }))
-    const text = formatExportText(items, start, end || start)
+    const text = formatExportText(items, start, end || start, unitSystem)
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -158,13 +188,17 @@ export default function ShoppingListPage() {
     }
   }, [startDate, endDate])
 
-  // The recipe catalog is independent of the selected range, so fetch it once.
-  React.useEffect(() => {
+  // The recipe catalog is independent of the selected range, so fetch it once
+  // -- and again when an ingredient's conversions change, since the recipe
+  // lines are how those reach this page.
+  const loadRecipes = React.useCallback(() => {
     recipesApi
       .fetchAll()
       .then((all) => setRecipesByTitle(new Map(all.map((r) => [r.title, r]))))
       .catch((err) => console.error('Failed to load recipes', err))
   }, [])
+
+  React.useEffect(loadRecipes, [loadRecipes])
 
   // Seed the global People box from the user's saved default.
   React.useEffect(() => {
@@ -335,20 +369,16 @@ export default function ShoppingListPage() {
       <ul className="space-y-2">
         {ingredients.map((ing) => {
           const isCrossed = isCrossedOff(ing)
-          const label =
-            ing.amount !== null
-              ? `${ing.name}: ${ing.amount}${ing.unit ? ` ${ing.unit}` : ''}`
-              : ing.name
           return (
-            <li key={ing.key}>
+            <li key={ing.rowKey} className="flex items-center gap-2">
               <button
                 type="button"
                 aria-pressed={isCrossed}
                 onClick={() =>
                   setCrossed((prev) => {
                     const next = new Map(prev)
-                    if (next.get(ing.key) === ing.amount) next.delete(ing.key)
-                    else next.set(ing.key, ing.amount)
+                    if (next.get(ing.key) === ing.signature) next.delete(ing.key)
+                    else next.set(ing.key, ing.signature)
                     return next
                   })
                 }
@@ -372,9 +402,28 @@ export default function ShoppingListPage() {
                   className={isCrossed ? 'line-through' : undefined}
                   style={{ color: isCrossed ? 'var(--text-subtle)' : undefined }}
                 >
-                  {label}
+                  {ing.amount !== null ? `${ing.name}: ` : ing.name}
+                  <Quantity
+                    amount={ing.amount}
+                    unit={ing.unit}
+                    alternates={ing.alternates}
+                    system={unitSystem}
+                  />
                 </span>
               </button>
+              {ing.missing.length > 0 && (
+                // The one friction point in the design, placed at the moment
+                // the user has a reason to care about it -- and skippable.
+                <button
+                  type="button"
+                  onClick={() => openConversionEditor(ing)}
+                  className="shrink-0 rounded-lg px-2 py-1 text-xs"
+                  style={{ color: 'var(--text-subtle)' }}
+                  title="This ingredient is measured two ways. Add a conversion to combine them."
+                >
+                  combine
+                </button>
+              )}
             </li>
           )
         })}
@@ -456,6 +505,23 @@ export default function ShoppingListPage() {
         <MergeIngredientsModal
           onClose={() => setMerging(false)}
           onMerged={handleLoad}
+        />
+      )}
+      {fixing && (
+        // Opened straight onto the field that would unify the split rows, so
+        // noticing the gap and closing it are one gesture.
+        <EditIngredientModal
+          ingredient={fixing.ingredient}
+          autoFocusField={fixing.field}
+          onClose={() => setFixing(null)}
+          onSave={async (updates) => {
+            await ingredientsApi.update(fixing.ingredient.id, updates)
+            setFixing(null)
+            // The factors reach this page on the recipe lines, so it is the
+            // recipes that have to come back -- and reloading the plan would
+            // throw away the user's ticks for no reason.
+            loadRecipes()
+          }}
         />
       )}
     </div>

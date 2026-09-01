@@ -14,9 +14,9 @@ from models import Ingredient, UnitEnum
 def test_find_duplicate_pairs_returns_each_pair_once(db_session) -> None:
     db_session.add_all(
         [
-            Ingredient(name="Tomato", unit=UnitEnum.G),
-            Ingredient(name="Tomatoes", unit=UnitEnum.PIECE),
-            Ingredient(name="Onion", unit=UnitEnum.G),
+            Ingredient(name="Tomato"),
+            Ingredient(name="Tomatoes"),
+            Ingredient(name="Onion"),
         ]
     )
     db_session.flush()
@@ -31,8 +31,8 @@ def test_find_duplicate_pairs_returns_each_pair_once(db_session) -> None:
 
 def test_duplicates_endpoint_shape(api_client) -> None:
     client = api_client
-    client.post("/ingredients", json={"name": "Tomato", "unit": "g"})
-    client.post("/ingredients", json={"name": "Tomatoes", "unit": "piece"})
+    client.post("/ingredients", json={"name": "Tomato"})
+    client.post("/ingredients", json={"name": "Tomatoes"})
     res = client.get("/ingredients/duplicates")
     assert res.status_code == 200
     data = res.json()

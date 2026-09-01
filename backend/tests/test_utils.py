@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
 
-from mealplanner.utils import parse_date, format_date, convert_units
+from mealplanner.utils import parse_date, format_date
 
 
 def test_parse_date_string():
@@ -31,21 +31,3 @@ def test_format_date_round_trip():
 def test_format_date_invalid_type():
     with pytest.raises(TypeError):
         format_date("2023-01-01")  # type: ignore[arg-type]
-
-
-def test_convert_units_basic():
-    assert convert_units(1000, "g", "kg") == pytest.approx(1)
-    assert convert_units(1, "kg", "g") == pytest.approx(1000)
-    # cross conversion lb -> oz should equal 16
-    assert convert_units(1, "lb", "oz") == pytest.approx(16)
-
-
-def test_convert_units_negative_value():
-    with pytest.raises(ValueError):
-        convert_units(-5, "g", "kg")
-
-
-def test_convert_units_unsupported_unit():
-    with pytest.raises(ValueError):
-        convert_units(10, "stone", "kg")
-

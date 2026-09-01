@@ -129,12 +129,8 @@ export default function IngredientsPage() {
         recipes,
         onConfirm: async () => {
           try {
-            const updated = await ingredientsApi.update(editing.id, {
-              name: updates.name,
-              unit: updates.unit,
-              season_months: updates.season,
-              categories: updates.categories,
-            })
+            // The modal emits the wire shape, so there is nothing to map.
+            const updated = await ingredientsApi.update(editing.id, updates)
             setIngredients((ings) =>
               ings.map((i) => (i.id === editing.id ? { ...i, ...updated } : i))
             )
@@ -151,14 +147,10 @@ export default function IngredientsPage() {
     }
   }
 
-  const handleAdd = async ({ name, unit, season, categories }) => {
+  const handleAdd = async (payload) => {
     try {
-      const created = await ingredientsApi.create({
-        name,
-        unit,
-        season_months: season,
-        categories,
-      })
+      // The modal emits the wire shape, so there is nothing to map.
+      const created = await ingredientsApi.create(payload)
       setIngredients((ings) =>
         !query || created.name.toLowerCase().includes(query.toLowerCase())
           ? [...ings, created]
@@ -245,7 +237,8 @@ export default function IngredientsPage() {
                       <IngredientCard
                         key={`${g.category}-${ing.id}`}
                         name={ing.name}
-                        unit={ing.unit}
+                        grams_per_ml={ing.grams_per_ml}
+                        grams_per_piece={ing.grams_per_piece}
                         season={ing.season_months || []}
                         categories={ing.categories || []}
                         expanded={expanded === `${g.category}-${ing.id}`}

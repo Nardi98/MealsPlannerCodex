@@ -51,7 +51,6 @@ def rich_recipe(db_session, user):
     ing = crud.create_ingredient(
         db_session,
         name="beef",
-        unit=models.UnitEnum.G,
         season_months=[],
         user_id=user.id,
     )

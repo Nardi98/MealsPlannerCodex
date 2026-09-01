@@ -95,6 +95,13 @@ export const authApi = {
       body: JSON.stringify({ username: (handle || '').trim() }),
     }),
   me: () => request('/auth/me'),
+  // Display only: the database is always metric, so this cannot alter a single
+  // stored quantity, which is why the UI applies it with no save step.
+  setUnitSystem: (unitSystem) =>
+    request('/auth/me/unit-system', {
+      method: 'PUT',
+      body: JSON.stringify({ unit_system: unitSystem }),
+    }),
   setDefaultPeople: ({ people, startDate, endDate }) =>
     request('/auth/me/default-people', {
       method: 'PUT',

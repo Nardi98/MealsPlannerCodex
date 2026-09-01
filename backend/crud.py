@@ -8,16 +8,20 @@ import json
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+from types import SimpleNamespace
+
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import unit_conversion
 import usernames
 from database import SessionLocal
 from mealplanner.config import DEFAULT_PLAN_SETTINGS
 from scoping import owned as _owned, scope as _scope
 from models import (
     CATEGORIES,
+    DimensionEnum,
     DEFAULT_PEOPLE,
     Ingredient,
     MealPlan,
@@ -28,7 +32,6 @@ from models import (
     RefreshToken,
     Tag,
     RecipeIngredient,
-    UnitEnum,
     User,
     is_side_dish,
     normalize_email,
@@ -312,16 +315,20 @@ def create_recipe(session: Session, **data: Any) -> Recipe:
 def create_ingredient(
     session: Session,
     name: str,
-    unit: UnitEnum | None,
     season_months: List[int],
     categories: List[str] | None = None,
     user_id: int | None = None,
+    grams_per_ml: float | None = None,
+    grams_per_piece: float | None = None,
+    preferred_dimension: DimensionEnum | None = None,
 ) -> Ingredient:
     """Create and persist a new :class:`Ingredient`."""
 
     ingredient = Ingredient(
         name=name,
-        unit=unit,
+        grams_per_ml=grams_per_ml,
+        grams_per_piece=grams_per_piece,
+        preferred_dimension=preferred_dimension,
         season_months=season_months,
         categories=categories or [],
         user_id=user_id,
@@ -405,22 +412,129 @@ def find_duplicate_pairs(
     return pairs
 
 
+#: How the ingredient editor names each conversion factor, so a refusal can
+#: point at the field to fill in rather than at a column name. These strings
+#: mirror the field labels in ``frontend-v2/src/components/ConversionFields.jsx``
+#: and must be changed with them.
+_FACTOR_LABELS = {
+    DimensionEnum.VOLUME: "\u201c100 ml weighs\u201d",
+    DimensionEnum.PIECE: "\u201cOne piece weighs\u201d",
+}
+
+
+def _missing_factors(
+    ingredient: Ingredient, *dimensions: DimensionEnum | None
+) -> List[str]:
+    """The editor fields that would put ``dimensions`` within reach."""
+
+    reachable = unit_conversion.reachable_dimensions(ingredient)
+    return [
+        label
+        for dimension, label in _FACTOR_LABELS.items()
+        if dimension in dimensions and dimension not in reachable
+    ]
+
+
+def switch_preferred_dimension(
+    session: Session,
+    dimension: DimensionEnum,
+    user_id: int | None = None,
+) -> Tuple[List[str], List[str]]:
+    """Prefer ``dimension`` on every ingredient whose factors can reach it.
+
+    US recipes measure by volume where metric ones weigh, so switching systems
+    usually wants the pantry to follow. This writes a *display preference* and
+    never a quantity, which is why it can be one click with an undo rather than
+    a migration.
+
+    Counted ingredients are never touched: counting is not a measuring system's
+    business, and an egg is an egg in both. Returns the names switched and the
+    names left alone, so the caller can say plainly what it skipped.
+    """
+    if dimension is DimensionEnum.PIECE:
+        raise ValueError(
+            "Counting is not a measuring system: switch to mass or volume"
+        )
+
+    switched: List[str] = []
+    skipped: List[str] = []
+
+    stmt = _scope(
+        select(Ingredient).order_by(Ingredient.name), Ingredient.user_id, user_id
+    )
+    for ingredient in session.execute(stmt).scalars():
+        # A counted ingredient is left alone whether it says so outright or
+        # only by carrying a piece weight, and so is one already switched.
+        if ingredient.preferred_dimension in (DimensionEnum.PIECE, dimension):
+            continue
+        # Both halves of the switch need the density: mass and volume are
+        # reachable together or not at all.
+        if DimensionEnum.VOLUME in unit_conversion.reachable_dimensions(
+            ingredient
+        ):
+            ingredient.preferred_dimension = dimension
+            switched.append(ingredient.name)
+        else:
+            skipped.append(ingredient.name)
+
+    session.commit()
+    return switched, skipped
+
+
+def _restate_in(
+    line: RecipeIngredient,
+    dimension: DimensionEnum | None,
+    ingredient: Ingredient,
+) -> None:
+    """Convert ``line`` into ``dimension`` if ``ingredient``'s factors allow it.
+
+    ``ingredient`` is the *target* of the merge: the line is about to become
+    one of its lines, so its conversions are the ones that apply. A ``None``
+    dimension means there is nothing to aim at, and the line keeps the one it
+    was authored in -- as it also does when the conversion is unavailable.
+    """
+    if dimension is None:
+        return
+    from_dimension = unit_conversion.dimension_of(line.unit)
+    if from_dimension is dimension:
+        return
+
+    converted = unit_conversion.convert(
+        line.quantity, from_dimension, dimension, ingredient
+    )
+    if converted is None:
+        return
+    line.quantity = converted
+    line.unit = unit_conversion.base_unit_of(dimension)
+
+
 def merge_ingredients(
     session: Session,
     source_id: int,
     target_id: int,
     *,
-    surviving_unit: UnitEnum | None = None,
-    conversion_factor: float | None = None,
     user_id: int | None = None,
 ) -> Ingredient | None:
     """Merge ``source_id`` into ``target_id`` within a single transaction.
 
-    Recipe references to the source are re-pointed to the target (folding into
-    an existing target line when the composite PK would collide). When the
-    source line's unit differs from ``surviving_unit`` and ``conversion_factor``
-    is provided, quantities are converted. Categories and season months are
-    unioned onto the target, then the source ingredient is deleted.
+    Units used to need a hand-supplied bridge here, because two unit strings
+    either matched or they did not. The ingredient's own conversions now supply
+    it, so the caller states only which ingredient survives.
+
+    Recipe references to the source are re-pointed to the target, converted
+    into the target's dimensions where its conversions allow. Where they do
+    not, a line keeps its own dimension and the merged ingredient simply spans
+    two -- which the shopping list already renders as two rows.
+
+    One case cannot be spanned: two lines of the same recipe, because the
+    composite key permits only one row per recipe and ingredient. Folding them
+    would delete an amount the user wrote down, so the whole merge is refused
+    with a ``ValueError`` naming the recipe and the factor that would unblock
+    it, and nothing is written.
+
+    Conversions, categories and season months are otherwise unioned onto the
+    target with the target winning every collision, so a merge that does go
+    ahead can only ever add knowledge.
     """
 
     if source_id == target_id:
@@ -440,27 +554,97 @@ def merge_ingredients(
         .scalars()
         .all()
     )
-    for line in source_lines:
-        if (
-            surviving_unit is not None
-            and line.unit != surviving_unit
-            and conversion_factor is not None
-        ):
-            if line.quantity is not None:
-                line.quantity *= conversion_factor
-            line.unit = surviving_unit
+    # Every target line a source line could collide with, in one query.
+    # ``session.get`` per line is an N+1, and it does not cache a miss -- the
+    # common outcome -- so the fold loop below would re-issue every one.
+    collisions: Dict[int, RecipeIngredient] = {}
+    if source_lines:
+        collisions = {
+            existing.recipe_id: existing
+            for existing in session.execute(
+                select(RecipeIngredient).where(
+                    RecipeIngredient.ingredient_id == target_id,
+                    RecipeIngredient.recipe_id.in_(
+                        [line.recipe_id for line in source_lines]
+                    ),
+                )
+            )
+            .scalars()
+            .all()
+        }
 
-        existing = session.get(RecipeIngredient, (line.recipe_id, target_id))
+    # What the target will know once the union below runs: a factor the source
+    # contributes may be exactly what makes the merge possible. The check reads
+    # this preview rather than the target itself so that a merge about to be
+    # declined leaves no trace. ``_backfill_conversions`` owns the "target
+    # wins, source fills the nulls" rule, so it is applied to a throwaway
+    # stand-in here rather than restated -- a field added to it is then
+    # automatically considered by the refusal too.
+    merged = SimpleNamespace(
+        grams_per_ml=None, grams_per_piece=None, preferred_dimension=None
+    )
+    for donor in (target, source):
+        _backfill_conversions(
+            merged,
+            donor.grams_per_ml,
+            donor.grams_per_piece,
+            donor.preferred_dimension,
+        )
+    # Refuse before a single row is touched. The composite key permits one row
+    # per recipe and ingredient, so a collision the factors cannot bridge
+    # leaves the amount the user wrote down nowhere to go -- and dropping it
+    # quietly is worse than declining the merge.
+    for line in source_lines:
+        existing = collisions.get(line.recipe_id)
+        if existing is None or line.quantity is None:
+            continue
+        aim = unit_conversion.dimension_of(existing.unit)
+        from_dimension = unit_conversion.dimension_of(line.unit)
+        if from_dimension is aim:
+            continue
+        if unit_conversion.convert(
+            line.quantity, from_dimension, aim, merged
+        ) is None:
+            recipe = session.get(Recipe, line.recipe_id)
+            title = recipe.title if recipe is not None else line.recipe_id
+            missing = _missing_factors(merged, from_dimension, aim)
+            wanted = " and ".join(missing) if missing else "a conversion"
+            raise ValueError(
+                f"\u201c{title}\u201d measures {source.name} and "
+                f"{target.name} in ways that cannot be converted. Fill in "
+                f"{wanted} on {target.name} first, or its amount would be "
+                f"lost."
+            )
+
+    # The target still wins every collision; the merge only ever adds.
+    _backfill_conversions(
+        target,
+        source.grams_per_ml,
+        source.grams_per_piece,
+        source.preferred_dimension,
+    )
+
+    for line in source_lines:
+        existing = collisions.get(line.recipe_id)
+        # Aim at the line already on that recipe, or else at however the user
+        # says they measure the surviving ingredient.
+        aim = (
+            unit_conversion.dimension_of(existing.unit)
+            if existing
+            else target.preferred_dimension
+        )
+        _restate_in(line, aim, target)
+
         if existing is not None:
-            if line.quantity is not None:
+            # The composite key permits one row per recipe and ingredient, so
+            # two dimensions cannot both survive a collision. The target's line
+            # is the one the user already had, so it stands.
+            if line.quantity is not None and line.unit == existing.unit:
                 existing.quantity = (existing.quantity or 0) + line.quantity
             session.delete(line)
         else:
             line.ingredient_id = target_id
         session.flush()
-
-    if surviving_unit is not None:
-        target.unit = surviving_unit
 
     merged_categories = [
         c for c in CATEGORIES
@@ -603,14 +787,20 @@ def get_or_create_ingredient(
     session: Session,
     ingredient_id: int | None,
     name: str | None,
-    unit: UnitEnum | None = None,
     user_id: int | None = None,
+    grams_per_ml: float | None = None,
+    grams_per_piece: float | None = None,
+    preferred_dimension: DimensionEnum | None = None,
 ) -> Ingredient:
     """Return an :class:`Ingredient` looked up by ``ingredient_id`` or ``name``.
 
     The ingredient is created and added to the session if it does not already
     exist. The session is flushed so that ingredients added earlier in the
     transaction are visible to lookup queries.
+
+    Any conversion the caller supplies is *backfilled*: it fills a NULL and
+    never replaces a stored value. Every import therefore teaches the pantry
+    something permanently, and can only ever add to what the user already knows.
     """
 
     session.flush()
@@ -627,11 +817,41 @@ def get_or_create_ingredient(
         )
         ingredient = session.execute(stmt).scalar_one_or_none()
     if ingredient is None:
-        ingredient = Ingredient(name=name, unit=unit, user_id=user_id)
+        ingredient = Ingredient(
+            name=name,
+            user_id=user_id,
+            grams_per_ml=grams_per_ml,
+            grams_per_piece=grams_per_piece,
+            preferred_dimension=preferred_dimension,
+        )
         session.add(ingredient)
-    elif ingredient.unit is None and unit is not None:
-        ingredient.unit = unit
+    else:
+        _backfill_conversions(
+            ingredient, grams_per_ml, grams_per_piece, preferred_dimension
+        )
     return ingredient
+
+
+def _backfill_conversions(
+    ingredient: Ingredient,
+    grams_per_ml: float | None,
+    grams_per_piece: float | None,
+    preferred_dimension: DimensionEnum | None = None,
+) -> None:
+    """Fill in what the ingredient lacks, overwriting none of it.
+
+    The display preference follows the same rule as the two factors: it fills
+    a null and never overrides a preference already stored.
+    """
+    if ingredient.grams_per_ml is None and grams_per_ml is not None:
+        ingredient.grams_per_ml = grams_per_ml
+    if ingredient.grams_per_piece is None and grams_per_piece is not None:
+        ingredient.grams_per_piece = grams_per_piece
+    if (
+        ingredient.preferred_dimension is None
+        and preferred_dimension is not None
+    ):
+        ingredient.preferred_dimension = preferred_dimension
 
 
 def get_ingredient(
@@ -1567,18 +1787,36 @@ def import_data(
                 months = ing_info.get("season_months")
                 if isinstance(months, str):
                     months = [int(m) for m in months.split(",") if m.strip()]
+                # A payload written before the display preference existed
+                # omits the key entirely, and ``None`` imports cleanly.
+                preferred = ing_info.get("preferred_dimension")
                 ingredient_obj = get_or_create_ingredient(
                     session, ing_info.get("id"), ing_info.get("name"),
                     user_id=user_id,
+                    grams_per_ml=ing_info.get("grams_per_ml"),
+                    grams_per_piece=ing_info.get("grams_per_piece"),
+                    preferred_dimension=(
+                        DimensionEnum(preferred) if preferred else None
+                    ),
                 )
                 if months is not None:
                     ingredient_obj.season_months = months
-                unit_val = ing_info.get("unit")
-                unit = UnitEnum(unit_val) if unit_val else None
+                quantity, unit = unit_conversion.normalise_to_base_unit(
+                    ing_info.get("quantity"), ing_info.get("unit")
+                )
+                # An amount with nothing to measure it in cannot be added to
+                # anything, so it is an import error here rather than a row
+                # that breaks a page weeks later. Neither is still fine: an
+                # unquantified ingredient is a real thing to write down.
+                if quantity is not None and unit is None:
+                    raise ValueError(
+                        f"\u201c{recipe.title}\u201d gives a quantity for "
+                        f"{ingredient_obj.name} without a unit"
+                    )
                 recipe.ingredients.append(
                     RecipeIngredient(
                         ingredient=ingredient_obj,
-                        quantity=ing_info.get("quantity"),
+                        quantity=quantity,
                         unit=unit,
                     )
                 )
@@ -1695,6 +1933,13 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                             "quantity": ri.quantity,
                             "unit": ri.unit.value if ri.unit else None,
                             "season_months": ri.ingredient.season_months,
+                            "grams_per_ml": ri.ingredient.grams_per_ml,
+                            "grams_per_piece": ri.ingredient.grams_per_piece,
+                            "preferred_dimension": (
+                                ri.ingredient.preferred_dimension.value
+                                if ri.ingredient.preferred_dimension
+                                else None
+                            ),
                         }
                         for ri in recipe.ingredients
                     ],

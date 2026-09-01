@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import select
 
-from models import CATEGORIES, Recipe, Ingredient, RecipeIngredient, Tag, UnitEnum
+from models import CATEGORIES, DimensionEnum, Recipe, Ingredient, RecipeIngredient, Tag, UnitEnum
 from mealplanner.seed import (
     SYSTEM_INGREDIENTS,
     SYSTEM_TAGS,
@@ -86,9 +86,10 @@ def test_seed_system_tags_upgrades_preexisting_plain_tag(db_session):
 
 
 def test_system_ingredients_fixture_is_valid():
-    # Guards hand-edits to data/system_ingredients.json: every unit must be a
-    # real UnitEnum and every category one of the canonical CATEGORIES.
-    valid_units = {u.value for u in UnitEnum}
+    # Guards hand-edits to data/system_ingredients.json: every preferred
+    # dimension must be a real DimensionEnum, every category one of the
+    # canonical CATEGORIES, and every conversion a positive number.
+    valid_dimensions = {d.value for d in DimensionEnum}
     valid_categories = set(CATEGORIES)
 
     assert len(SYSTEM_INGREDIENTS) >= 150
@@ -96,9 +97,34 @@ def test_system_ingredients_fixture_is_valid():
     assert len(names) == len(set(names)), "duplicate ingredient names in fixture"
 
     for entry in SYSTEM_INGREDIENTS:
-        assert entry["unit"] in valid_units, entry
+        assert entry["preferred_dimension"] in valid_dimensions, entry
         assert set(entry["categories"]) <= valid_categories, entry
         assert all(1 <= m <= 12 for m in entry["season_months"]), entry
+        for factor in ("grams_per_ml", "grams_per_piece"):
+            # Absent is a legitimate, permanent answer. Present must be real.
+            if factor in entry:
+                assert entry[factor] > 0, entry
+
+
+def test_the_fixture_states_conversions_only_where_they_make_sense():
+    """The seeded pantry must exercise the null path, not pretend it is rare.
+
+    A new account should arrive able to unify what it can -- an onion weighed
+    or counted -- and honest about what it cannot: nothing knows what one
+    millilitre of egg is, and nothing should invent it.
+    """
+    by_name = {entry["name"]: entry for entry in SYSTEM_INGREDIENTS}
+
+    assert by_name["Onion"]["grams_per_piece"] == 150
+    assert "grams_per_ml" not in by_name["Onion"]
+    assert by_name["Milk"]["grams_per_ml"] == 1.03
+    assert "grams_per_piece" not in by_name["Milk"]
+
+    without_any = [
+        e["name"] for e in SYSTEM_INGREDIENTS
+        if "grams_per_ml" not in e and "grams_per_piece" not in e
+    ]
+    assert len(without_any) > 20
 
 
 def test_seed_system_ingredients_populates(db_session, user):
@@ -109,7 +135,8 @@ def test_seed_system_ingredients_populates(db_session, user):
             Ingredient.name == "Potato", Ingredient.user_id == user.id
         )
     ).scalar_one()
-    assert potato.unit == UnitEnum.G
+    assert potato.preferred_dimension is DimensionEnum.MASS
+    assert potato.grams_per_piece == 170
     assert potato.season_months == [9, 10, 11, 12, 1]
     assert "Vegetables" in potato.categories
 

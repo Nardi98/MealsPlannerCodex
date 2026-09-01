@@ -93,7 +93,6 @@ def shared_page(db_session, user):
     ingredient = crud.create_ingredient(
         db_session,
         name="pasta",
-        unit=models.UnitEnum.G,
         season_months=[],
         user_id=user.id,
     )

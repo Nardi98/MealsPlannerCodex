@@ -3,6 +3,8 @@ import { InboxArrowDownIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { Badge, Button, Card, Modal, AttributionLine } from '../components'
 import { sharedWithMeApi } from '../api/sharedWithMeApi'
 import { basisOf, peopleLabel } from '../utils/servings'
+import { formatAmount } from '../utils/units'
+import { useUnitSystem } from '../hooks/useUnitSystem'
 
 // Recipes other people addressed to this account (SWM-1 / SWM-2 / SWM-3).
 //
@@ -61,14 +63,11 @@ function asAttributionRecipe(recipe) {
   }
 }
 
-function formatQuantity(ingredient) {
-  const parts = []
-  if (ingredient.quantity !== null && ingredient.quantity !== undefined) {
-    parts.push(String(ingredient.quantity))
-  }
-  if (ingredient.unit) parts.push(ingredient.unit)
-  return parts.join(' ')
-}
+// The shared payload states amounts in base units like every other surface,
+// so it renders through the one formatter rather than concatenating the raw
+// number -- otherwise this page alone would say "1200 g" for "1.2 kg".
+const formatQuantity = (ingredient, system) =>
+  formatAmount(ingredient.quantity, ingredient.unit, system) || ''
 
 function SharedCard({ entry, onOpen, onDismiss, dismissing }) {
   const { recipe } = entry
@@ -161,6 +160,7 @@ function SharedCard({ entry, onOpen, onDismiss, dismissing }) {
 }
 
 function SharedRecipeDetail({ entry, onClose, onCopy, copying, copyResult, copyError }) {
+  const system = useUnitSystem()
   const { recipe } = entry
   const attribution = asAttributionRecipe(recipe)
 
@@ -210,7 +210,9 @@ function SharedRecipeDetail({ entry, onClose, onCopy, copying, copyResult, copyE
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-sm)' }}>
             {(recipe.ingredients || []).map((ing, i) => (
               <li key={`${ing.name}-${i}`} style={{ color: 'var(--text-muted)' }}>
-                {formatQuantity(ing) ? `${ing.name} — ${formatQuantity(ing)}` : ing.name}
+                {formatQuantity(ing, system)
+                  ? `${ing.name} — ${formatQuantity(ing, system)}`
+                  : ing.name}
               </li>
             ))}
           </ul>

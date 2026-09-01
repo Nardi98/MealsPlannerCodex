@@ -2,13 +2,14 @@
  * @vitest-environment jsdom
  */
 import React from 'react'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import ShoppingListPage from '../ShoppingListPage'
 import { mealPlansApi } from '../../api/mealPlansApi'
 import { recipesApi } from '../../api/recipesApi'
 import { authApi } from '../../api/authApi'
+import { ingredientsApi } from '../../api/ingredientsApi'
 import { stubViewport } from '../../test/stubViewport'
 
 vi.mock('../../api/mealPlansApi', () => ({
@@ -21,6 +22,16 @@ vi.mock('../../api/mealPlansApi', () => ({
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: {
     fetchAll: vi.fn(),
+  },
+}))
+
+vi.mock('../../api/ingredientsApi', () => ({
+  ingredientsApi: {
+    get: vi.fn(),
+    update: vi.fn(),
+    fetchAll: vi.fn(() => Promise.resolve([])),
+    duplicates: vi.fn(() => Promise.resolve([])),
+    recipes: vi.fn(() => Promise.resolve([])),
   },
 }))
 
@@ -40,8 +51,8 @@ beforeEach(() => {
     ],
   })
   recipesApi.fetchAll.mockResolvedValue([
-    { id: 1, title: 'A', ingredients: [{ name: 'ing1', amount: 1, unit: 'kg' }] },
-    { id: 2, title: 'B', ingredients: [{ name: 'ing2', amount: 1, unit: 'kg' }] },
+    { id: 1, title: 'A', ingredients: [{ name: 'ing1', amount: 1000, unit: 'g' }] },
+    { id: 2, title: 'B', ingredients: [{ name: 'ing2', amount: 1000, unit: 'g' }] },
   ])
   authApi.me.mockResolvedValue({ default_people: 2 })
 })
@@ -61,9 +72,9 @@ test('leftover meals are included as occurrences', async () => {
 test('ingredient amounts are scaled by the meal people count', async () => {
   render(<ShoppingListPage />)
   // B is cooked for 3 people, so 1 kg of ing2 becomes 3 kg.
-  expect(await screen.findByText('ing2: 3 kg')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: /ing2: 3 kg/ })).toBeInTheDocument()
   // A is cooked for 2 people, so 1 kg of ing1 becomes 2 kg.
-  expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toBeInTheDocument()
 })
 
 test('a day with an empty lunch slot still builds a list', async () => {
@@ -104,7 +115,7 @@ test('ingredient amounts are divided by the basis the recipe was written for', a
   render(<ShoppingListPage />)
 
   // Written for 4, cooked for 2: half the recipe.
-  expect(await screen.findByText('ing1: 400 g')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: /ing1: 400 g/ })).toBeInTheDocument()
 })
 
 test('an occurrence cooking part of a recipe says so', async () => {
@@ -148,7 +159,7 @@ test('an occurrence cooking exactly one batch is not annotated', async () => {
 test('shows a single month on mobile', async () => {
   stubViewport(true)
   render(<ShoppingListPage />)
-  await screen.findByText('ing1: 2 kg')
+  await screen.findByRole('button', { name: /ing1: 2 kg/ })
 
   expect(screen.getAllByTestId('shopping-month')).toHaveLength(1)
 })
@@ -165,7 +176,7 @@ test('mobile opens on the ingredients tab and hides the meal list', async () => 
   stubViewport(true)
   render(<ShoppingListPage />)
 
-  expect(await screen.findByText('ing1: 2 kg')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: /ing1: 2 kg/ })).toBeInTheDocument()
   // 'A' is a meal title, which lives on the other tab.
   expect(screen.queryByText('A')).toBeNull()
 })
@@ -173,12 +184,12 @@ test('mobile opens on the ingredients tab and hides the meal list', async () => 
 test('mobile can switch to the meal list', async () => {
   stubViewport(true)
   render(<ShoppingListPage />)
-  await screen.findByText('ing1: 2 kg')
+  await screen.findByRole('button', { name: /ing1: 2 kg/ })
 
   fireEvent.click(screen.getByRole('button', { name: 'Meals' }))
 
   expect(await screen.findByText('A')).toBeInTheDocument()
-  expect(screen.queryByText('ing1: 2 kg')).toBeNull()
+  expect(screen.queryByRole('button', { name: /ing1: 2 kg/ })).toBeNull()
 })
 
 test('desktop shows both lists at once and no tabs', async () => {
@@ -186,7 +197,7 @@ test('desktop shows both lists at once and no tabs', async () => {
   render(<ShoppingListPage />)
 
   expect(await screen.findByText('A')).toBeInTheDocument()
-  expect(screen.getByText('ing1: 2 kg')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /ing1: 2 kg/ })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Meals' })).toBeNull()
 })
 
@@ -294,3 +305,56 @@ test('says so when the range holds no meals', async () => {
   ).toBeInTheDocument()
 })
 
+
+
+// An ingredient two recipes measure differently, with no factor to reconcile
+// them: the list splits it and offers to close the gap. That offer is the one
+// friction point in the design, so it had better work.
+function splitIngredient() {
+  const todayIso = new Date().toISOString().slice(0, 10)
+  mealPlansApi.fetchRange.mockResolvedValue({
+    [todayIso]: [
+      { recipe: 'A', side_recipes: [], leftover: false, meal_number: 1, people: 1 },
+      { recipe: 'B', side_recipes: [], leftover: false, meal_number: 2, people: 1 },
+    ],
+  })
+  recipesApi.fetchAll.mockResolvedValue([
+    {
+      id: 1,
+      title: 'A',
+      servings: 1,
+      ingredients: [{ id: 9, name: 'Onion', amount: 2, unit: 'piece' }],
+    },
+    {
+      id: 2,
+      title: 'B',
+      servings: 1,
+      ingredients: [{ id: 9, name: 'Onion', amount: 200, unit: 'g' }],
+    },
+  ])
+}
+
+test('an ingredient measured two ways offers to combine its rows', async () => {
+  splitIngredient()
+  render(<ShoppingListPage />)
+
+  expect(await screen.findAllByRole('button', { name: 'combine' })).toHaveLength(2)
+})
+
+test('combine opens that ingredient on the field that would unify it', async () => {
+  splitIngredient()
+  ingredientsApi.get.mockResolvedValue({
+    id: 9,
+    name: 'Onion',
+    season_months: [],
+    categories: [],
+    grams_per_ml: null,
+    grams_per_piece: null,
+  })
+  render(<ShoppingListPage />)
+
+  fireEvent.click((await screen.findAllByRole('button', { name: 'combine' }))[0])
+
+  await waitFor(() => expect(ingredientsApi.get).toHaveBeenCalledWith(9))
+  expect(await screen.findByText(/How this ingredient converts/i)).toBeInTheDocument()
+})

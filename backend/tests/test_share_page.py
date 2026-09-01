@@ -54,7 +54,6 @@ def shared_recipe(db_session, user):
         ing = crud.create_ingredient(
             db_session,
             name=name,
-            unit=models.UnitEnum.G,
             season_months=[],
             user_id=user.id,
         )

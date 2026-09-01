@@ -19,6 +19,11 @@ function normaliseRecipe(recipe) {
       name: ing.name,
       amount: ing.quantity ?? '',
       unit: ing.unit ?? '',
+      // The ingredient's physics ride along with its amount: unifying two
+      // recipes is a read-time job, and the reader needs both at once.
+      grams_per_ml: ing.grams_per_ml ?? null,
+      grams_per_piece: ing.grams_per_piece ?? null,
+      preferred_dimension: ing.preferred_dimension ?? null,
     })),
     procedure: recipe.procedure || '',
     favorite_side_ids: recipe.favorite_side_ids || [],
@@ -59,6 +64,11 @@ function serialiseRecipe(recipe) {
           : null,
       unit: ing.unit || null,
       season_months: ing.season_months || ALL_MONTHS,
+      // Physical facts an import learned about the ingredient. The server
+      // back-fills them onto the pantry row, filling gaps and overwriting
+      // nothing, so the rule lives in exactly one place.
+      grams_per_ml: ing.grams_per_ml ?? null,
+      grams_per_piece: ing.grams_per_piece ?? null,
     })),
   };
 }

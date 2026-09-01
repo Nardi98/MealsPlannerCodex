@@ -189,3 +189,37 @@ test('changing the servings basis never rewrites the typed quantities', async ()
   expect(saved.servings).toBe(8)
   expect(saved.ingredients[0].amount).toBe(800)
 })
+
+// An import hands this modal ingredient lines that learned physical facts from
+// the chatbot. The recipe save is what carries them to the server, so dropping
+// them here would silently stop imports teaching the pantry anything.
+test('saving keeps the conversions an imported line arrived with', async () => {
+  const onSave = vi.fn()
+  render(
+    <NewRecipeModal
+      onClose={() => {}}
+      onSave={onSave}
+      initialRecipe={{
+        title: 'Soffritto',
+        course: 'main',
+        ingredients: [
+          {
+            id: 4,
+            name: 'Onion',
+            amount: 2,
+            unit: 'piece',
+            grams_per_piece: 150,
+            grams_per_ml: null,
+          },
+        ],
+      }}
+    />,
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+  await waitFor(() => expect(onSave).toHaveBeenCalled())
+  expect(onSave.mock.calls[0][0].ingredients[0]).toMatchObject({
+    grams_per_piece: 150,
+  })
+})

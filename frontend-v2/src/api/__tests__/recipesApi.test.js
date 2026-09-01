@@ -121,3 +121,52 @@ test('visibility defaults to private when the caller does not set it (VIS-2)', a
 
   expect(sentBody().visibility).toBe('private')
 })
+
+// Unification is a read-time job, so the physics have to survive the trip from
+// the API into the shopping list along with the amounts.
+test('a recipe line keeps the ingredient conversions the API sent', async () => {
+  mockJson({
+      id: 1,
+      title: 'Soffritto',
+      servings: 2,
+      ingredients: [
+        {
+          id: 4,
+          name: 'Onion',
+          quantity: 2,
+          unit: 'piece',
+          grams_per_ml: null,
+          grams_per_piece: 150,
+          preferred_dimension: 'mass',
+        },
+      ],
+  })
+
+  const recipe = await recipesApi.fetch(1)
+
+  expect(recipe.ingredients[0]).toMatchObject({
+    grams_per_piece: 150,
+    grams_per_ml: null,
+    preferred_dimension: 'mass',
+  })
+})
+
+// An import learns physical facts about an ingredient; the recipe payload is
+// what carries them to the server, which applies the database-wins backfill.
+// If they were dropped here, imports would silently stop teaching the pantry.
+test('a saved recipe carries the conversions its lines learned', async () => {
+  const fetchMock = mockJson({ id: 1, title: 'Soffritto', ingredients: [] })
+
+  await recipesApi.create({
+    title: 'Soffritto',
+    ingredients: [
+      { name: 'Onion', amount: 2, unit: 'piece', grams_per_piece: 150 },
+    ],
+  })
+
+  const sent = JSON.parse(fetchMock.mock.calls[0][1].body)
+  expect(sent.ingredients[0]).toMatchObject({
+    grams_per_piece: 150,
+    grams_per_ml: null,
+  })
+})

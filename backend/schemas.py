@@ -2,12 +2,19 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 import usernames
-from models import CATEGORIES, VISIBILITY_VALUES, UnitEnum
+from models import CATEGORIES, VISIBILITY_VALUES, DimensionEnum, UnitEnum
 
 #: VIS-5. Stated once, so the schema validator and ``main``'s 400 handler
 #: cannot drift apart.
@@ -88,6 +95,8 @@ class UserOut(BaseModel):
     display_name: Optional[str] = None
     auth_provider: str
     default_people: int
+    # Which system this account reads amounts in. Display only.
+    unit_system: str = "metric"
     email_verified: bool = False
 
     model_config = ConfigDict(from_attributes=True)
@@ -134,11 +143,21 @@ class TagOut(BaseModel):
 
 
 class IngredientOut(BaseModel):
+    """One line of a recipe: an amount, plus how to restate it.
+
+    The conversions ride along with the amount because unifying two recipes is
+    a read-time job -- the shopping list needs the physics in the same payload
+    as the quantities, not a second round trip later.
+    """
+
     id: int
     name: str
     quantity: Optional[float] = None
     unit: Optional[UnitEnum] = None
     season_months: List[int] = Field(default_factory=list)
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DimensionEnum] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,16 +165,40 @@ class IngredientOut(BaseModel):
 class IngredientIn(BaseModel):
     id: int | None = None
     name: str | None = None
-    quantity: Optional[float] = None
+    # You cannot need less than none of something, and a negative subtracts
+    # from every other recipe's share of the same ingredient once the shopping
+    # list unifies them -- so one bad row corrupts an unrelated total. Zero is
+    # allowed: "to taste" is a real thing to write down.
+    quantity: Optional[float] = Field(default=None, ge=0)
     unit: Optional[UnitEnum] = None
     season_months: List[int] = Field(default_factory=list)
+    # NULL means this dimension does not apply to the ingredient, not that
+    # nobody has filled it in yet. Nothing invents a value for it.
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _quantity_needs_a_unit(self) -> "IngredientIn":
+        """A number with nothing to measure it in cannot be added up.
+
+        The shopping list sums lines by dimension, so a unitless amount has no
+        row to join and no way to be shown. Both blank stays legal: an
+        unquantified ingredient is a real thing to write down.
+        """
+        if self.quantity is not None and self.unit is None:
+            raise ValueError("A quantity needs a unit")
+        return self
 
 
 class IngredientCreate(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
-    unit: Optional[UnitEnum] = None
     categories: List[str] = Field(default_factory=list)
+    # NULL means this dimension does not apply to the ingredient, not that
+    # nobody has filled it in yet. Nothing invents a value for it.
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DimensionEnum] = None
 
     _check_categories = field_validator("categories")(_validate_categories)
 
@@ -164,8 +207,12 @@ class IngredientSummary(BaseModel):
     id: int
     name: str
     season_months: List[int] = Field(default_factory=list)
-    unit: Optional[UnitEnum] = None
     categories: List[str] = Field(default_factory=list)
+    # NULL means this dimension does not apply to the ingredient, not that
+    # nobody has filled it in yet. Nothing invents a value for it.
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DimensionEnum] = None
     recipe_count: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -176,8 +223,12 @@ class IngredientSummary(BaseModel):
 class IngredientUpdate(BaseModel):
     name: str
     season_months: List[int] = Field(default_factory=list)
-    unit: Optional[UnitEnum] = None
     categories: List[str] = Field(default_factory=list)
+    # NULL means this dimension does not apply to the ingredient, not that
+    # nobody has filled it in yet. Nothing invents a value for it.
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DimensionEnum] = None
 
     _check_categories = field_validator("categories")(_validate_categories)
 
@@ -189,10 +240,15 @@ class DuplicatePair(BaseModel):
 
 
 class IngredientMergeRequest(BaseModel):
+    """Which ingredient survives, and nothing else.
+
+    ``surviving_unit`` and ``conversion_factor`` used to ride along because
+    units were opaque strings needing a hand-supplied bridge. The target's own
+    conversions supply it now.
+    """
+
     source_id: int
     target_id: int
-    surviving_unit: Optional[UnitEnum] = None
-    conversion_factor: Optional[float] = None
 
 
 class RecipeSummary(BaseModel):
@@ -364,6 +420,33 @@ class MealPeopleIn(BaseModel):
     plan_date: date
     meal_number: int
     people: int = Field(ge=1)
+
+
+class UnitSystemIn(BaseModel):
+    """Which system the account reads amounts in.
+
+    Display only: nothing stored changes when this does.
+    """
+
+    unit_system: Literal["metric", "us"]
+
+
+class PreferredDimensionIn(BaseModel):
+    """The dimension to switch every ingredient that can reach it to."""
+
+    preferred_dimension: DimensionEnum
+
+
+class PreferredDimensionResult(BaseModel):
+    """What the bulk switch did, and what it left alone.
+
+    ``skipped`` names the ingredients whose conversions cannot reach the
+    requested dimension. They are reported plainly rather than nagged about:
+    a single-dimension ingredient is a normal ingredient.
+    """
+
+    switched: List[str]
+    skipped: List[str]
 
 
 class DefaultPeopleIn(BaseModel):
