@@ -12,6 +12,8 @@ The system therefore gets more capable the more it is used, and can only ever
 gain knowledge, never lose it.
 """
 
+import pytest
+
 import crud
 from models import DimensionEnum, Ingredient, Recipe, RecipeIngredient, UnitEnum
 
@@ -161,20 +163,28 @@ class TestMerge:
         line = db_session.get(RecipeIngredient, (recipe.id, target.id))
         assert (line.quantity, line.unit) == (340, UnitEnum.G)
 
-    def test_an_unconvertible_collision_keeps_the_target_line(self, db_session, user):
+    def test_an_unconvertible_collision_refuses_the_merge(self, db_session, user):
         # The composite key permits one row per recipe and ingredient, so two
-        # dimensions cannot both survive here. The target's line is the one the
-        # user already had, so it stands, and the caller is told what was lost.
+        # dimensions cannot both survive here -- and folding them would drop
+        # the 2 pieces the user wrote down. Refusing says so; merging lies.
         source = _ingredient(db_session, "Tomatoes", user)
         target = _ingredient(db_session, "Tomato", user)
         recipe = _recipe(db_session, user)
         _line(db_session, recipe, source, 2, UnitEnum.PIECE)
         _line(db_session, recipe, target, 100, UnitEnum.G)
 
-        crud.merge_ingredients(db_session, source.id, target.id, user_id=user.id)
+        with pytest.raises(ValueError) as excinfo:
+            crud.merge_ingredients(
+                db_session, source.id, target.id, user_id=user.id
+            )
 
-        line = db_session.get(RecipeIngredient, (recipe.id, target.id))
-        assert (line.quantity, line.unit) == (100, UnitEnum.G)
+        # The refusal names the recipe and the field that would unblock it.
+        assert "Stew" in str(excinfo.value)
+        assert "One piece weighs" in str(excinfo.value)
+        # Nothing was written: both lines, and both ingredients, still stand.
+        assert db_session.get(RecipeIngredient, (recipe.id, source.id)).quantity == 2
+        assert db_session.get(RecipeIngredient, (recipe.id, target.id)).quantity == 100
+        assert db_session.get(Ingredient, source.id) is not None
 
 
 class TestDataPortability:

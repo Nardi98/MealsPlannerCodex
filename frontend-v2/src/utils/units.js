@@ -110,6 +110,10 @@ export const asFactor = (value) =>
  */
 export function convert(amount, fromDimension, toDimension, ingredient) {
   if (typeof amount !== 'number' || !Number.isFinite(amount)) return null
+  // A dimension we do not recognise is not a count. Refusing here is what
+  // keeps an unknown unit from being silently weighed or tallied.
+  if (!DIMENSION_ORDER.includes(fromDimension)) return null
+  if (!DIMENSION_ORDER.includes(toDimension)) return null
   if (fromDimension === toDimension) return amount
   if (!ingredient) return null
 
@@ -205,6 +209,10 @@ export function formatAmount(amount, unit, system = 'metric') {
 
   const dimension = dimensionOf(unit)
   if (dimension === 'piece') return `${formatCount(amount)} piece`
+  // A line stating no unit, or one outside the vocabulary, still has a number
+  // worth showing. It is rendered bare rather than dressed in a unit it never
+  // claimed -- and rather than throwing on the way past.
+  if (dimension === null) return String(round2(amount))
 
   const [small, large] = PROMOTIONS[system === 'us' ? 'us' : 'metric'][dimension]
   const target = amount >= TIER_1[large].perBase ? large : small

@@ -4,7 +4,14 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 import usernames
 from models import CATEGORIES, VISIBILITY_VALUES, DimensionEnum, UnitEnum
@@ -169,6 +176,18 @@ class IngredientIn(BaseModel):
     # nobody has filled it in yet. Nothing invents a value for it.
     grams_per_ml: Optional[float] = None
     grams_per_piece: Optional[float] = None
+
+    @model_validator(mode="after")
+    def _quantity_needs_a_unit(self) -> "IngredientIn":
+        """A number with nothing to measure it in cannot be added up.
+
+        The shopping list sums lines by dimension, so a unitless amount has no
+        row to join and no way to be shown. Both blank stays legal: an
+        unquantified ingredient is a real thing to write down.
+        """
+        if self.quantity is not None and self.unit is None:
+            raise ValueError("A quantity needs a unit")
+        return self
 
 
 class IngredientCreate(BaseModel):

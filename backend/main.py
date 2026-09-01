@@ -1098,9 +1098,12 @@ def switch_preferred_dimension(
     Writes a display preference, never a quantity. See
     ``crud.switch_preferred_dimension`` for the rules.
     """
-    switched, skipped = crud.switch_preferred_dimension(
-        db, payload.preferred_dimension, user_id=current_user.id
-    )
+    try:
+        switched, skipped = crud.switch_preferred_dimension(
+            db, payload.preferred_dimension, user_id=current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return schemas.PreferredDimensionResult(switched=switched, skipped=skipped)
 
 
