@@ -245,3 +245,80 @@ def test_payload_ingredient_lines_match_the_source_tables():
             assert line["grams_per_piece"] == entry["grams_per_piece"]
             assert line["quantity"] == quantity
             assert line["unit"] == unit
+
+
+import io
+
+import crud
+from models import Ingredient, Recipe
+
+
+def _seed_account(session, user, snapshot):
+    """Put the account's ingredients and recipe titles in the database.
+
+    Enough for the two things the import must not do: create a second
+    ingredient with a name that already exists, or a second recipe with a title
+    that already exists.
+    """
+    for info in snapshot["ingredients"]:
+        session.add(Ingredient(
+            id=info["id"],
+            name=info["name"],
+            season_months=info["season_months"],
+            grams_per_ml=info["grams_per_ml"],
+            grams_per_piece=info["grams_per_piece"],
+            user_id=user.id,
+        ))
+    for title in snapshot["recipe_titles"]:
+        session.add(Recipe(title=title, course="main", user_id=user.id))
+    session.commit()
+
+
+def test_the_file_imports_into_a_populated_account(db_session, user, snapshot):
+    _seed_account(db_session, user, snapshot)
+    before_ingredients = {
+        name for (name,) in db_session.query(Ingredient.name).all()
+    }
+    before_recipes = db_session.query(Recipe).count()
+
+    payload = json.dumps(build_payload())
+    crud.import_data(io.StringIO(payload), db_session, mode="merge", user_id=user.id)
+
+    assert db_session.query(Recipe).count() == before_recipes + 24
+
+    after_ingredients = {
+        name for (name,) in db_session.query(Ingredient.name).all()
+    }
+    created = after_ingredients - before_ingredients
+    assert created == set(NEW_INGREDIENTS), (
+        "import created ingredients that were not the declared new ones: "
+        f"{created - set(NEW_INGREDIENTS)}"
+    )
+
+
+def test_imported_recipes_carry_their_quantities(db_session, user, snapshot):
+    _seed_account(db_session, user, snapshot)
+    payload = json.dumps(build_payload())
+    crud.import_data(io.StringIO(payload), db_session, mode="merge", user_id=user.id)
+
+    gazpacho = (
+        db_session.query(Recipe)
+        .filter(Recipe.title == "Andalusian Gazpacho")
+        .one()
+    )
+    assert gazpacho.servings == 4
+    assert gazpacho.course == "first-course"
+    assert gazpacho.bulk_prep is True
+    by_name = {
+        ri.ingredient.name: (ri.quantity, ri.unit.value)
+        for ri in gazpacho.ingredients
+    }
+    assert by_name["Tomato"] == (1000, "g")
+    assert by_name["Olive Oil"] == (25, "ml")
+    # Reused, not recreated.
+    tomato_id = next(
+        ri.ingredient.id for ri in gazpacho.ingredients
+        if ri.ingredient.name == "Tomato"
+    )
+    assert tomato_id == 919
+
