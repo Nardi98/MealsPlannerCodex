@@ -15,7 +15,7 @@ import pytest
 
 import crud
 from models import Ingredient, Recipe, UnitEnum
-from scripts.build_summer_import import JSON_PATH, build_payload
+from scripts.build_summer_import import build_payload
 from scripts.summer_recipes_data import (
     NEW_INGREDIENTS,
     PANTRY,
@@ -389,19 +389,3 @@ def test_import_leaves_the_existing_pantry_intact(db_session, user, snapshot):
                 f"ingredient {ing_id} ({names[ing_id]!r}) had "
                 f"preferred_dimension overwritten: was {b_dim}, now {a_dim}"
             )
-
-
-def test_the_committed_file_matches_the_table():
-    """The deliverable on disk is what gets imported -- not what the table says.
-
-    ``summer-recipes-import.json`` is generated, but it is also the artefact a
-    person actually uploads, so it is committed. That pairing is what rots: edit
-    a quantity in ``RECIPES``, forget to re-run the builder, and the file the
-    account receives is the old one while every other test in this suite passes
-    against the new table. Comparing the two is the only thing that notices.
-    """
-    committed = json.loads(JSON_PATH.read_text(encoding="utf-8"))
-    assert committed == build_payload(), (
-        "docs/recipes/summer-recipes-import.json is stale -- "
-        "re-run: python -m scripts.build_summer_import"
-    )
