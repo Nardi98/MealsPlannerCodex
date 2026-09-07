@@ -108,3 +108,48 @@ def test_every_ingredient_line_is_measurable():
             assert name in PANTRY, f"{recipe['title']}: unknown ingredient {name}"
             assert unit in LEGAL_UNITS, f"{recipe['title']}: bad unit {unit}"
             assert quantity > 0
+
+
+# What four portions of each kind of dish plausibly weighs, in grams, counting
+# only the solid and liquid bulk -- seasonings are excluded because a recipe is
+# not made implausible by three grams of oregano.
+SANE_TOTAL_GRAMS = {
+    "first-course": (850, 3000),
+    "main": (900, 2600),
+    "side": (300, 1800),
+}
+
+SEASONINGS = {
+    "Salt", "Black Pepper", "Sugar", "Cumin", "Paprika", "Nutmeg", "Oregano",
+    "Rosemary", "Basil", "Parsley", "Dill", "Garlic", "Olive Oil",
+    "Red Wine Vinegar", "White Wine Vinegar", "Dijon Mustard", "Lemon Juice",
+}
+
+
+def _bulk_grams(recipe):
+    total = 0.0
+    for name, quantity, unit in recipe["ingredients"]:
+        if name in SEASONINGS:
+            continue
+        if unit in ("g", "ml"):
+            total += quantity
+        else:
+            per_piece = PANTRY[name]["grams_per_piece"]
+            assert per_piece, f"{recipe['title']}: {name} in pieces with no weight"
+            total += quantity * per_piece
+    return total
+
+
+@pytest.mark.parametrize("recipe", RECIPES, ids=lambda r: r["title"])
+def test_each_recipe_feeds_four(recipe):
+    low, high = SANE_TOTAL_GRAMS[recipe["course"]]
+    total = _bulk_grams(recipe)
+    assert low <= total <= high, f"{recipe['title']} is {total:.0f} g for four"
+
+
+def test_oil_is_measured_by_the_spoon():
+    """The document's central claim: the oil is what decides whether a plate of
+    vegetables is light. Past 40 ml for four, this is not that cookbook."""
+    for recipe in RECIPES:
+        oil = sum(q for n, q, _ in recipe["ingredients"] if n == "Olive Oil")
+        assert oil <= 40, f"{recipe['title']} uses {oil} ml of oil"
