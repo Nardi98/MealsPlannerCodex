@@ -110,9 +110,32 @@ def test_every_ingredient_line_is_measurable():
             assert quantity > 0
 
 
+def test_every_piece_ingredient_has_a_weight():
+    """A piece-unit line with no known weight cannot be converted to grams.
+
+    This is a distinct claim from "the recipe's mass is plausible" -- it is
+    about the pantry data, not about any one recipe's total -- so it gets its
+    own test rather than surfacing as an assertion buried inside the bulk
+    calculation for ``test_each_recipe_feeds_four``.
+    """
+    for recipe in RECIPES:
+        for name, quantity, unit in recipe["ingredients"]:
+            if unit == "piece":
+                assert PANTRY[name]["grams_per_piece"], (
+                    f"{recipe['title']}: {name} in pieces with no weight"
+                )
+
+
 # What four portions of each kind of dish plausibly weighs, in grams, counting
 # only the solid and liquid bulk -- seasonings are excluded because a recipe is
 # not made implausible by three grams of oregano.
+#
+# These bounds are not a nutritional standard. They were set by computing the
+# actual bulk totals of the 24 imported recipes -- which run 333-2010 g -- and
+# leaving room on either side. The band is a tripwire calibrated to this data
+# set, not an authority on correct portion size. The tightest margins in that
+# calibration were Cannellini Cream at 333 g against the 300 g floor and Light
+# Krompirusa at 920 g against the 900 g floor.
 SANE_TOTAL_GRAMS = {
     "first-course": (850, 3000),
     "main": (900, 2600),
@@ -134,17 +157,19 @@ def _bulk_grams(recipe):
         if unit in ("g", "ml"):
             total += quantity
         else:
-            per_piece = PANTRY[name]["grams_per_piece"]
-            assert per_piece, f"{recipe['title']}: {name} in pieces with no weight"
-            total += quantity * per_piece
+            total += quantity * PANTRY[name]["grams_per_piece"]
     return total
 
 
 @pytest.mark.parametrize("recipe", RECIPES, ids=lambda r: r["title"])
 def test_each_recipe_feeds_four(recipe):
+    """The band bounds the sum, and the sum is dominated by the largest line,
+    so a threefold error on a minor ingredient can still pass -- this does
+    not check that every quantity is individually plausible, only that the
+    total is. A green result here is not proof every line was checked."""
     low, high = SANE_TOTAL_GRAMS[recipe["course"]]
     total = _bulk_grams(recipe)
-    assert low <= total <= high, f"{recipe['title']} is {total:.0f} g for four"
+    assert low <= total <= high, f"{recipe['title']} is {total:.0f} g for four, want {low}-{high}"
 
 
 def test_oil_is_measured_by_the_spoon():
