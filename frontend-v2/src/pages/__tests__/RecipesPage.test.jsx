@@ -883,3 +883,65 @@ test('shows a zero score when the recipe has none', async () => {
   await screen.findByText('Spaghetti')
   expect(screen.getByText('0.00')).toBeInTheDocument()
 })
+
+test('sorts recipes by score, name and course, and flips direction', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Zuppa', course: 'first-course', score: 0.2 },
+    { id: 2, title: 'Burger', course: 'main', score: 0.9 },
+    { id: 3, title: 'Salad', course: 'side', score: 0.5 },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Zuppa')
+
+  const order = () =>
+    [
+      ...document
+        .querySelector('[data-tour="recipes-grid"]')
+        .querySelectorAll('[data-testid="recipe-title"]'),
+    ].map((el) => el.textContent)
+
+  expect(order()).toEqual(['Zuppa', 'Burger', 'Salad'])
+
+  const select = screen.getByLabelText('Sort recipes')
+  fireEvent.change(select, { target: { value: 'score' } })
+  await waitFor(() => expect(order()).toEqual(['Burger', 'Salad', 'Zuppa']))
+
+  fireEvent.click(screen.getByLabelText('Sort ascending'))
+  await waitFor(() => expect(order()).toEqual(['Zuppa', 'Salad', 'Burger']))
+
+  fireEvent.change(select, { target: { value: 'name' } })
+  await waitFor(() => expect(order()).toEqual(['Burger', 'Salad', 'Zuppa']))
+
+  fireEvent.change(select, { target: { value: 'course' } })
+  await waitFor(() => expect(order()).toEqual(['Burger', 'Zuppa', 'Salad']))
+})
+
+test('sorting applies to the filtered recipes', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Sea bass', course: 'main', score: 0.1 },
+    { id: 2, title: 'Sausage', course: 'main', score: 0.8 },
+    { id: 3, title: 'Pizza', course: 'main', score: 0.9 },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+  await screen.findByText('Pizza')
+
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'sea' },
+  })
+  fireEvent.change(screen.getByLabelText('Sort recipes'), { target: { value: 'score' } })
+
+  await waitFor(() => {
+    const shown = [
+      ...document
+        .querySelector('[data-tour="recipes-grid"]')
+        .querySelectorAll('[data-testid="recipe-title"]'),
+    ].map((el) => el.textContent)
+    expect(shown).toEqual(['Sea bass'])
+  })
+})

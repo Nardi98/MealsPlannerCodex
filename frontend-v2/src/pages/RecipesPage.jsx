@@ -22,10 +22,12 @@ import {
   ImportRecipeModal,
   NewRecipeModal,
   RecipeFilters,
+  RecipeSort,
   ShareRecipeModal,
 } from '../components'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
+import { defaultDirectionFor, sortRecipes } from '../utils/sortRecipes'
 import Quantity from '../components/Quantity'
 import { alternateForms } from '../utils/units'
 import { useUnitSystem } from '../hooks/useUnitSystem'
@@ -153,6 +155,8 @@ export default function RecipesPage() {
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
   const [selectedCourses, setSelectedCourses] = React.useState([])
+  const [sortKey, setSortKey] = React.useState('default')
+  const [sortDirection, setSortDirection] = React.useState(defaultDirectionFor('default'))
 
   React.useEffect(() => {
     async function load() {
@@ -192,6 +196,13 @@ export default function RecipesPage() {
         return matchesSearch && matchesTags && matchesIngredients && matchesCourses
       }),
     [recipes, search, selectedTags, selectedIngredients, selectedCourses]
+  )
+
+  // Sorting sits after filtering so the two compose: the user orders what the
+  // filters left, not the whole catalogue.
+  const sortedRecipes = React.useMemo(
+    () => sortRecipes(filteredRecipes, { key: sortKey, direction: sortDirection }),
+    [filteredRecipes, sortKey, sortDirection]
   )
 
   const courseOptions = React.useMemo(
@@ -388,6 +399,15 @@ export default function RecipesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <RecipeSort
+            sortKey={sortKey}
+            direction={sortDirection}
+            onChange={(key, direction) => {
+              setSortKey(key)
+              setSortDirection(direction)
+            }}
+            onDirectionChange={setSortDirection}
+          />
           {!isMobile && (
             <>
               <Button
@@ -421,7 +441,7 @@ export default function RecipesPage() {
         data-tour="recipes-grid"
         className="card-grid pb-24 md:pb-0"
       >
-        {filteredRecipes.map((r, i) => (
+        {sortedRecipes.map((r, i) => (
           <Card
             key={r.id}
             // The tour points at one card, not the grid: the grid is taller than
@@ -478,6 +498,7 @@ export default function RecipesPage() {
             >
               <div
                 className="line-clamp-2"
+                data-testid="recipe-title"
                 style={{
                   fontFamily: 'var(--font-display)',
                   fontWeight: 'var(--weight-semibold)',
