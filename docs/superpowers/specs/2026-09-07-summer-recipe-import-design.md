@@ -73,7 +73,8 @@ Import matches an ingredient by `id` first, then by exact `name`, and creates it
   is safe.
 - New ingredients carry **no `id`** — an invented id would bind to an unrelated row. They
   are: Feta, Ricotta, Phyllo Pastry, Farro, Wholewheat Couscous, Stale Bread, Dill, Spring
-  Onion, Fennel, Radish, Dijon Mustard, Red Wine Vinegar, Pecorino, Lemon Juice.
+  Onion, Dijon Mustard, Red Wine Vinegar, Lemon Juice. (Fennel, radish and pecorino appeared
+  only in the crudité platter and the hummus, both of which are skipped.)
 - Units are `g` / `ml` / `piece` only; `kg` and `l` are formatting, not storage.
 
 ### Lemon
@@ -98,8 +99,8 @@ not deepen the split.
 ### Tags
 
 Reuse by name (import matches tags by name in merge mode): `vegetarian`, `vegan`, `quick`,
-`cheap`, `salad`, `soup`, `roast`, `low calories`, `mediterranean`, `spicy`. New:
-`make-ahead`, `no-cook`, `phyllo`, `high-protein`, `legumes`, `summer`.
+`cheap`, `low calories`, `mediterranean`. New: `make-ahead`, `no-cook`, `phyllo`,
+`high-protein`, `legumes`, `summer`, `oven`.
 
 ### bulk_prep
 
