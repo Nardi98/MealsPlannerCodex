@@ -355,7 +355,7 @@ RECIPES = [
             "twenty minutes."
         ),
         "ingredients": [
-            ("Phyllo Pastry", 3, "piece"),
+            ("Phyllo Pastry", 6, "piece"),
             ("Eggplant", 500, "g"),
             ("Bell Pepper", 150, "g"),
             ("Onion", 150, "g"),
@@ -364,7 +364,11 @@ RECIPES = [
             ("Paprika", 3, "g"),
             ("Olive Oil", 12, "ml"),
         ],
-        "notes": [],
+        "notes": [
+            "Corrected: this file first said three sheets, which would have made six cigars instead of the twelve "
+            "the source's own heading promises. The source calls for six sheets cut in half. It is the one recipe "
+            "here already written for four portions, so unlike the bureks it needed no scaling.",
+        ],
     },
     {
         "source": 15,
