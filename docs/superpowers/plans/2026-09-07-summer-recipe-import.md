@@ -930,7 +930,8 @@ Phyllo Pastry 4 pieces · Spinach 533 · Spring Onion 100 · Feta 100 · Ricotta
 *(corrected: 1.33 eggs rounded down to one.)*
 
 **14. Phyllo Cigars with Aubergine and Feta** — vegetarian, oven, phyllo
-Phyllo Pastry 3 pieces · Eggplant 500 · Bell Pepper 150 · Onion 150 · Feta 100 · Parsley 8 · Paprika 3 · Olive Oil 12 ml
+Phyllo Pastry 6 pieces · Eggplant 500 · Bell Pepper 150 · Onion 150 · Feta 100 · Parsley 8 · Paprika 3 · Olive Oil 12 ml
+*(corrected: this appendix first said 3 sheets. The source recipe is already written for four portions and calls for six sheets cut in half — the twelve cigars its own heading names. Three would have halved the yield.)*
 
 **15. Light Krompirusa** — vegetarian, oven, phyllo, cheap
 Phyllo Pastry 4 pieces · Potato 400 · Onion 200 · Zucchini 133 · Parmesan 27 · Black Pepper 4 · Olive Oil 8 ml
