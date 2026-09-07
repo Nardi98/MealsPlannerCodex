@@ -322,3 +322,71 @@ def test_imported_recipes_carry_their_quantities(db_session, user, snapshot):
     )
     assert tomato_id == 919
 
+
+def test_import_leaves_the_existing_pantry_intact(db_session, user, snapshot):
+    """This asserts the state of the database *after* the merge, not the
+    payload before it.
+
+    ``crud.import_data`` writes ``season_months`` onto ingredients that
+    already exist *unconditionally* -- not backfilled the way it treats the
+    conversions -- so a wrong value anywhere upstream (the source table, the
+    renderer, or the import path itself) silently overwrites what the
+    account already knows, and it lands in a live account that has no
+    backups. Task 2's checks compare ``PANTRY`` against the snapshot, which
+    catches a mistake in the table, but nothing else checks what actually
+    ends up stored. This does, for every existing ingredient, not just the
+    ones the imported recipes touch: ``season_months`` must come back
+    exactly as it went in. ``grams_per_ml``, ``grams_per_piece`` and
+    ``preferred_dimension`` are genuinely backfill-only (``_backfill_conversions``
+    fills a NULL and never replaces a stored value), so those are only
+    checked for the stronger violation that would matter -- a value the
+    account already had being replaced or cleared.
+    """
+    _seed_account(db_session, user, snapshot)
+    names = {ing.id: ing.name for ing in db_session.query(Ingredient).all()}
+    before = {
+        ing.id: (
+            ing.season_months,
+            ing.grams_per_ml,
+            ing.grams_per_piece,
+            ing.preferred_dimension,
+        )
+        for ing in db_session.query(Ingredient).all()
+    }
+
+    payload = json.dumps(build_payload())
+    crud.import_data(io.StringIO(payload), db_session, mode="merge", user_id=user.id)
+
+    after = {
+        ing.id: (
+            ing.season_months,
+            ing.grams_per_ml,
+            ing.grams_per_piece,
+            ing.preferred_dimension,
+        )
+        for ing in db_session.query(Ingredient).all()
+    }
+
+    for ing_id, (b_season, b_ml, b_piece, b_dim) in before.items():
+        a_season, a_ml, a_piece, a_dim = after[ing_id]
+        assert a_season == b_season, (
+            f"ingredient {ing_id} ({names[ing_id]!r}) had its season_months "
+            f"changed during merge: was {b_season}, now {a_season}"
+        )
+        # grams_per_ml / grams_per_piece / preferred_dimension only ever fill
+        # a NULL -- a value the account already had must never move.
+        if b_ml is not None:
+            assert a_ml == b_ml, (
+                f"ingredient {ing_id} ({names[ing_id]!r}) had grams_per_ml "
+                f"overwritten: was {b_ml}, now {a_ml}"
+            )
+        if b_piece is not None:
+            assert a_piece == b_piece, (
+                f"ingredient {ing_id} ({names[ing_id]!r}) had grams_per_piece "
+                f"overwritten: was {b_piece}, now {a_piece}"
+            )
+        if b_dim is not None:
+            assert a_dim == b_dim, (
+                f"ingredient {ing_id} ({names[ing_id]!r}) had "
+                f"preferred_dimension overwritten: was {b_dim}, now {a_dim}"
+            )
