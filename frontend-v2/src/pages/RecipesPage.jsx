@@ -46,6 +46,28 @@ const sectionHeadingStyle = {
   color: 'var(--text-strong)',
 }
 
+// The learned preference score, always two decimals so the corner pill keeps a
+// stable width across the grid.
+const formatScore = (score) => Number(score ?? 0).toFixed(2)
+
+// Not a Badge: badge tones are translucent, and this one has to stay readable
+// sitting on top of the tags it overlaps.
+const scorePillStyle = {
+  position: 'absolute',
+  right: 8,
+  bottom: 8,
+  zIndex: 1,
+  pointerEvents: 'none',
+  background: 'var(--surface-card)',
+  border: '1px solid var(--border-default)',
+  boxShadow: 'var(--shadow-sm)',
+  borderRadius: 999,
+  padding: '1px 7px',
+  fontSize: 'var(--text-xs)',
+  fontWeight: 'var(--weight-semibold)',
+  color: 'var(--text-muted)',
+}
+
 function RecipeMedia({ recipe, rounded }) {
   const color = courseColor[recipe.course] || 'var(--c-a3)'
   if (recipe.image_url) {
@@ -450,7 +472,10 @@ export default function RecipesPage() {
                 )}
               </div>
             </div>
-            <div className="flex flex-1 flex-col gap-1.5" style={{ padding: 12 }}>
+            <div
+              className="flex flex-1 flex-col gap-1.5"
+              style={{ padding: 12, position: 'relative' }}
+            >
               <div
                 className="line-clamp-2"
                 style={{
@@ -471,13 +496,19 @@ export default function RecipesPage() {
                   ? `${r.course} · ${(r.ingredients || []).length} ingr · ${basisOf(r.servings)}p`
                   : `${r.course} · ${(r.ingredients || []).length} ingredients · serves ${basisOf(r.servings)}`}
               </div>
-              <div className="mt-auto flex flex-wrap gap-1">
+              <div className="mt-auto flex flex-wrap gap-1" style={{ paddingRight: 48 }}>
                 {(r.tags || []).slice(0, 2).map((t) => (
                   <Badge key={t} tone="caramel">
                     {t}
                   </Badge>
                 ))}
               </div>
+              {/* Painted last, over the tags: a long tag row would otherwise
+                  push the score out of the corner, so it sits on top with an
+                  opaque background instead of reflowing. */}
+              <span title="Score" style={scorePillStyle}>
+                {formatScore(r.score)}
+              </span>
             </div>
           </Card>
         ))}
@@ -525,7 +556,7 @@ export default function RecipesPage() {
                 size={16}
                 color={courseColor[openRecipe.course] || 'var(--c-a3)'}
               />
-              {openRecipe.course}
+              {openRecipe.course} · {formatScore(openRecipe.score)}
             </div>
             {/* AT-3/AT-7: permanent credit when this recipe was copied. */}
             <AttributionLine recipe={openRecipe} />

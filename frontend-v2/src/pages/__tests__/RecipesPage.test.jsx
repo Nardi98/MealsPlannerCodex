@@ -853,3 +853,33 @@ test('only the ingredient filter is searchable', async () => {
   expect(screen.getByRole('button', { name: 'Italian' })).toBeInTheDocument()
   expect(screen.queryByPlaceholderText(/^Search Tags/)).toBeNull()
 })
+
+test('shows the recipe score on the card, and in the detail view', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main', score: 7.4239 },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  const title = await screen.findByText('Spaghetti')
+  expect(screen.getByText('7.42')).toBeInTheDocument()
+
+  fireEvent.click(title)
+
+  expect(await screen.findByText(/main · 7\.42/)).toBeInTheDocument()
+})
+
+test('shows a zero score when the recipe has none', async () => {
+  recipesApi.fetchAll.mockResolvedValue([
+    { id: 1, title: 'Spaghetti', course: 'main' },
+  ])
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  render(<RecipesPage />)
+
+  await screen.findByText('Spaghetti')
+  expect(screen.getByText('0.00')).toBeInTheDocument()
+})
