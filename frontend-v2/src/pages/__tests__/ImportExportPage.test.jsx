@@ -8,7 +8,6 @@ import '@testing-library/jest-dom/vitest'
 import ImportExportPage from '../ImportExportPage'
 import { dataApi } from '../../api/dataApi'
 import { recipesApi } from '../../api/recipesApi'
-import { ingredientsApi } from '../../api/ingredientsApi'
 
 vi.mock('../../api/dataApi', () => ({
   dataApi: {
@@ -23,15 +22,20 @@ vi.mock('../../api/recipesApi', () => ({
   },
 }))
 
-vi.mock('../../api/ingredientsApi', () => ({
-  ingredientsApi: {
-    fetchAll: vi.fn(),
-  },
-}))
-
 beforeEach(() => {
   window.alert = vi.fn()
 })
+
+/** Pick `data` in the file input, the way a user choosing a backup does. */
+async function selectFile(data) {
+  const json = JSON.stringify(data)
+  const file = new File([json], 'data.json', { type: 'application/json' })
+  file.text = () => Promise.resolve(json)
+  fireEvent.change(document.querySelector('input[type="file"]'), {
+    target: { files: [file] },
+  })
+  return screen.findByText('Import')
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -55,14 +59,7 @@ test('import button appears after file selection', async () => {
   render(<ImportExportPage />)
   expect(screen.queryByText('Import')).toBeNull()
 
-  const file = new File([JSON.stringify({})], 'data.json', {
-    type: 'application/json',
-  })
-  file.text = () => Promise.resolve(JSON.stringify({}))
-  const input = document.querySelector('input[type="file"]')
-  fireEvent.change(input, { target: { files: [file] } })
-
-  const btn = await screen.findByText('Import')
+  const btn = await selectFile({})
   expect(btn).toBeEnabled()
 })
 
@@ -71,16 +68,10 @@ test('merge conflict modal opens when conflicts detected', async () => {
     recipes: [{ title: 'Recipe A', ingredients: [{ name: 'Salt' }] }],
   }
   recipesApi.fetchAll.mockResolvedValue([{ id: 1, title: 'Recipe A' }])
-  ingredientsApi.fetchAll.mockResolvedValue([{ id: 1, name: 'Salt' }])
 
   render(<ImportExportPage />)
 
-  const file = new File([JSON.stringify(data)], 'data.json', {
-    type: 'application/json',
-  })
-  file.text = () => Promise.resolve(JSON.stringify(data))
-  const input = document.querySelector('input[type="file"]')
-  fireEvent.change(input, { target: { files: [file] } })
+  await selectFile(data)
   const btn = await screen.findByText('Import')
   fireEvent.click(btn)
 
@@ -93,16 +84,76 @@ test('overwrite confirmation modal shown in overwrite mode', async () => {
   const select = document.querySelector('select')
   fireEvent.change(select, { target: { value: 'overwrite' } })
 
-  const file = new File([JSON.stringify({})], 'data.json', {
-    type: 'application/json',
-  })
-  file.text = () => Promise.resolve(JSON.stringify({}))
-  const input = document.querySelector('input[type="file"]')
-  fireEvent.change(input, { target: { files: [file] } })
-  const btn = await screen.findByText('Import')
+  const btn = await selectFile({})
   fireEvent.click(btn)
 
   await screen.findByText('Overwrite Existing Data')
   expect(dataApi.importDatabase).not.toHaveBeenCalled()
 })
 
+
+// Selecting a file, hitting Import, and resolving the conflict must still send
+// the file that was chosen. The conflict path used to clear the parsed payload
+// on its way to the modal, so confirming imported an empty object and the user
+// was told the import had succeeded.
+test('resolving a conflict imports the payload that was chosen', async () => {
+  const data = {
+    recipes: [
+      { id: 1, title: 'Recipe A', ingredients: [{ name: 'Salt' }] },
+      { id: 2, title: 'Recipe B', ingredients: [{ name: 'Pepper' }] },
+    ],
+    tags: [{ id: 5, name: 'summer' }],
+  }
+  recipesApi.fetchAll.mockResolvedValue([{ id: 9, title: 'Recipe A' }])
+  dataApi.importDatabase.mockResolvedValue({ status: 'ok' })
+
+  render(<ImportExportPage />)
+  fireEvent.click(await selectFile(data))
+
+  await screen.findByText('Resolve Conflicts')
+  fireEvent.click(screen.getByLabelText('keep both'))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+
+  await waitFor(() => expect(dataApi.importDatabase).toHaveBeenCalled())
+  const [payload, mode] = dataApi.importDatabase.mock.calls[0]
+  expect(mode).toBe('merge')
+  expect(payload.recipes.map((r) => r.title)).toEqual(['Recipe A', 'Recipe B'])
+  expect(payload.tags).toHaveLength(1)
+})
+
+// Ingredients are a shared pantry: the backend already reuses an existing one
+// by name rather than duplicating it, so an overlapping name is the normal
+// case and not something to interrupt the user about.
+test('shared ingredient names are not conflicts', async () => {
+  const data = {
+    recipes: [{ id: 1, title: 'Brand New Recipe', ingredients: [{ name: 'Salt' }] }],
+  }
+  recipesApi.fetchAll.mockResolvedValue([{ id: 9, title: 'Something Else' }])
+  dataApi.importDatabase.mockResolvedValue({ status: 'ok' })
+
+  render(<ImportExportPage />)
+  fireEvent.click(await selectFile(data))
+
+  await waitFor(() => expect(dataApi.importDatabase).toHaveBeenCalledWith(data, 'merge'))
+  expect(screen.queryByText('Resolve Conflicts')).toBeNull()
+})
+
+// "Import successful" over an empty import is what hid the bug above, so the
+// message says what actually landed.
+test('the success message reports what was imported', async () => {
+  const data = { recipes: [{ id: 1, title: 'Recipe A', ingredients: [] }] }
+  recipesApi.fetchAll.mockResolvedValue([])
+  dataApi.importDatabase.mockResolvedValue({
+    status: 'ok',
+    imported: { recipes: 1, ingredients: 3, tags: 2, meal_plans: 0 },
+  })
+
+  render(<ImportExportPage />)
+  fireEvent.click(await selectFile(data))
+
+  await waitFor(() => expect(window.alert).toHaveBeenCalled())
+  const message = window.alert.mock.calls[0][0]
+  expect(message).toMatch(/1 recipe/)
+  expect(message).toMatch(/3 ingredients/)
+  expect(message).toMatch(/2 tags/)
+})

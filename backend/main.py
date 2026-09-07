@@ -1542,14 +1542,16 @@ def import_data_endpoint(
     db: Db,
     current_user: CurrentUser,
     mode: str = "overwrite",
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     try:
-        crud.import_data(
+        imported = crud.import_data(
             io.StringIO(json.dumps(payload)), db, mode=mode, user_id=current_user.id
         )
-    except ValueError as exc:  # pragma: no cover - value error path
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"status": "ok"}
+    # The counts go back so the caller can say what actually landed: an import
+    # of nothing answering a bare "ok" reads exactly like one that worked.
+    return {"status": "ok", "imported": imported}
 
 
 @app.delete("/data")
@@ -1557,7 +1559,10 @@ def clear_data_endpoint(
     db: Db,
     current_user: CurrentUser,
 ) -> Dict[str, str]:
+    # ``clear_data`` leaves the transaction to its caller so that import's
+    # overwrite mode can wipe and reload atomically; here that caller is us.
     crud.clear_data(db, current_user.id)
+    db.commit()
     return {"status": "ok"}
 
 

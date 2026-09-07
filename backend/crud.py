@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from types import SimpleNamespace
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -1634,6 +1634,10 @@ def clear_data(session: Session, user_id: int | None) -> None:
     tags, and plans; system tags are cleared too so a re-import / reset starts
     empty. Passing ``None`` removes *every* user's rows — it has no default
     precisely because forgetting the argument must not silently do that.
+
+    The caller owns the transaction: this flushes but does not commit, so
+    ``import_data``'s overwrite mode can wipe and reload in one transaction and
+    a failure mid-reload leaves the account exactly as it was.
     """
 
     # Association / child rows are keyed by recipe rather than by owner, so they
@@ -1646,9 +1650,8 @@ def clear_data(session: Session, user_id: int | None) -> None:
         )
     )
     # ``synchronize_session=False`` skips the SELECT each DELETE would otherwise
-    # issue just to evict rows from the identity map: the ``commit`` below
-    # expires every object in the session anyway (``expire_on_commit`` is on),
-    # so nothing can be read back stale.
+    # issue just to evict rows from the identity map; the ``expire_all`` below
+    # does that eviction once, for all of them.
     session.query(RecipeIngredient).filter(
         RecipeIngredient.recipe_id.in_(owned_recipe_ids)
     ).delete(synchronize_session=False)
@@ -1658,7 +1661,8 @@ def clear_data(session: Session, user_id: int | None) -> None:
         _scope(session.query(model), model.user_id, user_id).delete(
             synchronize_session=False
         )
-    session.commit()
+    session.flush()
+    session.expire_all()
 
 
 def _payload_servings(rec_info: Dict[str, Any]) -> int:
@@ -1700,14 +1704,31 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
     )
 
 
+def _is_new(obj: Any) -> bool:
+    """Whether ``obj`` was created rather than found by a get-or-create helper.
+
+    ``get_or_create_tag`` / ``get_or_create_ingredient`` return the object
+    either way and cannot say which happened, so the object itself is asked:
+    ``pending`` means added to the session and not yet flushed, which is exactly
+    what those helpers leave behind for a row they created (they flush on entry,
+    so an earlier payload entry's row is already persistent and reads False).
+    Constant-time, unlike a membership test against ``session.new``.
+    """
+    return inspect(obj).pending
+
+
 def import_data(
     file_obj: Any,
     session: Optional[Session] = None,
     mode: str = "overwrite",
     *,
     user_id: int | None,
-) -> None:
+) -> Dict[str, int]:
     """Import data from the given uploaded file object.
+
+    Returns how many rows were created, keyed ``recipes`` / ``ingredients`` /
+    ``tags`` / ``meal_plans``, so a caller can tell an import that landed
+    nothing from one that worked.
 
     Parameters
     ----------
@@ -1747,6 +1768,11 @@ def import_data(
             session.close()
         raise ValueError("mode must be 'overwrite' or 'merge'")
 
+    # Counted as rows are created rather than by diffing the account, so a
+    # merge that reuses an existing tag or pantry ingredient reports it as
+    # reused (0) rather than imported.
+    summary = {"recipes": 0, "ingredients": 0, "tags": 0, "meal_plans": 0}
+
     try:
         if mode == "overwrite":
             clear_data(session, user_id)
@@ -1756,11 +1782,14 @@ def import_data(
             tag_id = tag_info.get("id")
             if mode == "merge":
                 tag = get_or_create_tag(session, tag_info["name"], user_id)
+                if _is_new(tag):
+                    summary["tags"] += 1
             else:
                 tag = session.get(Tag, tag_id) if tag_id is not None else None
                 if tag is None:
                     tag = Tag(id=tag_id, name=tag_info["name"], user_id=user_id)
                     session.add(tag)
+                    summary["tags"] += 1
                 else:
                     tag.name = tag_info["name"]
             tag_map[tag_id] = tag
@@ -1780,6 +1809,7 @@ def import_data(
             recipe.user_id = user_id
             session.add(recipe)
             session.flush()
+            summary["recipes"] += 1
             if rec_id is not None:
                 recipe_id_map[rec_id] = recipe.id
 
@@ -1799,6 +1829,8 @@ def import_data(
                         DimensionEnum(preferred) if preferred else None
                     ),
                 )
+                if _is_new(ingredient_obj):
+                    summary["ingredients"] += 1
                 if months is not None:
                     ingredient_obj.season_months = months
                 quantity, unit = unit_conversion.normalise_to_base_unit(
@@ -1858,6 +1890,7 @@ def import_data(
             if meal_plan is None:
                 meal_plan = MealPlan(plan_date=pdate, user_id=user_id)
                 session.add(meal_plan)
+                summary["meal_plans"] += 1
             else:
                 meal_plan.meals.clear()
                 session.flush()
@@ -1880,6 +1913,14 @@ def import_data(
 
         _assign_leftover_sources(imported_meals, user_id=user_id)
         session.commit()
+        return summary
+    except ValueError:
+        # A ValueError raised in here already says what is wrong with the file
+        # ("X gives a quantity for Y without a unit"). Rewrapping it as
+        # "Malformed import data" is what left users with an unfixable file and
+        # no idea which line to fix.
+        session.rollback()
+        raise
     except Exception as exc:  # noqa: BLE001
         session.rollback()
         raise ValueError("Malformed import data") from exc

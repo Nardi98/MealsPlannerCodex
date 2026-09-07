@@ -9,16 +9,31 @@ import {
 } from '../components'
 import { dataApi } from '../api/dataApi'
 import { recipesApi } from '../api/recipesApi'
-import { ingredientsApi } from '../api/ingredientsApi'
+
+const COUNT_LABELS = [
+  ['recipes', 'recipe'],
+  ['ingredients', 'ingredient'],
+  ['tags', 'tag'],
+  ['meal_plans', 'meal plan'],
+]
+
+/** What actually landed, so an import of nothing can never read as a success. */
+function importSummary(result) {
+  const counts = result?.imported ?? {}
+  const parts = COUNT_LABELS.filter(([key]) => counts[key]).map(
+    ([key, noun]) => `${counts[key]} ${noun}${counts[key] === 1 ? '' : 's'}`
+  )
+  return parts.length ? `Imported ${parts.join(', ')}.` : 'Imported nothing.'
+}
 
 export default function ImportExportPage() {
   const [file, setFile] = React.useState(null)
   const [parsedData, setParsedData] = React.useState(null)
   const [mode, setMode] = React.useState('merge')
   const [showOverwriteModal, setShowOverwriteModal] = React.useState(false)
-  const [mergeConflicts, setMergeConflicts] = React.useState(null)
-  const [existingRecipes, setExistingRecipes] = React.useState([])
-  const [existingIngredients, setExistingIngredients] = React.useState([])
+  // The conflict modal's whole input: the clashing titles, the payload to
+  // send once they are resolved, and the recipes a "use new" has to replace.
+  const [pending, setPending] = React.useState(null)
   const [showImportRecipe, setShowImportRecipe] = React.useState(false)
   const [importedTitle, setImportedTitle] = React.useState('')
   const fileInputRef = React.useRef(null)
@@ -72,91 +87,69 @@ export default function ImportExportPage() {
     }
 
     try {
-      const [existingRecs, existingIngs] = await Promise.all([
-        recipesApi.fetchAll(),
-        ingredientsApi.fetchAll(),
-      ])
-      const recipeTitles = new Set(existingRecs.map((r) => r.title.toLowerCase()))
-      const ingredientNames = new Set(
-        existingIngs.map((i) => i.name.toLowerCase())
-      )
+      const existing = await recipesApi.fetchAll()
+      const existingTitles = new Set(existing.map((r) => r.title.toLowerCase()))
 
-      const conflicts = []
-
-      ;(parsedData.recipes || []).forEach((r) => {
-        if (recipeTitles.has(r.title.toLowerCase()))
-          conflicts.push({ type: 'recipe', title: r.title })
-        ;(r.ingredients || []).forEach((ing) => {
-          if (ingredientNames.has(ing.name.toLowerCase()))
-            conflicts.push({ type: 'ingredient', title: ing.name })
-        })
-      })
+      // Only titles can conflict. Ingredients are a shared pantry and the
+      // backend already reuses an existing one by name instead of duplicating
+      // it, so an overlapping ingredient name is the normal case, not a
+      // question to put to the user.
+      const conflicts = (parsedData.recipes || [])
+        .filter((r) => existingTitles.has(r.title.toLowerCase()))
+        .map((r) => ({ title: r.title }))
 
       if (conflicts.length) {
-        setExistingRecipes(existingRecs)
-        setExistingIngredients(existingIngs)
-        setMergeConflicts(conflicts)
+        // The payload and the recipes it clashes with travel *with* the
+        // conflicts rather than being read back out of state later, so
+        // clearing the file below cannot leave confirmMerge with nothing to
+        // send. That is exactly how this page used to import an empty object
+        // and report it as a success.
+        setPending({ conflicts, payload: parsedData, existing })
         return
       }
 
-      await dataApi.importDatabase(parsedData, 'merge')
-      alert('Import successful')
+      const result = await dataApi.importDatabase(parsedData, 'merge')
+      alert(importSummary(result))
     } catch (err) {
       console.error('Failed to import database', err)
       alert(`Failed to import database: ${err.message}`)
-  } finally {
+    } finally {
       clearFile()
     }
   }
 
   const confirmMerge = async (selections) => {
     try {
-      const payload = JSON.parse(JSON.stringify(parsedData || {}))
+      const payload = JSON.parse(JSON.stringify(pending.payload))
       for (const sel of selections) {
         const title = sel.title.toLowerCase()
-        if (sel.type === 'recipe') {
-          if (sel.action === 'keep-old') {
-            payload.recipes = (payload.recipes || []).filter(
-              (r) => r.title.toLowerCase() !== title
-            )
-          } else if (sel.action === 'use-new') {
-            const existing = existingRecipes.find(
-              (r) => r.title.toLowerCase() === title
-            )
-            if (existing) await recipesApi.delete(existing.id)
-          }
-        } else if (sel.type === 'ingredient') {
-          if (sel.action === 'keep-old') {
-            payload.recipes = (payload.recipes || []).map((r) => ({
-              ...r,
-              ingredients: (r.ingredients || []).filter(
-                (ing) => ing.name.toLowerCase() !== title
-              ),
-            }))
-          } else if (sel.action === 'use-new') {
-            const existing = existingIngredients.find(
-              (i) => i.name.toLowerCase() === title
-            )
-            if (existing) await ingredientsApi.remove(existing.id, true)
-          }
+        if (sel.action === 'keep-old') {
+          payload.recipes = (payload.recipes || []).filter(
+            (r) => r.title.toLowerCase() !== title
+          )
+        } else if (sel.action === 'use-new') {
+          const old = pending.existing.find(
+            (r) => r.title.toLowerCase() === title
+          )
+          if (old) await recipesApi.delete(old.id)
         }
       }
 
-      await dataApi.importDatabase(payload, 'merge')
-      alert('Import successful')
+      const result = await dataApi.importDatabase(payload, 'merge')
+      alert(importSummary(result))
     } catch (err) {
       console.error('Failed to import database', err)
       alert(`Failed to import database: ${err.message}`)
     } finally {
       clearFile()
-      setMergeConflicts(null)
+      setPending(null)
     }
   }
 
   const confirmOverwrite = async () => {
     try {
-      await dataApi.importDatabase(parsedData, 'overwrite')
-      alert('Import successful')
+      const result = await dataApi.importDatabase(parsedData, 'overwrite')
+      alert(importSummary(result))
     } catch (err) {
       console.error('Failed to import database', err)
       alert(`Failed to import database: ${err.message}`)
@@ -227,10 +220,10 @@ export default function ImportExportPage() {
           onConfirm={confirmOverwrite}
         />
       )}
-      {mergeConflicts && (
+      {pending && (
         <MergeConflictModal
-          conflicts={mergeConflicts}
-          onCancel={() => setMergeConflicts(null)}
+          conflicts={pending.conflicts}
+          onCancel={() => setPending(null)}
           onConfirm={confirmMerge}
         />
       )}
