@@ -178,3 +178,47 @@ def test_oil_is_measured_by_the_spoon():
     for recipe in RECIPES:
         oil = sum(q for n, q, _ in recipe["ingredients"] if n == "Olive Oil")
         assert oil <= 40, f"{recipe['title']} uses {oil} ml of oil"
+
+
+from scripts.build_summer_import import build_payload
+
+
+def test_payload_is_export_shaped():
+    payload = build_payload()
+    assert set(payload) == {"recipes", "tags", "meal_plans"}
+    # Importing a plan would overwrite whatever is planned for that date.
+    assert payload["meal_plans"] == []
+    assert len(payload["recipes"]) == 24
+
+
+def test_payload_recipe_ids_are_unique():
+    """Merge assigns fresh ids, but favourite-side wiring reads the payload's
+    own ids, so they must at least be unique within the file."""
+    ids = [r["id"] for r in build_payload()["recipes"]]
+    assert len(ids) == len(set(ids))
+
+
+def test_payload_carries_no_favorite_sides():
+    for recipe in build_payload()["recipes"]:
+        assert recipe["favorite_side_ids"] == []
+
+
+def test_payload_tags_are_declared_once_and_referenced_by_id():
+    payload = build_payload()
+    declared = {tag["id"] for tag in payload["tags"]}
+    names = [tag["name"] for tag in payload["tags"]]
+    assert len(names) == len(set(names))
+    for recipe in payload["recipes"]:
+        assert recipe["tags"]
+        for tag_id in recipe["tags"]:
+            assert tag_id in declared
+
+
+def test_existing_ingredients_keep_their_account_id(snapshot):
+    by_name = {ing["name"]: ing["id"] for ing in snapshot["ingredients"]}
+    for recipe in build_payload()["recipes"]:
+        for line in recipe["ingredients"]:
+            if line["name"] in by_name:
+                assert line["id"] == by_name[line["name"]]
+            else:
+                assert line["id"] is None
