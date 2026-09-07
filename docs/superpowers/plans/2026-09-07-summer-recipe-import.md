@@ -181,18 +181,26 @@ from scripts.summer_recipes_data import PANTRY, NEW_INGREDIENTS
 
 
 def test_existing_pantry_entries_match_the_account(snapshot):
-    """An id must name the ingredient the account thinks it names.
+    """An id must name the ingredient the account thinks it names, and carry
+    the seasonality the account already has.
 
-    ``get_or_create_ingredient`` looks an ingredient up by id first. A wrong id
-    silently attaches a quantity to an unrelated ingredient, which no later
-    check would catch.
+    ``get_or_create_ingredient`` looks an ingredient up by id first, so a wrong
+    id silently attaches a quantity to an unrelated ingredient. And
+    ``import_data`` *assigns* ``season_months`` rather than backfilling it, so a
+    wrong list here quietly destroys the account's own value.
     """
-    by_id = {ing["id"]: ing["name"] for ing in snapshot["ingredients"]}
+    by_id = {ing["id"]: ing for ing in snapshot["ingredients"]}
     for name, entry in PANTRY.items():
         if entry["id"] is None:
             continue
         assert entry["id"] in by_id, f"{name} cites unknown id {entry['id']}"
-        assert by_id[entry["id"]] == name
+        assert by_id[entry["id"]]["name"] == name
+        # season_months is assigned on import, not backfilled like the
+        # conversions are, so a value that disagrees with the account here
+        # silently overwrites what the account already knows.
+        assert entry["season_months"] == by_id[entry["id"]]["season_months"], (
+            f"{name} would overwrite the account's seasonality"
+        )
 
 
 def test_new_ingredients_are_genuinely_new(snapshot):
@@ -264,7 +272,11 @@ PANTRY = {
     "Vegetable Stock": {"id": 1058, "season_months": [], "grams_per_piece": None},
     "Sugar": {"id": 1068, "season_months": [], "grams_per_piece": None},
     "Olives": {"id": 1085, "season_months": [], "grams_per_piece": None},
-    "Capers": {"id": 1108, "season_months": [], "grams_per_piece": None},
+    # Seasonality is written, not backfilled: import assigns season_months
+    # whenever the payload carries the key, so an empty list here would erase
+    # what the account knows. Every existing entry repeats the account's value.
+    "Capers": {"id": 1108, "season_months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+               "grams_per_piece": None},
     # -- created by this import, by name -------------------------------------
     "Feta": {"id": None, "season_months": [], "grams_per_piece": None},
     "Ricotta": {"id": None, "season_months": [], "grams_per_piece": None},
