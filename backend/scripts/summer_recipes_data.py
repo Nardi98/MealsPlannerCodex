@@ -1,5 +1,10 @@
 """The 24 summer recipes, as data.
 
+One-off: this table describes one import for one account, not anything the
+application runs. The ingredient ids in ``PANTRY`` are that account's own, and
+mean nothing anywhere else -- ``tests/data/account_snapshot.json`` is what holds
+them to it.
+
 Quantities are written for **four** portions. Where the source document gave
 six, the number here is the source's times 2/3, rounded; where it gave none,
 the number was chosen and is recorded in ``notes`` so the report can list it.

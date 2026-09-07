@@ -1,5 +1,9 @@
 """Render the summer recipes into an import file and an audit report.
 
+A one-off, unlike its neighbours in this directory: ``seed_testing_data.py``
+and friends are operational tooling that docker-compose and CI run, while this
+exists to produce one file for one account and then be left alone.
+
 Run from ``backend/``::
 
     python -m scripts.build_summer_import

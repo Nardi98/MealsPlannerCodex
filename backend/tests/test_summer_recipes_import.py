@@ -7,13 +7,28 @@ here need, and committing less of the user's data than the full export is the
 point.
 """
 
+import io
 import json
 from pathlib import Path
 
 import pytest
 
+import crud
+from models import Ingredient, Recipe, UnitEnum
+from scripts.build_summer_import import JSON_PATH, build_payload
+from scripts.summer_recipes_data import (
+    NEW_INGREDIENTS,
+    PANTRY,
+    RECIPES,
+    SKIPPED,
+)
+
 BACKEND = Path(__file__).resolve().parent.parent
 SNAPSHOT_PATH = BACKEND / "tests" / "data" / "account_snapshot.json"
+
+# Derived from the enum rather than copied from it: a unit added to or removed
+# from UnitEnum must break this suite, not slip past a stale duplicate of it.
+LEGAL_UNITS = {unit.value for unit in UnitEnum}
 
 
 @pytest.fixture(scope="module")
@@ -28,8 +43,6 @@ def test_snapshot_is_self_consistent(snapshot):
     assert len(ids) == len(set(ids))
     assert len(snapshot["recipe_titles"]) == len(set(snapshot["recipe_titles"]))
 
-
-from scripts.summer_recipes_data import PANTRY, NEW_INGREDIENTS
 
 
 def test_existing_pantry_entries_match_the_account(snapshot):
@@ -62,10 +75,6 @@ def test_new_ingredients_are_genuinely_new(snapshot):
         assert PANTRY[name]["id"] is None
         assert name not in existing
 
-
-from scripts.summer_recipes_data import RECIPES, SKIPPED
-
-LEGAL_UNITS = {"g", "ml", "piece"}
 
 
 def test_twenty_four_recipes_split_by_course():
@@ -180,8 +189,6 @@ def test_oil_is_measured_by_the_spoon():
         assert oil <= 40, f"{recipe['title']} uses {oil} ml of oil"
 
 
-from scripts.build_summer_import import build_payload
-
 
 def test_payload_is_export_shaped():
     payload = build_payload()
@@ -214,24 +221,20 @@ def test_payload_tags_are_declared_once_and_referenced_by_id():
             assert tag_id in declared
 
 
-def test_existing_ingredients_keep_their_account_id(snapshot):
-    by_name = {ing["name"]: ing["id"] for ing in snapshot["ingredients"]}
-    for recipe in build_payload()["recipes"]:
-        for line in recipe["ingredients"]:
-            if line["name"] in by_name:
-                assert line["id"] == by_name[line["name"]]
-            else:
-                assert line["id"] is None
-
-
-def test_payload_ingredient_lines_match_the_source_tables():
+def test_payload_ingredient_lines_match_the_source_tables(snapshot):
     """The table being right does not prove the renderer copied it -- and the
     renderer is what the account actually receives. ``crud.import_data``
     assigns ``season_months`` onto the ingredient whenever the payload
     carries the key, rather than backfilling it the way it treats
     conversions, so a wrong (or silently dropped) value here would overwrite
     what the user's account already knows. This checks every emitted line
-    against ``PANTRY``/``RECIPES`` directly, not merely that the keys exist."""
+    against ``PANTRY``/``RECIPES`` directly, not merely that the keys exist.
+
+    The id is checked here too: an existing ingredient must carry the
+    account's own id, and one the account does not have must carry none. An
+    invented id would bind the quantity to an unrelated ingredient.
+    """
+    by_name = {ing["name"]: ing["id"] for ing in snapshot["ingredients"]}
     for recipe, payload_recipe in zip(RECIPES, build_payload()["recipes"]):
         assert recipe["title"] == payload_recipe["title"]
         source_lines = {name: (quantity, unit) for name, quantity, unit in recipe["ingredients"]}
@@ -245,12 +248,8 @@ def test_payload_ingredient_lines_match_the_source_tables():
             assert line["grams_per_piece"] == entry["grams_per_piece"]
             assert line["quantity"] == quantity
             assert line["unit"] == unit
+            assert line["id"] == by_name.get(line["name"])
 
-
-import io
-
-import crud
-from models import Ingredient, Recipe
 
 
 def _seed_account(session, user, snapshot):
@@ -390,3 +389,19 @@ def test_import_leaves_the_existing_pantry_intact(db_session, user, snapshot):
                 f"ingredient {ing_id} ({names[ing_id]!r}) had "
                 f"preferred_dimension overwritten: was {b_dim}, now {a_dim}"
             )
+
+
+def test_the_committed_file_matches_the_table():
+    """The deliverable on disk is what gets imported -- not what the table says.
+
+    ``summer-recipes-import.json`` is generated, but it is also the artefact a
+    person actually uploads, so it is committed. That pairing is what rots: edit
+    a quantity in ``RECIPES``, forget to re-run the builder, and the file the
+    account receives is the old one while every other test in this suite passes
+    against the new table. Comparing the two is the only thing that notices.
+    """
+    committed = json.loads(JSON_PATH.read_text(encoding="utf-8"))
+    assert committed == build_payload(), (
+        "docs/recipes/summer-recipes-import.json is stale -- "
+        "re-run: python -m scripts.build_summer_import"
+    )
