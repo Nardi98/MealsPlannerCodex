@@ -97,11 +97,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "no-cook", "make-ahead", "summer", "low calories"],
         "procedure": (
-            "Soak the stale bread in the vinegar with a splash of water.\n"
-            "Roughly chop the vegetables and blend them with the garlic and "
-            "salt, adding water until it is as thick as you want it.\n"
-            "With the blender running, pour in the oil.\n"
-            "Chill at least two hours. Do not sieve it: the fibre is the point."
+            "Soak the stale bread in the vinegar with a splash of water.\nRoughly chop the vegetables and blend them "
+            "with the garlic and salt, adding water until it is as thick as you want it.\nWith the blender running, "
+            "pour in the oil.\nChill at least two hours. Do not sieve it: the fibre is the point."
         ),
         "ingredients": [
             ("Tomato", 1000, "g"),
@@ -126,13 +124,10 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "summer", "make-ahead", "low calories"],
         "procedure": (
-            "Soften the chopped onion in the oil, then add the sliced "
-            "courgettes and the diced potato.\n"
-            "Pour in the stock, season, and simmer about twenty minutes until "
-            "everything is tender.\n"
-            "Take the pan off the heat, add the basil, and only then blend: "
-            "off the heat the basil keeps its colour and its scent.\n"
-            "Chill, and serve each bowl with a spoonful of yogurt stirred in."
+            "Soften the chopped onion in the oil, then add the courgettes and the potato in pieces.\nCover with the "
+            "stock, season, and cook fifteen minutes.\nAdd the basil at the end of cooking, off the heat, and only "
+            "then blend: off the heat it stays green and keeps its scent.\nCool it completely, and spoon the yogurt "
+            "over each bowl to serve."
         ),
         "ingredients": [
             ("Zucchini", 1000, "g"),
@@ -154,14 +149,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "make-ahead", "summer", "mediterranean"],
         "procedure": (
-            "Boil the farro in salted water until tender, drain, and spread it "
-            "out to cool.\n"
-            "Dice the aubergine, courgette and pepper, toss with a little of "
-            "the oil, and roast hot until browned at the edges.\n"
-            "Fold the cooled vegetables through the farro with the crumbled "
-            "feta.\n"
-            "Dress with the rest of the oil and the lemon juice, and tear the "
-            "basil over just before serving."
+            "Dice the aubergine, courgette and pepper, dress them with a little of the oil and roast them.\nCook the "
+            "farro, then cool it under running water.\nMix it with the roasted vegetables and the crumbled feta.\n"
+            "Finish with the rest of the oil, the lemon zest and the basil."
         ),
         "ingredients": [
             ("Farro", 200, "g"),
@@ -188,14 +178,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "no-cook", "summer", "cheap", "mediterranean"],
         "procedure": (
-            "Tear the stale bread into pieces and wet it briefly with water, "
-            "then squeeze it dry.\n"
-            "Cut the tomatoes and cucumber into chunks, slice the red onion "
-            "thinly, and salt them so they give up their juice.\n"
-            "Mix the bread through the vegetables and their juice with the oil "
-            "and vinegar.\n"
-            "Leave it half an hour for the bread to drink, and add the basil "
-            "at the table."
+            "Wet the stale bread with water and vinegar, squeeze it and crumble it.\nCut the tomatoes over a bowl to "
+            "catch their juice: that juice is the dressing.\nDice the cucumber and slice the red onion thinly.\nMix "
+            "everything with the oil, the basil and the salt, and let it rest an hour."
         ),
         "ingredients": [
             ("Stale Bread", 150, "g"),
@@ -217,13 +202,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegan", "no-cook", "make-ahead", "legumes", "high-protein"],
         "procedure": (
-            "Pour about 270 ml of boiling salted water over the couscous, "
-            "cover, and leave ten minutes, then fork the grains apart.\n"
-            "Dice the tomato, cucumber and pepper and slice the spring onion.\n"
-            "Fold the vegetables and the drained chickpeas through the "
-            "couscous.\n"
-            "Dress with the lemon juice, oil and cumin, and stir in the "
-            "parsley and basil."
+            "Hydrate the couscous with about 270 ml of boiling salted water, then separate the grains with a fork.\n"
+            "Cut the tomato, cucumber, pepper and spring onion into small dice.\nAdd them raw, with the chickpeas, the "
+            "lemon juice, the oil and the cumin.\nStir in the parsley and basil: be generous with the herbs."
         ),
         "ingredients": [
             ("Wholewheat Couscous", 180, "g"),
@@ -253,13 +234,10 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegetarian", "oven", "legumes", "high-protein", "make-ahead"],
         "procedure": (
-            "Halve the aubergines, score the flesh, and roast them cut side "
-            "down until collapsed.\n"
-            "Scoop out the flesh, leaving the shells intact, and let it "
-            "drain: wet flesh makes a watery filling.\n"
-            "Soften the onion, add the chopped flesh, the cooked lentils, the "
-            "passata, cumin and oregano, and simmer until thick.\n"
-            "Fill the shells, crumble the feta over, and bake twenty minutes."
+            "Halve the aubergines, score the flesh in diamonds, and bake at 200 degrees for twenty-five minutes.\n"
+            "Meanwhile stew the onion in the oil, then add the cooked lentils, the passata, the cumin and the oregano "
+            "and cook ten minutes.\nFill the aubergines with the lentils and scatter the crumbled feta over.\nGive "
+            "them another ten minutes in the oven."
         ),
         "ingredients": [
             ("Eggplant", 1200, "g"),
@@ -281,12 +259,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "oven", "make-ahead", "summer", "cheap"],
         "procedure": (
-            "Cut the aubergine, courgette, pepper and red onion into pieces "
-            "of roughly the same size.\n"
-            "Toss everything with the oil, oregano and salt and spread it out "
-            "in one layer; crowding steams it instead of roasting it.\n"
-            "Roast hot for about thirty-five minutes, turning once.\n"
-            "Add the cherry tomatoes for the last ten minutes."
+            "Cut the aubergine, courgette, pepper and red onion into big pieces and halve the cherry tomatoes.\nDress "
+            "them with the oil, oregano and salt with your hands in a bowl: that uses far less oil than pouring it "
+            "over the tray.\nSpread everything out and bake at 200 degrees for thirty minutes."
         ),
         "ingredients": [
             ("Eggplant", 400, "g"),
@@ -312,14 +287,11 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "phyllo", "make-ahead"],
         "procedure": (
-            "Grate the courgettes, salt them, leave twenty minutes and then "
-            "squeeze them hard: the water has to come out or the pastry will "
-            "never crisp.\n"
-            "Soften the chopped onion and mix it with the courgettes, "
-            "crumbled feta, ricotta, egg, dill and pepper.\n"
-            "Lay out the phyllo, brush each sheet lightly with oil, spread "
-            "the filling along one edge and roll it into a coil.\n"
-            "Bake about forty minutes until golden, and serve with the yogurt."
+            "Salt the grated courgettes and leave them to drain twenty minutes, then squeeze them hard with your "
+            "hands: skip this and the burek comes out soggy.\nMix them with the stewed onion, the crumbled feta, the "
+            "ricotta, the egg, the dill and the pepper.\nLay out a sheet of phyllo, brush it lightly with the yogurt "
+            "and oil, spread filling along one side, roll it into a cigar and coil it into a round tin. Carry on with "
+            "the other sheets.\nBrush the top and bake at 190 degrees for thirty-five minutes."
         ),
         "ingredients": [
             ("Phyllo Pastry", 4, "piece"),
@@ -346,13 +318,10 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "phyllo", "high-protein", "make-ahead"],
         "procedure": (
-            "Wilt the spinach, then squeeze it dry and chop it.\n"
-            "Soften the sliced spring onion and mix it with the spinach, "
-            "crumbled feta, ricotta, egg, dill, nutmeg and pepper.\n"
-            "Brush the phyllo sheets lightly with oil, line a dish with half "
-            "of them, spread the filling, and cover with the rest.\n"
-            "Score the top and bake about forty minutes; serve with the "
-            "yogurt."
+            "Wilt the spinach in a pan with no added water, then drain and squeeze it thoroughly.\nMix it with the "
+            "chopped spring onion, the feta, the ricotta, the egg, the dill, the nutmeg and the pepper.\nLine a tin "
+            "with half the phyllo, brushed lightly with the yogurt and oil, pour in the filling and close with the "
+            "rest.\nScore the portions before it goes in, and bake at 190 degrees for forty minutes."
         ),
         "ingredients": [
             ("Phyllo Pastry", 4, "piece"),
@@ -380,13 +349,10 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "phyllo"],
         "procedure": (
-            "Roast the aubergine until soft, scoop out the flesh and let it "
-            "drain before using it.\n"
-            "Soften the chopped onion and pepper, then mix them with the "
-            "aubergine flesh, crumbled feta, parsley and paprika.\n"
-            "Cut the phyllo into strips, brush with oil, put a line of "
-            "filling at one end and roll each into a cigar.\n"
-            "Bake about twenty-five minutes until crisp and golden."
+            "Bake the aubergine and pepper in cubes at 200 degrees for twenty-five minutes, with the onion.\nCrush "
+            "them roughly with the feta, the parsley and the paprika.\nCut the phyllo sheets in half, put a spoonful "
+            "of filling on each half, fold the sides in and roll it up tight.\nBrush them and bake at 200 degrees for "
+            "twenty minutes."
         ),
         "ingredients": [
             ("Phyllo Pastry", 3, "piece"),
@@ -408,14 +374,10 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "phyllo", "cheap"],
         "procedure": (
-            "Grate the potato and the courgette, salt them, and squeeze out "
-            "the water.\n"
-            "Mix them with the finely sliced onion, the parmesan and plenty "
-            "of black pepper.\n"
-            "Brush the phyllo sheets with oil, spread the filling along them "
-            "and roll each into a coil.\n"
-            "Bake about fifty minutes, until the pastry is crisp and the "
-            "potato is cooked through."
+            "Grate the raw potato on the coarse holes; grate the courgette and squeeze it dry.\nMix them with the "
+            "chopped onion, the parmesan and plenty of black pepper. The filling goes in raw and cooks inside.\nSpread "
+            "it along the phyllo sheets, roll each one up and lay them out in a spiral.\nBrush the top and bake at 190 "
+            "degrees for forty-five minutes."
         ),
         "ingredients": [
             ("Phyllo Pastry", 4, "piece"),
@@ -436,13 +398,10 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "high-protein", "make-ahead"],
         "procedure": (
-            "Slice the aubergines lengthways, brush them with a little oil "
-            "and grill or roast them until pliable.\n"
-            "Soften the chopped onion in the rest of the oil and simmer it "
-            "with the passata into a simple sauce.\n"
-            "Mix the ricotta with the parmesan, the lemon zest and the torn "
-            "basil, put a spoonful on each slice and roll it up.\n"
-            "Sit the rolls in the sauce and bake about twenty-five minutes."
+            "Slice the aubergines lengthways and grill the slices in a pan or in the oven.\nMix the ricotta with the "
+            "parmesan, the lemon zest and the basil, put a teaspoon on each slice and roll it up.\nSoften the onion in "
+            "the oil and simmer it with the passata into a simple sauce.\nSit the rolls on the sauce and bake twenty "
+            "minutes at 190 degrees."
         ),
         "ingredients": [
             ("Eggplant", 900, "g"),
@@ -465,11 +424,9 @@ RECIPES = [
         "tags": ["vegetarian", "no-cook", "quick", "high-protein",
                  "low calories"],
         "procedure": (
-            "Grate the cucumber, salt it, and squeeze it dry.\n"
-            "Stir it into the yogurt with the crushed garlic and the chopped "
-            "dill.\n"
-            "Loosen with the oil and sharpen with the vinegar.\n"
-            "Rest it an hour in the fridge before serving."
+            "Grate the cucumbers and wring them out in a tea towel: this is the step that decides whether it works.\n"
+            "Mix them with the yogurt, the crushed garlic, the dill, the oil, the salt and a little vinegar.\nLet it "
+            "rest an hour before serving."
         ),
         "ingredients": [
             ("Greek Yogurt", 330, "g"),
@@ -490,12 +447,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegetarian", "oven", "make-ahead", "high-protein"],
         "procedure": (
-            "Roast the peppers whole until blackened, then close them in a "
-            "bowl to steam and slip off the skins.\n"
-            "Blend the flesh with the feta and the yogurt.\n"
-            "Season with the paprika, the black pepper and the vinegar, and "
-            "trickle in the oil.\n"
-            "Chill before serving."
+            "Roast the peppers whole at 220 degrees for thirty-five minutes.\nShut them in a covered bowl for ten "
+            "minutes, then peel them: the skins come away on their own.\nBlend the flesh with the feta, the yogurt, "
+            "the paprika and the vinegar.\nSeason with black pepper and finish with the oil."
         ),
         "ingredients": [
             ("Bell Pepper", 400, "g"),
@@ -516,12 +470,10 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "make-ahead", "legumes", "cheap", "high-protein"],
         "procedure": (
-            "Warm the oil gently with the whole garlic and the rosemary to "
-            "flavour it, then take out the rosemary.\n"
-            "Blend the drained beans with the flavoured oil and the lemon "
-            "juice, loosening with a little of their cooking water.\n"
-            "Season with salt and black pepper and blend until smooth.\n"
-            "Serve at room temperature."
+            "Warm the oil with the garlic and the rosemary for two minutes to flavour it, then take the rosemary "
+            "out.\nBlend the beans with the flavoured oil, the lemon juice and a few spoonfuls of their cooking water "
+            "until smooth.\nSeason with the salt and the black pepper.\nJudge the water so it stays soft: it firms up "
+            "in the fridge."
         ),
         "ingredients": [
             ("Cannellini Beans", 333, "g"),
@@ -542,12 +494,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "oven", "make-ahead"],
         "procedure": (
-            "Halve the courgettes, oil them lightly and roast them until soft "
-            "and coloured.\n"
-            "Blend them with the ricotta, the parmesan and the sliced spring "
-            "onion.\n"
-            "Season with salt and the lemon zest and juice.\n"
-            "Fold in the torn basil at the end, off the heat, and chill."
+            "Cut the courgettes into thick rounds and roast them at 220 degrees for twenty-five minutes.\nThey have to "
+            "dry out and take colour; boiled, they make the cream watery.\nBlend them with the ricotta, the parmesan, "
+            "the lemon zest, the spring onion and the basil.\nSeason with salt and chill."
         ),
         "ingredients": [
             ("Zucchini", 533, "g"),
@@ -569,12 +518,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "make-ahead", "summer", "low calories", "cheap"],
         "procedure": (
-            "Slice the courgettes into rounds, salt them and let them drain.\n"
-            "Griddle or pan-fry them dry in batches until browned on both "
-            "sides.\n"
-            "Layer them in a dish with the sliced garlic and the basil.\n"
-            "Warm the vinegar with the oil, pour it over, and leave at least "
-            "a few hours before eating."
+            "Cut the courgettes into thin rounds and griddle them in a non-stick pan over a high flame, or under the "
+            "oven grill.\nLayer them in a container with the sliced garlic, the basil and the salt.\nPour the vinegar "
+            "and the oil over.\nLeave them to marinate at least three hours."
         ),
         "ingredients": [
             ("Zucchini", 800, "g"),
@@ -595,12 +541,8 @@ RECIPES = [
         "tags": ["vegan", "no-cook", "legumes", "high-protein",
                  "mediterranean"],
         "procedure": (
-            "Drain and rinse the chickpeas.\n"
-            "Halve the cherry tomatoes, dice the cucumber, slice the red "
-            "onion thinly and stone the olives.\n"
-            "Mix everything with the oregano and the parsley.\n"
-            "Dress with the lemon juice and the oil and let it stand twenty "
-            "minutes."
+            "Drain the chickpeas.\nCut the cherry tomatoes, cucumber, red onion and olives into dice.\nMix everything "
+            "with the oregano, the parsley, the lemon juice and the oil.\nLet it stand at least half an hour."
         ),
         "ingredients": [
             ("Chickpeas", 500, "g"),
@@ -623,12 +565,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "make-ahead", "legumes", "high-protein", "cheap"],
         "procedure": (
-            "Cook the lentils in salted water until tender but whole, then "
-            "drain and cool them.\n"
-            "Slice the red onion thinly and halve the cherry tomatoes.\n"
-            "Whisk the mustard with the vinegar and the oil into a "
-            "vinaigrette.\n"
-            "Toss everything together with the parsley."
+            "Slice the red onion thinly and marinate it ten minutes in the vinegar.\nEmulsify the mustard with the oil "
+            "and the vinegar.\nDress the cooked lentils, the halved cherry tomatoes, the onion and plenty of parsley "
+            "with it.\nRest thirty minutes before serving."
         ),
         "ingredients": [
             ("Lentils", 400, "g"),
@@ -649,11 +588,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegan", "no-cook", "quick", "legumes", "high-protein"],
         "procedure": (
-            "Drain and rinse the beans.\n"
-            "Halve the cherry tomatoes and slice the spring onion.\n"
-            "Toss them with the rocket, the oil, the lemon juice and zest and "
-            "the black pepper.\n"
-            "Dress it at the last moment so the rocket does not wilt."
+            "Crush a third of the beans lightly with a fork: it makes a cream that binds the dressing and lets you use "
+            "less oil.\nHalve the cherry tomatoes and slice the spring onion.\nMix everything with the oil, the lemon "
+            "zest and the black pepper.\nAdd the rocket at the last moment."
         ),
         "ingredients": [
             ("Cannellini Beans", 500, "g"),
@@ -674,12 +611,8 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "no-cook", "quick", "make-ahead", "low calories"],
         "procedure": (
-            "Slice the cucumbers thinly.\n"
-            "Dissolve the sugar and the salt in the vinegar.\n"
-            "Pour it over the cucumbers with the black pepper and the chopped "
-            "dill.\n"
-            "Leave at least thirty minutes in the fridge; they keep several "
-            "days."
+            "Slice the cucumbers thinly.\nMix them with the vinegar, the sugar, the salt, the black pepper and the "
+            "dill.\nLeave twenty minutes before serving."
         ),
         "ingredients": [
             ("Cucumber", 600, "g"),
@@ -699,11 +632,9 @@ RECIPES = [
         "bulk_prep": False,
         "tags": ["vegetarian", "no-cook", "quick", "summer", "low calories"],
         "procedure": (
-            "Peel the courgettes into long ribbons with a vegetable peeler.\n"
-            "Dress them with the lemon juice, the oil, salt and black "
-            "pepper.\n"
-            "Shave the parmesan over and tear the basil on top.\n"
-            "Serve straight away, while the ribbons are still crisp."
+            "Peel the courgettes into ribbons with a vegetable peeler.\nDress them with the lemon juice, the oil, the "
+            "salt and the black pepper.\nAdd the shaved parmesan and the basil.\nLeave ten minutes before serving so "
+            "the ribbons soften."
         ),
         "ingredients": [
             ("Zucchini", 500, "g"),
@@ -725,13 +656,8 @@ RECIPES = [
         "tags": ["vegan", "oven", "make-ahead", "mediterranean",
                  "low calories"],
         "procedure": (
-            "Roast the peppers whole until the skins blister, then close them "
-            "in a bowl to steam and peel them.\n"
-            "Tear the flesh into strips, keeping any juice that runs out.\n"
-            "Dress with the sliced garlic, the capers, the vinegar, the oil "
-            "and the salt.\n"
-            "Scatter the parsley over and leave a couple of hours before "
-            "serving."
+            "Roast the peppers at 220 degrees for thirty-five minutes.\nPeel them and cut the flesh into strips.\n"
+            "Dress them with the garlic in slivers, the capers, the parsley, the vinegar, the salt and a little oil."
         ),
         "ingredients": [
             ("Bell Pepper", 800, "g"),
@@ -755,10 +681,9 @@ RECIPES = [
         "bulk_prep": True,
         "tags": ["vegan", "oven", "make-ahead", "summer", "cheap"],
         "procedure": (
-            "Halve the cherry tomatoes and lay them cut side up in a dish.\n"
-            "Trickle the oil over and season with the oregano and the salt.\n"
-            "Bake slowly, about an hour, until shrunken and sweet.\n"
-            "Keep them in the fridge under their oil."
+            "Halve the cherry tomatoes and lay them on baking paper.\nSeason with the salt and the oregano and trickle "
+            "the oil over.\nBake at 200 degrees for twenty-five minutes, until they have concentrated and turned very "
+            "sweet."
         ),
         "ingredients": [
             ("Cherry Tomato", 600, "g"),
