@@ -222,3 +222,26 @@ def test_existing_ingredients_keep_their_account_id(snapshot):
                 assert line["id"] == by_name[line["name"]]
             else:
                 assert line["id"] is None
+
+
+def test_payload_ingredient_lines_match_the_source_tables():
+    """The table being right does not prove the renderer copied it -- and the
+    renderer is what the account actually receives. ``crud.import_data``
+    assigns ``season_months`` onto the ingredient whenever the payload
+    carries the key, rather than backfilling it the way it treats
+    conversions, so a wrong (or silently dropped) value here would overwrite
+    what the user's account already knows. This checks every emitted line
+    against ``PANTRY``/``RECIPES`` directly, not merely that the keys exist."""
+    for recipe, payload_recipe in zip(RECIPES, build_payload()["recipes"]):
+        assert recipe["title"] == payload_recipe["title"]
+        source_lines = {name: (quantity, unit) for name, quantity, unit in recipe["ingredients"]}
+        assert len(source_lines) == len(recipe["ingredients"])
+        emitted_names = {line["name"] for line in payload_recipe["ingredients"]}
+        assert emitted_names == set(source_lines)
+        for line in payload_recipe["ingredients"]:
+            entry = PANTRY[line["name"]]
+            quantity, unit = source_lines[line["name"]]
+            assert line["season_months"] == entry["season_months"]
+            assert line["grams_per_piece"] == entry["grams_per_piece"]
+            assert line["quantity"] == quantity
+            assert line["unit"] == unit
