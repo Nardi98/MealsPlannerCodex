@@ -61,3 +61,50 @@ def test_new_ingredients_are_genuinely_new(snapshot):
     for name in NEW_INGREDIENTS:
         assert PANTRY[name]["id"] is None
         assert name not in existing
+
+
+from scripts.summer_recipes_data import RECIPES, SKIPPED
+
+LEGAL_UNITS = {"g", "ml", "piece"}
+
+
+def test_twenty_four_recipes_split_by_course():
+    assert len(RECIPES) == 24
+    courses = [r["course"] for r in RECIPES]
+    assert courses.count("first-course") == 5
+    assert courses.count("main") == 7
+    assert courses.count("side") == 12
+
+
+def test_no_imported_title_collides_with_an_existing_one(snapshot):
+    existing = {t.casefold() for t in snapshot["recipe_titles"]}
+    for recipe in RECIPES:
+        assert recipe["title"].casefold() not in existing
+
+
+def test_five_recipes_were_skipped_as_duplicates():
+    assert len(SKIPPED) == 5
+
+
+def test_every_recipe_is_complete():
+    titles = [r["title"] for r in RECIPES]
+    assert len(titles) == len(set(titles))
+    for recipe in RECIPES:
+        assert recipe["servings"] == 4
+        assert recipe["procedure"].strip()
+        assert len(recipe["ingredients"]) >= 3
+        assert recipe["tags"]
+        assert isinstance(recipe["bulk_prep"], bool)
+
+
+def test_every_ingredient_line_is_measurable():
+    """A quantity with no unit cannot be added to anything.
+
+    ``crud.import_data`` raises on such a line, so catching it here is the
+    difference between a failing test and a rejected import.
+    """
+    for recipe in RECIPES:
+        for name, quantity, unit in recipe["ingredients"]:
+            assert name in PANTRY, f"{recipe['title']}: unknown ingredient {name}"
+            assert unit in LEGAL_UNITS, f"{recipe['title']}: bad unit {unit}"
+            assert quantity > 0
