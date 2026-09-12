@@ -55,6 +55,10 @@ def test_generate_plan_avoid_tags_from_ui(db_session):
 
 def test_fridge_ingredient_boosts_recipe(db_session):
     """A fridge ingredient promotes a lower-base recipe that uses it."""
+    # Tight margin: in a two-recipe pool the z-scores are +-1, so the base gap
+    # is 2 * BASE_SQUASH_SCALE * tanh(BASE_SQUASH_SHARPNESS) = 11.09 against a
+    # FRIDGE_BONUS_SCALE of 12.0 -- only 0.91 to spare. If this flips, the base
+    # squash scale has outgrown the fridge bonus; retune them together.
     plain = Recipe(title="Plain", score=1.5, course="main")
     fridgey = Recipe(title="Fridgey", score=1.0, course="main")
     onion = Ingredient(name="onion")
@@ -77,6 +81,7 @@ def test_fridge_ingredient_boosts_recipe(db_session):
 
 def test_fridge_boost_consumed_after_count_reached(db_session):
     """A count-1 fridge selection only boosts one slot; then it stops."""
+    # Same tight fridge-vs-base margin as the test above.
     plain = Recipe(title="Plain", score=1.5, course="main")
     fridgey = Recipe(title="Fridgey", score=1.0, course="main")
     onion = Ingredient(name="onion")

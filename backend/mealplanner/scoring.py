@@ -47,6 +47,13 @@ BULK_PREP_BONUS = 10.0            # bonus applied to bulk-prep recipes
 FRIDGE_BONUS_SCALE = 12.0         # bonus when a recipe uses an on-hand fridge ingredient
 DEFAULT_TAG_PENALTY = 3.0         # default penalty for a matching reduce-tag
 
+# Base score squash: the accept/reject counter is normalised against the
+# candidate pool then squashed with ``tanh`` into [-SCALE, SCALE]. The scale
+# sits just above seasonality/bulk (10) and below recency (30), so sustained
+# feedback outranks season and batch-cooking but never a just-eaten meal.
+BASE_SQUASH_SCALE = 12.0          # max |contribution| of the base score
+BASE_SQUASH_SHARPNESS = 0.5       # tanh sharpness; lower saturates more slowly
+
 # Ingredient repetition: short timescale, small magnitude so seasonality can win.
 INGREDIENT_REPEAT_MAX_PENALTY = 2.0
 INGREDIENT_REPEAT_HALF_LIFE_DAYS = 1.0
@@ -318,8 +325,8 @@ def score_recipe(
     penalized_tags: Iterable[str] | None = None,
     base_scores: Iterable[float] | None = None,
     squash_mode: str = "zscore",
-    B: float = 3.0,
-    k: float = 1.0
+    B: float = BASE_SQUASH_SCALE,
+    k: float = BASE_SQUASH_SHARPNESS,
 ) -> float:
     """Compute the overall score for ``recipe``.
 
@@ -409,6 +416,8 @@ __all__ = [
     "BULK_PREP_BONUS",
     "FRIDGE_BONUS_SCALE",
     "DEFAULT_TAG_PENALTY",
+    "BASE_SQUASH_SCALE",
+    "BASE_SQUASH_SHARPNESS",
     "INGREDIENT_REPEAT_MAX_PENALTY",
     "INGREDIENT_REPEAT_HALF_LIFE_DAYS",
     "INGREDIENT_REPEAT_WINDOW_DAYS",

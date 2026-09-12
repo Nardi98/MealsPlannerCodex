@@ -13,6 +13,8 @@ from mealplanner.scoring import (
     SEASONALITY_BONUS_SCALE,
     BULK_PREP_BONUS,
     DEFAULT_TAG_PENALTY,
+    BASE_SQUASH_SCALE,
+    BASE_SQUASH_SHARPNESS,
     INGREDIENT_REPEAT_MAX_PENALTY,
     INGREDIENT_REPEAT_HALF_LIFE_DAYS,
     INGREDIENT_REPEAT_WINDOW_DAYS,
@@ -28,6 +30,16 @@ from mealplanner.scoring import (
 
 
 SLOT = date(2024, 6, 30)
+
+
+def squashed_base(norm):
+    """The base-score term for a normalised score, re-derived from the constants.
+
+    Deliberately spelled out rather than imported from ``scoring`` so the
+    assertions stay independent of the production formula.
+    """
+
+    return BASE_SQUASH_SCALE * math.tanh(BASE_SQUASH_SHARPNESS * norm)
 
 
 def test_exploration_weight_grows_linearly_with_staleness():
@@ -155,7 +167,7 @@ def test_all_in_season_old_recipe():
         "date_last_planned": date(2024, 4, 1),
         "bulk_prep": False,
     }
-    expected = 3 * math.tanh(1.0) + seasonality_bonus(recipe, today)
+    expected = squashed_base(1.0) + seasonality_bonus(recipe, today)
     assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
@@ -171,7 +183,7 @@ def test_recent_offseason_bulk_recipe():
         "bulk_prep": True,
     }
     expected = (
-        3 * math.tanh(0.5)
+        squashed_base(0.5)
         + seasonality_bonus(recipe, today)
         + recency_penalty(recipe, today)
         + bulk_bonus(recipe)
@@ -196,7 +208,7 @@ def test_extreme_base_score():
         "date_last_planned": date(2023, 12, 31),
         "ingredients": [],
     }
-    expected = 3 * math.tanh(1_000_000) + recency_penalty(recipe, today)
+    expected = squashed_base(1_000_000) + recency_penalty(recipe, today)
     assert score_recipe(recipe, today) == pytest.approx(expected)
 
 
@@ -218,7 +230,7 @@ def test_weight_parameters():
         tag_penalty_weight=0,
         bulk_bonus_weight=0,
         reduce_tags={"spicy"},
-    ) == pytest.approx(3 * math.tanh(1.0))
+    ) == pytest.approx(squashed_base(1.0))
     # Doubling all weights doubles magnitude of other components
     assert score_recipe(
         recipe,
@@ -229,7 +241,7 @@ def test_weight_parameters():
         bulk_bonus_weight=2,
         reduce_tags={"spicy"},
     ) == pytest.approx(
-        3 * math.tanh(1.0)
+        squashed_base(1.0)
         + 2 * seasonality_bonus(recipe, today)
         + 2 * recency_penalty(recipe, today)
         + 2 * bulk_bonus(recipe)
@@ -384,5 +396,69 @@ def test_score_recipe_backward_compatible_without_maps():
         "date_last_planned": date(2024, 4, 1),
         "bulk_prep": False,
     }
-    baseline = 3 * math.tanh(1.0) + seasonality_bonus(recipe, today)
+    baseline = squashed_base(1.0) + seasonality_bonus(recipe, today)
     assert score_recipe(recipe, today) == pytest.approx(baseline)
+
+
+# ---------------------------------------------------------------------------
+# Base score squash
+# ---------------------------------------------------------------------------
+
+
+def test_rejected_recipe_loses_to_neutral_one_despite_being_in_season():
+    """Sustained rejection outweighs a full seasonality bonus.
+
+    The regression this guards: with the base score squashed into a narrow
+    range, a disliked recipe kept winning slots purely because it was in
+    season, and no amount of rejecting it could dislodge it.
+    """
+
+    today = date(2024, 6, 1)
+    long_ago = date(2024, 1, 1)
+    # One heavily rejected recipe among nine untouched ones. The pool has to be
+    # this wide because the normalisation is pool-relative: a lone outlier among
+    # N recipes cannot exceed a z-score of -sqrt(N-1), so a 3-recipe pool could
+    # not sink far enough to clear the +10 seasonality bonus however often it
+    # was rejected.
+    pool = [-8.0] + [0.0] * 9
+
+    rejected = {
+        "score": -8.0,
+        "ingredients": [{"season_months": [6]}],  # fully in season: +10
+        "date_last_planned": long_ago,
+        "bulk_prep": False,
+    }
+    neutral = {
+        "score": 0.0,
+        "ingredients": [],  # no seasonal opinion either way
+        "date_last_planned": long_ago,
+        "bulk_prep": False,
+    }
+
+    assert score_recipe(rejected, today, base_scores=pool) < score_recipe(
+        neutral, today, base_scores=pool
+    )
+
+
+def test_feedback_still_moves_the_score_past_the_old_saturation_point():
+    """A recipe rejected twice as often scores meaningfully lower.
+
+    ``tanh`` used to flatten at roughly four net rejections, after which
+    further feedback changed the score by less than a tenth of a point.
+    """
+
+    today = date(2024, 6, 1)
+    long_ago = date(2024, 1, 1)
+    # mean 0, std 1 -> the normalised score equals the raw one.
+    pool = [-1.0, 1.0]
+
+    def at(raw_score):
+        recipe = {
+            "score": raw_score,
+            "ingredients": [],
+            "date_last_planned": long_ago,
+            "bulk_prep": False,
+        }
+        return score_recipe(recipe, today, base_scores=pool)
+
+    assert at(-2.0) - at(-4.0) > 1.0

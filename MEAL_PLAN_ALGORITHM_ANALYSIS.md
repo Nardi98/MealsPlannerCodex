@@ -44,7 +44,7 @@ Applied fresh for every slot because the season depends on the slot's month:
 If the pool is empty for a slot, generation raises `ValueError("No recipes
 available")`.
 
-## 3. Scoring (`score_recipe`, `scoring.py:152`)
+## 3. Scoring (`score_recipe` in `scoring.py`)
 
 The final score is a sum of five weighted components:
 
@@ -59,14 +59,21 @@ score = base
 ### Base score (normalized + squashed)
 The raw `recipe.score` (nudged by user feedback, §5) is **normalized against the
 current candidate pool** and squashed with `tanh` into `[-B, B]` (default
-`B=3`). Two modes:
+`B = BASE_SQUASH_SCALE = 12`, sharpness `k = BASE_SQUASH_SHARPNESS = 0.5`). Two
+modes:
 
 - **`zscore`** (default): `(raw − mean) / std` over the pool's base scores.
 - **`percentile`**: maps rank to `[-1, 1]`.
 
-Result: `base = B · tanh(k · norm)`. Squashing means one recipe with a runaway
-score can't dominate — its base contribution is capped at ±3, which is small
-relative to the other components (seasonality ±10, recency up to −30).
+Result: `base = B · tanh(k · norm)`. Squashing still bounds a runaway score,
+but at ±12 the base is the second-largest component: it outranks seasonality
+(±10) and bulk (+10) and ties the fridge bonus (+12), while staying below
+recency (−30) so a just-eaten meal is never re-proposed on preference alone.
+The sharpness `k = 0.5` widens the useful range, roughly doubling how far the
+counter keeps moving the score before `tanh` flattens. Note `k` acts on the
+*normalised* score, so the number of rejections that buys depends on the pool's
+spread — about ten when the pool's standard deviation is near 1, fewer in a
+tight pool.
 
 ### Seasonality (`seasonality_bonus`, `scoring.py:79`)
 Each ingredient with *meaningful* seasonal data (`0 < len(season_months) < 12`)
@@ -149,9 +156,13 @@ by user feedback:
   (`main.py:433`).
 
 These accumulated scores feed back in as the **base score** on the next
-generation, after z-score normalization and tanh squashing. So feedback is a
-slow, bounded nudge — it shifts a recipe's relative rank within the pool but
-(by design of the squash) can't overpower seasonality/recency.
+generation, after z-score normalization and tanh squashing. Feedback is bounded
+but decisive: given a pool with reasonable spread, sustained rejection
+overpowers seasonality and bulk-prep, though not the recency penalty. The
+caveat is that normalization is *pool-relative* — a lone outlier among `N`
+recipes cannot exceed a z-score of `√(N−1)`, and if every recipe in the pool is
+disliked equally the base term collapses toward 0 for all of them and ranking
+reverts to seasonality/recency.
 
 ## 6. Side dishes (`generate_side_dish`, `planner.py:236`)
 
@@ -167,8 +178,15 @@ here is keyed off `MealSide.plan_date`. No leftover logic.
 - **Deterministic when ε = 0** (aside from feedback state), which the codebase
   relies on for unit tests.
 - **Component magnitudes are hardcoded** in `scoring.py` (recency −30 dominates,
-  base capped at ±3, seasonality ±10, bulk +10, tag −3). Weights scale but don't
-  change these ceilings.
+  base capped at ±12, fridge +12, seasonality ±10, bulk +10, tag −3). Weights
+  scale but don't change these ceilings.
+- **The side-dish path leans on the base score alone.** `replace_meal_side`
+  (`crud.py`) overwrites the `MealSide` row when a side is rejected, so the
+  rejected recipe keeps no `plan_date` and its recency penalty is always `0`.
+  `generate_side_dish` also passes none of the diversity maps and never calls
+  `exploration_weight`, and its ε defaults to 0. So on that path the base score
+  is the *only* discriminator — in exactly the small-pool regime where the
+  pool-relative normalization is weakest. Both are tracked follow-ups.
 - **Recency is the main variety engine**; seasonality shapes *what fits the
   month*; feedback slowly reweights preferences within those constraints.
 - Tunables live in `scoring.py` (`RECENCY_*`, `HALF_LIFE_DAYS`, bonuses) and
