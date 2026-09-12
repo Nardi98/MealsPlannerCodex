@@ -1498,17 +1498,16 @@ def replace_meal_side(
     side_id: int,
     user_id: int | None = None,
 ) -> Optional[Meal]:
-    """Replace a side dish at ``index`` for a meal."""
+    """Replace a side dish at ``index`` for a meal.
+
+    Pure bookkeeping: the displaced recipe's ``score`` is left alone. Penalising
+    a rejection is ``reject_recipe``'s job, which is also the only place
+    ``date_last_rejected`` is stamped.
+    """
 
     meal = _get_meal(session, plan_date, meal_number, user_id)
     if meal is None or index >= len(meal.sides):
         return None
-
-    old_side_id = meal.sides[index].side_recipe_id
-    if old_side_id != side_id:
-        old_side = session.get(Recipe, old_side_id)
-        if old_side is not None:
-            old_side.score = (old_side.score or 0) - 1
 
     meal.sides[index].side_recipe_id = side_id
     session.commit()

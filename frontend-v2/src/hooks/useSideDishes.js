@@ -45,10 +45,13 @@ export function useSideDishes({ plan, setPlan, setError }) {
     const meal = plan[date]?.[mealIndex]
     const current = meal?.side_recipes?.[sideIndex]
     if (!meal || !current) return
-    const existing = meal.side_recipes.filter((_, idx) => idx !== sideIndex)
     try {
       await feedbackApi.rejectRecipe(current, date)
-      const avoid = [meal.recipe, ...existing]
+      // Avoid every title on the plate, the rejected one included: the planner
+      // picks sides by a deterministic argmax and the rejected recipe keeps no
+      // plan_date, so nothing else stops it being handed back as its own
+      // replacement.
+      const avoid = [meal.recipe, ...meal.side_recipes]
       const replacement = await sideDishesApi.generate({ avoid_titles: avoid })
       if (!replacement) {
         setError('No replacement recipe available.')
