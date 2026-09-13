@@ -241,6 +241,33 @@ def test_ensure_system_account_seeds_its_own_tags_and_ingredients(db_session):
     assert {i["name"] for i in SYSTEM_INGREDIENTS} <= ingredient_names
 
 
+def test_the_system_account_is_never_committed_without_its_flag(db_session, monkeypatch):
+    """A crash between commits must not strand a non-system ``mealplanner`` row.
+
+    SYS-6 forbids finding the account by handle, so a committed ``mealplanner``
+    user with ``is_system = false`` could never be recognised or healed: every
+    later start would try to create it again and hit the unique handle.
+    """
+    db_session.execute(delete(models.User).where(models.User.is_system.is_(True)))
+    real_commit = db_session.commit
+    seen = []
+
+    def checking_commit():
+        db_session.flush()
+        rows = db_session.execute(
+            text("SELECT is_system FROM users WHERE username = :u OR email = :e"),
+            {"u": catalog.SYSTEM_ACCOUNT_USERNAME, "e": catalog.SYSTEM_ACCOUNT_EMAIL},
+        ).scalars().all()
+        seen.append(rows)
+        assert all(rows), "system account committed without is_system"
+        real_commit()
+
+    monkeypatch.setattr(db_session, "commit", checking_commit)
+    catalog.ensure_system_account(db_session)
+
+    assert any(rows == [True] for rows in seen)
+
+
 def test_ensure_system_account_is_idempotent(db_session):
     db_session.execute(delete(models.User).where(models.User.is_system.is_(True)))
     first = catalog.ensure_system_account(db_session)

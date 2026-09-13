@@ -9,10 +9,11 @@ scripts and a future self-service publish flow alike (FC-5).
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import crud
 import models
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
 
@@ -72,24 +73,34 @@ def system_user(session: Session) -> models.User:
 def ensure_system_account(session: Session) -> models.User:
     """Get or create the system account, with its own tags and ingredients.
 
-    Idempotent, so it is safe on every start. Creation goes through
-    ``crud.create_user`` with an explicit handle, which records the handle as
-    chosen (SYS-12) and does not consult the reserved list (SYS-10). No password,
-    no Google identity and an unverified address leave no login path (SYS-5).
-    The tags and ingredients are re-seeded on every call; both seeders skip
-    what already exists (SYS-8).
+    Idempotent, so it is safe on every start. No password, no Google identity
+    and an unverified address leave no login path (SYS-5). The handle is
+    recorded as chosen (SYS-12), and nothing consults the reserved list, which
+    is enforced only at the route layer (SYS-10). The tags and ingredients are
+    re-seeded on every call; both seeders skip what already exists (SYS-8).
+
+    The row is built here rather than through ``crud.create_user``, because
+    that function commits before ``is_system`` could be set. A crash, or a
+    second instance starting at the same moment, would then leave a committed
+    ``mealplanner`` user *without* the flag. SYS-6 forbids finding the account
+    by its handle, so nothing could recognise that row, and every later start
+    would fail trying to create the handle again. Here the row is only ever
+    flushed carrying the flag, and the seeders' commit lands it all together.
     """
     try:
         account = system_user(session)
     except SystemAccountMissing:
-        account = crud.create_user(
-            session,
+        account = models.User(
             email=SYSTEM_ACCOUNT_EMAIL,
             username=SYSTEM_ACCOUNT_USERNAME,
             hashed_password=None,
+            google_sub=None,
+            auth_provider="local",
+            email_verified=False,
+            is_system=True,
+            username_changed_at=datetime.utcnow(),
         )
-        account.is_system = True
-        account.email_verified = False
+        session.add(account)
         session.flush()
     seed_system_tags(session, account.id)
     seed_system_ingredients(session, account.id)

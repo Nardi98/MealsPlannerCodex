@@ -109,6 +109,39 @@ def test_register_ignores_is_admin(db_session):
     assert _admin_count(db_session) == 0
 
 
+def test_login_ignores_is_admin(db_session):
+    account = crud.create_user(
+        db_session,
+        email="login@example.com",
+        username="loginuser",
+        hashed_password=auth_users.hash_password("Pw123456"),
+        email_verified=True,
+    )
+    resp = db_client(db_session).post(
+        "/auth/login",
+        json={"email": account.email, "password": "Pw123456", "is_admin": True},
+    )
+    assert resp.status_code == 200
+    assert _admin_count(db_session) == 0
+
+
+def test_forgot_password_ignores_is_admin(db_session):
+    crud.create_user(
+        db_session,
+        email="forgot@example.com",
+        username="forgotuser",
+        hashed_password=auth_users.hash_password("Pw123456"),
+    )
+    # Both the existing-account path and the neutral unknown-address path.
+    for email in ("forgot@example.com", "nobody@example.com"):
+        resp = db_client(db_session).post(
+            "/auth/forgot-password", json={"email": email, "is_admin": True}
+        )
+        assert resp.status_code == 200
+    assert mailer.outbox, "the existing-account path should have sent a reset email"
+    assert _admin_count(db_session) == 0
+
+
 def test_google_sign_in_ignores_is_admin(db_session, monkeypatch):
     monkeypatch.setattr(
         auth_users,
