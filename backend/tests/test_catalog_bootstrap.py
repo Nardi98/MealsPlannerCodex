@@ -1,7 +1,7 @@
 """T8: the catalog is populated from the pack at startup (INIT-8..13, EXP-5, TST-4).
 
-``main`` imports run :func:`main._bootstrap`, so the test database already holds
-a populated catalog by the time these tests run. Every test here therefore
+``main`` imports run :func:`main._bootstrap`, and conftest removes what that
+loaded once per run, so these tests call the loader explicitly. Each still
 starts from a known empty catalog -- the ``system_account`` fixture clears the
 entries, or the system account is removed outright -- inside a transaction that
 is rolled back afterwards.
@@ -10,7 +10,7 @@ is rolled back afterwards.
 import json
 
 import pytest
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 import catalog
@@ -74,18 +74,10 @@ def _write_pack(tmp_path, items):
 
 def test_populate_creates_the_system_account_and_sixty_published_entries(db_session):
     """INIT-9, starting from a database with no system account at all."""
-    system_ids = select(models.User.id).where(models.User.is_system.is_(True))
-    # ``recipe_tag`` does not cascade from ``recipes``, so the import-time
-    # catalog's tag links go first; everything else cascades from the account.
-    db_session.execute(
-        delete(models.recipe_tag_table).where(
-            models.recipe_tag_table.c.recipe_id.in_(
-                select(models.Recipe.id).where(models.Recipe.user_id.in_(system_ids))
-            )
-        )
-    )
-    db_session.execute(delete(models.User).where(models.User.id.in_(system_ids)))
-    assert db_session.scalar(system_ids.limit(1)) is None
+    from conftest import remove_system_catalog
+
+    remove_system_catalog(db_session)
+    assert db_session.scalar(select(models.User.id).where(models.User.is_system.is_(True))) is None
 
     created = catalog.populate_from_pack(db_session)
 
@@ -198,6 +190,51 @@ def test_an_export_file_loads_with_every_entry_published(db_session, system_acco
     assert created == 60
     assert _entries(db_session, "published") == 60
     assert all(r.catalog_entry.retired_at is None for r in _catalog_recipes(db_session))
+
+
+def _count(session, stmt):
+    return session.scalar(select(func.count()).select_from(stmt.subquery()))
+
+
+def test_the_test_run_cleanup_removes_the_import_time_catalog(db_session, user):
+    """conftest's one-time cleanup: back to the pre-catalog state, reservations kept."""
+    import usernames
+    from conftest import remove_system_catalog
+
+    usernames.seed_reserved(db_session)
+    main._bootstrap(db_session)
+    system = catalog.system_user(db_session)
+    system_id = system.id
+    source = _catalog_recipes(db_session)[0]
+    copy = models.Recipe(user_id=user.id, title="My copy", source_recipe_id=source.id)
+    db_session.add(copy)
+    db_session.flush()
+
+    remove_system_catalog(db_session)
+    db_session.expire_all()
+
+    assert db_session.scalar(select(models.User.id).where(models.User.is_system.is_(True))) is None
+    assert db_session.get(models.User, system_id) is None
+    for model in (models.Recipe, models.Ingredient, models.Tag):
+        assert _count(db_session, select(model.id).where(model.user_id == system_id)) == 0
+    assert _count(db_session, select(models.CatalogEntry.recipe_id)) == 0
+    # Copies survive, unlinked by ``ON DELETE SET NULL``.
+    assert db_session.get(models.Recipe, copy.id).source_recipe_id is None
+    assert db_session.get(models.ReservedUsername, catalog.SYSTEM_ACCOUNT_USERNAME) is not None
+
+
+def test_the_test_run_cleanup_is_a_no_op_without_a_system_account(db_session, user):
+    from conftest import remove_system_catalog
+
+    remove_system_catalog(db_session)  # whatever the DB held, there is no account now
+    reserved = _count(db_session, select(models.ReservedUsername.username))
+
+    remove_system_catalog(db_session)
+    db_session.expire_all()
+
+    assert db_session.get(models.User, user.id) is not None
+    assert _count(db_session, select(models.ReservedUsername.username)) == reserved
+    assert db_session.scalar(select(models.User.id).where(models.User.is_system.is_(True))) is None
 
 
 def test_a_bad_item_writes_nothing(db_session, system_account, tmp_path):

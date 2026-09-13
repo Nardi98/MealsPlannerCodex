@@ -58,6 +58,69 @@ def reset_schema(bind):
 reset_schema(_app_engine)
 
 
+def remove_system_catalog(session):
+    """Delete the system account and everything it owns; does not commit.
+
+    ``main`` loads the catalog pack at import (INIT-8), so without this every
+    test would run against 60 extra system recipes -- or not, depending on
+    whether an earlier test happened to reset the schema. Removing them once
+    puts every test back on the pre-catalog state, whatever the order. Catalog
+    tests build their own rows (``system_account``, ``make_catalog_recipe``),
+    and the bootstrap tests call the loader explicitly.
+
+    The account is found by ``is_system``, never by handle (SYS-6); with none
+    this deletes nothing. Children go first and each delete is explicit, so
+    nothing rests on which foreign keys happen to cascade (``recipe_tag`` does
+    not). Copies elsewhere lose ``source_recipe_id`` by ``ON DELETE SET NULL``.
+    The reserved-usernames table is not touched.
+    """
+    from sqlalchemy import delete, or_, select
+
+    system_ids = select(models.User.id).where(models.User.is_system.is_(True))
+    recipe_ids = select(models.Recipe.id).where(models.Recipe.user_id.in_(system_ids))
+    ingredient_ids = select(models.Ingredient.id).where(models.Ingredient.user_id.in_(system_ids))
+    tag_ids = select(models.Tag.id).where(models.Tag.user_id.in_(system_ids))
+    tag_link = models.recipe_tag_table.c
+    side_link = models.recipe_favorite_side_table.c
+
+    for stmt in (
+        delete(models.CatalogEntry).where(models.CatalogEntry.recipe_id.in_(recipe_ids)),
+        delete(models.recipe_tag_table).where(
+            or_(tag_link.recipe_id.in_(recipe_ids), tag_link.tag_id.in_(tag_ids))
+        ),
+        delete(models.recipe_favorite_side_table).where(
+            or_(side_link.main_recipe_id.in_(recipe_ids), side_link.side_recipe_id.in_(recipe_ids))
+        ),
+        delete(models.RecipeIngredient).where(
+            or_(
+                models.RecipeIngredient.recipe_id.in_(recipe_ids),
+                models.RecipeIngredient.ingredient_id.in_(ingredient_ids),
+            )
+        ),
+        delete(models.Recipe).where(models.Recipe.id.in_(recipe_ids)),
+        delete(models.Ingredient).where(models.Ingredient.id.in_(ingredient_ids)),
+        delete(models.Tag).where(models.Tag.id.in_(tag_ids)),
+        delete(models.User).where(models.User.id.in_(system_ids)),
+    ):
+        session.execute(stmt, execution_options={"synchronize_session": False})
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _without_import_time_catalog():
+    """Once per run: undo what ``main``'s import-time bootstrap loaded.
+
+    ``main`` is imported here first, so its bootstrap has certainly run before
+    the cleanup -- a lazy import inside some later test would otherwise
+    repopulate the catalog mid-run.
+    """
+    import main  # noqa: F401  the import runs ``_bootstrap``
+    from database import SessionLocal
+
+    with SessionLocal() as session:
+        remove_system_catalog(session)
+        session.commit()
+
+
 @pytest.fixture(scope="session")
 def engine():
     """The application's own engine, pointed at ``TEST_DATABASE_URL`` above.
