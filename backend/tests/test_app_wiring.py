@@ -28,6 +28,16 @@ def test_the_three_domain_routers_are_included():
     assert main.public_pages is public_pages
 
 
+def test_the_catalog_router_is_included():
+    """TST-10: ``/catalog/*`` is served by ``catalog_routes``, mounted by ``main``."""
+    import catalog_routes
+
+    assert main.catalog_routes is catalog_routes
+    catalog_paths = {route.path for route in catalog_routes.router.routes}
+    served = {getattr(route, "path", None) for route in main.app.routes}
+    assert catalog_paths and catalog_paths <= served
+
+
 def test_static_is_mounted_for_the_public_stylesheet():
     """D-4: ``/static`` serves ``backend/static/public.css`` in Phase 1B."""
     assert any(
