@@ -1,0 +1,2686 @@
+[
+  {
+    "title": "Pasta with Fresh Tomato Sauce",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Cook the tomatoes in the oil over high heat until they collapse.\nAdd the garlic, salt and a pinch of sugar once they soften.\nFinish with basil or rosemary and toss the drained pasta through.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Tomato",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Sugar",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Basil",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Salt",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Spaghetti Aglio, Olio e Peperoncino",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegan",
+      "quick",
+      "cheap",
+      "spicy"
+    ],
+    "procedure": "Warm the sliced garlic and chili gently in the oil; do not brown them.\nDrain the spaghetti a minute early and finish it in the pan with its water.\nToss hard so the oil and water emulsify, then add the parsley.",
+    "ingredients": [
+      {
+        "name": "Spaghetti",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Chili Pepper",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Parsley",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta alla Norma",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegetarian"
+    ],
+    "procedure": "Fry the eggplant cubes until deep gold and drain them.\nSimmer the passata with the garlic for 10 minutes.\nToss the pasta through the sauce, fold in the eggplant, grate over the ricotta salata.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Eggplant",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Passata",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Basil",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Ricotta Salata",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Spaghetti Carbonara",
+    "course": "first-course",
+    "servings": 2,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "meat",
+      "quick"
+    ],
+    "procedure": "Render the bacon slowly until crisp and keep the fat.\nBeat the eggs with the parmesan and plenty of black pepper.\nOff the heat, toss the drained pasta with the bacon, then the eggs, loosening with pasta water.",
+    "ingredients": [
+      {
+        "name": "Spaghetti",
+        "quantity": 180,
+        "unit": "g"
+      },
+      {
+        "name": "Bacon",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Egg",
+        "quantity": 3,
+        "unit": "piece"
+      },
+      {
+        "name": "Parmesan",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Black Pepper",
+        "quantity": 4,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta al Ragu",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "pasta",
+      "meat"
+    ],
+    "procedure": "Soften the diced carrot, celery and onion in the oil.\nBrown the mince hard, then deglaze with the wine.\nAdd the passata and simmer at least 90 minutes, topping up with water.\nDress the pasta in the pan with a ladle of its cooking water.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Ground Beef",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Passata",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Celery",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Red Wine",
+        "quantity": 30,
+        "unit": "ml"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Tuna and Cherry Tomato Pasta",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Burst the cherry tomatoes in oil with the garlic over high heat.\nAdd the drained tuna and break it up; season.\nToss the drained pasta through with a splash of its water and the parsley.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Canned Tuna",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Cherry Tomato",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Parsley",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta with Smoked Tofu and Eggplant",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegan"
+    ],
+    "procedure": "Sear the diced smoked tofu until the edges crisp, then set it aside.\nBrown the eggplant in the same pan, adding oil as it drinks it.\nPour in the passata with the garlic and simmer 10 minutes.\nReturn the tofu, then toss the pasta through with basil.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Smoked Tofu",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Eggplant",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Passata",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Basil",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta with Chickpea Cream and Confit Tomatoes",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegan"
+    ],
+    "procedure": "Confit the cherry tomatoes with oil, garlic and thyme in a low oven or air fryer, 25 minutes.\nBlend the chickpeas with a little cooking water and oil into a loose cream.\nWarm the cream in the pan, toss the pasta through it, top with the tomatoes.\nGrate over lemon zest -- it lifts the whole plate.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Chickpeas",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Cherry Tomato",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Thyme",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 10,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta with Cauliflower Miso Cream",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pasta",
+      "vegan"
+    ],
+    "procedure": "Roast or boil the cauliflower until fully soft.\nBlend it with the miso, garlic and a little pasta water into a cream.\nSear the diced smoked tofu separately until crisp.\nToss the pasta through the cream; finish with the tofu and toasted walnuts.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Cauliflower",
+        "quantity": 180,
+        "unit": "g"
+      },
+      {
+        "name": "Miso Paste",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Walnuts",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Smoked Tofu",
+        "quantity": 70,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Baked Pasta with Zucchini Pesto",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "pasta",
+      "vegetarian"
+    ],
+    "procedure": "Make a light bechamel with the butter, flour and milk.\nBlend half the zucchini with the pine nuts and parmesan into a pesto.\nSaute the rest of the zucchini, the peas and the green beans with garlic.\nFold everything through half-cooked pasta and bake 20 minutes at 200 C.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Zucchini",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Peas",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Green Beans",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Milk",
+        "quantity": 150,
+        "unit": "ml"
+      },
+      {
+        "name": "Flour",
+        "quantity": 12,
+        "unit": "g"
+      },
+      {
+        "name": "Butter",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Pine Nuts",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Parmesan",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Bulgur with Zucchini, Peas and Lemon",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Cook the bulgur in salted water or stock and let it stand covered.\nSaute the diced zucchini hard, adding the peas at the end.\nFold everything together off the heat with lemon zest, juice and mint.",
+    "ingredients": [
+      {
+        "name": "Bulgur",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Zucchini",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Peas",
+        "quantity": 70,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Mint",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pasta alla Genovese with Seitan",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "pasta",
+      "vegan"
+    ],
+    "procedure": "Brown the seitan pieces, then set them aside.\nAdd the sliced onions with the carrot and celery and a splash of water.\nCook covered for an hour, stirring, until the onions melt; deglaze with the wine.\nReturn the seitan, cook 15 minutes more, then dress the pasta with it.",
+    "ingredients": [
+      {
+        "name": "Pasta",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Seitan",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 300,
+        "unit": "g"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Celery",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "White Wine",
+        "quantity": 30,
+        "unit": "ml"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Mushroom Risotto",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "risotto",
+      "vegetarian"
+    ],
+    "procedure": "Sear the mushrooms hard in a dry pan first, then set them aside.\nSoften the onion, toast the rice, deglaze with the wine.\nAdd hot stock a ladle at a time for about 18 minutes.\nOff the heat, beat in the butter and parmesan and fold the mushrooms back in.",
+    "ingredients": [
+      {
+        "name": "Arborio Rice",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Mushroom",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "White Wine",
+        "quantity": 30,
+        "unit": "ml"
+      },
+      {
+        "name": "Vegetable Stock",
+        "quantity": 400,
+        "unit": "ml"
+      },
+      {
+        "name": "Butter",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Parmesan",
+        "quantity": 25,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Minestrone",
+    "course": "first-course",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "soup",
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Sweat the diced carrot, celery and onion in the oil.\nAdd the rest of the vegetables and the tomatoes, cover with water, simmer 30 minutes.\nBlend a ladleful and stir it back in for body.\nCook the pasta in the pot and add the beans for the last five minutes.",
+    "ingredients": [
+      {
+        "name": "Carrot",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Celery",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Potato",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Zucchini",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Cannellini Beans",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Pasta",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Canned Tomatoes",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Chickpea Hummus Tart with Caramelised Onion",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Boil the carrots, then blend them with the chickpeas, walnuts and almonds.\nCaramelise the sliced onion and pepper slowly with the sugar; no vinegar.\nSpread the hummus over the pastry, top with the onions and peppers.\nBake 30 minutes at 190 C, until the base is cooked through.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Chickpeas",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Walnuts",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Almonds",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Bell Pepper",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Sugar",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Cannellini and Cherry Tomato Tart",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Blend the cannellini with oil, salt and a splash of water into a thick cream.\nSoften the sliced onion in a pan until sweet.\nSpread the cream on the pastry, scatter over the onion and halved tomatoes.\nBake 30 minutes at 190 C and finish with thyme and oregano.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Cannellini Beans",
+        "quantity": 130,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 70,
+        "unit": "g"
+      },
+      {
+        "name": "Cherry Tomato",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Thyme",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Oregano",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Pea and Leek Tart with Lemon Zest",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Sweat the sliced leek until soft and sweet.\nBlend most of the peas into a cream, keeping some whole for texture.\nSpread over the pastry, top with the leek, bake 30 minutes at 190 C.\nGrate the lemon zest over once the tart is out of the oven.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Peas",
+        "quantity": 140,
+        "unit": "g"
+      },
+      {
+        "name": "Leek",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Mint",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pesto, Green Bean and Potato Tart",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegetarian"
+    ],
+    "procedure": "Boil the potatoes and beans until just tender, then drain them well.\nSpread the pesto over the pastry.\nLay the sliced potato and the beans on top and season.\nBake 30 minutes at 190 C.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Pesto",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Green Beans",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Potato",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Lentil and Radicchio Tart with Walnuts",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Blend the cooked lentils with the soy sauce, rosemary and walnuts.\nFry the radicchio hard with the vinegar, sugar and salt until it collapses.\nSpread the lentil cream on the pastry and top with the radicchio.\nBake 30 minutes at 190 C. Caramelised onions on top work well too.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Lentils",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Soy Sauce",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Walnuts",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Radicchio",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Balsamic Vinegar",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Sugar",
+        "quantity": 5,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Chickpea and Caramelised Leek Tart",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Blend the chickpeas into a thick cream with oil and salt.\nCook the sliced leek low and slow until it caramelises.\nAssemble on the pastry and bake 30 minutes at 190 C.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Chickpeas",
+        "quantity": 130,
+        "unit": "g"
+      },
+      {
+        "name": "Leek",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "Thyme",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Potato, Chard and Olive Tart",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Boil the sliced potatoes until just tender.\nWilt the chard with garlic and squeeze it dry.\nLayer both over the pastry with the olives and bake 30 minutes at 190 C.",
+    "ingredients": [
+      {
+        "name": "Puff Pastry",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Potato",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Swiss Chard",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Olives",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Potato, Leek and Kale Soup",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "soup",
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Sweat the leek, add the diced potato and the stock, simmer 20 minutes.\nBlend the chickpeas smooth and stir them in.\nAdd the shredded kale and cook five minutes more.",
+    "ingredients": [
+      {
+        "name": "Potato",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Leek",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Chickpeas",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Kale",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Stock",
+        "quantity": 400,
+        "unit": "ml"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Mediterranean Soy Strips with Eggplant",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Sear the strips until browned on both sides and set them aside.\nCook the eggplant in the same pan until soft.\nAdd the tomatoes, garlic and oregano and simmer 10 minutes.\nReturn the strips and cook them through in the sauce.",
+    "ingredients": [
+      {
+        "name": "Tofu",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Eggplant",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Tomato",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Oregano",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Cannellini-Stuffed Zucchini",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Halve the zucchini and scoop out the centres; chop the flesh.\nMash the beans with the softened onion, the zucchini flesh and the herbs.\nFill the halves, top with breadcrumbs and nutritional yeast.\nBake 25 minutes at 200 C until the top is crisp.",
+    "ingredients": [
+      {
+        "name": "Zucchini",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Cannellini Beans",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Breadcrumbs",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Nutritional Yeast",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Thyme",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Sticky Marinated Tempeh",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Boil the tempeh 10 minutes in water with soy sauce, garlic and ginger.\nMarinate it in soy sauce, garlic, curry, lemon, ginger and maple syrup.\nCrisp it in a pan or air fryer.\nThicken the leftover marinade with a little flour and pour it back over.",
+    "ingredients": [
+      {
+        "name": "Tempeh",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Soy Sauce",
+        "quantity": 25,
+        "unit": "ml"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Ginger",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Curry Powder",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Maple Syrup",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "Flour",
+        "quantity": 5,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Golden Soy Chunks",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Rehydrate the chunks in hot stock, then squeeze them dry.\nFry them in the oil without moving them, so they colour.\nAdd the rosemary, pepper and garlic powder and keep frying until golden.",
+    "ingredients": [
+      {
+        "name": "Soy Chunks",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Stock",
+        "quantity": 300,
+        "unit": "ml"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Black Pepper",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Tofu Kebab with Yogurt Sauce",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "sandwich",
+      "vegetarian"
+    ],
+    "procedure": "Shave the tofu into thin ribbons with a vegetable peeler.\nToss with the spices and crisp in the air fryer or a hot pan.\nMix the yogurt with garlic, lemon and salt.\nFill the pita with the tofu, tomato, lettuce and sauce.",
+    "ingredients": [
+      {
+        "name": "Tofu",
+        "quantity": 130,
+        "unit": "g"
+      },
+      {
+        "name": "Smoked Paprika",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Pita Bread",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "name": "Tomato",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Lettuce",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Greek Yogurt",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 4,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Glazed Eggplant on Whipped Feta",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegetarian"
+    ],
+    "procedure": "Roast the eggplant wedges until soft and browned.\nReduce the soy, maple and vinegar with the cornstarch into a glaze.\nWhip the feta with the quark until smooth and spread it on the plate.\nPile on the glazed eggplant and finish with mint.",
+    "ingredients": [
+      {
+        "name": "Eggplant",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Soy Sauce",
+        "quantity": 20,
+        "unit": "ml"
+      },
+      {
+        "name": "Maple Syrup",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "White Wine Vinegar",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Cornstarch",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Feta",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Quark",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Mint",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Summer Rolls with Marinated Tofu",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Marinate the tofu strips in soy sauce and sear them.\nSoak the noodles and cut the carrot and cucumber into matchsticks.\nSoften one sheet of rice paper at a time and roll tightly.\nServe with a dip of soy sauce, lime and crushed peanuts.",
+    "ingredients": [
+      {
+        "name": "Rice Paper",
+        "quantity": 3,
+        "unit": "piece"
+      },
+      {
+        "name": "Tofu",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Rice Noodles",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Cucumber",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Mint",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Soy Sauce",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Peanuts",
+        "quantity": 15,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Falafel",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Blitz soaked (not cooked) chickpeas with the onion, garlic and herbs.\nSeason with cumin and salt and bind with a little flour; rest 30 minutes.\nShape into balls and fry or air-fry until deep brown.",
+    "ingredients": [
+      {
+        "name": "Chickpeas",
+        "quantity": 130,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 50,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Parsley",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Cilantro",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Flour",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Oil",
+        "quantity": 20,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Tofu Pad Thai",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "noodles",
+      "vegetarian"
+    ],
+    "procedure": "Soak the noodles until pliable but not soft.\nFry the tofu until crisp, push it aside and scramble the egg.\nAdd the noodles with the fish sauce, sugar and lime and toss over high heat.\nFinish with spring onion and crushed peanuts.",
+    "ingredients": [
+      {
+        "name": "Rice Noodles",
+        "quantity": 90,
+        "unit": "g"
+      },
+      {
+        "name": "Tofu",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Egg",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "name": "Spring Onion",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Peanuts",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Fish Sauce",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Lime",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Brown Sugar",
+        "quantity": 8,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Chana Masala",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "curry",
+      "vegan",
+      "cheap",
+      "spicy"
+    ],
+    "procedure": "Brown the onion properly, then add the garlic and ginger.\nToast the spices in the oil for a minute.\nAdd the tomatoes and cook them down before the chickpeas go in.\nSimmer 20 minutes, crushing some chickpeas to thicken it.",
+    "ingredients": [
+      {
+        "name": "Chickpeas",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Canned Tomatoes",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 70,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Ginger",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Curry Powder",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Turmeric",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Coconut Chicken Curry",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "curry",
+      "meat"
+    ],
+    "procedure": "Brown the chicken pieces and set them aside.\nFry the onion, pepper, ginger and curry paste until fragrant.\nAdd the coconut milk, return the chicken and simmer 20 minutes.",
+    "ingredients": [
+      {
+        "name": "Chicken Thigh",
+        "quantity": 180,
+        "unit": "g"
+      },
+      {
+        "name": "Coconut Milk",
+        "quantity": 150,
+        "unit": "ml"
+      },
+      {
+        "name": "Curry Paste",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Bell Pepper",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Ginger",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Shakshuka",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegetarian",
+      "cheap",
+      "spicy"
+    ],
+    "procedure": "Soften the onion and pepper, then add the spices.\nPour in the tomatoes and reduce until thick.\nMake wells, crack in the eggs, cover and cook until just set.",
+    "ingredients": [
+      {
+        "name": "Canned Tomatoes",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Bell Pepper",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Egg",
+        "quantity": 2,
+        "unit": "piece"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Paprika",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Chili Flakes",
+        "quantity": 1,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Pan-Seared Steak",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "meat",
+      "quick"
+    ],
+    "procedure": "Take the steak out of the fridge early and pat it dry.\nSear in a very hot pan without moving it, then turn once.\nAdd the butter, garlic and rosemary and baste for a minute.\nRest it five minutes before slicing.",
+    "ingredients": [
+      {
+        "name": "Beef Steak",
+        "quantity": 220,
+        "unit": "g"
+      },
+      {
+        "name": "Butter",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Black Pepper",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Roast Chicken Thighs with Lemon",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "roast",
+      "meat"
+    ],
+    "procedure": "Toss the potatoes with oil, garlic and rosemary in a tray.\nSit the salted thighs on top, skin side up, with lemon wedges.\nRoast 45 minutes at 200 C without turning anything.",
+    "ingredients": [
+      {
+        "name": "Chicken Thigh",
+        "quantity": 220,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Potato",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Baked Salmon with Herbs",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "quick"
+    ],
+    "procedure": "Sit the fillet on foil with oil, garlic, lemon and herbs.\nBake 15 minutes at 190 C, until it just flakes.\nSqueeze over more lemon at the table.",
+    "ingredients": [
+      {
+        "name": "Salmon",
+        "quantity": 180,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Parsley",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 4,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Zucchini Frittata",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegetarian",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Saute the sliced zucchini and onion until they take colour.\nBeat the eggs with the parmesan and plenty of salt.\nPour over, cook low until nearly set, then flip or finish under the grill.",
+    "ingredients": [
+      {
+        "name": "Egg",
+        "quantity": 3,
+        "unit": "piece"
+      },
+      {
+        "name": "Zucchini",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Parmesan",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Pizza Margherita",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "pizza",
+      "vegetarian"
+    ],
+    "procedure": "Knead flour, water, salt and a little yeast and let it rise slowly.\nStretch by hand, spread the passata thinly, salt it.\nBake as hot as the oven goes, adding the mozzarella halfway.\nBasil and oil go on after it comes out.",
+    "ingredients": [
+      {
+        "name": "Flour",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Passata",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Mozzarella",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Basil",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Salt",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Lentil and Vegetable Stew",
+    "course": "main",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "stew",
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Sweat the diced vegetables in the oil.\nAdd the lentils, tomatoes, stock and bay leaf.\nSimmer 35 minutes until the lentils fall apart at the edges.",
+    "ingredients": [
+      {
+        "name": "Lentils",
+        "quantity": 120,
+        "unit": "g"
+      },
+      {
+        "name": "Carrot",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Celery",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Canned Tomatoes",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Stock",
+        "quantity": 300,
+        "unit": "ml"
+      },
+      {
+        "name": "Bay Leaf",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Lentil Hummus with Sun-dried Tomatoes",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Blend the cooked lentils with the sun-dried tomatoes and hazelnuts.\nAdd a splash of soy sauce, the thyme and a little oil.\nGrate lemon zest over the top: it carries the flavour without more oil or tahini.",
+    "ingredients": [
+      {
+        "name": "Lentils",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Sun-dried Tomatoes",
+        "quantity": 25,
+        "unit": "g"
+      },
+      {
+        "name": "Soy Sauce",
+        "quantity": 5,
+        "unit": "ml"
+      },
+      {
+        "name": "Hazelnuts",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Thyme",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Roasted Chickpea Hummus",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Roast half the chickpeas with garlic powder, both paprikas, oregano, curry and a pinch of chili.\nBlend them with the plain chickpeas, the tahini, lemon juice and water.\nFinish with grated lemon zest rather than more tahini or oil.",
+    "ingredients": [
+      {
+        "name": "Chickpeas",
+        "quantity": 140,
+        "unit": "g"
+      },
+      {
+        "name": "Smoked Paprika",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Paprika",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Oregano",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Curry Powder",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Chili Flakes",
+        "quantity": 0.5,
+        "unit": "g"
+      },
+      {
+        "name": "Tahini",
+        "quantity": 15,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 15,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Classic Hummus",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Blend the tahini with the lemon juice and garlic first, until it seizes and loosens.\nAdd the chickpeas and blend long, adding ice water until it is silky.\nSeason, pour over oil, grate on lemon zest.",
+    "ingredients": [
+      {
+        "name": "Chickpeas",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Tahini",
+        "quantity": 25,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Babaganoush",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Halve the eggplants and roast them cut side down until collapsed.\nPeel off the skin and drain the flesh.\nMix, do not blend, with the tahini, lemon and a little oil.",
+    "ingredients": [
+      {
+        "name": "Eggplant",
+        "quantity": 300,
+        "unit": "g"
+      },
+      {
+        "name": "Tahini",
+        "quantity": 25,
+        "unit": "g"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 20,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 4,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 8,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Caramelised Onions and Peppers",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Slice both thinly and start them in oil over medium heat.\nWhen they soften, add the sugar and salt.\nKeep going, low, until they are jammy and deep gold.",
+    "ingredients": [
+      {
+        "name": "Onion",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Bell Pepper",
+        "quantity": 150,
+        "unit": "g"
+      },
+      {
+        "name": "Sugar",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "Salt",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Smoked Paprika Celeriac Chips",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Cut the celeriac into batons and dry them well.\nToss with oil, rosemary, smoked paprika, pepper and salt.\nRoast or air-fry at 200 C until the edges are dark.",
+    "ingredients": [
+      {
+        "name": "Celeriac",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 2,
+        "unit": "g"
+      },
+      {
+        "name": "Smoked Paprika",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Black Pepper",
+        "quantity": 1,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Peperonata",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Cook the sliced onion until soft, then add the peppers.\nAdd the tomato and cook slowly, covered, for 30 minutes.\nSeason well and finish with basil.",
+    "ingredients": [
+      {
+        "name": "Bell Pepper",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Tomato",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Basil",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Caponata",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": true,
+    "tags": [
+      "vegan"
+    ],
+    "procedure": "Fry the eggplant cubes until browned and drain them.\nSoften the celery and onion, then add the passata, olives and capers.\nReturn the eggplant, add the vinegar and sugar and cook until sticky.",
+    "ingredients": [
+      {
+        "name": "Eggplant",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Celery",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 60,
+        "unit": "g"
+      },
+      {
+        "name": "Passata",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Olives",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Capers",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "White Wine Vinegar",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Sugar",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 20,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Mashed Potatoes",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegetarian",
+      "cheap"
+    ],
+    "procedure": "Boil the potatoes whole in salted water, then peel and rice them.\nBeat in the butter, then the warm milk.\nSeason with salt and a scrape of nutmeg.",
+    "ingredients": [
+      {
+        "name": "Potato",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Butter",
+        "quantity": 25,
+        "unit": "g"
+      },
+      {
+        "name": "Milk",
+        "quantity": 60,
+        "unit": "ml"
+      },
+      {
+        "name": "Nutmeg",
+        "quantity": 0.5,
+        "unit": "g"
+      },
+      {
+        "name": "Salt",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Rosemary Roasted Potatoes",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "roast",
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Parboil the chunks 8 minutes, drain, and shake them in the pan.\nToss with hot oil, salt, rosemary and unpeeled garlic.\nRoast at 210 C for 35 minutes, turning once.",
+    "ingredients": [
+      {
+        "name": "Potato",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Rosemary",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 15,
+        "unit": "ml"
+      },
+      {
+        "name": "Salt",
+        "quantity": 3,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Boiled Eggs",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegetarian",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Lower the eggs into already boiling water.\nSeven minutes for a jammy yolk, ten for hard.\nStraight into cold water so they peel cleanly.",
+    "ingredients": [
+      {
+        "name": "Egg",
+        "quantity": 2,
+        "unit": "piece"
+      },
+      {
+        "name": "Salt",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Steamed Broccoli",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Steam the florets 5 to 6 minutes, until a knife just goes in.\nDress warm with oil, lemon and salt.",
+    "ingredients": [
+      {
+        "name": "Broccoli",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 8,
+        "unit": "ml"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 10,
+        "unit": "g"
+      },
+      {
+        "name": "Salt",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Boiled Potatoes with Olive Oil",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Boil the potatoes whole in well-salted water until tender.\nHalve them and dress immediately with oil, salt and parsley.",
+    "ingredients": [
+      {
+        "name": "Potato",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "Parsley",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Salt",
+        "quantity": 4,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Pan-Fried Zucchini with Mint",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Slice the zucchini into rounds and get the pan properly hot.\nFry in one layer until the undersides are brown, then turn.\nAdd the garlic at the end and finish with torn mint.",
+    "ingredients": [
+      {
+        "name": "Zucchini",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 5,
+        "unit": "g"
+      },
+      {
+        "name": "Mint",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Sauteed Spinach with Garlic",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Warm the sliced garlic in the oil.\nAdd the spinach in handfuls and toss until just wilted.\nSalt and lemon off the heat.",
+    "ingredients": [
+      {
+        "name": "Spinach",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Lemon",
+        "quantity": 8,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Roasted Carrots with Cumin",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "roast",
+      "vegan",
+      "cheap"
+    ],
+    "procedure": "Halve the carrots lengthways and toss with oil, cumin and salt.\nRoast 30 minutes at 200 C.\nBrush with a little honey for the last five minutes.",
+    "ingredients": [
+      {
+        "name": "Carrot",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "name": "Cumin",
+        "quantity": 3,
+        "unit": "g"
+      },
+      {
+        "name": "Honey",
+        "quantity": 8,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      }
+    ]
+  },
+  {
+    "title": "Green Beans with Garlic",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Boil the beans in salted water until just tender, then drain.\nFinish them in a hot pan with the garlic and chili flakes.",
+    "ingredients": [
+      {
+        "name": "Green Beans",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Garlic",
+        "quantity": 6,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      },
+      {
+        "name": "Chili Flakes",
+        "quantity": 0.5,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Green Salad",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "salad",
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Wash and dry the leaves properly -- wet leaves will not hold dressing.\nWhisk oil, vinegar and salt and toss at the last moment.",
+    "ingredients": [
+      {
+        "name": "Lettuce",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Rocket",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "White Wine Vinegar",
+        "quantity": 6,
+        "unit": "ml"
+      },
+      {
+        "name": "Salt",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Tomato and Cucumber Salad",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "salad",
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Cut the tomatoes into wedges, salt them and let them sit ten minutes.\nAdd the cucumber and thinly sliced red onion.\nDress with oil and oregano, using the tomato juices.",
+    "ingredients": [
+      {
+        "name": "Tomato",
+        "quantity": 200,
+        "unit": "g"
+      },
+      {
+        "name": "Cucumber",
+        "quantity": 100,
+        "unit": "g"
+      },
+      {
+        "name": "Red Onion",
+        "quantity": 30,
+        "unit": "g"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 12,
+        "unit": "ml"
+      },
+      {
+        "name": "Oregano",
+        "quantity": 2,
+        "unit": "g"
+      }
+    ]
+  },
+  {
+    "title": "Simple Rice Pilaf",
+    "course": "side",
+    "servings": 1,
+    "bulk_prep": false,
+    "tags": [
+      "rice",
+      "vegan",
+      "quick",
+      "cheap"
+    ],
+    "procedure": "Soften the onion, then toast the rinsed rice in the oil.\nAdd twice its volume of stock and the bay leaf.\nCover, cook 12 minutes, then rest 10 off the heat before forking through.",
+    "ingredients": [
+      {
+        "name": "Basmati Rice",
+        "quantity": 80,
+        "unit": "g"
+      },
+      {
+        "name": "Onion",
+        "quantity": 40,
+        "unit": "g"
+      },
+      {
+        "name": "Vegetable Stock",
+        "quantity": 160,
+        "unit": "ml"
+      },
+      {
+        "name": "Bay Leaf",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "name": "Olive Oil",
+        "quantity": 10,
+        "unit": "ml"
+      }
+    ]
+  }
+]
