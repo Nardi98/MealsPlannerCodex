@@ -31,6 +31,8 @@ __all__ = [
     "SHARE_RATE_LIMIT",
     "COPY_RATE_LIMIT",
     "USERNAME_CHECK_RATE_LIMIT",
+    "CATALOG_ADOPT_RATE_LIMIT",
+    "CATALOG_ADMIN_RATE_LIMIT",
 ]
 
 # Generous enough that nobody sharing recipes in earnest will notice, tight
@@ -42,6 +44,11 @@ COPY_RATE_LIMIT = os.environ.get("COPY_RATE_LIMIT", "30/hour")
 # user types, so the budget has to cover a realistic form session while still
 # making handle-space enumeration impractical (UN-7).
 USERNAME_CHECK_RATE_LIMIT = os.environ.get("USERNAME_CHECK_RATE_LIMIT", "30/minute")
+# Catalog adoption (ADO-13). One call adopts a whole batch, so thirty an hour is
+# far more than browsing the library needs.
+CATALOG_ADOPT_RATE_LIMIT = os.environ.get("CATALOG_ADOPT_RATE_LIMIT", "30/hour")
+# Admin catalog writes (ADM-11). Higher, because curating is many small edits.
+CATALOG_ADMIN_RATE_LIMIT = os.environ.get("CATALOG_ADMIN_RATE_LIMIT", "120/hour")
 
 
 def user_or_ip_key(request: Request) -> str:

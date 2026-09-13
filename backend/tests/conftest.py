@@ -136,6 +136,95 @@ def make_recipe(db_session, user):
     return _make
 
 
+@pytest.fixture
+def system_account(db_session):
+    """The ``is_system`` account, with an empty catalog for this test.
+
+    From T8 onward ``main._bootstrap`` loads the catalog pack into the test DB at
+    import time, so a catalog test cannot assume it starts from nothing. The
+    entries are cleared here, inside the test's rolled-back transaction, which
+    is what lets catalog tests assert on exactly the rows they created.
+    """
+    import catalog
+    from sqlalchemy import delete
+
+    account = catalog.ensure_system_account(db_session)
+    db_session.execute(delete(models.CatalogEntry))
+    return account
+
+
+@pytest.fixture
+def make_catalog_recipe(db_session, system_account):
+    """Factory for a system-owned recipe with a catalog entry.
+
+    Inserts the rows directly rather than through ``catalog.publish`` so tests
+    of the service are not built on the service. Ingredient and tag names are
+    resolved in the system account's namespace, as every catalog recipe's are.
+    """
+    from datetime import datetime
+
+    import crud
+
+    def _make(
+        title,
+        course="main",
+        status="published",
+        ingredients=(("Pasta", 80, "g"),),
+        tags=("pasta",),
+        procedure="Cook it.",
+        bulk_prep=False,
+        servings=1,
+    ):
+        recipe = models.Recipe(
+            user_id=system_account.id,
+            title=title,
+            course=course,
+            procedure=procedure,
+            bulk_prep=bulk_prep,
+            servings=servings,
+        )
+        for name, quantity, unit in ingredients:
+            ingredient = crud.get_or_create_ingredient(
+                db_session, None, name, system_account.id
+            )
+            recipe.ingredients.append(
+                models.RecipeIngredient(
+                    ingredient=ingredient, quantity=quantity, unit=models.UnitEnum(unit)
+                )
+            )
+        for name in tags:
+            recipe.tags.append(crud.get_or_create_tag(db_session, name, system_account.id))
+        recipe.catalog_entry = models.CatalogEntry(
+            status=status,
+            retired_at=datetime.utcnow() if status == "retired" else None,
+        )
+        db_session.add(recipe)
+        db_session.flush()
+        return recipe
+
+    return _make
+
+
+@pytest.fixture
+def admin_user(db_session):
+    """An account with ``is_admin`` set.
+
+    Test-only. ADM-2: nothing in the application writes ``is_admin`` -- it is
+    granted by SQL alone -- so a test needing an admin sets it directly here.
+    """
+    import crud
+
+    account = crud.create_user(
+        db_session,
+        email="admin@test.local",
+        username="admin_account",
+        hashed_password="x",
+    )
+    account.is_admin = True
+    db_session.flush()
+    return account
+
+
 def db_client(session):
     """Return a ``TestClient`` reading ``session`` with nobody logged in.
 
