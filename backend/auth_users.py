@@ -209,3 +209,18 @@ def get_current_user(
     if user is None:
         raise credentials_error
     return user
+
+
+def require_admin(
+    current_user: models.User = Depends(get_current_user),
+) -> models.User:
+    """FastAPI dependency admitting only an ``is_admin`` account (ADM-3).
+
+    Unauthenticated callers never get here: :func:`get_current_user` answers
+    401 first. Everyone else who is not an admin gets one fixed 403 body, which
+    reveals nothing about the resource they asked for (PRV-5). The flag itself
+    is granted by SQL alone (ADM-2); this only reads it.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return current_user
