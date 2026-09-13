@@ -12,8 +12,8 @@ import { TOURS } from './steps'
 // tour and nothing else; `steps` is an override for tests.
 //
 // `enabled` lets a page hold the tour back until it is worth running — Recipes
-// uses it to let the starter-recipes modal go first, so a brand-new account
-// isn't taught about a recipe grid that is still empty.
+// uses it to wait for its first load, so the tour never points at a grid whose
+// cards have not arrived yet.
 export function PageTour({ id, steps, enabled = true }) {
   const tourSteps = steps ?? TOURS[id]
   const tour = useTour({ id, steps: tourSteps, enabled })
