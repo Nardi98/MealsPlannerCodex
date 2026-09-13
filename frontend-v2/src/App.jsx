@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar'
 import NavDrawer from './components/NavDrawer'
 import { useIsMobile } from './hooks/useIsMobile'
 import RecipesPage from './pages/RecipesPage'
+import DiscoverPage from './pages/DiscoverPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
@@ -153,6 +154,7 @@ function Shell() {
             <Routes>
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/discover" element={<DiscoverPage />} />
               <Route path="/meal-plan" element={<MealPlanPage />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />

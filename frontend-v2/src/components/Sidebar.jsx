@@ -7,10 +7,14 @@ import {
   BeakerIcon,
   ArrowUpTrayIcon,
   InboxArrowDownIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', match: (p) => p === '/' || p === '/recipes' },
+  // Terracotta: the last distinct category hue not already on a nav icon (the
+  // other unused tokens -- sage, clay, forest -- alias core chrome colours).
+  { label: 'Discover', path: '/discover', Icon: SparklesIcon, color: 'var(--cat-terracotta)', match: (p) => p === '/discover' },
   { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', match: (p) => p === '/meal-plan' },
   { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', match: (p) => p === '/shared-with-me' },
   { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', match: (p) => p === '/ingredients' },
