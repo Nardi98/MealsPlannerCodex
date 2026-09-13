@@ -9,13 +9,16 @@ scripts and a future self-service publish flow alike (FC-5).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy import Select, distinct, func, select
 from sqlalchemy.orm import Session, aliased, contains_eager, selectinload
 
+import crud
 import models
 import recipe_copy
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
@@ -25,6 +28,8 @@ __all__ = [
     "SYSTEM_ACCOUNT_EMAIL",
     "LISTING_CAP",
     "ADOPT_BATCH_MAX",
+    "PACK_PATH",
+    "POPULATE_LOCK_KEY",
     "SystemAccountMissing",
     "CatalogEntryNotFound",
     "IncompleteRecipe",
@@ -32,6 +37,7 @@ __all__ = [
     "AdoptResult",
     "system_user",
     "ensure_system_account",
+    "populate_from_pack",
     "list_published",
     "get_published",
     "adoption_counts",
@@ -45,6 +51,15 @@ __all__ = [
 #: finds it by ``User.is_system``, so renaming it is a one-row UPDATE.
 SYSTEM_ACCOUNT_USERNAME = "mealplanner"
 SYSTEM_ACCOUNT_EMAIL = "mealplanner@localhost"
+
+#: INIT-1: the recipes the catalog ships with. Resolved from this file rather
+#: than the working directory, so startup finds it wherever it is launched.
+PACK_PATH = Path(__file__).resolve().parent / "data" / "catalog_pack.json"
+
+#: The ``pg_advisory_xact_lock`` key serialising :func:`populate_from_pack`
+#: across instances. Any fixed bigint works; it only has to be unique among the
+#: app's advisory locks, and this is the only one. (ASCII "catpack".)
+POPULATE_LOCK_KEY = 0x6361747061636B
 
 #: API-20: the hard cap on one catalog listing. The catalog ships with 60
 #: entries; past this cap, pagination is the intended next step.
@@ -133,6 +148,75 @@ def ensure_system_account(session: Session) -> models.User:
     seed_system_tags(session, account.id)
     seed_system_ingredients(session, account.id)
     return account
+
+
+def populate_from_pack(session: Session, path: Path = PACK_PATH) -> int:
+    """Load the pack into an empty catalog; return how many entries were created.
+
+    Runs on every start (INIT-8, INIT-13), so it does nothing once the system
+    account holds *any* catalog entry, retired ones included (INIT-10): it never
+    updates or reconciles an existing catalog recipe, and an admin's edit
+    survives every restart (INIT-11). Ingredient and tag names resolve in the
+    system account's own namespace, onto the rows its seeders created, so the
+    recipes carry real seasonality and conversions (INIT-9, SYS-8).
+
+    Each entry is created ``published`` whatever the file says: an export file
+    carries ``status``, ``published_at`` and ``retired_at``, which are ignored
+    (EXP-5). The recipes stay ``private`` (P2-2). The whole pack lands in one
+    commit and any failure rolls it all back, so a start never leaves half a
+    catalog that INIT-10 would then refuse to complete.
+    """
+    system = ensure_system_account(session)
+    # INIT-13 across instances: two starting together would both find the
+    # catalog empty and load it twice. The second now waits here until the
+    # first commits, then finds it full. Taken only now, because
+    # ``ensure_system_account`` commits and a transaction-scoped lock taken
+    # before it would already have been released.
+    session.execute(select(func.pg_advisory_xact_lock(POPULATE_LOCK_KEY)))
+    populated = session.execute(
+        select(models.CatalogEntry.recipe_id)
+        .join(models.Recipe, models.Recipe.id == models.CatalogEntry.recipe_id)
+        .where(models.Recipe.user_id == system.id)
+        .limit(1)
+    ).first()
+    if populated is not None:
+        # Release the lock by ending its transaction. Commit, not rollback:
+        # ``ensure_system_account`` has just committed, so the transaction holds
+        # nothing but the lock and this read, and a commit cannot discard work
+        # a caller left pending, which a rollback would if that ever changed.
+        session.commit()
+        return 0
+
+    items = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        for item in items:
+            recipe = models.Recipe(
+                user_id=system.id,
+                title=item["title"],
+                course=item["course"],
+                servings=item["servings"],
+                bulk_prep=item["bulk_prep"],
+                procedure=item["procedure"],
+                visibility="private",
+                catalog_entry=models.CatalogEntry(
+                    status="published", published_at=datetime.utcnow(), retired_at=None
+                ),
+            )
+            session.add(recipe)
+            for line in item["ingredients"]:
+                recipe.ingredients.append(
+                    models.RecipeIngredient(
+                        ingredient=crud.get_or_create_ingredient(session, None, line["name"], system.id),
+                        quantity=line["quantity"],
+                        unit=models.UnitEnum(line["unit"]),
+                    )
+                )
+            recipe.tags = [crud.get_or_create_tag(session, name, system.id) for name in item["tags"]]
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return len(items)
 
 
 # --- Popularity (POP-1..4, FC-3) ---------------------------------------------

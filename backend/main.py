@@ -49,7 +49,7 @@ import auth_users
 
 
 def _bootstrap(session: Session) -> None:
-    """Idempotent startup data: system tags per account, reserved handles.
+    """Idempotent startup data: system tags per account, reserved handles, the catalog.
 
     A function rather than a bare module-level block so the behaviour is
     reachable from a test; ``main`` still runs it once at import.
@@ -69,6 +69,15 @@ def _bootstrap(session: Session) -> None:
     # UN-4: the reserved list must be in place before the first registration,
     # or the first person to sign up could claim ``admin``.
     usernames.seed_reserved(session)
+    # INIT-8: the catalog pack, loaded once into an empty catalog and never
+    # re-applied (INIT-10/11). After the reserved list, which also reserves the
+    # system account's own ``mealplanner`` handle; a reservation never checks
+    # the users table, so the account holding that handle is not in conflict.
+    # Imported here so this hunk stays inside ``_bootstrap``, clear of the
+    # module's import block that the catalog routers also edit.
+    import catalog
+
+    catalog.populate_from_pack(session)
     session.commit()
 
 

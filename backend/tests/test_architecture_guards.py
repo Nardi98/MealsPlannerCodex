@@ -5,15 +5,21 @@ expensive to discover later. They live together because none is large enough to
 justify its own module and all of them answer the same question: "is the
 codebase still wired the way the docs say it is?"
 
-- Import layout -- one canonical set of ORM models / db / crud (audit #8).
+- Import layout -- one canonical set of ORM models / db / crud (audit #8), and
+  ``catalog.py`` imports no router and no ``main`` (CAT-11).
+- Scoping -- production calls to user-scoped ``crud``/``planner`` functions pass
+  ``user_id``.
 - Pydantic v2 -- no v1-style ``class Config``, no deprecation warnings.
 - Runtime DDL -- Alembic owns the schema; no request may issue DDL.
 - Destructive seed -- ``reset_database`` is gated behind an explicit opt-in.
 """
+import ast
 import importlib
 import io
 import json
+import sys
 import warnings
+from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
@@ -24,6 +30,8 @@ import schemas
 from database import Base
 
 from scripts.seed_testing_data import ALLOW_DESTRUCTIVE_SEED_ENV, reset_database
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 # --------------------------------------------------------------------------
@@ -46,6 +54,136 @@ def test_no_shim_submodules():
     for name in ("mealplanner.models", "mealplanner.db", "mealplanner.crud"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(name)
+
+
+def _imported_modules(path):
+    """Every module name ``path`` imports, read from its AST (not by importing it)."""
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+    return names
+
+
+def test_catalog_service_imports_no_router_and_no_main():
+    """CAT-11 / TST-11: startup, seed scripts and routers all call ``catalog``.
+
+    It must not reach back into ``main``, any router or the frontend, or it
+    could no longer be imported from startup without a cycle.
+    """
+    imported = _imported_modules(BACKEND_ROOT / "catalog.py")
+    assert imported, "the AST walk found no imports at all"
+
+    forbidden = {
+        name
+        for name in imported
+        if name.split(".")[0] in {"main", "public_pages", "ops_routes"}
+        or name.split(".")[0].endswith("_routes")
+        or "frontend" in name.replace("-", "_").split(".")[0]
+    }
+    assert forbidden == set()
+
+
+def _user_scoped_functions(path):
+    """``{name: index of user_id among positional params, or None if keyword-only}``."""
+    scoped = {}
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        positional = [arg.arg for arg in node.args.posonlyargs + node.args.args]
+        if "user_id" in positional:
+            scoped[node.name] = positional.index("user_id")
+        elif any(arg.arg == "user_id" for arg in node.args.kwonlyargs):
+            scoped[node.name] = None
+    return scoped
+
+
+def _unscoped_calls(path, targets):
+    """Calls in ``path`` to a user-scoped function that do not pass ``user_id``.
+
+    ``targets`` maps a defining module's stem to its scoped functions. A call
+    matches as ``<module>.<fn>(...)`` (``crud.get_recipe``, ``planner.generate_plan``)
+    or, inside the defining module itself, as a bare ``<fn>(...)``. Anything
+    else with the same name -- ``auth_users.create_refresh_token`` -- is a
+    different function and is not matched.
+    """
+    found = []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+            module, name = func.value.id, func.attr
+        elif isinstance(func, ast.Name):
+            module, name = path.stem, func.id
+        else:
+            continue
+        scoped = targets.get(module, {})
+        if name not in scoped:
+            continue
+        position = scoped[name]
+        by_keyword = any(keyword.arg == "user_id" for keyword in node.keywords)
+        by_position = position is not None and len(node.args) > position
+        if not (by_keyword or by_position):
+            found.append(f"{path.relative_to(BACKEND_ROOT).as_posix()}:{node.lineno} {module}.{name}")
+    return found
+
+
+def _production_modules():
+    """Backend-root modules plus ``mealplanner/`` -- never tests, scripts or migrations."""
+    return sorted(BACKEND_ROOT.glob("*.py")) + sorted((BACKEND_ROOT / "mealplanner").glob("*.py"))
+
+
+#: Unscoped calls that are known and deliberate, each with the reason.
+UNSCOPED_ALLOWLIST = {
+    # ``seed._create_recipe`` builds the global (ownerless) demo data of
+    # ``seed_sample_data``. Only tests call either (``test_seed``,
+    # ``test_tag_creation``); no route, startup hook or deploy step does.
+    "mealplanner/seed.py:91 crud.get_or_create_tag",
+}
+
+
+def test_production_calls_to_user_scoped_functions_pass_user_id():
+    """Every production call to a ``crud``/``planner`` function taking ``user_id`` passes it.
+
+    Omitting it silently widens the query to every account's rows (``scope``
+    treats ``None`` as unscoped), which is a data leak rather than an error.
+    """
+    targets = {
+        "crud": _user_scoped_functions(BACKEND_ROOT / "crud.py"),
+        "planner": _user_scoped_functions(BACKEND_ROOT / "mealplanner" / "planner.py"),
+    }
+    assert targets["crud"] and targets["planner"], "found no user-scoped functions to check"
+
+    unscoped = [
+        call
+        for path in _production_modules()
+        for call in _unscoped_calls(path, targets)
+    ]
+
+    assert sorted(set(unscoped) - UNSCOPED_ALLOWLIST) == []
+
+
+def test_the_scoping_guard_resolves_positional_keyword_and_same_named_calls(tmp_path, monkeypatch):
+    """The guard's own matching rules, on a fixture module."""
+    monkeypatch.setattr(sys.modules[__name__], "BACKEND_ROOT", tmp_path)
+    module = tmp_path / "sample.py"
+    module.write_text(
+        "crud.get_or_create_ingredient(session, None, name, system.id)\n"
+        "crud.get_or_create_ingredient(session, None, name)\n"
+        "crud.get_recipe(session, 1, user_id=2)\n"
+        "auth_users.create_refresh_token(session, user)\n"
+        "crud.create_refresh_token(session)\n",
+        encoding="utf-8",
+    )
+    targets = {"crud": {"get_or_create_ingredient": 3, "get_recipe": 2, "create_refresh_token": None}}
+
+    assert _unscoped_calls(module, targets) == [
+        "sample.py:2 crud.get_or_create_ingredient",
+        "sample.py:5 crud.create_refresh_token",
+    ]
 
 
 def test_canonical_modules_import_cleanly():
