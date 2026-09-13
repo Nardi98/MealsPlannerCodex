@@ -121,6 +121,9 @@ export default function RecipesPage() {
   // The first load has settled. The tutorial and both empty states wait for it,
   // so neither flashes up before the recipes arrive.
   const [loaded, setLoaded] = React.useState(false)
+  // A failed load leaves `recipes` empty without the book being empty, so the
+  // RM-6 call to action must not read it as one.
+  const [loadFailed, setLoadFailed] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
@@ -153,6 +156,7 @@ export default function RecipesPage() {
         setIngredientNames(ingRes.map((i) => i.name))
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
+        setLoadFailed(true)
       } finally {
         setLoaded(true)
       }
@@ -515,8 +519,8 @@ export default function RecipesPage() {
       </div>
 
       {/* RM-6: an empty book is pointed at the recipe library, its route to a
-          populated book. */}
-      {loaded && recipes.length === 0 && (
+          populated book -- only after a load that succeeded and found none. */}
+      {loaded && !loadFailed && recipes.length === 0 && (
         <Card className="flex flex-col items-center gap-3 py-8 text-center">
           <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
             Your recipe book is empty. Start with a few dishes from the recipe library.

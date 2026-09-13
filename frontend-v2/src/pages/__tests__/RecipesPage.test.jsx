@@ -444,6 +444,23 @@ test('the library call to action navigates to /discover', async () => {
   expect(await screen.findByText('Discover page')).toBeInTheDocument()
 })
 
+// A failed load says nothing about the book: a network blip must not tell a
+// user with fifty recipes that theirs is empty.
+test('a failed load shows no library call to action', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  recipesApi.fetchAll.mockRejectedValue(new Error('offline'))
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  renderPage()
+  // The tour gate flips once the load settles, failed or not (RM-5).
+  await waitFor(() =>
+    expect(screen.getByTestId('page-tour-recipes')).toHaveAttribute('data-enabled', 'true'),
+  )
+
+  expect(screen.queryByRole('button', { name: 'Browse the recipe library' })).toBeNull()
+})
+
 test('a book with recipes shows no library call to action', async () => {
   recipesApi.fetchAll.mockResolvedValue([{ id: 1, title: 'Risotto', course: 'main' }])
   tagsApi.fetchAll.mockResolvedValue([])
