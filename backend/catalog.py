@@ -29,6 +29,7 @@ __all__ = [
     "LISTING_CAP",
     "ADOPT_BATCH_MAX",
     "PACK_PATH",
+    "POPULATE_LOCK_KEY",
     "SystemAccountMissing",
     "CatalogEntryNotFound",
     "IncompleteRecipe",
@@ -54,6 +55,11 @@ SYSTEM_ACCOUNT_EMAIL = "mealplanner@localhost"
 #: INIT-1: the recipes the catalog ships with. Resolved from this file rather
 #: than the working directory, so startup finds it wherever it is launched.
 PACK_PATH = Path(__file__).resolve().parent / "data" / "catalog_pack.json"
+
+#: The ``pg_advisory_xact_lock`` key serialising :func:`populate_from_pack`
+#: across instances. Any fixed bigint works; it only has to be unique among the
+#: app's advisory locks, and this is the only one. (ASCII "catpack".)
+POPULATE_LOCK_KEY = 0x6361747061636B
 
 #: API-20: the hard cap on one catalog listing. The catalog ships with 60
 #: entries; past this cap, pagination is the intended next step.
@@ -161,6 +167,12 @@ def populate_from_pack(session: Session, path: Path = PACK_PATH) -> int:
     catalog that INIT-10 would then refuse to complete.
     """
     system = ensure_system_account(session)
+    # INIT-13 across instances: two starting together would both find the
+    # catalog empty and load it twice. The second now waits here until the
+    # first commits, then finds it full. Taken only now, because
+    # ``ensure_system_account`` commits and a transaction-scoped lock taken
+    # before it would already have been released.
+    session.execute(select(func.pg_advisory_xact_lock(POPULATE_LOCK_KEY)))
     populated = session.execute(
         select(models.CatalogEntry.recipe_id)
         .join(models.Recipe, models.Recipe.id == models.CatalogEntry.recipe_id)
@@ -168,6 +180,11 @@ def populate_from_pack(session: Session, path: Path = PACK_PATH) -> int:
         .limit(1)
     ).first()
     if populated is not None:
+        # Release the lock by ending its transaction. Commit, not rollback:
+        # ``ensure_system_account`` has just committed, so the transaction holds
+        # nothing but the lock and this read, and a commit cannot discard work
+        # a caller left pending, which a rollback would if that ever changed.
+        session.commit()
         return 0
 
     items = json.loads(path.read_text(encoding="utf-8"))

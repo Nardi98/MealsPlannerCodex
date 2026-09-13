@@ -8,9 +8,10 @@ is rolled back afterwards.
 """
 
 import json
+from contextlib import contextmanager
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.orm import sessionmaker
 
 import catalog
@@ -235,6 +236,60 @@ def test_the_test_run_cleanup_is_a_no_op_without_a_system_account(db_session, us
     assert db_session.get(models.User, user.id) is not None
     assert _count(db_session, select(models.ReservedUsername.username)) == reserved
     assert db_session.scalar(select(models.User.id).where(models.User.is_system.is_(True))) is None
+
+
+@contextmanager
+def _statements(engine):
+    seen = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        seen.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _record)
+    try:
+        yield seen
+    finally:
+        event.remove(engine, "before_cursor_execute", _record)
+
+
+def _lock_then_emptiness_check(statements):
+    locks = [i for i, s in enumerate(statements) if "pg_advisory_xact_lock" in s]
+    checks = [i for i, s in enumerate(statements) if "FROM catalog_entries JOIN recipes" in s]
+    return locks, checks
+
+
+@pytest.mark.parametrize("already_populated", [False, True])
+def test_populate_takes_the_advisory_lock_before_checking_emptiness(
+    db_session, engine, make_catalog_recipe, already_populated
+):
+    """Two instances starting together: the second waits, then finds the catalog full."""
+    if already_populated:
+        make_catalog_recipe("Existing")
+
+    with _statements(engine) as statements:
+        catalog.populate_from_pack(db_session)
+
+    locks, checks = _lock_then_emptiness_check(statements)
+    assert len(locks) == 1
+    assert len(checks) == 1
+    assert locks[0] < checks[0]
+
+
+def test_the_early_return_commits_to_release_the_lock(
+    db_session, engine, make_catalog_recipe, monkeypatch
+):
+    """``return 0`` ends the lock's transaction with a commit, never a rollback."""
+    make_catalog_recipe("Existing")
+    real_commit, real_rollback = db_session.commit, db_session.rollback
+
+    with _statements(engine) as timeline:
+        monkeypatch.setattr(db_session, "commit", lambda: (timeline.append("COMMIT()"), real_commit())[1])
+        monkeypatch.setattr(db_session, "rollback", lambda: (timeline.append("ROLLBACK()"), real_rollback())[1])
+        assert catalog.populate_from_pack(db_session) == 0
+
+    _, checks = _lock_then_emptiness_check(timeline)
+    assert "COMMIT()" in timeline[checks[0]:]
+    assert "ROLLBACK()" not in timeline
 
 
 def test_a_bad_item_writes_nothing(db_session, system_account, tmp_path):
