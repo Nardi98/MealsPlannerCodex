@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from datetime import date
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, select
 from sqlalchemy.orm import sessionmaker
 
 import catalog
@@ -484,3 +484,303 @@ def test_held_by_reports_each_users_own_copies(
     assert mine == {pesto.id, ragu.id}
     assert len(statements) == 1
     assert catalog.held_by(db_session, other_user, ids) == {ragu.id}
+
+
+# --- adopt (ADO-1..16, ERR-1..4, ERR-12, PRV-6, TST-2) -----------------------
+
+def _recipes_of(db_session, person):
+    return db_session.execute(
+        select(models.Recipe).where(models.Recipe.user_id == person.id).order_by(models.Recipe.id)
+    ).scalars().all()
+
+
+def _copy_count(db_session, recipe_id):
+    return db_session.execute(
+        select(models.Recipe.copy_count).where(models.Recipe.id == recipe_id)
+    ).scalar_one()
+
+
+def test_adopt_creates_a_private_copy_with_the_full_snapshot(
+    db_session, make_catalog_recipe, system_account, user
+):
+    source = make_catalog_recipe("Stew", course="first-course", bulk_prep=True, servings=4,
+                                 procedure="Simmer for two hours.")
+    source.score = 9.5
+    source.date_last_consumed = date(2026, 1, 1)
+    source.date_last_rejected = date(2026, 2, 1)
+    db_session.flush()
+
+    result = catalog.adopt(db_session, user, [source.id])
+
+    assert isinstance(result, catalog.AdoptResult)
+    assert result.skipped_ids == []
+    [made] = _recipes_of(db_session, user)
+    assert result.created_ids == [made.id]
+    # ADO-8: the attribution snapshot (POP-1 depends on source_recipe_id).
+    assert made.source_recipe_id == source.id
+    assert made.source_user_id == system_account.id
+    assert made.source_author_username == system_account.username
+    assert made.source_recipe_title == "Stew"
+    assert made.copied_at is not None
+    # ADO-9 and D2.
+    assert made.visibility == "private"
+    assert made.copy_count == 0
+    assert made.bulk_prep is True
+    assert (made.title, made.course, made.servings, made.procedure) == (
+        "Stew", "first-course", 4, "Simmer for two hours."
+    )
+    # ADO-10: no planner history crosses accounts.
+    assert made.score is None
+    assert made.date_last_consumed is None
+    assert made.date_last_rejected is None
+
+
+def test_adopted_ingredients_and_tags_live_in_the_adopters_namespace(
+    db_session, make_catalog_recipe, user
+):
+    own_pasta = crud.get_or_create_ingredient(db_session, None, "Pasta", user.id)
+    own_tag = crud.get_or_create_tag(db_session, "pasta", user.id)
+    db_session.flush()
+    source = make_catalog_recipe(
+        "Aglio e olio", ingredients=(("Pasta", 80, "g"), ("Olive oil", 10, "ml")), tags=("pasta", "quick")
+    )
+
+    catalog.adopt(db_session, user, [source.id])
+
+    [made] = _recipes_of(db_session, user)
+    by_name = {link.ingredient.name: link.ingredient for link in made.ingredients}
+    assert by_name["Pasta"].id == own_pasta.id  # ADO-11: reused, not duplicated
+    assert all(i.user_id == user.id for i in by_name.values())
+    tags = {t.name: t for t in made.tags}
+    assert tags["pasta"].id == own_tag.id  # ADO-12
+    assert all(t.user_id == user.id for t in tags.values())
+
+
+def test_adopting_a_main_with_favourite_sides_creates_exactly_one_recipe(
+    db_session, make_catalog_recipe, user
+):
+    """ADO-2 / TST-2. Its counterpart, that ``copy_recipe`` *does* copy sides (ADO-3), is
+    ``tests/test_copy_recipe.py::test_favourite_sides_are_copied_and_relinked``."""
+    main = make_catalog_recipe("Roast", course="main")
+    main.favorite_sides.append(make_catalog_recipe("Potatoes", course="side"))
+    db_session.flush()
+
+    result = catalog.adopt(db_session, user, [main.id])
+
+    made = _recipes_of(db_session, user)
+    assert [r.title for r in made] == ["Roast"]
+    assert result.created_ids == [made[0].id]
+    assert made[0].favorite_sides == []
+
+
+def test_an_already_held_recipe_is_skipped(db_session, make_catalog_recipe, user):
+    held = make_catalog_recipe("Held")
+    fresh = make_catalog_recipe("Fresh")
+    catalog.adopt(db_session, user, [held.id])
+
+    result = catalog.adopt(db_session, user, [held.id, fresh.id])
+
+    assert result.skipped_ids == [held.id]
+    assert len(result.created_ids) == 1
+    assert sorted(r.title for r in _recipes_of(db_session, user)) == ["Fresh", "Held"]
+
+
+def test_a_copy_made_by_sharing_counts_as_held(db_session, make_catalog_recipe, user):
+    """ADO-7 is ``existing_copy``: any copy with this source, however it was made."""
+    source = make_catalog_recipe("Pesto")
+    _copy(db_session, source, user)
+
+    result = catalog.adopt(db_session, user, [source.id])
+
+    assert result == catalog.AdoptResult(created_ids=[], skipped_ids=[source.id])
+
+
+def test_adopting_only_held_recipes_creates_nothing(db_session, make_catalog_recipe, user):
+    first = make_catalog_recipe("First")
+    second = make_catalog_recipe("Second")
+    catalog.adopt(db_session, user, [first.id, second.id])
+    before = len(_recipes_of(db_session, user))
+
+    result = catalog.adopt(db_session, user, [second.id, first.id])
+
+    assert result.created_ids == []
+    assert result.skipped_ids == sorted([first.id, second.id])
+    assert len(_recipes_of(db_session, user)) == before
+
+
+def test_submitting_the_same_batch_twice_makes_no_duplicates(db_session, make_catalog_recipe, user):
+    """ERR-12, in sequence as the spec requires."""
+    ids = [make_catalog_recipe("One").id, make_catalog_recipe("Two").id]
+
+    first = catalog.adopt(db_session, user, ids)
+    second = catalog.adopt(db_session, user, ids)
+
+    assert len(first.created_ids) == 2
+    assert second.created_ids == []
+    assert sorted(r.source_recipe_id for r in _recipes_of(db_session, user)) == sorted(ids)
+
+
+def test_duplicate_ids_in_one_batch_count_once(db_session, make_catalog_recipe, user):
+    source = make_catalog_recipe("Pesto")
+
+    result = catalog.adopt(db_session, user, [source.id, source.id, source.id])
+
+    assert len(result.created_ids) == 1
+    assert result.skipped_ids == []
+    assert len(_recipes_of(db_session, user)) == 1
+    assert _copy_count(db_session, source.id) == 1
+
+
+def test_created_ids_follow_the_source_ids_in_ascending_order(db_session, make_catalog_recipe, user):
+    a, b, c = (make_catalog_recipe(t) for t in ("A", "B", "C"))
+
+    result = catalog.adopt(db_session, user, [c.id, a.id, b.id])
+
+    by_id = {r.id: r for r in _recipes_of(db_session, user)}
+    assert [by_id[i].source_recipe_id for i in result.created_ids] == [a.id, b.id, c.id]
+
+
+def test_adopt_increments_the_source_copy_count(db_session, make_catalog_recipe, user, other_user):
+    source = make_catalog_recipe("Pesto")
+
+    catalog.adopt(db_session, user, [source.id])
+    catalog.adopt(db_session, other_user, [source.id])
+    catalog.adopt(db_session, other_user, [source.id])  # skipped: no increment
+
+    assert _copy_count(db_session, source.id) == 2
+
+
+@pytest.fixture
+def not_adoptable(db_session, make_catalog_recipe, make_system_recipe, make_recipe, user, other_user):
+    """One id of each kind ADO-14 / PRV-6 says ``adopt`` must refuse."""
+    theirs = crud.create_recipe(db_session, title="Theirs", course="main", user_id=other_user.id)
+    return {
+        "retired": make_catalog_recipe("Retired", status="retired").id,
+        "uncatalogued": make_system_recipe(title="Draft").id,
+        "another user's recipe": theirs.id,
+        "the adopter's own recipe": make_recipe("Mine").id,
+        "a user's copy of an entry": _copy(db_session, make_catalog_recipe("Entry"), other_user).id,
+        "nonexistent": 10**9,
+    }
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["retired", "uncatalogued", "another user's recipe", "the adopter's own recipe",
+     "a user's copy of an entry", "nonexistent"],
+)
+def test_anything_but_a_published_entry_is_not_found_and_nothing_is_written(
+    db_session, make_catalog_recipe, other_user, not_adoptable, kind, monkeypatch
+):
+    good = make_catalog_recipe("Good")
+    recipes_before = len(_recipes_of(db_session, other_user))
+    commits = []
+    monkeypatch.setattr(db_session, "commit", lambda: commits.append(1))
+
+    with pytest.raises(catalog.CatalogEntryNotFound):
+        catalog.adopt(db_session, other_user, [good.id, not_adoptable[kind]])
+
+    assert commits == []
+    assert len(_recipes_of(db_session, other_user)) == recipes_before
+    assert _copy_count(db_session, good.id) == 0
+
+
+def test_a_failure_part_way_rolls_back_the_whole_batch(
+    db_session, make_catalog_recipe, user, monkeypatch
+):
+    """ADO-6: the first copy reaches the database, and is still undone."""
+    first = make_catalog_recipe("First")
+    second = make_catalog_recipe("Second")
+    db_session.commit()  # keep the fixtures out of reach of the rollback under test
+    real_duplicate = recipe_copy.duplicate
+    calls = []
+
+    def failing_on_the_second(session, source, copier):
+        calls.append(source.id)
+        if len(calls) == 2:
+            session.flush()
+            raise RuntimeError("disk full")
+        return real_duplicate(session, source, copier)
+
+    monkeypatch.setattr(recipe_copy, "duplicate", failing_on_the_second)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        catalog.adopt(db_session, user, [first.id, second.id])
+
+    assert len(calls) == 2
+    assert _recipes_of(db_session, user) == []
+    assert _copy_count(db_session, first.id) == 0
+
+
+def test_adopt_commits_exactly_once(db_session, make_catalog_recipe, user, monkeypatch):
+    ids = [make_catalog_recipe(t).id for t in ("A", "B", "C")]
+    real_commit = db_session.commit
+    commits = []
+
+    def spy():
+        commits.append(1)
+        real_commit()
+
+    monkeypatch.setattr(db_session, "commit", spy)
+
+    catalog.adopt(db_session, user, ids)
+
+    assert commits == [1]
+
+
+def test_an_empty_batch_is_refused(db_session, system_account, user):
+    with pytest.raises(ValueError):
+        catalog.adopt(db_session, user, [])
+
+
+def test_an_oversized_batch_is_refused_naming_the_limit(db_session, make_catalog_recipe, user):
+    source = make_catalog_recipe("Pesto")
+    ids = [source.id] + list(range(10**9, 10**9 + catalog.ADOPT_BATCH_MAX))
+
+    with pytest.raises(ValueError, match=str(catalog.ADOPT_BATCH_MAX)):
+        catalog.adopt(db_session, user, ids)
+
+    assert _recipes_of(db_session, user) == []
+
+
+def test_a_full_batch_is_accepted(db_session, make_catalog_recipe, user):
+    source = make_catalog_recipe("Pesto")
+    ids = [source.id] * catalog.ADOPT_BATCH_MAX
+
+    assert len(catalog.adopt(db_session, user, ids).created_ids) == 1
+
+
+def test_adopt_without_a_system_account_raises_the_named_error(
+    db_session, make_catalog_recipe, system_account, user
+):
+    source_id = make_catalog_recipe("Pesto").id
+    system_account.is_system = False  # the flag is the account's only identity (SYS-6)
+    db_session.flush()
+
+    with pytest.raises(catalog.SystemAccountMissing):
+        catalog.adopt(db_session, user, [source_id])
+
+
+def test_adopt_serialises_on_the_adopters_row(db_session, engine, make_catalog_recipe, user):
+    """ERR-12 under real concurrency.
+
+    ``existing_copy`` alone is a check-then-insert: two simultaneous submits can
+    both see "not held" and both insert, since nothing in the schema forbids two
+    copies of one source. ``adopt`` therefore locks the adopter's ``users`` row
+    before checking. A second transaction blocks there until the first commits,
+    and under READ COMMITTED its ``existing_copy`` then sees the first one's
+    copy. Two genuinely concurrent sessions cannot run inside this suite's
+    rolled-back transaction, so this pins the lock itself.
+    """
+    source = make_catalog_recipe("Pesto")
+
+    with count_queries(engine) as statements:
+        catalog.adopt(db_session, user, [source.id])
+
+    locks = [s for s in statements if "FOR NO KEY UPDATE" in s and "FROM users" in s]
+    assert len(locks) == 1
+    existing_copy_checks = [
+        i for i, s in enumerate(statements) if "recipes.source_recipe_id = %(" in s
+    ]
+    assert existing_copy_checks
+    assert statements.index(locks[0]) < existing_copy_checks[0]

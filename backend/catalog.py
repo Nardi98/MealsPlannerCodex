@@ -14,9 +14,10 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import Select, distinct, func, select
-from sqlalchemy.orm import Session, aliased, contains_eager, joinedload, selectinload
+from sqlalchemy.orm import Session, aliased, contains_eager, selectinload
 
 import models
+import recipe_copy
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
 
 __all__ = [
@@ -28,12 +29,14 @@ __all__ = [
     "CatalogEntryNotFound",
     "IncompleteRecipe",
     "CatalogRow",
+    "AdoptResult",
     "system_user",
     "ensure_system_account",
     "list_published",
     "get_published",
     "adoption_counts",
     "held_by",
+    "adopt",
     "publish",
     "retire",
 ]
@@ -70,6 +73,14 @@ class CatalogRow:
 
     recipe: models.Recipe
     adoption_count: int
+
+
+@dataclass(frozen=True)
+class AdoptResult:
+    """What one adopt call did: the new recipes' ids and the source ids already held."""
+
+    created_ids: list[int]
+    skipped_ids: list[int]
 
 
 def system_user(session: Session) -> models.User:
@@ -257,6 +268,72 @@ def get_published(session: Session, recipe_id: int) -> CatalogRow:
     if not rows:
         raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not published")
     return rows[0]
+
+
+# --- Adoption (ADO-1..16, ERR-1..4, ERR-12, PRV-6) ---------------------------
+
+
+def adopt(session: Session, user: models.User, recipe_ids: Iterable[int]) -> AdoptResult:
+    """Copy published catalog recipes into ``user``'s book, all or nothing.
+
+    Only published entries can be adopted: any other id -- retired, never
+    catalogued, someone's private recipe, a user's copy of an entry -- raises
+    :class:`CatalogEntryNotFound` before anything is written, so this is never a
+    general-purpose recipe copier (ADO-14, PRV-6). A recipe the user already
+    holds a copy of is skipped (ADO-7). Each copy is made by
+    :func:`recipe_copy.duplicate`, never ``copy_recipe``, so favourite sides stay
+    behind (ADO-2). The batch lands in exactly one commit and any failure rolls
+    all of it back (ADO-5, ADO-6).
+
+    ``created_ids`` and ``skipped_ids`` follow the source ids in ascending order.
+    """
+    requested = list(recipe_ids)
+    if not requested:
+        raise ValueError("catalog: choose at least one recipe to adopt")
+    if len(requested) > ADOPT_BATCH_MAX:
+        raise ValueError(f"catalog: at most {ADOPT_BATCH_MAX} recipes can be adopted at once")
+    ids = set(requested)
+
+    # ERR-5, as for the listing: a missing account is named, not a 404.
+    system_user(session)
+
+    sources = session.execute(
+        select(models.Recipe)
+        .join(models.Recipe.catalog_entry)
+        .where(models.Recipe.id.in_(ids), models.CatalogEntry.status == "published")
+        .order_by(models.Recipe.id)
+    ).scalars().all()
+    missing = ids - {source.id for source in sources}
+    if missing:
+        raise CatalogEntryNotFound(f"catalog: not published: {sorted(missing)}")
+
+    try:
+        # ERR-12 under concurrency. ``existing_copy`` then insert is a race on
+        # its own: two simultaneous submits could both find nothing held. Locking
+        # the adopter's row makes a second adopt by the same user wait for this
+        # one to commit, after which its ``existing_copy`` sees these copies.
+        # ``NO KEY UPDATE`` still conflicts with itself but not with the key-share
+        # locks that inserting any row referencing this user takes.
+        session.execute(
+            select(models.User.id).where(models.User.id == user.id).with_for_update(key_share=True)
+        )
+        made, skipped_ids = [], []
+        # Ascending source ids, so concurrent batches from different users take
+        # the source rows' copy_count locks in the same order.
+        for source in sources:
+            if recipe_copy.existing_copy(session, source, user) is not None:
+                skipped_ids.append(source.id)
+                continue
+            made.append(recipe_copy.duplicate(session, source, user))
+            # ADO-16. Incremented in SQL so concurrent adopters do not lose counts.
+            source.copy_count = models.Recipe.copy_count + 1
+        session.flush()
+        result = AdoptResult(created_ids=[recipe.id for recipe in made], skipped_ids=skipped_ids)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    return result
 
 
 # --- Curation (CAT-6..10) ----------------------------------------------------
