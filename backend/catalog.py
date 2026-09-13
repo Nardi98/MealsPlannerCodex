@@ -27,6 +27,8 @@ __all__ = [
     "IncompleteRecipe",
     "system_user",
     "ensure_system_account",
+    "publish",
+    "retire",
 ]
 
 #: SYS-3. Used **only** when the account is created (SYS-6): everything else
@@ -105,3 +107,65 @@ def ensure_system_account(session: Session) -> models.User:
     seed_system_tags(session, account.id)
     seed_system_ingredients(session, account.id)
     return account
+
+
+# --- Curation (CAT-6..10) ----------------------------------------------------
+#
+# Both functions flush and never commit: the caller owns the transaction, so the
+# admin routes today and a self-service publish flow later call them unchanged
+# (FC-5).
+
+
+def _missing_part(recipe: models.Recipe) -> str | None:
+    """The first thing CAT-10 requires that ``recipe`` lacks, or ``None``."""
+    if not (recipe.title or "").strip():
+        return "title"
+    if not recipe.ingredients:
+        return "ingredients"
+    if not (recipe.procedure or "").strip():
+        return "procedure"
+    return None
+
+
+def publish(session: Session, recipe: models.Recipe) -> models.CatalogEntry:
+    """Put ``recipe`` in the catalog, or bring a retired entry back (CAT-6, CAT-7).
+
+    Idempotent. ``published_at`` is written once, when the entry is created, and
+    survives every later retire and re-publish (FC-8).
+    """
+    # --- CAT-9 / FC-2: only the system account's recipes may be published. ---
+    # This is the single place that restriction lives. Membership itself does
+    # not depend on ownership (FC-1), so letting users publish their own
+    # recipes later means deleting this block and nothing else.
+    if recipe.user_id != system_user(session).id:
+        raise PermissionError("catalog: only system-owned recipes can be published")
+
+    missing = _missing_part(recipe)
+    if missing is not None:
+        raise IncompleteRecipe(f"catalog: the recipe has no {missing}")
+
+    entry = recipe.catalog_entry
+    if entry is None:
+        entry = models.CatalogEntry(status="published", published_at=datetime.utcnow())
+        recipe.catalog_entry = entry
+    elif entry.status == "retired":
+        entry.status = "published"
+        entry.retired_at = None
+    session.flush()
+    return entry
+
+
+def retire(session: Session, recipe: models.Recipe) -> models.CatalogEntry:
+    """Hide ``recipe`` from the catalog without deleting anything (CAT-8, RET-1..4).
+
+    The entry row stays, so the adoption count and ``published_at`` are there
+    when it is re-published. Retiring a retired entry changes nothing.
+    """
+    entry = recipe.catalog_entry
+    if entry is None:
+        raise CatalogEntryNotFound(f"catalog: recipe {recipe.id} is not catalogued")
+    if entry.status != "retired":
+        entry.status = "retired"
+        entry.retired_at = datetime.utcnow()
+        session.flush()
+    return entry
