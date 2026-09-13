@@ -31,6 +31,7 @@ vi.mock('../pages/IngredientsPage', () => ({ default: () => <div>ingredients-pag
 vi.mock('../pages/ShoppingListPage', () => ({ default: () => <div>shopping-page</div> }))
 vi.mock('../pages/ImportExportPage', () => ({ default: () => <div>import-page</div> }))
 vi.mock('../pages/SharedWithMePage', () => ({ default: () => <div>shared-with-me-page</div> }))
+vi.mock('../pages/DiscoverPage', () => ({ default: () => <div>discover-page</div> }))
 vi.mock('../pages/SharedRecipePage', () => ({ default: () => <div>shared-recipe-page</div> }))
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
@@ -84,6 +85,25 @@ test('offers Shared with me in the sidebar navigation', () => {
   expect(screen.getByRole('button', { name: /shared with me/i })).toBeInTheDocument()
 })
 
+test('routes /discover to the discover page', () => {
+  signedIn(CONFIRMED)
+  visit('/discover')
+  render(<App />)
+  expect(screen.getByText('discover-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover')
+})
+
+test('offers Discover in the sidebar directly after Recipes', () => {
+  signedIn(CONFIRMED)
+  render(<App />)
+  const labels = screen
+    .getAllByRole('button')
+    .map((b) => b.textContent.trim())
+  const recipes = labels.indexOf('Recipes')
+  expect(recipes).toBeGreaterThanOrEqual(0)
+  expect(labels[recipes + 1]).toBe('Discover')
+})
+
 test('routes /shared-with-me to the shared-with-me page', () => {
   signedIn(CONFIRMED)
   visit('/shared-with-me')
@@ -105,7 +125,7 @@ test('sends an unconfirmed handle to the choose-handle page', () => {
   expect(screen.queryByText('recipes-page')).not.toBeInTheDocument()
 })
 
-test.each(['/', '/recipes', '/meal-plan', '/ingredients', '/shopping-list', '/import-export', '/shared-with-me', '/shared/tok', '/anything-else'])(
+test.each(['/', '/recipes', '/meal-plan', '/ingredients', '/shopping-list', '/import-export', '/shared-with-me', '/shared/tok', '/discover', '/anything-else'])(
   'an unconfirmed handle cannot reach %s',
   (path) => {
     signedIn(UNCONFIRMED)
@@ -115,6 +135,7 @@ test.each(['/', '/recipes', '/meal-plan', '/ingredients', '/shopping-list', '/im
     expect(screen.queryByText('recipes-page')).not.toBeInTheDocument()
     expect(screen.queryByText('shared-with-me-page')).not.toBeInTheDocument()
     expect(screen.queryByText('shared-recipe-page')).not.toBeInTheDocument()
+    expect(screen.queryByText('discover-page')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /account menu/i })).not.toBeInTheDocument()
   },
 )
