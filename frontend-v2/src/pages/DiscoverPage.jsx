@@ -255,7 +255,10 @@ export default function DiscoverPage() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [showFilters, isMobile])
 
+  // Locked while adding: a tick landing mid-request would be wiped by the
+  // success path and would clear the in-flight notice (UI-8/UI-15).
   const toggleSelected = (id) => {
+    if (adding) return
     setNotice(null)
     setSelectedIds((ids) => toggleIn(ids, id))
   }
@@ -372,6 +375,7 @@ export default function DiscoverPage() {
               key={recipe.id}
               recipe={recipe}
               selected={selectedIds.includes(recipe.id)}
+              disabled={adding}
               onToggle={() => toggleSelected(recipe.id)}
               onOpen={() => setOpened(recipe)}
             />

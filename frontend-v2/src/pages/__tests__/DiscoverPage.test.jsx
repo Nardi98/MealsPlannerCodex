@@ -269,6 +269,31 @@ test('the add action shows progress while the request is in flight', async () =>
   expect(await screen.findByRole('status')).toBeInTheDocument()
 })
 
+test('the selection is locked while an add is in flight', async () => {
+  let resolve
+  catalogApi.adopt.mockReturnValue(new Promise((r) => { resolve = r }))
+  await renderLoaded()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Spaghetti al pomodoro' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Green salad' }))
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add 2 recipes' }))
+  await screen.findByRole('button', { name: /adding/i })
+
+  const late = screen.getByRole('checkbox', { name: 'Select Roast chicken' })
+  expect(late).toBeDisabled()
+  expect(screen.getByRole('checkbox', { name: 'Select Green salad' })).toBeDisabled()
+  fireEvent.click(late)
+  expect(late).not.toBeChecked()
+  expect(catalogApi.adopt).toHaveBeenCalledWith([1, 3])
+
+  resolve({ created_ids: [101, 102], skipped_ids: [] })
+
+  expect(await screen.findByRole('status')).toHaveTextContent(/added 2 recipes to your book/i)
+  expect(screen.getByRole('checkbox', { name: 'Select Roast chicken' })).toBeEnabled()
+  expect(screen.getByRole('checkbox', { name: 'Select Roast chicken' })).not.toBeChecked()
+  expect(screen.queryByRole('button', { name: /^Add \d+ recipes?$/ })).not.toBeInTheDocument()
+})
+
 test('a failed add names the failure and keeps the selection (UI-15)', async () => {
   catalogApi.adopt.mockRejectedValue(new Error('Rate limit exceeded'))
   await renderLoaded()

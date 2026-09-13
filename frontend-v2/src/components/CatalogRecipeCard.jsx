@@ -47,8 +47,11 @@ export function CatalogRecipeMedia({ recipe, rounded }) {
  * A recipe already in the user's book has no checkbox at all (UI-9): it shows
  * "In your book" in the checkbox's place. The adoption count is an aggregate
  * number only, never who added it (UI-13).
+ *
+ * `disabled` locks the checkbox (but not the detail view) while the page's add
+ * request is in flight, so the selection cannot change under it.
  */
-export default function CatalogRecipeCard({ recipe, selected = false, onToggle, onOpen }) {
+export default function CatalogRecipeCard({ recipe, selected = false, disabled = false, onToggle, onOpen }) {
   const count = recipe.adoption_count ?? 0
   const ingredientCount = (recipe.ingredients || []).length
 
@@ -130,15 +133,16 @@ export default function CatalogRecipeCard({ recipe, selected = false, onToggle, 
         ) : (
           // The whole label is the 44px target, not just the 20px box inside it.
           <label
-            className="flex min-h-11 min-w-0 cursor-pointer items-center gap-2"
+            className={`flex min-h-11 min-w-0 items-center gap-2 ${disabled ? '' : 'cursor-pointer'}`}
             style={{ fontSize: 'var(--text-sm)', color: 'var(--text-strong)' }}
           >
             <input
               type="checkbox"
               checked={selected}
+              disabled={disabled}
               onChange={onToggle}
               aria-label={`Select ${recipe.title}`}
-              className="h-5 w-5 flex-shrink-0 cursor-pointer"
+              className={`h-5 w-5 flex-shrink-0 ${disabled ? '' : 'cursor-pointer'}`}
               style={{ accentColor: 'var(--c-pos)' }}
             />
             Select
