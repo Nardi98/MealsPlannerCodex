@@ -1,4 +1,5 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FunnelIcon,
   GlobeAltIcon,
@@ -108,29 +109,17 @@ function RecipeMedia({ recipe, rounded }) {
   )
 }
 
-// Lazy: the starter pack carries a 30 KB recipe catalogue that only a
-// brand-new, empty account ever renders. Importing it through the barrel would
-// put it in every page's bundle, login included.
-const StarterRecipesModal = React.lazy(() => import('../components/StarterRecipesModal'))
-
-const STARTER_DISMISSED_KEY = 'starterRecipesDismissed'
-
 export default function RecipesPage() {
   const unitSystem = useUnitSystem()
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
   const [showAddSheet, setShowAddSheet] = React.useState(false)
-  // The starter-recipe offer (SR): shown once the first load comes back empty.
-  // Dismissal lives in sessionStorage rather than on the account, so a user who
-  // says "maybe later" is not asked again this session but is offered the pack
-  // again next time they sign in with a book that is still empty.
-  const [showStarter, setShowStarter] = React.useState(false)
-  // The tutorial waits for this. `showStarter` is false until the first load
-  // comes back, so gating the tour on it alone would let the tour open in front
-  // of a starter modal that is about to appear.
+  // The first load has settled. The tutorial and both empty states wait for it,
+  // so neither flashes up before the recipes arrive.
   const [loaded, setLoaded] = React.useState(false)
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
@@ -144,14 +133,7 @@ export default function RecipesPage() {
   const [search, setSearch] = React.useState('')
   const [showFilters, setShowFilters] = React.useState(false)
   const [tags, setTags] = React.useState([])
-  // The account's full ingredient rows. The filter list needs only the names,
-  // but the starter-pack import needs each row's id, unit and seasonality —
-  // fetching them twice was the alternative.
-  const [ingredientRows, setIngredientRows] = React.useState([])
-  const ingredientNames = React.useMemo(
-    () => ingredientRows.map((i) => i.name),
-    [ingredientRows],
-  )
+  const [ingredientNames, setIngredientNames] = React.useState([])
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
   const [selectedCourses, setSelectedCourses] = React.useState([])
@@ -167,11 +149,8 @@ export default function RecipesPage() {
           ingredientsApi.fetchAll(),
         ])
         setRecipes(recipesRes)
-        if (recipesRes.length === 0 && sessionStorage.getItem(STARTER_DISMISSED_KEY) !== '1') {
-          setShowStarter(true)
-        }
         setTags(tagsRes.map((t) => t.name))
-        setIngredientRows(ingRes)
+        setIngredientNames(ingRes.map((i) => i.name))
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
       } finally {
@@ -351,9 +330,9 @@ export default function RecipesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Held back until the first load settles, so a brand-new account is
-          offered the starter pack before being taught about the grid. */}
-      <PageTour id="recipes" enabled={loaded && !showStarter} />
+      {/* RM-5: held back until the first load settles, then runs on every
+          account -- an empty one included, whose steps fall back to the grid. */}
+      <PageTour id="recipes" enabled={loaded} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
           Recipes
@@ -535,8 +514,22 @@ export default function RecipesPage() {
         ))}
       </div>
 
-      {/* Held back on a brand-new account, which gets the starter-pack offer
-          instead -- two empty states firing at once is worse than none. */}
+      {/* RM-6: an empty book is pointed at the recipe library, its route to a
+          populated book. */}
+      {loaded && recipes.length === 0 && (
+        <Card className="flex flex-col items-center gap-3 py-8 text-center">
+          <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+            Your recipe book is empty. Start with a few dishes from the recipe library.
+          </p>
+          <Button variant="primary" onClick={() => navigate('/discover')}>
+            Browse the recipe library
+          </Button>
+        </Card>
+      )}
+
+      {/* RM-7: the `recipes.length > 0` guard keeps this about filters. An
+          empty book belongs to the RM-6 call to action above -- two empty
+          states firing at once is worse than one. */}
       {loaded && recipes.length > 0 && filteredRecipes.length === 0 && (
         <div
           className="flex flex-col items-center gap-3 py-12 text-center"
@@ -715,22 +708,6 @@ export default function RecipesPage() {
           onSave={handleSave}
           initialRecipe={editing}
         />
-      )}
-
-      {showStarter && (
-        <React.Suspense fallback={null}>
-          <StarterRecipesModal
-            ingredients={ingredientRows}
-            onClose={() => {
-              sessionStorage.setItem(STARTER_DISMISSED_KEY, '1')
-              setShowStarter(false)
-            }}
-            onImported={async () => {
-              setShowStarter(false)
-              setRecipes(await recipesApi.fetchAll())
-            }}
-          />
-        </React.Suspense>
       )}
 
       {isMobile && (
