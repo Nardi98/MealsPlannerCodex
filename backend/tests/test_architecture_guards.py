@@ -5,15 +5,18 @@ expensive to discover later. They live together because none is large enough to
 justify its own module and all of them answer the same question: "is the
 codebase still wired the way the docs say it is?"
 
-- Import layout -- one canonical set of ORM models / db / crud (audit #8).
+- Import layout -- one canonical set of ORM models / db / crud (audit #8), and
+  ``catalog.py`` imports no router and no ``main`` (CAT-11).
 - Pydantic v2 -- no v1-style ``class Config``, no deprecation warnings.
 - Runtime DDL -- Alembic owns the schema; no request may issue DDL.
 - Destructive seed -- ``reset_database`` is gated behind an explicit opt-in.
 """
+import ast
 import importlib
 import io
 import json
 import warnings
+from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
@@ -24,6 +27,8 @@ import schemas
 from database import Base
 
 from scripts.seed_testing_data import ALLOW_DESTRUCTIVE_SEED_ENV, reset_database
+
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 # --------------------------------------------------------------------------
@@ -46,6 +51,36 @@ def test_no_shim_submodules():
     for name in ("mealplanner.models", "mealplanner.db", "mealplanner.crud"):
         with pytest.raises(ModuleNotFoundError):
             importlib.import_module(name)
+
+
+def _imported_modules(path):
+    """Every module name ``path`` imports, read from its AST (not by importing it)."""
+    names = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names.add(node.module)
+    return names
+
+
+def test_catalog_service_imports_no_router_and_no_main():
+    """CAT-11 / TST-11: startup, seed scripts and routers all call ``catalog``.
+
+    It must not reach back into ``main``, any router or the frontend, or it
+    could no longer be imported from startup without a cycle.
+    """
+    imported = _imported_modules(BACKEND_ROOT / "catalog.py")
+    assert imported, "the AST walk found no imports at all"
+
+    forbidden = {
+        name
+        for name in imported
+        if name.split(".")[0] in {"main", "public_pages", "ops_routes"}
+        or name.split(".")[0].endswith("_routes")
+        or "frontend" in name.replace("-", "_").split(".")[0]
+    }
+    assert forbidden == set()
 
 
 def test_canonical_modules_import_cleanly():
