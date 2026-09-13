@@ -76,3 +76,46 @@ test('renders the credit even when the copy has been renamed beyond recognition'
 
   expect(screen.getByText(/Adapted from Ribollita by @anna/)).toBeInTheDocument()
 })
+
+// UI-10 / TST-9: a recipe adopted from the catalog credits the library, never
+// the system account's handle -- even if a handle somehow reaches the client.
+test('credits the recipe library for a catalog recipe (UI-10)', () => {
+  const { container } = render(
+    <AttributionLine
+      recipe={{ from_library: true, source_recipe_title: 'Ribollita' }}
+    />
+  )
+
+  expect(container.textContent).toBe('From the recipe library')
+})
+
+test('never renders the handle for a catalog recipe, even when one is present', () => {
+  const { container } = render(
+    <AttributionLine
+      recipe={{
+        from_library: true,
+        source_author_username: 'mealplanner',
+        source_recipe_title: 'Ribollita',
+      }}
+    />
+  )
+
+  expect(container.textContent).toBe('From the recipe library')
+  expect(container.textContent).not.toContain('@')
+  expect(container.textContent).not.toContain('mealplanner')
+})
+
+// FC-4: the library credit is a branch, not a replacement.
+test('keeps the @handle credit for a recipe copied from a real user', () => {
+  render(
+    <AttributionLine
+      recipe={{
+        from_library: false,
+        source_author_username: 'anna',
+        source_recipe_title: 'Ribollita',
+      }}
+    />
+  )
+
+  expect(screen.getByText('Adapted from Ribollita by @anna')).toBeInTheDocument()
+})
