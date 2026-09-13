@@ -26,6 +26,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
+import catalog_routes
 import crud
 import mailer
 import models
@@ -98,6 +99,7 @@ app.include_router(username_routes.router)
 app.include_router(share_routes.router)
 app.include_router(public_pages.router)
 app.include_router(ops_routes.router)
+app.include_router(catalog_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
