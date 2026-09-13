@@ -24,8 +24,9 @@ from sqlalchemy import (
     UniqueConstraint,
     false,
     func,
+    select,
 )
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import column_property, relationship, validates
 from sqlalchemy.types import TypeDecorator
 
 from database import Base
@@ -154,6 +155,10 @@ RESERVED_USERNAMES: tuple[str, ...] = (
     "search",
     "null",
     "undefined",
+    # SYS-4: the catalog's system account. Reserving it is what stops a real
+    # person from impersonating the recipe library; the account itself is
+    # created below the route layer, which is the only place that checks this.
+    "mealplanner",
 )
 
 
@@ -210,6 +215,14 @@ class User(Base):
     email_verified = Column(
         Boolean, nullable=False, server_default=false(), default=False
     )
+    # SYS-1: marks the single account that owns the recipe catalog. Code finds
+    # that account by this flag and never by its handle, email or id (SYS-6),
+    # so the handle can be renamed with a one-row UPDATE.
+    is_system = Column(Boolean, nullable=False, server_default=false(), default=False)
+    # ADM-1 / ADM-2: granted by direct SQL only. No route, service function or
+    # startup path writes it, so privilege escalation over HTTP is impossible by
+    # construction rather than by a guard someone could forget.
+    is_admin = Column(Boolean, nullable=False, server_default=false(), default=False)
 
     @validates("email")
     def _canonicalise_email(self, key: str, value: str) -> str:
@@ -241,6 +254,15 @@ class User(Base):
         # Functional index, so it is Postgres-only -- which the project already
         # is (``database.resolve_database_url`` accepts nothing else).
         Index("uq_user_username_lower", func.lower(username), unique=True),
+        # SYS-2: at most one system account. Two would silently split the
+        # catalog in half, so the database makes that state unrepresentable.
+        # Partial, so the ``false`` every other account holds is unconstrained.
+        Index(
+            "uq_user_single_system",
+            is_system,
+            unique=True,
+            postgresql_where=is_system,
+        ),
     )
 
 
@@ -374,11 +396,29 @@ class Recipe(Base):
     # The two FKs are ``ON DELETE SET NULL`` and the two text columns are
     # snapshots: deleting the source recipe or the source account must not erase
     # the credit (AT-2). Only the immediate source is recorded (AT-6).
+    # Indexed (DM-5): a catalog listing groups copies by their source to count
+    # adopters, which is otherwise a sequential scan of every recipe.
     source_recipe_id = Column(
-        Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("recipes.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     source_user_id = Column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # API-16: a copy whose source account is the system account came from the
+    # recipe library. Derived in SQL rather than stored, so it cannot drift from
+    # the snapshot and ``Recipe`` gains no column (DM-7). ``coalesce`` covers a
+    # copy whose source account was deleted (``source_user_id`` SET NULL).
+    from_library = column_property(
+        func.coalesce(
+            select(User.is_system)
+            .where(User.id == source_user_id)
+            .correlate_except(User)
+            .scalar_subquery(),
+            false(),
+        )
     )
     source_author_username = Column(String, nullable=True)
     source_recipe_title = Column(String, nullable=True)
@@ -405,11 +445,59 @@ class Recipe(Base):
         primaryjoin=id == recipe_favorite_side_table.c.main_recipe_id,
         secondaryjoin=id == recipe_favorite_side_table.c.side_recipe_id,
     )
+    # DM-10. ``passive_deletes`` leaves removal to the table's ``ON DELETE
+    # CASCADE`` instead of having the ORM load the entry just to delete it.
+    catalog_entry = relationship(
+        "CatalogEntry",
+        back_populates="recipe",
+        uselist=False,
+        passive_deletes=True,
+    )
 
     @property
     def favorite_side_ids(self) -> list[int]:
         """The favorite sides flattened to ids, as the API exposes them."""
         return [side.id for side in self.favorite_sides]
+
+
+class CatalogEntry(Base):
+    """A recipe's membership of the recipe catalog (spec §5).
+
+    Curation is kept apart from authorship: a recipe is in the catalog exactly
+    when it has a ``published`` row here (P2-1), whoever owns it. That is what
+    lets a user-published recipe join later by inserting one row (FC-1).
+
+    ``recipe_id`` is the primary key (DM-2) because a recipe is catalogued at
+    most once, and there is deliberately no ``user_id`` (DM-8): the owner is
+    reachable through the recipe, and a copy of it here could contradict it.
+    """
+
+    __tablename__ = "catalog_entries"
+
+    recipe_id = Column(
+        Integer, ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True
+    )
+    status = Column(
+        String, nullable=False, server_default="published", default="published"
+    )
+    published_at = Column(DateTime, nullable=False, server_default=func.now())
+    retired_at = Column(DateTime, nullable=True)
+
+    recipe = relationship("Recipe", back_populates="catalog_entry")
+
+    __table_args__ = (
+        # Both named (MIG-2): an unnamed CHECK has nothing in the metadata to
+        # match the reflected one against -- see ``meals_meal_number_check``.
+        CheckConstraint(
+            "status IN ('published', 'retired')", name="ck_catalog_entry_status"
+        ),
+        # DM-4, the same all-or-nothing shape as
+        # ``ck_meal_leftover_source_all_or_nothing``.
+        CheckConstraint(
+            "(status = 'retired') = (retired_at IS NOT NULL)",
+            name="ck_catalog_entry_retired_all_or_nothing",
+        ),
+    )
 
 
 class Ingredient(Base):

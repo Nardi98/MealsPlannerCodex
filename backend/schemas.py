@@ -98,6 +98,9 @@ class UserOut(BaseModel):
     # Which system this account reads amounts in. Display only.
     unit_system: str = "metric"
     email_verified: bool = False
+    # ADM-5: tells the SPA whether to render admin controls. Output only -- no
+    # request schema carries it (ADM-2).
+    is_admin: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -316,8 +319,20 @@ class RecipeOut(BaseModel):
     source_author_username: Optional[str] = None
     source_recipe_title: Optional[str] = None
     copied_at: Optional[datetime] = None
+    # API-16: read off ``Recipe.from_library``. The SPA renders "From the recipe
+    # library" from this instead of a handle (UI-10).
+    from_library: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="after")
+    def _mask_the_system_handle(self) -> "RecipeOut":
+        # D7 / SYS-7: the copy keeps the full snapshot (ADO-8), so the stored
+        # ``source_author_username`` is the system handle. It is withheld on the
+        # way out -- the flag already says where the recipe came from.
+        if self.from_library:
+            self.source_author_username = None
+        return self
 
 
 class MealAssignment(BaseModel):
