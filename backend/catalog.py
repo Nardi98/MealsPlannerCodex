@@ -9,10 +9,12 @@ scripts and a future self-service publish flow alike (FC-5).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import Select, distinct, func, select
+from sqlalchemy.orm import Session, aliased, contains_eager, joinedload, selectinload
 
 import models
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
@@ -25,8 +27,13 @@ __all__ = [
     "SystemAccountMissing",
     "CatalogEntryNotFound",
     "IncompleteRecipe",
+    "CatalogRow",
     "system_user",
     "ensure_system_account",
+    "list_published",
+    "get_published",
+    "adoption_counts",
+    "held_by",
     "publish",
     "retire",
 ]
@@ -55,6 +62,14 @@ class CatalogEntryNotFound(LookupError):
 
 class IncompleteRecipe(ValueError):
     """The recipe cannot be published; ``str(e)`` names the missing part (CAT-10)."""
+
+
+@dataclass(frozen=True)
+class CatalogRow:
+    """One published entry as a listing sees it: the recipe and its adopter count."""
+
+    recipe: models.Recipe
+    adoption_count: int
 
 
 def system_user(session: Session) -> models.User:
@@ -107,6 +122,141 @@ def ensure_system_account(session: Session) -> models.User:
     seed_system_tags(session, account.id)
     seed_system_ingredients(session, account.id)
     return account
+
+
+# --- Popularity (POP-1..4, FC-3) ---------------------------------------------
+
+
+def _adopter_counts(source_ids) -> Select:
+    """``COUNT(DISTINCT owner)`` of the copies of each of ``source_ids``.
+
+    Derived from ``source_recipe_id`` (POP-1), so deleting a copy lowers the
+    count with no bookkeeping (ERR-10) and a retired entry keeps its history
+    (RET-4). Copies the system account holds are not adoptions (POP-3); it is
+    excluded by its flag, and nothing here assumes the *source* is system-owned
+    (FC-3). ``source_ids`` is anything ``in_`` accepts, a subquery included.
+    """
+    copy = aliased(models.Recipe)
+    return (
+        select(
+            copy.source_recipe_id.label("recipe_id"),
+            func.count(distinct(copy.user_id)).label("adoption_count"),
+        )
+        .join(models.User, models.User.id == copy.user_id)
+        .where(copy.source_recipe_id.in_(source_ids), models.User.is_system.is_(False))
+        .group_by(copy.source_recipe_id)
+    )
+
+
+def adoption_counts(session: Session, recipe_ids: Iterable[int]) -> dict[int, int]:
+    """How many distinct users hold a copy of each recipe, in one query (POP-4).
+
+    Every requested id is in the result; one nobody adopted maps to ``0``.
+    """
+    counts = dict.fromkeys(recipe_ids, 0)
+    counts.update(session.execute(_adopter_counts(list(counts))).tuples().all())
+    return counts
+
+
+def held_by(session: Session, user: models.User, recipe_ids: Iterable[int]) -> set[int]:
+    """Which of ``recipe_ids`` ``user`` already holds a copy of, in one query (API-3)."""
+    return set(
+        session.execute(
+            select(models.Recipe.source_recipe_id)
+            .where(
+                models.Recipe.user_id == user.id,
+                models.Recipe.source_recipe_id.in_(list(recipe_ids)),
+            )
+            .distinct()
+        ).scalars()
+    )
+
+
+# --- Browsing (CAT-4, CAT-5, API-1, API-5, API-20) ---------------------------
+
+
+def _escape_like(text: str) -> str:
+    """``text`` with LIKE's metacharacters made literal, for ``escape="\\\\"`` (ERR-11)."""
+    return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _published_rows(session: Session, criteria: list, sort: str) -> list[CatalogRow]:
+    """Published entries matching ``criteria``, with counts and eager relations.
+
+    Membership is a ``published`` entry and nothing else -- there is no
+    ownership filter, so a user-published recipe would join by its entry alone
+    (P2-1, FC-1). The count is an outer join on one grouped subquery, and the
+    ingredients (with each ingredient row, whose name callers render) and tags
+    are loaded by ``selectinload``, so the statement count is the same for one
+    row or five hundred (CAT-5).
+    """
+    # ERR-5: with no system account the catalog is broken, not empty. Say so by
+    # name instead of returning a quiet ``[]``.
+    system_user(session)
+
+    published = models.CatalogEntry.status == "published"
+    counts = _adopter_counts(
+        select(models.CatalogEntry.recipe_id).where(published)
+    ).subquery()
+    adoption_count = func.coalesce(counts.c.adoption_count, 0)
+    ordering = {"popular": [adoption_count.desc()], "title": []}[sort]
+
+    stmt = (
+        select(models.Recipe, adoption_count)
+        .join(models.Recipe.catalog_entry)
+        .outerjoin(counts, counts.c.recipe_id == models.Recipe.id)
+        .where(published, *criteria)
+        .options(
+            contains_eager(models.Recipe.catalog_entry),
+            selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
+            selectinload(models.Recipe.tags),
+        )
+        # POP-7; the id makes equal titles deterministic too.
+        .order_by(*ordering, models.Recipe.title.asc(), models.Recipe.id.asc())
+        .limit(LISTING_CAP)
+    )
+    return [CatalogRow(recipe, count) for recipe, count in session.execute(stmt).tuples()]
+
+
+def list_published(
+    session: Session,
+    *,
+    course: str | Iterable[str] | None = None,
+    tags: Iterable[str] | None = None,
+    query: str | None = None,
+    sort: str = "popular",
+) -> list[CatalogRow]:
+    """The catalog listing: published entries, filtered, sorted and capped.
+
+    ``course`` matches any of the given courses; ``tags`` must all be present;
+    ``query`` is a case-insensitive literal substring of the title. ``sort`` is
+    ``"popular"`` (adopters descending, then title) or ``"title"``. At most
+    :data:`LISTING_CAP` rows are returned.
+    """
+    if sort not in ("popular", "title"):
+        raise ValueError(f"catalog: unknown sort {sort!r}; expected 'popular' or 'title'")
+
+    criteria = []
+    if course:
+        courses = [course] if isinstance(course, str) else list(course)
+        criteria.append(models.Recipe.course.in_(courses))
+    for name in tags or ():
+        criteria.append(models.Recipe.tags.any(models.Tag.name == name))
+    if query:
+        criteria.append(models.Recipe.title.ilike(f"%{_escape_like(query)}%", escape="\\"))
+    return _published_rows(session, criteria, sort)
+
+
+def get_published(session: Session, recipe_id: int) -> CatalogRow:
+    """One published entry, or :class:`CatalogEntryNotFound` (API-5).
+
+    Retired, never-catalogued and other users' recipes are all simply not found:
+    the caller cannot tell them apart.
+    """
+    rows = _published_rows(session, [models.Recipe.id == recipe_id], "title")
+    if not rows:
+        raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not published")
+    return rows[0]
 
 
 # --- Curation (CAT-6..10) ----------------------------------------------------
