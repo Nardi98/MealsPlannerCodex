@@ -172,8 +172,10 @@ export default function DiscoverPage() {
   const isAdmin = useOptionalAuth()?.user?.is_admin === true
 
   const [rows, setRows] = React.useState([])
-  const [loaded, setLoaded] = React.useState(false)
-  const [loadFailed, setLoadFailed] = React.useState(false)
+  // The latest settled listing request: 'loading' | 'ready' | 'failed'. Only
+  // the first request shows 'loading'; a refetch keeps what is on screen --
+  // stale rows, or the error with its retry -- until it settles.
+  const [status, setStatus] = React.useState('loading')
   const [reloadKey, setReloadKey] = React.useState(0)
 
   const [tagOptions, setTagOptions] = React.useState([])
@@ -222,14 +224,11 @@ export default function DiscoverPage() {
       .then((result) => {
         if (stale) return
         setRows(result)
-        setLoadFailed(false)
+        setStatus('ready')
       })
       .catch((err) => {
         console.error('Failed to load the recipe library', err)
-        if (!stale) setLoadFailed(true)
-      })
-      .finally(() => {
-        if (!stale) setLoaded(true)
+        if (!stale) setStatus('failed')
       })
     return () => {
       stale = true
@@ -458,9 +457,9 @@ export default function DiscoverPage() {
         <>
           <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
 
-          {!loaded && <p style={mutedTextStyle}>Loading the recipe library…</p>}
+          {status === 'loading' && <p style={mutedTextStyle}>Loading the recipe library…</p>}
 
-          {loadFailed && (
+          {status === 'failed' && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
                 Couldn&apos;t load the recipe library.
@@ -471,7 +470,7 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {loaded && !loadFailed && rows.length === 0 && (
+          {status === 'ready' && rows.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p style={mutedTextStyle}>
                 {filtering ? 'No recipes match your search.' : 'The recipe library is empty right now. Check back soon.'}
@@ -484,7 +483,7 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {!loadFailed && rows.length > 0 && (
+          {status === 'ready' && rows.length > 0 && (
             <div className="card-grid">
               {rows.map((recipe) => (
                 <CatalogRecipeCard

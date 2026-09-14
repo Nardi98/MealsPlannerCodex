@@ -80,12 +80,11 @@ export default function RecipesPage() {
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
   const [showAddSheet, setShowAddSheet] = React.useState(false)
-  // The first load has settled. The tutorial and both empty states wait for it,
-  // so neither flashes up before the recipes arrive.
-  const [loaded, setLoaded] = React.useState(false)
-  // A failed load leaves `recipes` empty without the book being empty, so the
-  // RM-6 call to action must not read it as one.
-  const [loadFailed, setLoadFailed] = React.useState(false)
+  // The first load: 'loading' | 'ready' | 'failed'. The tutorial and both empty
+  // states wait for it to settle, so neither flashes up before the recipes
+  // arrive. A failed load leaves `recipes` empty without the book being empty,
+  // so the RM-6 call to action must not read it as one.
+  const [status, setStatus] = React.useState('loading')
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
@@ -115,11 +114,10 @@ export default function RecipesPage() {
         setRecipes(recipesRes)
         setTags(tagsRes.map((t) => t.name))
         setIngredientNames(ingRes.map((i) => i.name))
+        setStatus('ready')
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
-        setLoadFailed(true)
-      } finally {
-        setLoaded(true)
+        setStatus('failed')
       }
     }
     load()
@@ -275,7 +273,7 @@ export default function RecipesPage() {
     <div className="flex flex-col gap-4">
       {/* RM-5: held back until the first load settles, then runs on every
           account -- an empty one included, whose steps fall back to the grid. */}
-      <PageTour id="recipes" enabled={loaded} />
+      <PageTour id="recipes" enabled={status !== 'loading'} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
           Recipes
@@ -435,7 +433,7 @@ export default function RecipesPage() {
 
       {/* RM-6: an empty book is pointed at the recipe library, its route to a
           populated book -- only after a load that succeeded and found none. */}
-      {loaded && !loadFailed && recipes.length === 0 && (
+      {status === 'ready' && recipes.length === 0 && (
         <Card className="flex flex-col items-center gap-3 py-8 text-center">
           <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
             Your recipe book is empty. Start with a few dishes from the recipe library.
@@ -449,7 +447,7 @@ export default function RecipesPage() {
       {/* RM-7: the `recipes.length > 0` guard keeps this about filters. An
           empty book belongs to the RM-6 call to action above -- two empty
           states firing at once is worse than one. */}
-      {loaded && recipes.length > 0 && filteredRecipes.length === 0 && (
+      {status !== 'loading' && recipes.length > 0 && filteredRecipes.length === 0 && (
         <div
           className="flex flex-col items-center gap-3 py-12 text-center"
           style={{ color: 'var(--text-subtle)' }}
