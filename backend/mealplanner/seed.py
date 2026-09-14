@@ -88,7 +88,9 @@ def _create_recipe(
         )
 
     for tag_name in tags:
-        recipe.tags.append(crud.get_or_create_tag(session, tag_name))
+        # Deliberately ownerless: this helper builds test-only global demo data
+        # (``seed_sample_data``), which no route, startup hook or deploy step runs.
+        recipe.tags.append(crud.get_or_create_tag(session, tag_name, user_id=None))
 
 
 def seed_system_tags(session: Session, user_id: int | None = None) -> None:
