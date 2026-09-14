@@ -355,6 +355,41 @@ def test_the_service_flushes_and_never_commits(db_session, system_account, monke
     assert commits == []
 
 
+def _as_stored(db_session, recipe_id):
+    """The AdminRow for ``recipe_id`` rebuilt from the database, nothing from the session."""
+    db_session.expire_all()
+    recipe = db_session.get(models.Recipe, recipe_id)
+    count = catalog.adoption_counts(db_session, [recipe_id])[recipe_id]
+    return catalog_admin_routes.AdminRecipe.build(catalog.CatalogRow(recipe, count)).model_dump(mode="json")
+
+
+def test_every_write_response_is_the_row_as_committed(admin, db_session, make_catalog_recipe, other_user):
+    """A write's body is what a fresh read of the committed rows would render, drafts included."""
+    source = make_catalog_recipe("Stored", ingredients=(("Rice", 80, "g"),), tags=("rice",))
+    catalog.adopt(db_session, other_user, [source.id])
+    draft_id = None
+    calls = [
+        lambda: admin.post("/admin/catalog/recipes", json=recipe_body()),
+        lambda: admin.post("/admin/catalog/recipes", json={**recipe_body(title="Draft"), "publish": False}),
+        lambda: admin.put(f"/admin/catalog/recipes/{draft_id}", json=recipe_body(title="Draft, edited")),
+        lambda: admin.put(
+            f"/admin/catalog/recipes/{source.id}",
+            json=recipe_body(ingredients=[{"name": "Onion", "quantity": 1, "unit": "piece"},
+                                          {"name": "Rice", "quantity": 90, "unit": "g"}]),
+        ),
+        lambda: admin.post(f"/admin/catalog/recipes/{source.id}/retire"),
+        lambda: admin.post(f"/admin/catalog/recipes/{source.id}/publish"),
+        lambda: admin.post(f"/admin/catalog/recipes/{draft_id}/publish"),
+    ]
+
+    for call in calls:
+        response = call()
+        assert response.status_code in (200, 201), response.text
+        body = response.json()
+        draft_id = draft_id or (body["id"] if body["status"] is None else None)
+        assert body == _as_stored(db_session, body["id"])
+
+
 # --- Admin listing (API-9, RET-4) ---------------------------------------------
 
 
