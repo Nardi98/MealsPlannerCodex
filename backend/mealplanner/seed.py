@@ -35,7 +35,7 @@ SYSTEM_INGREDIENTS: list[dict] = json.loads(
 )
 
 # Curated system tags, same story: one data file, read by the backend here and
-# by the starter pack's tests across the repo. Format tags carry the repetition
+# by the catalog pack's integrity test (INIT-6). Format tags carry the repetition
 # penalty; attribute tags do not (repeating them every meal is fine).
 SYSTEM_TAGS: list[dict] = json.loads(
     (_DATA_DIR / "system_tags.json").read_text(encoding="utf-8")
