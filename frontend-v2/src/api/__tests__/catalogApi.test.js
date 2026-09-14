@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, expect, test, vi } from 'vitest'
-import { catalogApi, toRecipeForm, toRecipeWrite } from '../catalogApi'
+import { apiErrorText, catalogApi, recipeWriteProblem, toRecipeForm, toRecipeWrite } from '../catalogApi'
 
 function mockFetch(body, { status = 200 } = {}) {
   globalThis.fetch = vi.fn(() =>
@@ -239,6 +239,57 @@ test.each([
   const [url, opts] = globalThis.fetch.mock.calls[0]
   expect(new URL(url, 'http://x.test').pathname).toBe(path)
   expect(opts.method ?? 'GET').toBe('GET')
+})
+
+// --- Client-side checks mirroring RecipeWrite validation ---------------------
+
+const withLines = (ingredients) => ({ ...FORM, ingredients })
+
+test('recipeWriteProblem finds nothing wrong with a complete recipe', () => {
+  expect(recipeWriteProblem(FORM)).toBeNull()
+})
+
+test.each([
+  ['a blank amount', { amount: '' }],
+  ['a zero amount', { amount: 0 }],
+  ['a negative amount', { amount: -2 }],
+  ['a missing unit', { unit: '' }],
+])('recipeWriteProblem names the ingredient with %s', (_label, change) => {
+  const form = withLines([FORM.ingredients[0], { ...FORM.ingredients[1], ...change }])
+  expect(recipeWriteProblem(form)).toBe('"Olive oil" needs an amount and a unit.')
+})
+
+test('recipeWriteProblem ignores blank lines, which are never sent', () => {
+  expect(recipeWriteProblem(withLines([FORM.ingredients[0], { name: ' ', amount: '', unit: '' }]))).toBeNull()
+})
+
+test('recipeWriteProblem catches a duplicate ingredient with the server message', () => {
+  const form = withLines([FORM.ingredients[0], { ...FORM.ingredients[0], name: ' cavolo nero ', amount: 5 }])
+  expect(recipeWriteProblem(form)).toBe('Duplicate ingredient: cavolo nero')
+})
+
+function apiError(message, data) {
+  return Object.assign(new Error(message), { data })
+}
+
+test('apiErrorText keeps a string detail as the message', () => {
+  const err = apiError('Unknown ingredient: Kale', { detail: 'Unknown ingredient: Kale' })
+  expect(apiErrorText(err)).toBe('Unknown ingredient: Kale')
+  expect(apiErrorText(new Error('Network down'))).toBe('Network down')
+})
+
+test('apiErrorText turns a 422 detail array into readable text, never JSON', () => {
+  const detail = [
+    { loc: ['body', 'ingredients', 0, 'quantity'], msg: 'Input should be greater than 0', type: 'greater_than' },
+    { loc: ['body', 'servings'], msg: 'Input should be greater than or equal to 1', type: 'greater_than_equal' },
+    { loc: ['body'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' },
+  ]
+  const text = apiErrorText(apiError(JSON.stringify({ detail }), { detail }))
+  expect(text).toBe(
+    'ingredient 1 quantity: Input should be greater than 0; ' +
+      'servings: Input should be greater than or equal to 1; ' +
+      'Extra inputs are not permitted',
+  )
 })
 
 test('an admin failure surfaces the backend detail', async () => {

@@ -18,7 +18,7 @@ import Quantity from '../components/Quantity'
 import NewRecipeModal from '../components/NewRecipeModal'
 import CatalogAdminListing from '../components/catalog/CatalogAdminListing'
 import CatalogAdminToolbar from '../components/catalog/CatalogAdminToolbar'
-import { catalogApi, toRecipeForm } from '../api/catalogApi'
+import { apiErrorText, catalogApi, recipeWriteProblem, toRecipeForm } from '../api/catalogApi'
 import { useOptionalAuth } from '../auth/AuthContext'
 import { tagsApi } from '../api/tagsApi'
 import { COURSES } from '../constants/recipeImport'
@@ -48,6 +48,9 @@ const sectionHeadingStyle = {
 const mutedTextStyle = { margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }
 
 const recipesLabel = (n) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
+
+// Ends a reason with exactly one full stop, whether or not it came with one.
+const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
 
 const toggleIn = (list, value) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
@@ -260,7 +263,9 @@ export default function DiscoverPage() {
       .then((result) => !stale && setAdminRows(result))
       .catch((err) => {
         console.error('Failed to load the admin catalog listing', err)
-        if (!stale) setNotice({ kind: 'alert', text: `Couldn't load the retired entries: ${err.message}.` })
+        if (!stale) {
+          setNotice({ kind: 'alert', text: `Couldn't load the retired entries: ${asSentence(apiErrorText(err))}` })
+        }
       })
     return () => {
       stale = true
@@ -274,11 +279,19 @@ export default function DiscoverPage() {
   }
 
   // The form closes as soon as it hands the recipe over, without awaiting
-  // this, so a failure reopens it -- with what was typed and the reason --
-  // rather than losing the recipe.
+  // this, so a problem reopens it -- with what was typed and the reason --
+  // rather than losing the recipe. A slip the server would reject is caught
+  // here first, so it never costs a request.
   const saveRecipe = async (recipe) => {
     const { id } = form
+    const reopen = (reason) =>
+      setForm({ id, initialRecipe: recipe, error: `Couldn't save “${recipe.title}”: ${asSentence(reason)}` })
     setNotice(null)
+    const problem = recipeWriteProblem(recipe)
+    if (problem) {
+      reopen(problem)
+      return
+    }
     try {
       if (id == null) await catalogApi.admin.create(recipe)
       else await catalogApi.admin.update(id, recipe)
@@ -286,9 +299,14 @@ export default function DiscoverPage() {
       refreshListings()
     } catch (err) {
       console.error('Failed to save the catalog recipe', err)
-      setForm({ id, initialRecipe: recipe, error: `Couldn't save “${recipe.title}”: ${err.message}.` })
+      reopen(apiErrorText(err))
     }
   }
+
+  // Closes the form it was rendered for, and only that one: the modal calls
+  // this straight after `onSave`, which may already have reopened the form
+  // with a problem that must stay on screen.
+  const closeForm = (closing) => setForm((current) => (current === closing ? null : current))
 
   // `action` is 'publish' or 'retire', which is also the endpoint's name.
   const changeStatus = async (action, recipe) => {
@@ -300,7 +318,7 @@ export default function DiscoverPage() {
       refreshListings()
     } catch (err) {
       console.error(`Failed to ${action} the catalog recipe`, err)
-      setNotice({ kind: 'alert', text: `Couldn't ${action} “${recipe.title}”: ${err.message}.` })
+      setNotice({ kind: 'alert', text: `Couldn't ${action} “${recipe.title}”: ${asSentence(apiErrorText(err))}` })
     }
   }
 
@@ -312,7 +330,7 @@ export default function DiscoverPage() {
       downloadJson(entries, `catalog-export-${new Date().toISOString().slice(0, 10)}.json`)
     } catch (err) {
       console.error('Failed to export the catalog', err)
-      setNotice({ kind: 'alert', text: `Couldn't export the library: ${err.message}.` })
+      setNotice({ kind: 'alert', text: `Couldn't export the library: ${asSentence(apiErrorText(err))}` })
     } finally {
       setExporting(false)
     }
@@ -604,7 +622,7 @@ export default function DiscoverPage() {
             )
           }
           onSave={saveRecipe}
-          onClose={() => setForm(null)}
+          onClose={() => closeForm(form)}
         />
       )}
 

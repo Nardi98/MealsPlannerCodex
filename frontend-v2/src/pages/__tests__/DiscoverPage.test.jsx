@@ -670,8 +670,69 @@ test('Export downloads the catalog as a JSON file through a Blob URL', async () 
 
 // --- Admin errors ------------------------------------------------------------
 
+// The Error `client.request` throws: the message, plus the parsed body on `data`.
+function httpError(status, body) {
+  const message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body)
+  return Object.assign(new Error(message), { status, data: body })
+}
+
+// Types into the ingredient row at `idx` (rows past the first are added first).
+function fillIngredient(idx, { name, amount }) {
+  if (idx > 0) fireEvent.click(screen.getByRole('button', { name: '+ Add ingredient' }))
+  fireEvent.change(screen.getAllByPlaceholderText('ingredient')[idx], { target: { value: name } })
+  fireEvent.change(screen.getAllByPlaceholderText('amt')[idx], { target: { value: amount } })
+}
+
+test('an ingredient without an amount is caught before any request, naming the ingredient', async () => {
+  await renderAdmin()
+  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Ribollita' } })
+  fireEvent.change(screen.getByLabelText('Course'), { target: { value: 'main' } })
+  fillIngredient(0, { name: 'Cavolo nero', amount: '800' })
+  fillIngredient(1, { name: 'Olive oil', amount: '' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Couldn\'t save “Ribollita”: "Olive oil" needs an amount and a unit.')
+  expect(catalogApi.admin.create).not.toHaveBeenCalled()
+  // The form is still there, with everything that was typed.
+  expect(screen.getByLabelText('Title')).toHaveValue('Ribollita')
+  expect(screen.getAllByPlaceholderText('ingredient').map((i) => i.value)).toEqual(['Cavolo nero', 'Olive oil'])
+})
+
+test('a duplicate ingredient is caught before any request, with the server wording', async () => {
+  await renderAdmin()
+  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
+  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Ribollita' } })
+  fireEvent.change(screen.getByLabelText('Course'), { target: { value: 'main' } })
+  fillIngredient(0, { name: 'Basil', amount: '5' })
+  fillIngredient(1, { name: 'Basil', amount: '10' })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate ingredient: Basil')
+  expect(catalogApi.admin.create).not.toHaveBeenCalled()
+})
+
+test('a 422 from the server reads as sentences, not raw JSON', async () => {
+  catalogApi.admin.create.mockRejectedValue(
+    httpError(422, {
+      detail: [{ loc: ['body', 'servings'], msg: 'Input should be greater than or equal to 1', type: 'greater_than_equal' }],
+    }),
+  )
+  await renderAdmin()
+  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
+
+  fillAndSave({ title: 'Ribollita' })
+
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('servings: Input should be greater than or equal to 1')
+  expect(alert.textContent).not.toMatch(/[{}[\]]|"loc"|greater_than_equal/)
+})
+
 test('a failed save names the failure and reopens the form with what was typed', async () => {
-  catalogApi.admin.create.mockRejectedValue(new Error('Unknown tag: brunch'))
+  catalogApi.admin.create.mockRejectedValue(httpError(400, { detail: 'Unknown tag: brunch' }))
   await renderAdmin()
   fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
 

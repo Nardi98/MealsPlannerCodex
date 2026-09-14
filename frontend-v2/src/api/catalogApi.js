@@ -53,6 +53,43 @@ export function toRecipeWrite(form) {
   };
 }
 
+/**
+ * The first thing the admin routes would reject in this form, as a sentence,
+ * or null. Mirrors the server so a slip is named before any request: each
+ * ingredient needs a positive quantity and a unit (a 422 otherwise), and a
+ * name may appear once (the server's 400 `Duplicate ingredient: X`).
+ */
+export function recipeWriteProblem(form) {
+  const seen = new Set();
+  for (const { name, quantity, unit } of toRecipeWrite(form).ingredients) {
+    if (!(quantity > 0) || !unit) return `"${name}" needs an amount and a unit.`;
+    const key = name.trim().toLowerCase();
+    if (seen.has(key)) return `Duplicate ingredient: ${name.trim()}`;
+    seen.add(key);
+  }
+  return null;
+}
+
+/**
+ * An API error as text a person can read. `client.request` only lifts a
+ * string `detail` into the message; FastAPI's 422 carries an array of
+ * `{loc, msg}` instead, which would otherwise surface as raw JSON.
+ */
+export function apiErrorText(err) {
+  const detail = err?.data?.detail;
+  if (!Array.isArray(detail)) return err.message;
+  return detail
+    .map(({ loc = [], msg }) => {
+      // ['body', 'ingredients', 0, 'quantity'] → 'ingredient 1 quantity'
+      const field = loc
+        .filter((part) => part !== 'body')
+        .map((part) => (typeof part === 'number' ? part + 1 : part === 'ingredients' ? 'ingredient' : part))
+        .join(' ');
+      return field ? `${field}: ${msg}` : msg;
+    })
+    .join('; ');
+}
+
 /** A catalog or admin row → the `initialRecipe` `NewRecipeModal` pre-fills from. */
 export function toRecipeForm(row) {
   return {
