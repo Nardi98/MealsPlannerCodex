@@ -15,7 +15,11 @@ import {
   RecipeSort,
 } from '../components'
 import Quantity from '../components/Quantity'
-import { catalogApi } from '../api/catalogApi'
+import NewRecipeModal from '../components/NewRecipeModal'
+import CatalogAdminListing from '../components/catalog/CatalogAdminListing'
+import CatalogAdminToolbar from '../components/catalog/CatalogAdminToolbar'
+import { catalogApi, toRecipeForm } from '../api/catalogApi'
+import { useOptionalAuth } from '../auth/AuthContext'
 import { tagsApi } from '../api/tagsApi'
 import { COURSES } from '../constants/recipeImport'
 import { courseColor, dishIcon } from '../constants/recipeIcons'
@@ -48,8 +52,29 @@ const recipesLabel = (n) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 const toggleIn = (list, value) =>
   list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
 
-/** The detail view of one catalog recipe: everything needed to decide (UI-7). */
-function CatalogRecipeDetail({ recipe, onClose }) {
+// The export is a pack-file superset (EXP-4), so it is saved as a JSON file.
+function downloadJson(data, filename) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  try {
+    link.click()
+  } finally {
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+}
+
+/**
+ * The detail view of one catalog recipe: everything needed to decide (UI-7).
+ *
+ * `onEdit` / `onRetire` are passed for an admin only, and receive the full
+ * detail row -- procedure and ingredients included -- so the edit form starts
+ * from the whole recipe, not the listing's summary.
+ */
+function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
   const unitSystem = useUnitSystem()
   const [detail, setDetail] = React.useState(null)
   const [failed, setFailed] = React.useState(false)
@@ -129,6 +154,20 @@ function CatalogRecipeDetail({ recipe, onClose }) {
             )}
           </div>
         )}
+        {detail && (onEdit || onRetire) && (
+          <div className="flex flex-wrap justify-end gap-2 pt-2">
+            {onRetire && (
+              <Button variant="ghost" onClick={() => onRetire(detail)}>
+                Retire
+              </Button>
+            )}
+            {onEdit && (
+              <Button variant="secondary" onClick={() => onEdit(detail)}>
+                Edit
+              </Button>
+            )}
+          </div>
+        )}
       </div>
     </Modal>
   )
@@ -141,11 +180,13 @@ function CatalogRecipeDetail({ recipe, onClose }) {
  * issues a fresh `catalogApi.list`, with the search debounced. Adding is one
  * batch `catalogApi.adopt` for the whole selection (ADO-5).
  *
- * No admin controls live here yet; they arrive with the admin UI and are gated
- * on `is_admin` there (UI-11).
+ * An admin (`is_admin` on the account) also gets the curation controls
+ * (UI-12); for anyone else they are not rendered at all (UI-11). The server
+ * enforces the same line with a 403, so this only decides what is shown.
  */
 export default function DiscoverPage() {
   const isMobile = useIsMobile()
+  const isAdmin = useOptionalAuth()?.user?.is_admin === true
 
   const [rows, setRows] = React.useState([])
   const [loaded, setLoaded] = React.useState(false)
@@ -165,6 +206,15 @@ export default function DiscoverPage() {
   // { kind: 'status' | 'alert', text } -- the role doubles as the kind.
   const [notice, setNotice] = React.useState(null)
   const [opened, setOpened] = React.useState(null)
+
+  // Admin only. `showRetired` swaps the browse grid for the admin listing,
+  // which has its own request and its own rows (UI-16).
+  const [showRetired, setShowRetired] = React.useState(false)
+  const [adminRows, setAdminRows] = React.useState(null)
+  const [adminReloadKey, setAdminReloadKey] = React.useState(0)
+  const [exporting, setExporting] = React.useState(false)
+  // The open recipe form: { id (null to create), initialRecipe, error }.
+  const [form, setForm] = React.useState(null)
 
   // Only the system account's tags can appear on a catalog recipe, so the
   // user's own tags would be filters that can never match.
@@ -201,6 +251,84 @@ export default function DiscoverPage() {
       stale = true
     }
   }, [selectedCourses, selectedTags, query, sort, reloadKey])
+
+  React.useEffect(() => {
+    if (!isAdmin || !showRetired) return undefined
+    let stale = false
+    catalogApi.admin
+      .list()
+      .then((result) => !stale && setAdminRows(result))
+      .catch((err) => {
+        console.error('Failed to load the admin catalog listing', err)
+        if (!stale) setNotice({ kind: 'alert', text: `Couldn't load the retired entries: ${err.message}.` })
+      })
+    return () => {
+      stale = true
+    }
+  }, [isAdmin, showRetired, adminReloadKey])
+
+  // A curation change can move a recipe in or out of either listing.
+  const refreshListings = () => {
+    setReloadKey((k) => k + 1)
+    setAdminReloadKey((k) => k + 1)
+  }
+
+  // The form closes as soon as it hands the recipe over, without awaiting
+  // this, so a failure reopens it -- with what was typed and the reason --
+  // rather than losing the recipe.
+  const saveRecipe = async (recipe) => {
+    const { id } = form
+    setNotice(null)
+    try {
+      if (id == null) await catalogApi.admin.create(recipe)
+      else await catalogApi.admin.update(id, recipe)
+      setNotice({ kind: 'status', text: `Saved “${recipe.title}” to the library.` })
+      refreshListings()
+    } catch (err) {
+      console.error('Failed to save the catalog recipe', err)
+      setForm({ id, initialRecipe: recipe, error: `Couldn't save “${recipe.title}”: ${err.message}.` })
+    }
+  }
+
+  // `action` is 'publish' or 'retire', which is also the endpoint's name.
+  const changeStatus = async (action, recipe) => {
+    setNotice(null)
+    try {
+      await catalogApi.admin[action](recipe.id)
+      const done = action === 'publish' ? 'Published' : 'Retired'
+      setNotice({ kind: 'status', text: `${done} “${recipe.title}”.` })
+      refreshListings()
+    } catch (err) {
+      console.error(`Failed to ${action} the catalog recipe`, err)
+      setNotice({ kind: 'alert', text: `Couldn't ${action} “${recipe.title}”: ${err.message}.` })
+    }
+  }
+
+  const exportCatalog = async () => {
+    setExporting(true)
+    setNotice(null)
+    try {
+      const entries = await catalogApi.admin.exportCatalog()
+      downloadJson(entries, `catalog-export-${new Date().toISOString().slice(0, 10)}.json`)
+    } catch (err) {
+      console.error('Failed to export the catalog', err)
+      setNotice({ kind: 'alert', text: `Couldn't export the library: ${err.message}.` })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const editRecipe = (recipe) => {
+    setOpened(null)
+    setForm({ id: recipe.id, initialRecipe: toRecipeForm(recipe), error: null })
+  }
+
+  const retireFromDetail = (recipe) => {
+    setOpened(null)
+    changeStatus('retire', recipe)
+  }
+
+  const managing = isAdmin && showRetired
 
   // One list drives the popover, the sheet and the active-filter chips, as on
   // the Recipes page, so the three surfaces cannot drift apart.
@@ -297,90 +425,114 @@ export default function DiscoverPage() {
             Recipes from the Meal Planner library. Pick the ones you like and add them to your book.
           </p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-          <div className="relative" ref={filterRef}>
-            <Button
-              variant="ghost"
-              aria-label="Filter"
-              className="relative"
-              onClick={() => setShowFilters((s) => !s)}
-              Icon={FunnelIcon}
-            >
-              {activeFilters.length > 0 && (
-                <span
-                  className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
-                  style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
-                >
-                  {activeFilters.length}
-                </span>
-              )}
-            </Button>
-            {showFilters && !isMobile && (
-              <div
-                className="absolute left-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2 md:left-auto md:right-0"
-                style={{ borderColor: 'var(--border-default)' }}
+        {/* Browsing controls; the admin listing is unfiltered, so they would do nothing there. */}
+        {!managing && (
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+            <div className="relative" ref={filterRef}>
+              <Button
+                variant="ghost"
+                aria-label="Filter"
+                className="relative"
+                onClick={() => setShowFilters((s) => !s)}
+                Icon={FunnelIcon}
               >
-                <RecipeFilters groups={filterGroups} />
-              </div>
-            )}
+                {activeFilters.length > 0 && (
+                  <span
+                    className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
+                    style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
+                  >
+                    {activeFilters.length}
+                  </span>
+                )}
+              </Button>
+              {showFilters && !isMobile && (
+                <div
+                  className="absolute left-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2 md:left-auto md:right-0"
+                  style={{ borderColor: 'var(--border-default)' }}
+                >
+                  <RecipeFilters groups={filterGroups} />
+                </div>
+              )}
+            </div>
+            <Input
+              placeholder="Search the library…"
+              aria-label="Search the library"
+              className="min-w-0 flex-1 md:w-56 md:flex-none"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <RecipeSort
+              sortKey={sort}
+              options={CATALOG_SORT_OPTIONS}
+              showDirection={false}
+              onChange={(key) => setSort(key)}
+            />
           </div>
-          <Input
-            placeholder="Search the library…"
-            aria-label="Search the library"
-            className="min-w-0 flex-1 md:w-56 md:flex-none"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <RecipeSort
-            sortKey={sort}
-            options={CATALOG_SORT_OPTIONS}
-            showDirection={false}
-            onChange={(key) => setSort(key)}
-          />
-        </div>
+        )}
       </div>
 
-      <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
-
-      {!loaded && <p style={mutedTextStyle}>Loading the recipe library…</p>}
-
-      {loadFailed && (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
-            Couldn&apos;t load the recipe library.
-          </p>
-          <Button variant="ghost" onClick={() => setReloadKey((k) => k + 1)}>
-            Try again
-          </Button>
-        </div>
+      {isAdmin && (
+        <CatalogAdminToolbar
+          showRetired={showRetired}
+          exporting={exporting}
+          onNew={() => setForm({ id: null, initialRecipe: undefined, error: null })}
+          onToggleRetired={() => setShowRetired((on) => !on)}
+          onExport={exportCatalog}
+        />
       )}
 
-      {loaded && !loadFailed && rows.length === 0 && (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <p style={mutedTextStyle}>
-            {filtering ? 'No recipes match your search.' : 'The recipe library is empty right now. Check back soon.'}
-          </p>
-          {filtering && (
-            <Button variant="ghost" onClick={clearSearchAndFilters}>
-              Clear search and filters
-            </Button>
+      {managing ? (
+        <CatalogAdminListing
+          rows={adminRows}
+          onEdit={editRecipe}
+          onPublish={(recipe) => changeStatus('publish', recipe)}
+          onRetire={(recipe) => changeStatus('retire', recipe)}
+        />
+      ) : (
+        <>
+          <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
+
+          {!loaded && <p style={mutedTextStyle}>Loading the recipe library…</p>}
+
+          {loadFailed && (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
+                Couldn&apos;t load the recipe library.
+              </p>
+              <Button variant="ghost" onClick={() => setReloadKey((k) => k + 1)}>
+                Try again
+              </Button>
+            </div>
           )}
-        </div>
-      )}
 
-      {!loadFailed && rows.length > 0 && (
-        <div className="card-grid">
-          {rows.map((recipe) => (
-            <CatalogRecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              selected={selectedIds.includes(recipe.id)}
-              disabled={adding}
-              onToggle={() => toggleSelected(recipe.id)}
-              onOpen={() => setOpened(recipe)}
-            />
-          ))}
-        </div>
+          {loaded && !loadFailed && rows.length === 0 && (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <p style={mutedTextStyle}>
+                {filtering ? 'No recipes match your search.' : 'The recipe library is empty right now. Check back soon.'}
+              </p>
+              {filtering && (
+                <Button variant="ghost" onClick={clearSearchAndFilters}>
+                  Clear search and filters
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!loadFailed && rows.length > 0 && (
+            <div className="card-grid">
+              {rows.map((recipe) => (
+                <CatalogRecipeCard
+                  key={recipe.id}
+                  recipe={recipe}
+                  selected={selectedIds.includes(recipe.id)}
+                  disabled={adding}
+                  onToggle={() => toggleSelected(recipe.id)}
+                  onOpen={() => setOpened(recipe)}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {(selectedIds.length > 0 || notice) && (
@@ -422,7 +574,38 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {opened && <CatalogRecipeDetail key={opened.id} recipe={opened} onClose={() => setOpened(null)} />}
+      {opened && (
+        <CatalogRecipeDetail
+          key={opened.id}
+          recipe={opened}
+          onClose={() => setOpened(null)}
+          onEdit={isAdmin ? editRecipe : undefined}
+          onRetire={isAdmin ? retireFromDetail : undefined}
+        />
+      )}
+
+      {form && (
+        // Catalog mode (plan D3): the library's own ingredients and tags, and no
+        // pantry writes -- the server rejects any name the library lacks. Image
+        // upload stays on: `/recipes/upload-image` is plain storage, not tied
+        // to a recipe or its owner.
+        <NewRecipeModal
+          heading={form.id == null ? 'New catalog recipe' : 'Edit catalog recipe'}
+          initialRecipe={form.initialRecipe}
+          loadIngredients={catalogApi.admin.ingredients}
+          loadTags={catalogApi.admin.tags}
+          allowCreateIngredient={false}
+          notice={
+            form.error && (
+              <p role="alert" className="text-sm" style={{ margin: 0, color: 'var(--c-neg)' }}>
+                {form.error}
+              </p>
+            )
+          }
+          onSave={saveRecipe}
+          onClose={() => setForm(null)}
+        />
+      )}
 
       {showFilters && isMobile && (
         <BottomSheet
