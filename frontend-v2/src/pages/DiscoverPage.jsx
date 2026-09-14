@@ -228,8 +228,10 @@ export default function DiscoverPage() {
       .catch((err) => console.error('Failed to load tags', err))
   }, [])
 
+  // Trimmed, so trailing whitespace settles on the query already sent and does
+  // not issue a duplicate request.
   React.useEffect(() => {
-    const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS)
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [search])
 
@@ -432,7 +434,7 @@ export default function DiscoverPage() {
     }
   }
 
-  const filtering = activeFilters.length > 0 || query.trim() !== ''
+  const filtering = activeFilters.length > 0 || query !== ''
 
   return (
     <div className="flex flex-col gap-4">
@@ -483,7 +485,7 @@ export default function DiscoverPage() {
               sortKey={sort}
               options={CATALOG_SORT_OPTIONS}
               showDirection={false}
-              onChange={(key) => setSort(key)}
+              onChange={setSort}
             />
           </div>
         )}
