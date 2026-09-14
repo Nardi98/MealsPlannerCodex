@@ -4,8 +4,8 @@ Every test builds on ``system_account`` (directly or through
 ``make_catalog_recipe``), which empties the catalog inside the test's
 transaction, so assertions are about rows the test created.
 
-The write routes commit on success and roll back on failure, so this module
-runs on a SAVEPOINT-scoped session (as ``test_catalog_service.py`` does). A test
+The write routes commit on success and roll back on failure, which the shared
+``db_session`` scopes to a SAVEPOINT (see ``conftest.py``). A test
 asserting that a failed write left nothing behind first commits its fixtures,
 so the route's rollback cannot take them with it.
 """
@@ -15,7 +15,6 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import catalog_admin_routes
@@ -57,26 +56,6 @@ def _router_table():
 
 
 ROUTER_TABLE = _router_table()
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session`` with ``commit``/``rollback`` scoped to a SAVEPOINT."""
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @pytest.fixture

@@ -12,7 +12,6 @@ from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import event, func, select
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import main
@@ -20,32 +19,6 @@ import models
 from mealplanner.seed import SYSTEM_INGREDIENTS, SYSTEM_TAGS
 
 PACK = json.loads(catalog.PACK_PATH.read_text(encoding="utf-8"))
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session``, but with every ``commit``/``rollback`` scoped to a SAVEPOINT.
-
-    ``populate_from_pack`` and ``_bootstrap`` commit. Under the default join
-    mode a session ``rollback()`` would discard the test's *outer* transaction,
-    so the service's commit and rollback are made to behave as in production
-    while the outer transaction still discards everything afterwards.
-    """
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 def _entries(session, status=None):

@@ -136,9 +136,24 @@ def engine():
 
 @pytest.fixture
 def db_session(engine):
+    """A session inside a transaction that is rolled back after the test.
+
+    Every ``commit``/``rollback`` the code under test issues is scoped to a
+    SAVEPOINT (``create_savepoint``). Under the default join mode a session
+    ``rollback()`` would roll back the test's *outer* transaction, so an
+    all-or-nothing test would pass vacuously -- its fixtures would vanish along
+    with the half-built work. This way services commit and roll back as they do
+    in production, and the outer transaction still discards everything.
+    """
     connection = engine.connect()
     trans = connection.begin()
-    TestingSessionLocal = sessionmaker(bind=connection, autoflush=False, autocommit=False, future=True)
+    TestingSessionLocal = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
     session = TestingSessionLocal()
     try:
         yield session

@@ -10,40 +10,11 @@ from datetime import date
 
 import pytest
 from sqlalchemy import event, select
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import crud
 import models
 import recipe_copy
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session``, but with every ``commit``/``rollback`` scoped to a SAVEPOINT.
-
-    ``adopt`` commits once and rolls back on failure. Under the default join
-    mode a session ``rollback()`` rolls back the test's *outer* transaction, so
-    an all-or-nothing test would pass vacuously -- the fixtures would vanish
-    along with the half-built batch. ``create_savepoint`` makes the service's
-    commit and rollback behave as they do in production while the test's outer
-    transaction still discards everything afterwards.
-    """
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @contextmanager

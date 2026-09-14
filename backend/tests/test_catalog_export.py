@@ -1,14 +1,13 @@
 """The catalog export (spec §9.1, EXP-1..5, PRV-8).
 
-The round trip ends in ``populate_from_pack``, which commits, so this module
-runs on a SAVEPOINT-scoped session, as ``test_catalog_bootstrap.py`` does.
+The round trip ends in ``populate_from_pack``, which commits; the shared
+``db_session`` scopes that commit to a SAVEPOINT (see ``conftest.py``).
 """
 
 import json
 from datetime import datetime
 
 import pytest
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 from main import app
@@ -16,26 +15,6 @@ from tests.conftest import client_as, remove_system_catalog
 
 PACK_KEYS = {"title", "course", "servings", "bulk_prep", "tags", "procedure", "ingredients"}
 EXPORT_KEYS = PACK_KEYS | {"status", "published_at", "retired_at"}
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session`` with ``commit``/``rollback`` scoped to a SAVEPOINT."""
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @pytest.fixture
