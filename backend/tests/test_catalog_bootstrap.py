@@ -12,7 +12,6 @@ from contextlib import contextmanager
 
 import pytest
 from sqlalchemy import event, func, select
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import main
@@ -20,32 +19,6 @@ import models
 from mealplanner.seed import SYSTEM_INGREDIENTS, SYSTEM_TAGS
 
 PACK = json.loads(catalog.PACK_PATH.read_text(encoding="utf-8"))
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session``, but with every ``commit``/``rollback`` scoped to a SAVEPOINT.
-
-    ``populate_from_pack`` and ``_bootstrap`` commit. Under the default join
-    mode a session ``rollback()`` would discard the test's *outer* transaction,
-    so the service's commit and rollback are made to behave as in production
-    while the outer transaction still discards everything afterwards.
-    """
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 def _entries(session, status=None):
@@ -290,6 +263,19 @@ def test_the_early_return_commits_to_release_the_lock(
     _, checks = _lock_then_emptiness_check(timeline)
     assert "COMMIT()" in timeline[checks[0]:]
     assert "ROLLBACK()" not in timeline
+
+
+def test_loading_the_pack_resolves_names_without_a_query_per_line(db_session, engine, system_account):
+    """The system vocabulary is read once, not looked up per ingredient line and tag."""
+    with _statements(engine) as statements:
+        assert catalog.populate_from_pack(db_session) == 60
+
+    lookups = [s for s in statements if "ingredients.name = %(" in s or "tags.name = %(" in s]
+    assert lookups == []
+    # Each recipe is flushed on its own: one INSERT each into recipes,
+    # catalog_entries, recipe_ingredients and recipe_tag. Everything else is a
+    # small constant; per-line lookups used to cost over a thousand statements.
+    assert len(statements) <= 4 * len(PACK) + 25, len(statements)
 
 
 def test_a_bad_item_writes_nothing(db_session, system_account, tmp_path):

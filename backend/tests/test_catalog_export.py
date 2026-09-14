@@ -1,14 +1,13 @@
 """The catalog export (spec §9.1, EXP-1..5, PRV-8).
 
-The round trip ends in ``populate_from_pack``, which commits, so this module
-runs on a SAVEPOINT-scoped session, as ``test_catalog_bootstrap.py`` does.
+The round trip ends in ``populate_from_pack``, which commits; the shared
+``db_session`` scopes that commit to a SAVEPOINT (see ``conftest.py``).
 """
 
 import json
 from datetime import datetime
 
 import pytest
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 from main import app
@@ -16,26 +15,6 @@ from tests.conftest import client_as, remove_system_catalog
 
 PACK_KEYS = {"title", "course", "servings", "bulk_prep", "tags", "procedure", "ingredients"}
 EXPORT_KEYS = PACK_KEYS | {"status", "published_at", "retired_at"}
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session`` with ``commit``/``rollback`` scoped to a SAVEPOINT."""
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @pytest.fixture
@@ -124,6 +103,15 @@ def test_the_export_contains_no_user_data(admin, two_entries, other_user, admin_
 
 def test_export_catalog_service_matches_the_route(admin, db_session, two_entries):
     assert catalog.export_catalog(db_session) == _export(admin).json()
+
+
+def test_the_export_body_is_the_service_output_byte_for_byte(admin, db_session, two_entries):
+    """The route's local models only validate: they add, drop and reshape nothing."""
+    expected = json.dumps(
+        catalog.export_catalog(db_session), ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    ).encode("utf-8")
+
+    assert _export(admin).content == expected
 
 
 def test_an_export_round_trips_through_the_pack_loader(admin, db_session, two_entries, tmp_path):

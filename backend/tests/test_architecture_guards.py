@@ -136,20 +136,12 @@ def _production_modules():
     return sorted(BACKEND_ROOT.glob("*.py")) + sorted((BACKEND_ROOT / "mealplanner").glob("*.py"))
 
 
-#: Unscoped calls that are known and deliberate, each with the reason.
-UNSCOPED_ALLOWLIST = {
-    # ``seed._create_recipe`` builds the global (ownerless) demo data of
-    # ``seed_sample_data``. Only tests call either (``test_seed``,
-    # ``test_tag_creation``); no route, startup hook or deploy step does.
-    "mealplanner/seed.py:91 crud.get_or_create_tag",
-}
-
-
 def test_production_calls_to_user_scoped_functions_pass_user_id():
     """Every production call to a ``crud``/``planner`` function taking ``user_id`` passes it.
 
     Omitting it silently widens the query to every account's rows (``scope``
-    treats ``None`` as unscoped), which is a data leak rather than an error.
+    treats ``None`` as unscoped), which is a data leak rather than an error. A
+    call that is unscoped on purpose says so by passing ``user_id=None``.
     """
     targets = {
         "crud": _user_scoped_functions(BACKEND_ROOT / "crud.py"),
@@ -163,7 +155,7 @@ def test_production_calls_to_user_scoped_functions_pass_user_id():
         for call in _unscoped_calls(path, targets)
     ]
 
-    assert sorted(set(unscoped) - UNSCOPED_ALLOWLIST) == []
+    assert unscoped == []
 
 
 def test_the_scoping_guard_resolves_positional_keyword_and_same_named_calls(tmp_path, monkeypatch):

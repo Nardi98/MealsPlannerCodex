@@ -71,14 +71,7 @@ class CatalogRecipe(BaseModel):
             bulk_prep=bool(recipe.bulk_prep),
             image_url=recipe.image_url,
             tags=[tag.name for tag in recipe.tags],
-            ingredients=[
-                CatalogIngredient(
-                    name=line.ingredient.name,
-                    quantity=line.quantity,
-                    unit=line.unit.value if line.unit is not None else None,
-                )
-                for line in recipe.ingredients
-            ],
+            ingredients=[CatalogIngredient(**line) for line in catalog.ingredient_lines(recipe)],
             adoption_count=row.adoption_count,
             in_my_book=in_my_book,
             **extra,

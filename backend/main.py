@@ -26,6 +26,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
+import catalog
 import catalog_admin_routes
 import catalog_routes
 import crud
@@ -74,10 +75,6 @@ def _bootstrap(session: Session) -> None:
     # re-applied (INIT-10/11). After the reserved list, which also reserves the
     # system account's own ``mealplanner`` handle; a reservation never checks
     # the users table, so the account holding that handle is not in conflict.
-    # Imported here so this hunk stays inside ``_bootstrap``, clear of the
-    # module's import block that the catalog routers also edit.
-    import catalog
-
     catalog.populate_from_pack(session)
     session.commit()
 

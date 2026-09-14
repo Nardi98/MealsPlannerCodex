@@ -10,40 +10,11 @@ from datetime import date
 
 import pytest
 from sqlalchemy import event, select
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import crud
 import models
 import recipe_copy
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session``, but with every ``commit``/``rollback`` scoped to a SAVEPOINT.
-
-    ``adopt`` commits once and rolls back on failure. Under the default join
-    mode a session ``rollback()`` rolls back the test's *outer* transaction, so
-    an all-or-nothing test would pass vacuously -- the fixtures would vanish
-    along with the half-built batch. ``create_savepoint`` makes the service's
-    commit and rollback behave as they do in production while the test's outer
-    transaction still discards everything afterwards.
-    """
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @contextmanager
@@ -759,6 +730,35 @@ def test_adopt_without_a_system_account_raises_the_named_error(
 
     with pytest.raises(catalog.SystemAccountMissing):
         catalog.adopt(db_session, user, [source_id])
+
+
+def test_adopting_a_batch_loads_nothing_per_source_but_its_copy(
+    db_session, engine, make_catalog_recipe, user
+):
+    """The author is the system account, already in hand, and every source's
+    ingredients and tags arrive with the sources query: per source, only
+    ``existing_copy`` (ADO-7) and the copier's ``get_or_create_*`` (ADO-11/12) run.
+    """
+    ids = [
+        make_catalog_recipe(
+            title, ingredients=(("Pasta", 80, "g"), ("Olive oil", 10, "ml")), tags=("pasta", "quick")
+        ).id
+        for title in ("A", "B", "C", "D", "E")
+    ]
+    adopter_id = user.id
+    db_session.expunge_all()  # otherwise the identity map already holds the collections
+    adopter = db_session.get(models.User, adopter_id)
+
+    with count_queries(engine) as statements:
+        result = catalog.adopt(db_session, adopter, ids)
+
+    assert len(result.created_ids) == 5
+    author_lookups = [s for s in statements if "FROM users" in s and "users.id = %(pk_1)s" in s]
+    lazy_ingredients = [s for s in statements if "= recipe_ingredients.recipe_id" in s]
+    lazy_tags = [s for s in statements if "= recipe_tag.recipe_id" in s]
+    assert author_lookups == []
+    assert lazy_ingredients == []
+    assert lazy_tags == []
 
 
 def test_adopt_serialises_on_the_adopters_row(db_session, engine, make_catalog_recipe, user):

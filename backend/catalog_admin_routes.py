@@ -109,6 +109,8 @@ class RecipeCreate(RecipeWrite):
 
 
 class AdminIngredient(BaseModel):
+    """One ingredient line, in an admin row and in the export alike (units are stored as g|ml|piece)."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -149,28 +151,13 @@ class AdminRecipe(BaseModel):
             bulk_prep=bool(recipe.bulk_prep),
             image_url=recipe.image_url,
             tags=[tag.name for tag in recipe.tags],
-            ingredients=[
-                AdminIngredient(
-                    name=line.ingredient.name,
-                    quantity=line.quantity,
-                    unit=line.unit.value if line.unit is not None else None,
-                )
-                for line in recipe.ingredients
-            ],
+            ingredients=[AdminIngredient(**line) for line in catalog.ingredient_lines(recipe)],
             adoption_count=row.adoption_count,
             procedure=recipe.procedure,
             status=entry.status if entry else None,
             published_at=entry.published_at if entry else None,
             retired_at=entry.retired_at if entry else None,
         )
-
-
-class ExportIngredient(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
 
 
 class ExportItem(BaseModel):
@@ -184,7 +171,7 @@ class ExportItem(BaseModel):
     bulk_prep: bool
     tags: List[str]
     procedure: Optional[str] = None
-    ingredients: List[ExportIngredient]
+    ingredients: List[AdminIngredient]
     status: Literal["published", "retired"]
     published_at: str
     retired_at: Optional[str] = None
@@ -214,6 +201,23 @@ class SystemTag(BaseModel):
 def _admin_row(db: Session, recipe: models.Recipe) -> AdminRecipe:
     count = catalog.adoption_counts(db, [recipe.id])[recipe.id]
     return AdminRecipe.build(catalog.CatalogRow(recipe, count))
+
+
+def _row_then_commit(db: Session, recipe: models.Recipe) -> AdminRecipe:
+    """Publish/retire: build the body, then commit.
+
+    The commit expires every loaded object, so building afterwards would reload
+    the recipe, its entry, lines and tags. These routes change only the entry,
+    whose timestamps are set in Python, and read the lines and tags as stored,
+    so the body is the same either way.
+
+    Create and update commit *first*: they build their lines and tags in the
+    request's order, while a body built from the committed rows lists them as
+    the database returns them, and the two can differ.
+    """
+    row = _admin_row(db, recipe)
+    db.commit()
+    return row
 
 
 def _recipe_or_404(db: Session, recipe_id: int) -> models.Recipe:
@@ -273,8 +277,7 @@ def publish_catalog_recipe(request: Request, recipe_id: int, db: Db) -> AdminRec
         raise HTTPException(status_code=403, detail="Only the recipe library's own recipes can be published")
     except catalog.IncompleteRecipe as exc:  # CAT-10 / ERR-6
         raise HTTPException(status_code=400, detail=str(exc))
-    db.commit()
-    return _admin_row(db, recipe)
+    return _row_then_commit(db, recipe)
 
 
 @router.post("/recipes/{recipe_id}/retire", response_model=AdminRecipe)
@@ -286,8 +289,7 @@ def retire_catalog_recipe(request: Request, recipe_id: int, db: Db) -> AdminReci
         catalog.retire(db, recipe)
     except catalog.CatalogEntryNotFound:
         raise HTTPException(status_code=404, detail="Not found")
-    db.commit()
-    return _admin_row(db, recipe)
+    return _row_then_commit(db, recipe)
 
 
 @router.get("/export", response_model=List[ExportItem])

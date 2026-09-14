@@ -4,8 +4,8 @@ Every test builds on ``system_account`` (directly or through
 ``make_catalog_recipe``), which empties the catalog inside the test's
 transaction, so assertions are about rows the test created.
 
-The write routes commit on success and roll back on failure, so this module
-runs on a SAVEPOINT-scoped session (as ``test_catalog_service.py`` does). A test
+The write routes commit on success and roll back on failure, which the shared
+``db_session`` scopes to a SAVEPOINT (see ``conftest.py``). A test
 asserting that a failed write left nothing behind first commits its fixtures,
 so the route's rollback cannot take them with it.
 """
@@ -15,7 +15,6 @@ from datetime import datetime
 
 import pytest
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import sessionmaker
 
 import catalog
 import catalog_admin_routes
@@ -57,26 +56,6 @@ def _router_table():
 
 
 ROUTER_TABLE = _router_table()
-
-
-@pytest.fixture
-def db_session(engine):
-    """``conftest.db_session`` with ``commit``/``rollback`` scoped to a SAVEPOINT."""
-    connection = engine.connect()
-    trans = connection.begin()
-    session = sessionmaker(
-        bind=connection,
-        autoflush=False,
-        autocommit=False,
-        future=True,
-        join_transaction_mode="create_savepoint",
-    )()
-    try:
-        yield session
-    finally:
-        session.close()
-        trans.rollback()
-        connection.close()
 
 
 @pytest.fixture
@@ -353,6 +332,41 @@ def test_the_service_flushes_and_never_commits(db_session, system_account, monke
 
     assert recipe.id is not None and recipe.title == "Renamed"
     assert commits == []
+
+
+def _as_stored(db_session, recipe_id):
+    """The AdminRow for ``recipe_id`` rebuilt from the database, nothing from the session."""
+    db_session.expire_all()
+    recipe = db_session.get(models.Recipe, recipe_id)
+    count = catalog.adoption_counts(db_session, [recipe_id])[recipe_id]
+    return catalog_admin_routes.AdminRecipe.build(catalog.CatalogRow(recipe, count)).model_dump(mode="json")
+
+
+def test_every_write_response_is_the_row_as_committed(admin, db_session, make_catalog_recipe, other_user):
+    """A write's body is what a fresh read of the committed rows would render, drafts included."""
+    source = make_catalog_recipe("Stored", ingredients=(("Rice", 80, "g"),), tags=("rice",))
+    catalog.adopt(db_session, other_user, [source.id])
+    draft_id = None
+    calls = [
+        lambda: admin.post("/admin/catalog/recipes", json=recipe_body()),
+        lambda: admin.post("/admin/catalog/recipes", json={**recipe_body(title="Draft"), "publish": False}),
+        lambda: admin.put(f"/admin/catalog/recipes/{draft_id}", json=recipe_body(title="Draft, edited")),
+        lambda: admin.put(
+            f"/admin/catalog/recipes/{source.id}",
+            json=recipe_body(ingredients=[{"name": "Onion", "quantity": 1, "unit": "piece"},
+                                          {"name": "Rice", "quantity": 90, "unit": "g"}]),
+        ),
+        lambda: admin.post(f"/admin/catalog/recipes/{source.id}/retire"),
+        lambda: admin.post(f"/admin/catalog/recipes/{source.id}/publish"),
+        lambda: admin.post(f"/admin/catalog/recipes/{draft_id}/publish"),
+    ]
+
+    for call in calls:
+        response = call()
+        assert response.status_code in (200, 201), response.text
+        body = response.json()
+        draft_id = draft_id or (body["id"] if body["status"] is None else None)
+        assert body == _as_stored(db_session, body["id"])
 
 
 # --- Admin listing (API-9, RET-4) ---------------------------------------------
