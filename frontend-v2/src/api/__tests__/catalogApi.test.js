@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, expect, test, vi } from 'vitest'
-import { catalogApi } from '../catalogApi'
+import { catalogApi, toRecipeForm, toRecipeWrite } from '../catalogApi'
 
 function mockFetch(body, { status = 200 } = {}) {
   globalThis.fetch = vi.fn(() =>
@@ -104,4 +104,145 @@ test('an adopt failure surfaces the backend detail', async () => {
   mockFetch({ detail: 'At most 100 recipes per request' }, { status: 400 })
 
   await expect(catalogApi.adopt([])).rejects.toThrow('At most 100 recipes per request')
+})
+
+// --- Admin (spec §10.2, plan D3) ---------------------------------------------
+
+// What NewRecipeModal's onSave hands over: the user-book form shape, with the
+// pantry ids, `hot`, `amount` and the fields only a user's own recipe carries.
+const FORM = {
+  title: 'Ribollita',
+  course: 'main',
+  servings: 4,
+  tags: ['soup', 'vegan'],
+  ingredients: [
+    { id: 17, name: 'Cavolo nero', amount: 800, unit: 'g', grams_per_ml: null, grams_per_piece: null },
+    { id: 18, name: 'Olive oil', amount: 30, unit: 'ml', grams_per_ml: 0.92, grams_per_piece: null },
+  ],
+  procedure: 'Simmer for two hours.',
+  image_url: 'http://api/recipes/images/recipes/a.png',
+  hot: true,
+  favorite_side_ids: [3],
+}
+
+const RECIPE_WRITE = {
+  title: 'Ribollita',
+  course: 'main',
+  servings: 4,
+  bulk_prep: true,
+  procedure: 'Simmer for two hours.',
+  image_url: 'http://api/recipes/images/recipes/a.png',
+  tags: ['soup', 'vegan'],
+  ingredients: [
+    { name: 'Cavolo nero', quantity: 800, unit: 'g' },
+    { name: 'Olive oil', quantity: 30, unit: 'ml' },
+  ],
+}
+
+const sentBody = (call = 0) => JSON.parse(globalThis.fetch.mock.calls[call][1].body)
+
+test('toRecipeWrite maps the form to RecipeWrite, by name, with nothing else', () => {
+  expect(toRecipeWrite(FORM)).toEqual(RECIPE_WRITE)
+})
+
+test('toRecipeWrite never sends ids, user_id or visibility', () => {
+  const payload = toRecipeWrite({ ...FORM, id: 9, user_id: 4, visibility: 'private' })
+  const json = JSON.stringify(payload)
+  expect(json).not.toMatch(/"id"|user_id|visibility|favorite_side_ids|grams_per/)
+})
+
+test('toRecipeWrite drops blank ingredient lines and sends a missing image as null', () => {
+  const payload = toRecipeWrite({
+    ...FORM,
+    image_url: '',
+    hot: undefined,
+    ingredients: [{ id: undefined, name: '  ', amount: '', unit: '' }, FORM.ingredients[0]],
+  })
+  expect(payload.image_url).toBeNull()
+  expect(payload.bulk_prep).toBe(false)
+  expect(payload.ingredients).toEqual([{ name: 'Cavolo nero', quantity: 800, unit: 'g' }])
+})
+
+test('toRecipeForm turns a catalog row into the form NewRecipeModal pre-fills from', () => {
+  const form = toRecipeForm({ id: 5, adoption_count: 3, status: 'published', ...RECIPE_WRITE })
+  expect(form).toEqual({
+    title: 'Ribollita',
+    course: 'main',
+    servings: 4,
+    hot: true,
+    procedure: 'Simmer for two hours.',
+    image_url: 'http://api/recipes/images/recipes/a.png',
+    tags: ['soup', 'vegan'],
+    ingredients: [
+      { id: undefined, name: 'Cavolo nero', amount: 800, unit: 'g' },
+      { id: undefined, name: 'Olive oil', amount: 30, unit: 'ml' },
+    ],
+  })
+  // The round trip is lossless.
+  expect(toRecipeWrite(form)).toEqual(RECIPE_WRITE)
+})
+
+test('admin.list GETs /admin/catalog/recipes', async () => {
+  mockFetch([{ id: 1, status: 'retired' }])
+
+  expect(await catalogApi.admin.list()).toEqual([{ id: 1, status: 'retired' }])
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(new URL(url, 'http://x.test').pathname).toBe('/admin/catalog/recipes')
+  expect(opts.method ?? 'GET').toBe('GET')
+})
+
+test('admin.create POSTs the serialised recipe and publishes it', async () => {
+  mockFetch({ id: 30, status: 'published' }, { status: 201 })
+
+  const row = await catalogApi.admin.create(FORM)
+
+  expect(row).toEqual({ id: 30, status: 'published' })
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(new URL(url, 'http://x.test').pathname).toBe('/admin/catalog/recipes')
+  expect(opts.method).toBe('POST')
+  expect(sentBody()).toEqual({ ...RECIPE_WRITE, publish: true })
+})
+
+test('admin.update PUTs the serialised recipe to its id', async () => {
+  mockFetch({ id: 30 })
+
+  await catalogApi.admin.update(30, FORM)
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(new URL(url, 'http://x.test').pathname).toBe('/admin/catalog/recipes/30')
+  expect(opts.method).toBe('PUT')
+  expect(sentBody()).toEqual(RECIPE_WRITE)
+})
+
+test.each([
+  ['publish', '/admin/catalog/recipes/30/publish'],
+  ['retire', '/admin/catalog/recipes/30/retire'],
+])('admin.%s POSTs to its endpoint', async (method, path) => {
+  mockFetch({ id: 30 })
+
+  await catalogApi.admin[method](30)
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(new URL(url, 'http://x.test').pathname).toBe(path)
+  expect(opts.method).toBe('POST')
+})
+
+test.each([
+  ['exportCatalog', '/admin/catalog/export'],
+  ['ingredients', '/admin/catalog/ingredients'],
+  ['tags', '/admin/catalog/tags'],
+])('admin.%s GETs %s', async (method, path) => {
+  mockFetch([])
+
+  await catalogApi.admin[method]()
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(new URL(url, 'http://x.test').pathname).toBe(path)
+  expect(opts.method ?? 'GET').toBe('GET')
+})
+
+test('an admin failure surfaces the backend detail', async () => {
+  mockFetch({ detail: 'Unknown ingredient: Kale' }, { status: 400 })
+
+  await expect(catalogApi.admin.create(FORM)).rejects.toThrow('Unknown ingredient: Kale')
 })

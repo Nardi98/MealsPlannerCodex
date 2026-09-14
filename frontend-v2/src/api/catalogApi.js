@@ -1,4 +1,5 @@
 import { request } from './client';
+import { basisOf } from '../utils/servings';
 
 // The system recipe catalog ("Discover", spec §10.1).
 //
@@ -21,6 +22,58 @@ function listQuery({ courses = [], tags = [], q, sort } = {}) {
   return query ? `?${query}` : '';
 }
 
+const json = (method, body) => ({ method, body: JSON.stringify(body) });
+
+/**
+ * `NewRecipeModal`'s form shape → the admin routes' `RecipeWrite`.
+ *
+ * An allowlist, not a spread: the form is the user-book shape and carries
+ * pantry ids, `favorite_side_ids` and conversion facts that mean nothing for a
+ * system-owned recipe. Ingredients and tags go by NAME only -- the server
+ * resolves them in the system account's namespace and rejects unknown names
+ * (plan D3). `user_id` and `visibility` are never sent: ownership is the
+ * server's to decide.
+ */
+export function toRecipeWrite(form) {
+  return {
+    title: form.title,
+    course: form.course,
+    servings: basisOf(form.servings),
+    bulk_prep: Boolean(form.hot),
+    procedure: form.procedure || '',
+    image_url: form.image_url || null,
+    tags: (form.tags || []).map((tag) => (tag.name ? tag.name : tag)),
+    ingredients: (form.ingredients || [])
+      .filter((ing) => (ing.name || '').trim())
+      .map((ing) => ({
+        name: ing.name,
+        quantity: ing.amount === '' || ing.amount == null ? null : Number(ing.amount),
+        unit: ing.unit || null,
+      })),
+  };
+}
+
+/** A catalog or admin row → the `initialRecipe` `NewRecipeModal` pre-fills from. */
+export function toRecipeForm(row) {
+  return {
+    title: row.title,
+    course: row.course,
+    servings: basisOf(row.servings),
+    hot: Boolean(row.bulk_prep),
+    procedure: row.procedure || '',
+    image_url: row.image_url || null,
+    tags: row.tags || [],
+    ingredients: (row.ingredients || []).map((ing) => ({
+      id: undefined,
+      name: ing.name,
+      amount: ing.quantity,
+      unit: ing.unit,
+    })),
+  };
+}
+
+const ADMIN = '/admin/catalog';
+
 export const catalogApi = {
   // Published catalog recipes, filtered, searched and sorted server-side.
   list: (filters) => request(`/catalog/recipes${listQuery(filters)}`),
@@ -35,6 +88,27 @@ export const catalogApi = {
       method: 'POST',
       body: JSON.stringify({ recipe_ids: recipeIds }),
     }),
+
+  // Curation (spec §10.2). Every route is admin-only on the server (403
+  // otherwise); the page only decides whether to show the controls.
+  admin: {
+    // Published AND retired entries, with status -- a separate endpoint from
+    // `list`, which hides retired entries from admins too (RET-1, UI-16).
+    list: () => request(`${ADMIN}/recipes`),
+    // Created published: a new catalog recipe is meant to be seen.
+    create: (form) => request(`${ADMIN}/recipes`, json('POST', { ...toRecipeWrite(form), publish: true })),
+    update: (recipeId, form) =>
+      request(`${ADMIN}/recipes/${encodeURIComponent(recipeId)}`, json('PUT', toRecipeWrite(form))),
+    publish: (recipeId) =>
+      request(`${ADMIN}/recipes/${encodeURIComponent(recipeId)}/publish`, { method: 'POST' }),
+    retire: (recipeId) =>
+      request(`${ADMIN}/recipes/${encodeURIComponent(recipeId)}/retire`, { method: 'POST' }),
+    // The whole catalog in pack-file shape (EXP-1..4).
+    exportCatalog: () => request(`${ADMIN}/export`),
+    // The system account's rows: the only names a catalog recipe may use (D3).
+    ingredients: () => request(`${ADMIN}/ingredients`),
+    tags: () => request(`${ADMIN}/tags`),
+  },
 };
 
 export default catalogApi;
