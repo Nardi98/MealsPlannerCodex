@@ -132,11 +132,10 @@ export default function NewRecipeModal({
   onSave,
   initialRecipe,
   notice,
-  loadIngredients,
-  loadTags,
+  loadIngredients = ingredientsApi.fetchAll,
+  loadTags = tagsApi.fetchAll,
   allowCreateIngredient = true,
   allowCreateTag = true,
-  allowImageUpload = true,
   heading = 'New Recipe',
 }) {
   const unitSystem = useUnitSystem()
@@ -204,10 +203,7 @@ export default function NewRecipeModal({
   React.useEffect(() => {
     async function loadOptions() {
       try {
-        const [tagsRes, ingRes] = await Promise.all([
-          loadTags ? loadTags() : tagsApi.fetchAll(),
-          loadIngredients ? loadIngredients() : ingredientsApi.fetchAll(),
-        ])
+        const [tagsRes, ingRes] = await Promise.all([loadTags(), loadIngredients()])
         setTagOptions(tagsRes.map((t) => t.name))
         setIngredientOptions(
           ingRes.map((i) => ({
@@ -416,42 +412,40 @@ export default function NewRecipeModal({
             ))}
             <Button type="button" variant="ghost" size="sm" onClick={addIngredient}>+ Add ingredient</Button>
           </div>
-          {allowImageUpload && (
-            <div className="space-y-1">
-              <label className="text-sm">Recipe image</label>
-              <input
-                type="file"
-                accept="image/*"
-                aria-label="Recipe image"
-                onChange={handleImageChange}
-                className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
-              />
-              {uploading && (
-                <p className="text-sm" style={{ color: 'var(--text-soft)' }}>Uploading…</p>
-              )}
-              {uploadError && (
-                <p className="text-sm" style={{ color: 'var(--c-neg)' }}>{uploadError}</p>
-              )}
-              {imageUrl && !uploading && (
-                <div className="flex items-center gap-3 pt-1">
-                  <img
-                    src={imageUrl}
-                    alt="Recipe image preview"
-                    className="h-16 w-16 rounded-xl object-cover"
-                    style={{ borderColor: 'var(--border)' }}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setImageUrl('')}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="space-y-1">
+            <label className="text-sm">Recipe image</label>
+            <input
+              type="file"
+              accept="image/*"
+              aria-label="Recipe image"
+              onChange={handleImageChange}
+              className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
+            />
+            {uploading && (
+              <p className="text-sm" style={{ color: 'var(--text-soft)' }}>Uploading…</p>
+            )}
+            {uploadError && (
+              <p className="text-sm" style={{ color: 'var(--c-neg)' }}>{uploadError}</p>
+            )}
+            {imageUrl && !uploading && (
+              <div className="flex items-center gap-3 pt-1">
+                <img
+                  src={imageUrl}
+                  alt="Recipe image preview"
+                  className="h-16 w-16 rounded-xl object-cover"
+                  style={{ borderColor: 'var(--border)' }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setImageUrl('')}
+                >
+                  Remove
+                </Button>
+              </div>
+            )}
+          </div>
           <div className="space-y-1">
             <label className="text-sm">Procedure</label>
             <textarea
