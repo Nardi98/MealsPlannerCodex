@@ -111,9 +111,9 @@ def system_user(session: Session) -> models.User:
     missing account fails here with its name on it instead of later as an
     ``AttributeError`` somewhere else (CAT-3).
     """
-    account = session.execute(
-        select(models.User).where(models.User.is_system.is_(True))
-    ).scalar_one_or_none()
+    # The bare column, not ``.is_(True)``, so Postgres can use the partial index
+    # ``uq_user_single_system``; ``is_system`` is NOT NULL, so the rows are the same.
+    account = session.execute(select(models.User).where(models.User.is_system)).scalar_one_or_none()
     if account is None:
         raise SystemAccountMissing("catalog: no is_system account exists")
     return account
@@ -244,7 +244,7 @@ def _adopter_counts(source_ids) -> Select:
             func.count(distinct(copy.user_id)).label("adoption_count"),
         )
         .join(models.User, models.User.id == copy.user_id)
-        .where(copy.source_recipe_id.in_(source_ids), models.User.is_system.is_(False))
+        .where(copy.source_recipe_id.in_(source_ids), ~models.User.is_system)
         .group_by(copy.source_recipe_id)
     )
 
