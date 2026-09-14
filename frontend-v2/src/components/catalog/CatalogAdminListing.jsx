@@ -2,13 +2,12 @@ import React from 'react'
 import { Badge } from '../Badge'
 import { Button } from '../Button'
 import { Card } from '../Card'
+import { mutedTextStyle } from './textStyles'
 
 const STATUS = {
   published: { label: 'Published', tone: 'forest' },
   retired: { label: 'Retired', tone: 'caramel' },
 }
-
-const mutedTextStyle = { margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }
 
 /**
  * Every catalog entry, published and retired, from the admin endpoint (UI-16).

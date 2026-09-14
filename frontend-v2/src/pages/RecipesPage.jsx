@@ -26,6 +26,7 @@ import {
   RecipeSort,
   ShareRecipeModal,
 } from '../components'
+import { sectionHeadingStyle } from '../components/catalog/textStyles'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
 import { defaultDirectionFor, sortRecipes } from '../utils/sortRecipes'
@@ -41,13 +42,6 @@ import { ingredientsApi } from '../api/ingredientsApi'
 // Only a main dish is served with a side. Mirrors the backend's
 // COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
 const COURSES_WITH_SIDES = ['main']
-
-const sectionHeadingStyle = {
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  marginBottom: 6,
-  color: 'var(--text-strong)',
-}
 
 // The learned preference score, always two decimals so the corner pill keeps a
 // stable width across the grid.

@@ -2,30 +2,24 @@ import React from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import {
   ActiveFilterChips,
-  Badge,
   Button,
   CatalogRecipeCard,
-  Icon,
   IconButton,
   Input,
-  Modal,
   RecipeFilterControl,
-  RecipeMedia,
   RecipeSort,
 } from '../components'
-import Quantity from '../components/Quantity'
 import NewRecipeModal from '../components/NewRecipeModal'
 import CatalogAdminListing from '../components/catalog/CatalogAdminListing'
 import CatalogAdminToolbar from '../components/catalog/CatalogAdminToolbar'
+import CatalogRecipeDetail from '../components/catalog/CatalogRecipeDetail'
+import { mutedTextStyle } from '../components/catalog/textStyles'
 import { apiErrorText, catalogApi, recipeWriteProblem, toRecipeForm } from '../api/catalogApi'
 import { useOptionalAuth } from '../auth/AuthContext'
 import { tagsApi } from '../api/tagsApi'
 import { COURSES } from '../constants/recipeImport'
-import { courseColor, dishIcon } from '../constants/recipeIcons'
-import { basisOf, peopleLabel } from '../utils/servings'
 import { downloadJson } from '../utils/download'
 import { toggleIn } from '../utils/toggleIn'
-import { useUnitSystem } from '../hooks/useUnitSystem'
 
 // The catalog's two server-side orderings (API-1). Each has one fixed
 // direction, so the sort control shows no direction arrow.
@@ -37,125 +31,10 @@ const CATALOG_SORT_OPTIONS = [
 // Long enough that typing a word issues one request, short enough to feel live.
 const SEARCH_DEBOUNCE_MS = 300
 
-const sectionHeadingStyle = {
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  marginBottom: 6,
-  color: 'var(--text-strong)',
-}
-
-const mutedTextStyle = { margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }
-
 const recipesLabel = (n) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 
 // Ends a reason with exactly one full stop, whether or not it came with one.
 const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
-
-/**
- * The detail view of one catalog recipe: everything needed to decide (UI-7).
- *
- * `onEdit` / `onRetire` are passed for an admin only, and receive the full
- * detail row -- procedure and ingredients included -- so the edit form starts
- * from the whole recipe, not the listing's summary.
- */
-function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
-  const unitSystem = useUnitSystem()
-  const [detail, setDetail] = React.useState(null)
-  const [failed, setFailed] = React.useState(false)
-
-  // Keyed by the parent on the recipe id, so this state starts fresh per recipe.
-  React.useEffect(() => {
-    let stale = false
-    catalogApi
-      .get(recipe.id)
-      .then((row) => !stale && setDetail(row))
-      .catch((err) => {
-        console.error('Failed to load catalog recipe', err)
-        if (!stale) setFailed(true)
-      })
-    return () => {
-      stale = true
-    }
-  }, [recipe.id])
-
-  // The listing row renders at once; the detail fills in ingredients and procedure.
-  const shown = detail || recipe
-  const servings = basisOf(shown.servings)
-
-  return (
-    <Modal title={shown.title} onClose={onClose}>
-      <div className="flex flex-col gap-3">
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}>
-          <RecipeMedia recipe={shown} rounded="var(--radius-md)" />
-        </div>
-        <div
-          className="flex items-center gap-1.5"
-          style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}
-        >
-          <Icon set="mdi" name={dishIcon(shown)} size={16} color={courseColor[shown.course] || 'var(--c-a3)'} />
-          {shown.course}
-        </div>
-        {(shown.bulk_prep || (shown.tags || []).length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
-            {shown.bulk_prep && (
-              <Badge tone="gold">
-                <img src="/assets/icons/bulk_icon.png" alt="" style={{ height: 12 }} />
-                bulk
-              </Badge>
-            )}
-            {(shown.tags || []).map((tag) => (
-              <Badge key={tag} tone="caramel">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {failed && (
-          <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
-            Couldn&apos;t load this recipe. Close it and try again.
-          </p>
-        )}
-        {!detail && !failed && <p style={mutedTextStyle}>Loading…</p>}
-        {detail && (
-          <div>
-            <div style={sectionHeadingStyle}>
-              Ingredients for {servings} {peopleLabel(servings)}
-            </div>
-            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-              {(detail.ingredients || []).map((ing, i) => (
-                <li key={`${ing.name}-${i}`}>
-                  <Quantity amount={ing.quantity} unit={ing.unit} system={unitSystem} /> {ing.name}
-                </li>
-              ))}
-            </ul>
-            {detail.procedure && (
-              <>
-                <div style={sectionHeadingStyle}>Procedure</div>
-                <p style={{ margin: 0, whiteSpace: 'pre-line', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                  {detail.procedure}
-                </p>
-              </>
-            )}
-          </div>
-        )}
-        {detail && (onEdit || onRetire) && (
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            {onRetire && (
-              <Button variant="ghost" onClick={() => onRetire(detail)}>
-                Retire
-              </Button>
-            )}
-            {onEdit && (
-              <Button variant="secondary" onClick={() => onEdit(detail)}>
-                Edit
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
-  )
-}
 
 /**
  * Discover: browse the system recipe catalog and add recipes to your book.
