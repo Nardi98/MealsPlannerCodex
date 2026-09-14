@@ -84,7 +84,7 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
           className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-white"
           style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
         >
-          {value && (
+          {value && onAddNew && (
             <div
               className="px-2 py-1 cursor-pointer hover:bg-gray-100"
               onMouseDown={() => {
@@ -123,9 +123,9 @@ const COURSES_WITH_SIDES = ['main']
  *
  * The defaults are the user's own book. The catalog admin reuses the form
  * (plan D3) by injecting the system account's sources through `loadIngredients`
- * / `loadTags` (each resolving to rows with a `name`), and turning off pantry
- * writes with `allowCreateIngredient={false}`, since a catalog recipe may only
- * name ingredients the library already has.
+ * / `loadTags` (each resolving to rows with a `name`), and turning off new
+ * names with `allowCreateIngredient={false}` / `allowCreateTag={false}`, since
+ * a catalog recipe may only use ingredients and tags the library already has.
  */
 export default function NewRecipeModal({
   onClose,
@@ -135,6 +135,7 @@ export default function NewRecipeModal({
   loadIngredients,
   loadTags,
   allowCreateIngredient = true,
+  allowCreateTag = true,
   allowImageUpload = true,
   heading = 'New Recipe',
 }) {
@@ -339,7 +340,7 @@ export default function NewRecipeModal({
                   if (!tags.includes(tag)) setTags((t) => [...t, tag])
                   setTagInput('')
                 }}
-                onAddNew={(tag) => {
+                onAddNew={allowCreateTag ? (tag) => {
                   const newTag = tag.trim()
                   if (!newTag) return
                   setTagOptions((opts) =>
@@ -348,7 +349,7 @@ export default function NewRecipeModal({
                   if (!tags.includes(newTag))
                     setTags((t) => [...t, newTag])
                   setTagInput('')
-                }}
+                } : undefined}
              />
               {tags.map((t) => (
                 <Badge tone="a3" key={t}>

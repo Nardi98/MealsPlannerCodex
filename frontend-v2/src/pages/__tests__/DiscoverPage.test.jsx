@@ -474,6 +474,20 @@ test('"New catalog recipe" opens the form on the library sources, with no pantry
   expect(screen.queryByText(/add new ingredient/i)).not.toBeInTheDocument()
 })
 
+test('the catalog form offers library tags only, never a free-text new tag', async () => {
+  catalogApi.admin.tags.mockResolvedValue([{ id: 60, name: 'soup' }])
+  await renderAdmin()
+  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
+  await waitFor(() => expect(catalogApi.admin.tags).toHaveBeenCalled())
+
+  const tagInput = screen.getByPlaceholderText('tag')
+  fireEvent.focus(tagInput)
+  fireEvent.change(tagInput, { target: { value: 'so' } })
+
+  expect(await screen.findByText('soup')).toBeInTheDocument()
+  expect(screen.queryByText(/^Add "/)).not.toBeInTheDocument()
+})
+
 test('saving a new catalog recipe calls admin.create, confirms it and refetches', async () => {
   catalogApi.admin.create.mockResolvedValue(adminRow({ id: 30, title: 'Ribollita' }))
   await renderAdmin()

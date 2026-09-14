@@ -282,6 +282,29 @@ test('allowCreateIngredient={false} removes the add-ingredient control', async (
   expect(screen.queryByText(/add new ingredient/i)).toBeNull()
 })
 
+const typeTag = (text) => {
+  const input = screen.getByPlaceholderText('tag')
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: text } })
+}
+
+test('by default the tag picker offers to add a typed tag', () => {
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} />)
+  typeTag('brunch')
+  expect(screen.getByText('Add "brunch"')).toBeInTheDocument()
+})
+
+test('allowCreateTag={false} removes the free-text add-tag option but keeps existing tags', async () => {
+  const loadTags = vi.fn(() => Promise.resolve([{ id: 60, name: 'brunchy' }]))
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} loadTags={loadTags} allowCreateTag={false} />)
+  await waitFor(() => expect(loadTags).toHaveBeenCalled())
+
+  typeTag('brunch')
+
+  expect(await screen.findByText('brunchy')).toBeInTheDocument()
+  expect(screen.queryByText(/^Add "/)).toBeNull()
+})
+
 test('allowImageUpload={false} hides the upload control but keeps an existing image', async () => {
   const onSave = vi.fn()
   render(

@@ -586,7 +586,7 @@ export default function DiscoverPage() {
 
       {form && (
         // Catalog mode (plan D3): the library's own ingredients and tags, and no
-        // pantry writes -- the server rejects any name the library lacks. Image
+        // new names -- the server rejects any name the library lacks. Image
         // upload stays on: `/recipes/upload-image` is plain storage, not tied
         // to a recipe or its owner.
         <NewRecipeModal
@@ -595,6 +595,7 @@ export default function DiscoverPage() {
           loadIngredients={catalogApi.admin.ingredients}
           loadTags={catalogApi.admin.tags}
           allowCreateIngredient={false}
+          allowCreateTag={false}
           notice={
             form.error && (
               <p role="alert" className="text-sm" style={{ margin: 0, color: 'var(--c-neg)' }}>
