@@ -23,6 +23,7 @@ import {
   ImportRecipeModal,
   NewRecipeModal,
   RecipeFilters,
+  RecipeMedia,
   RecipeSort,
   ShareRecipeModal,
 } from '../components'
@@ -69,44 +70,6 @@ const scorePillStyle = {
   fontSize: 'var(--text-xs)',
   fontWeight: 'var(--weight-semibold)',
   color: 'var(--text-muted)',
-}
-
-function RecipeMedia({ recipe, rounded }) {
-  const color = courseColor[recipe.course] || 'var(--c-a3)'
-  if (recipe.image_url) {
-    return (
-      <img
-        src={recipe.image_url}
-        alt={`${recipe.title} photo`}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          borderRadius: rounded,
-        }}
-      />
-    )
-  }
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: rounded,
-        background: `linear-gradient(135deg, color-mix(in srgb, ${color} 24%, #fff), color-mix(in srgb, ${color} 8%, #fff))`,
-      }}
-    >
-      <Icon set="mdi" name={dishIcon(recipe)} size={48} color={color} />
-    </div>
-  )
 }
 
 export default function RecipesPage() {

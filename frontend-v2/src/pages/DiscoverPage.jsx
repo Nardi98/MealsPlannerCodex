@@ -6,12 +6,12 @@ import {
   BottomSheet,
   Button,
   CatalogRecipeCard,
-  CatalogRecipeMedia,
   Icon,
   IconButton,
   Input,
   Modal,
   RecipeFilters,
+  RecipeMedia,
   RecipeSort,
 } from '../components'
 import Quantity from '../components/Quantity'
@@ -105,7 +105,7 @@ function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
     <Modal title={shown.title} onClose={onClose}>
       <div className="flex flex-col gap-3">
         <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}>
-          <CatalogRecipeMedia recipe={shown} rounded="var(--radius-md)" />
+          <RecipeMedia recipe={shown} rounded="var(--radius-md)" />
         </div>
         <div
           className="flex items-center gap-1.5"
