@@ -9,6 +9,7 @@ import {
 } from '../components'
 import { dataApi } from '../api/dataApi'
 import { recipesApi } from '../api/recipesApi'
+import { downloadJson } from '../utils/download'
 
 const COUNT_LABELS = [
   ['recipes', 'recipe'],
@@ -41,17 +42,7 @@ export default function ImportExportPage() {
   const handleExport = async () => {
     try {
       const data = await dataApi.exportDatabase()
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'meal-planner-export.json'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      downloadJson(data, 'meal-planner-export.json')
     } catch (err) {
       console.error('Failed to export database', err)
       alert(`Failed to export database: ${err.message}`)

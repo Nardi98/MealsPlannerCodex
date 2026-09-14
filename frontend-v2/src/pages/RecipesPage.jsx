@@ -30,6 +30,7 @@ import {
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
 import { defaultDirectionFor, sortRecipes } from '../utils/sortRecipes'
+import { toggleIn } from '../utils/toggleIn'
 import Quantity from '../components/Quantity'
 import { alternateForms } from '../utils/units'
 import { useUnitSystem } from '../hooks/useUnitSystem'
@@ -158,16 +159,9 @@ export default function RecipesPage() {
 
   const openRecipe = filteredRecipes.find((r) => r.id === opened)
 
-  const toggleTag = (tag) =>
-    setSelectedTags((t) => (t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]))
-  const toggleIngredient = (ing) =>
-    setSelectedIngredients((ings) =>
-      ings.includes(ing) ? ings.filter((x) => x !== ing) : [...ings, ing]
-    )
-  const toggleCourse = (course) =>
-    setSelectedCourses((cs) =>
-      cs.includes(course) ? cs.filter((c) => c !== course) : [...cs, course]
-    )
+  const toggleTag = (tag) => setSelectedTags((ts) => toggleIn(ts, tag))
+  const toggleIngredient = (ing) => setSelectedIngredients((ings) => toggleIn(ings, ing))
+  const toggleCourse = (course) => setSelectedCourses((cs) => toggleIn(cs, course))
 
   // One list drives the popover, the sheet and the active-filter chips, so a
   // new group cannot be added to one surface and forgotten on the others.

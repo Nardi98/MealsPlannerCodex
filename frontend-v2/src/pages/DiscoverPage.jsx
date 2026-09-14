@@ -24,6 +24,8 @@ import { tagsApi } from '../api/tagsApi'
 import { COURSES } from '../constants/recipeImport'
 import { courseColor, dishIcon } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
+import { downloadJson } from '../utils/download'
+import { toggleIn } from '../utils/toggleIn'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { useUnitSystem } from '../hooks/useUnitSystem'
@@ -51,24 +53,6 @@ const recipesLabel = (n) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 
 // Ends a reason with exactly one full stop, whether or not it came with one.
 const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
-
-const toggleIn = (list, value) =>
-  list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
-
-// The export is a pack-file superset (EXP-4), so it is saved as a JSON file.
-function downloadJson(data, filename) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  try {
-    link.click()
-  } finally {
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
-}
 
 /**
  * The detail view of one catalog recipe: everything needed to decide (UI-7).
@@ -329,6 +313,7 @@ export default function DiscoverPage() {
     setNotice(null)
     try {
       const entries = await catalogApi.admin.exportCatalog()
+      // The export is a pack-file superset (EXP-4), so it is saved as a JSON file.
       downloadJson(entries, `catalog-export-${new Date().toISOString().slice(0, 10)}.json`)
     } catch (err) {
       console.error('Failed to export the catalog', err)
