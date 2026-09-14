@@ -45,15 +45,17 @@ function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
               {opt.name}
             </div>
           ))}
-          <div
-            className="px-2 py-1 cursor-pointer hover:bg-gray-100"
-            onMouseDown={() => {
-              setOpen(false)
-              onAddNew()
-            }}
-          >
-            + Add new ingredient
-          </div>
+          {onAddNew && (
+            <div
+              className="px-2 py-1 cursor-pointer hover:bg-gray-100"
+              onMouseDown={() => {
+                setOpen(false)
+                onAddNew()
+              }}
+            >
+              + Add new ingredient
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -82,7 +84,7 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
           className="absolute z-10 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-white"
           style={{ borderColor: 'var(--border)', color: 'var(--text-strong)' }}
         >
-          {value && (
+          {value && onAddNew && (
             <div
               className="px-2 py-1 cursor-pointer hover:bg-gray-100"
               onMouseDown={() => {
@@ -115,7 +117,28 @@ function TagDropdown({ value, options, selected, onChange, onSelect, onAddNew })
 // COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
 const COURSES_WITH_SIDES = ['main']
 
-export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice }) {
+/**
+ * The recipe form. `onSave` receives the recipe and the form closes straight
+ * after, without awaiting it -- whoever saves owns the error feedback.
+ *
+ * The defaults are the user's own book. The catalog admin reuses the form
+ * (plan D3) by injecting the system account's sources through `loadIngredients`
+ * / `loadTags` (each resolving to rows with a `name`), and turning off new
+ * names with `allowCreateIngredient={false}` / `allowCreateTag={false}`, since
+ * a catalog recipe may only use ingredients and tags the library already has.
+ */
+export default function NewRecipeModal({
+  onClose,
+  onSave,
+  initialRecipe,
+  notice,
+  loadIngredients,
+  loadTags,
+  allowCreateIngredient = true,
+  allowCreateTag = true,
+  allowImageUpload = true,
+  heading = 'New Recipe',
+}) {
   const unitSystem = useUnitSystem()
   const [title, setTitle] = React.useState(initialRecipe?.title || '')
   const [course, setCourse] = React.useState(initialRecipe?.course || '')
@@ -182,8 +205,8 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
     async function loadOptions() {
       try {
         const [tagsRes, ingRes] = await Promise.all([
-          tagsApi.fetchAll(),
-          ingredientsApi.fetchAll(),
+          loadTags ? loadTags() : tagsApi.fetchAll(),
+          loadIngredients ? loadIngredients() : ingredientsApi.fetchAll(),
         ])
         setTagOptions(tagsRes.map((t) => t.name))
         setIngredientOptions(
@@ -199,6 +222,8 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
       }
     }
     loadOptions()
+    // The sources are read once, on open, as before they were injectable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // The box is held as a string so it can be cleared while typing; a blank or
@@ -264,7 +289,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
     <ModalScrim>
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" style={{ color: 'var(--text-strong)' }}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <h2 className="text-lg font-medium">New Recipe</h2>
+          <h2 className="text-lg font-medium">{heading}</h2>
           {notice}
           <div className="space-y-1">
             <label className="text-sm" htmlFor="recipe-title">Title</label>
@@ -315,7 +340,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
                   if (!tags.includes(tag)) setTags((t) => [...t, tag])
                   setTagInput('')
                 }}
-                onAddNew={(tag) => {
+                onAddNew={allowCreateTag ? (tag) => {
                   const newTag = tag.trim()
                   if (!newTag) return
                   setTagOptions((opts) =>
@@ -324,7 +349,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
                   if (!tags.includes(newTag))
                     setTags((t) => [...t, newTag])
                   setTagInput('')
-                }}
+                } : undefined}
              />
               {tags.map((t) => (
                 <Badge tone="a3" key={t}>
@@ -361,7 +386,7 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
                     updateIngredient(idx, 'id', opt.id)
                     updateIngredient(idx, 'name', opt.name)
                   }}
-                  onAddNew={() => setAddingIdx(idx)}
+                  onAddNew={allowCreateIngredient ? () => setAddingIdx(idx) : undefined}
                 />
                 <Input
                   type="number"
@@ -391,40 +416,42 @@ export default function NewRecipeModal({ onClose, onSave, initialRecipe, notice 
             ))}
             <Button type="button" variant="ghost" size="sm" onClick={addIngredient}>+ Add ingredient</Button>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm">Recipe image</label>
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="Recipe image"
-              onChange={handleImageChange}
-              className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
-            />
-            {uploading && (
-              <p className="text-sm" style={{ color: 'var(--text-soft)' }}>Uploading…</p>
-            )}
-            {uploadError && (
-              <p className="text-sm" style={{ color: 'var(--c-neg)' }}>{uploadError}</p>
-            )}
-            {imageUrl && !uploading && (
-              <div className="flex items-center gap-3 pt-1">
-                <img
-                  src={imageUrl}
-                  alt="Recipe image preview"
-                  className="h-16 w-16 rounded-xl object-cover"
-                  style={{ borderColor: 'var(--border)' }}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setImageUrl('')}
-                >
-                  Remove
-                </Button>
-              </div>
-            )}
-          </div>
+          {allowImageUpload && (
+            <div className="space-y-1">
+              <label className="text-sm">Recipe image</label>
+              <input
+                type="file"
+                accept="image/*"
+                aria-label="Recipe image"
+                onChange={handleImageChange}
+                className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
+              />
+              {uploading && (
+                <p className="text-sm" style={{ color: 'var(--text-soft)' }}>Uploading…</p>
+              )}
+              {uploadError && (
+                <p className="text-sm" style={{ color: 'var(--c-neg)' }}>{uploadError}</p>
+              )}
+              {imageUrl && !uploading && (
+                <div className="flex items-center gap-3 pt-1">
+                  <img
+                    src={imageUrl}
+                    alt="Recipe image preview"
+                    className="h-16 w-16 rounded-xl object-cover"
+                    style={{ borderColor: 'var(--border)' }}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setImageUrl('')}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <div className="space-y-1">
             <label className="text-sm">Procedure</label>
             <textarea
