@@ -120,11 +120,7 @@ export const catalogApi = {
 
   // Copy recipes into the caller's book in one transaction
   // → { created_ids, skipped_ids }.
-  adopt: (recipeIds) =>
-    request('/catalog/adopt', {
-      method: 'POST',
-      body: JSON.stringify({ recipe_ids: recipeIds }),
-    }),
+  adopt: (recipeIds) => request('/catalog/adopt', json('POST', { recipe_ids: recipeIds })),
 
   // Curation (spec §10.2). Every route is admin-only on the server (403
   // otherwise); the page only decides whether to show the controls.

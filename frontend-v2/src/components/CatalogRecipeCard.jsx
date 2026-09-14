@@ -2,39 +2,8 @@ import { BookmarkIcon } from '@heroicons/react/24/outline'
 import { Badge } from './Badge'
 import { Card } from './Card'
 import { Icon } from './Icon'
+import RecipeMedia from './RecipeMedia'
 import { courseColor, dishIcon } from '../constants/recipeIcons'
-
-/**
- * The recipe image, or the course-coloured placeholder tile when there is none
- * (design guide §4.2). Fills its positioned parent.
- *
- * The same media the Recipes grid draws. `RecipesPage` keeps its own private
- * copy, which this task may not touch; folding the two together is left to the
- * final simplify pass.
- */
-export function CatalogRecipeMedia({ recipe, rounded }) {
-  const color = courseColor[recipe.course] || 'var(--c-a3)'
-  const fill = { position: 'absolute', inset: 0, width: '100%', height: '100%', borderRadius: rounded }
-  if (recipe.image_url) {
-    return (
-      <img src={recipe.image_url} alt={`${recipe.title} photo`} style={{ ...fill, objectFit: 'cover' }} />
-    )
-  }
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        ...fill,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: `linear-gradient(135deg, color-mix(in srgb, ${color} 24%, #fff), color-mix(in srgb, ${color} 8%, #fff))`,
-      }}
-    >
-      <Icon set="mdi" name={dishIcon(recipe)} size={48} color={color} />
-    </div>
-  )
-}
 
 /**
  * One catalog recipe on the Discover grid.
@@ -71,7 +40,7 @@ export default function CatalogRecipeCard({ recipe, selected = false, disabled =
         className="flex flex-1 cursor-pointer flex-col border-0 bg-transparent p-0 text-left"
       >
         <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1' }}>
-          <CatalogRecipeMedia recipe={recipe} />
+          <RecipeMedia recipe={recipe} />
           <div
             className="pointer-events-none absolute flex justify-between"
             style={{ top: 8, left: 8, right: 8 }}

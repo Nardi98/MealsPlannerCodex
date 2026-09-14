@@ -1,32 +1,25 @@
 import React from 'react'
-import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import {
   ActiveFilterChips,
-  Badge,
-  BottomSheet,
   Button,
   CatalogRecipeCard,
-  CatalogRecipeMedia,
-  Icon,
   IconButton,
   Input,
-  Modal,
-  RecipeFilters,
+  RecipeFilterControl,
   RecipeSort,
 } from '../components'
-import Quantity from '../components/Quantity'
 import NewRecipeModal from '../components/NewRecipeModal'
 import CatalogAdminListing from '../components/catalog/CatalogAdminListing'
 import CatalogAdminToolbar from '../components/catalog/CatalogAdminToolbar'
+import CatalogRecipeDetail from '../components/catalog/CatalogRecipeDetail'
+import { mutedTextStyle } from '../components/catalog/textStyles'
 import { apiErrorText, catalogApi, recipeWriteProblem, toRecipeForm } from '../api/catalogApi'
 import { useOptionalAuth } from '../auth/AuthContext'
 import { tagsApi } from '../api/tagsApi'
 import { COURSES } from '../constants/recipeImport'
-import { courseColor, dishIcon } from '../constants/recipeIcons'
-import { basisOf, peopleLabel } from '../utils/servings'
-import { useEscapeKey } from '../hooks/useEscapeKey'
-import { useIsMobile } from '../hooks/useIsMobile'
-import { useUnitSystem } from '../hooks/useUnitSystem'
+import { downloadJson } from '../utils/download'
+import { toggleIn } from '../utils/toggleIn'
 
 // The catalog's two server-side orderings (API-1). Each has one fixed
 // direction, so the sort control shows no direction arrow.
@@ -38,143 +31,10 @@ const CATALOG_SORT_OPTIONS = [
 // Long enough that typing a word issues one request, short enough to feel live.
 const SEARCH_DEBOUNCE_MS = 300
 
-const sectionHeadingStyle = {
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  marginBottom: 6,
-  color: 'var(--text-strong)',
-}
-
-const mutedTextStyle = { margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-subtle)' }
-
 const recipesLabel = (n) => `${n} ${n === 1 ? 'recipe' : 'recipes'}`
 
 // Ends a reason with exactly one full stop, whether or not it came with one.
 const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
-
-const toggleIn = (list, value) =>
-  list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
-
-// The export is a pack-file superset (EXP-4), so it is saved as a JSON file.
-function downloadJson(data, filename) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  try {
-    link.click()
-  } finally {
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
-}
-
-/**
- * The detail view of one catalog recipe: everything needed to decide (UI-7).
- *
- * `onEdit` / `onRetire` are passed for an admin only, and receive the full
- * detail row -- procedure and ingredients included -- so the edit form starts
- * from the whole recipe, not the listing's summary.
- */
-function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
-  const unitSystem = useUnitSystem()
-  const [detail, setDetail] = React.useState(null)
-  const [failed, setFailed] = React.useState(false)
-
-  // Keyed by the parent on the recipe id, so this state starts fresh per recipe.
-  React.useEffect(() => {
-    let stale = false
-    catalogApi
-      .get(recipe.id)
-      .then((row) => !stale && setDetail(row))
-      .catch((err) => {
-        console.error('Failed to load catalog recipe', err)
-        if (!stale) setFailed(true)
-      })
-    return () => {
-      stale = true
-    }
-  }, [recipe.id])
-
-  // The listing row renders at once; the detail fills in ingredients and procedure.
-  const shown = detail || recipe
-  const servings = basisOf(shown.servings)
-
-  return (
-    <Modal title={shown.title} onClose={onClose}>
-      <div className="flex flex-col gap-3">
-        <div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', overflow: 'hidden' }}>
-          <CatalogRecipeMedia recipe={shown} rounded="var(--radius-md)" />
-        </div>
-        <div
-          className="flex items-center gap-1.5"
-          style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}
-        >
-          <Icon set="mdi" name={dishIcon(shown)} size={16} color={courseColor[shown.course] || 'var(--c-a3)'} />
-          {shown.course}
-        </div>
-        {(shown.bulk_prep || (shown.tags || []).length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
-            {shown.bulk_prep && (
-              <Badge tone="gold">
-                <img src="/assets/icons/bulk_icon.png" alt="" style={{ height: 12 }} />
-                bulk
-              </Badge>
-            )}
-            {(shown.tags || []).map((tag) => (
-              <Badge key={tag} tone="caramel">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
-        {failed && (
-          <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
-            Couldn&apos;t load this recipe. Close it and try again.
-          </p>
-        )}
-        {!detail && !failed && <p style={mutedTextStyle}>Loading…</p>}
-        {detail && (
-          <div>
-            <div style={sectionHeadingStyle}>
-              Ingredients for {servings} {peopleLabel(servings)}
-            </div>
-            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-              {(detail.ingredients || []).map((ing, i) => (
-                <li key={`${ing.name}-${i}`}>
-                  <Quantity amount={ing.quantity} unit={ing.unit} system={unitSystem} /> {ing.name}
-                </li>
-              ))}
-            </ul>
-            {detail.procedure && (
-              <>
-                <div style={sectionHeadingStyle}>Procedure</div>
-                <p style={{ margin: 0, whiteSpace: 'pre-line', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                  {detail.procedure}
-                </p>
-              </>
-            )}
-          </div>
-        )}
-        {detail && (onEdit || onRetire) && (
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            {onRetire && (
-              <Button variant="ghost" onClick={() => onRetire(detail)}>
-                Retire
-              </Button>
-            )}
-            {onEdit && (
-              <Button variant="secondary" onClick={() => onEdit(detail)}>
-                Edit
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </Modal>
-  )
-}
 
 /**
  * Discover: browse the system recipe catalog and add recipes to your book.
@@ -188,12 +48,13 @@ function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
  * enforces the same line with a 403, so this only decides what is shown.
  */
 export default function DiscoverPage() {
-  const isMobile = useIsMobile()
   const isAdmin = useOptionalAuth()?.user?.is_admin === true
 
   const [rows, setRows] = React.useState([])
-  const [loaded, setLoaded] = React.useState(false)
-  const [loadFailed, setLoadFailed] = React.useState(false)
+  // The latest settled listing request: 'loading' | 'ready' | 'failed'. Only
+  // the first request shows 'loading'; a refetch keeps what is on screen --
+  // stale rows, or the error with its retry -- until it settles.
+  const [status, setStatus] = React.useState('loading')
   const [reloadKey, setReloadKey] = React.useState(0)
 
   const [tagOptions, setTagOptions] = React.useState([])
@@ -202,7 +63,6 @@ export default function DiscoverPage() {
   const [search, setSearch] = React.useState('')
   const [query, setQuery] = React.useState('')
   const [sort, setSort] = React.useState('popular')
-  const [showFilters, setShowFilters] = React.useState(false)
 
   const [selectedIds, setSelectedIds] = React.useState([])
   const [adding, setAdding] = React.useState(false)
@@ -228,8 +88,10 @@ export default function DiscoverPage() {
       .catch((err) => console.error('Failed to load tags', err))
   }, [])
 
+  // Trimmed, so trailing whitespace settles on the query already sent and does
+  // not issue a duplicate request.
   React.useEffect(() => {
-    const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS)
+    const timer = setTimeout(() => setQuery(search.trim()), SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(timer)
   }, [search])
 
@@ -241,14 +103,11 @@ export default function DiscoverPage() {
       .then((result) => {
         if (stale) return
         setRows(result)
-        setLoadFailed(false)
+        setStatus('ready')
       })
       .catch((err) => {
         console.error('Failed to load the recipe library', err)
-        if (!stale) setLoadFailed(true)
-      })
-      .finally(() => {
-        if (!stale) setLoaded(true)
+        if (!stale) setStatus('failed')
       })
     return () => {
       stale = true
@@ -327,6 +186,7 @@ export default function DiscoverPage() {
     setNotice(null)
     try {
       const entries = await catalogApi.admin.exportCatalog()
+      // The export is a pack-file superset (EXP-4), so it is saved as a JSON file.
       downloadJson(entries, `catalog-export-${new Date().toISOString().slice(0, 10)}.json`)
     } catch (err) {
       console.error('Failed to export the catalog', err)
@@ -387,20 +247,6 @@ export default function DiscoverPage() {
     clearAllFilters()
   }
 
-  // The desktop popover dismisses on Escape and outside click; the sheet
-  // handles its own Escape.
-  const filterRef = React.useRef(null)
-  const closeFilters = React.useCallback(() => setShowFilters(false), [])
-  useEscapeKey(showFilters && !isMobile, closeFilters)
-  React.useEffect(() => {
-    if (!showFilters || isMobile) return undefined
-    const onDown = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [showFilters, isMobile])
-
   // Locked while adding: a tick landing mid-request would be wiped by the
   // success path and would clear the in-flight notice (UI-8/UI-15).
   const toggleSelected = (id) => {
@@ -432,7 +278,7 @@ export default function DiscoverPage() {
     }
   }
 
-  const filtering = activeFilters.length > 0 || query.trim() !== ''
+  const filtering = activeFilters.length > 0 || query !== ''
 
   return (
     <div className="flex flex-col gap-4">
@@ -446,32 +292,12 @@ export default function DiscoverPage() {
         {/* Browsing controls; the admin listing is unfiltered, so they would do nothing there. */}
         {!managing && (
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-            <div className="relative" ref={filterRef}>
-              <Button
-                variant="ghost"
-                aria-label="Filter"
-                className="relative"
-                onClick={() => setShowFilters((s) => !s)}
-                Icon={FunnelIcon}
-              >
-                {activeFilters.length > 0 && (
-                  <span
-                    className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
-                    style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
-                  >
-                    {activeFilters.length}
-                  </span>
-                )}
-              </Button>
-              {showFilters && !isMobile && (
-                <div
-                  className="absolute left-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2 md:left-auto md:right-0"
-                  style={{ borderColor: 'var(--border-default)' }}
-                >
-                  <RecipeFilters groups={filterGroups} />
-                </div>
-              )}
-            </div>
+            <RecipeFilterControl
+              groups={filterGroups}
+              activeCount={activeFilters.length}
+              resultCount={rows.length}
+              popoverPosition="left-0 md:left-auto md:right-0"
+            />
             <Input
               placeholder="Search the library…"
               aria-label="Search the library"
@@ -483,7 +309,7 @@ export default function DiscoverPage() {
               sortKey={sort}
               options={CATALOG_SORT_OPTIONS}
               showDirection={false}
-              onChange={(key) => setSort(key)}
+              onChange={setSort}
             />
           </div>
         )}
@@ -510,9 +336,9 @@ export default function DiscoverPage() {
         <>
           <ActiveFilterChips filters={activeFilters} onClearAll={clearAllFilters} />
 
-          {!loaded && <p style={mutedTextStyle}>Loading the recipe library…</p>}
+          {status === 'loading' && <p style={mutedTextStyle}>Loading the recipe library…</p>}
 
-          {loadFailed && (
+          {status === 'failed' && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p role="alert" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
                 Couldn&apos;t load the recipe library.
@@ -523,7 +349,7 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {loaded && !loadFailed && rows.length === 0 && (
+          {status === 'ready' && rows.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
               <p style={mutedTextStyle}>
                 {filtering ? 'No recipes match your search.' : 'The recipe library is empty right now. Check back soon.'}
@@ -536,7 +362,7 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {!loadFailed && rows.length > 0 && (
+          {status === 'ready' && rows.length > 0 && (
             <div className="card-grid">
               {rows.map((recipe) => (
                 <CatalogRecipeCard
@@ -624,20 +450,6 @@ export default function DiscoverPage() {
           onSave={saveRecipe}
           onClose={() => closeForm(form)}
         />
-      )}
-
-      {showFilters && isMobile && (
-        <BottomSheet
-          title="Filters"
-          onClose={closeFilters}
-          footer={
-            <Button variant="accent" className="w-full" onClick={closeFilters}>
-              {`Show ${recipesLabel(rows.length)}`}
-            </Button>
-          }
-        >
-          <RecipeFilters groups={filterGroups} />
-        </BottomSheet>
       )}
     </div>
   )

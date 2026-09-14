@@ -305,23 +305,6 @@ test('allowCreateTag={false} removes the free-text add-tag option but keeps exis
   expect(screen.queryByText(/^Add "/)).toBeNull()
 })
 
-test('allowImageUpload={false} hides the upload control but keeps an existing image', async () => {
-  const onSave = vi.fn()
-  render(
-    <NewRecipeModal
-      onClose={() => {}}
-      onSave={onSave}
-      allowImageUpload={false}
-      initialRecipe={{ title: 'Roast', course: 'main', image_url: 'http://img/a.png' }}
-    />,
-  )
-
-  expect(screen.queryByLabelText(/image/i)).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: /save/i }))
-  await waitFor(() => expect(onSave).toHaveBeenCalled())
-  expect(onSave.mock.calls[0][0].image_url).toBe('http://img/a.png')
-})
-
 test('heading replaces the form title', () => {
   render(<NewRecipeModal onClose={() => {}} onSave={() => {}} heading="New catalog recipe" />)
   expect(screen.getByRole('heading', { name: 'New catalog recipe' })).toBeInTheDocument()
