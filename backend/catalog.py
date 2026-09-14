@@ -196,29 +196,36 @@ def populate_from_pack(session: Session, path: Path = PACK_PATH) -> int:
 
     items = json.loads(path.read_text(encoding="utf-8"))
     try:
+        # The system vocabulary, read once. A name the seeders did not create
+        # falls back to ``get_or_create_*`` in the same namespace, as before.
+        ingredients = {row.name: row for row in _owned_by(session, models.Ingredient, system)}
+        tags = {row.name: row for row in _owned_by(session, models.Tag, system)}
+
+        def ingredient(name: str) -> models.Ingredient:
+            if name not in ingredients:
+                ingredients[name] = crud.get_or_create_ingredient(session, None, name, system.id)
+            return ingredients[name]
+
+        def tag(name: str) -> models.Tag:
+            if name not in tags:
+                tags[name] = crud.get_or_create_tag(session, name, system.id)
+            return tags[name]
+
         for item in items:
+            # Resolved before the recipe joins the session: a fallback flushes,
+            # and must not flush a recipe whose fields are not written yet.
+            lines = [(ingredient(line["name"]), line["quantity"], line["unit"]) for line in item["ingredients"]]
+            item_tags = [tag(name) for name in item["tags"]]
             recipe = models.Recipe(
                 user_id=system.id,
-                title=item["title"],
-                course=item["course"],
-                servings=item["servings"],
-                bulk_prep=item["bulk_prep"],
-                procedure=item["procedure"],
                 visibility="private",
                 catalog_entry=models.CatalogEntry(
                     status="published", published_at=datetime.utcnow(), retired_at=None
                 ),
             )
             session.add(recipe)
-            for line in item["ingredients"]:
-                recipe.ingredients.append(
-                    models.RecipeIngredient(
-                        ingredient=crud.get_or_create_ingredient(session, None, line["name"], system.id),
-                        quantity=line["quantity"],
-                        unit=models.UnitEnum(line["unit"]),
-                    )
-                )
-            recipe.tags = [crud.get_or_create_tag(session, name, system.id) for name in item["tags"]]
+            # ``_write`` reads only the pack's fields, so an export's extra keys are ignored (EXP-5).
+            _write(session, recipe, item, lines, item_tags)
         session.commit()
     except Exception:
         session.rollback()
@@ -277,6 +284,16 @@ def held_by(session: Session, user: models.User, recipe_ids: Iterable[int]) -> s
 # --- Browsing (CAT-4, CAT-5, API-1, API-5, API-20) ---------------------------
 
 
+#: Every line with its ingredient row (whose name callers render), and the tags,
+#: each in one statement whatever the number of recipes (CAT-5).
+_LINES_AND_TAGS = (
+    selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
+    selectinload(models.Recipe.tags),
+)
+#: For a query already joined to the entry: the entry from that join, plus the above.
+_ENTRY_LINES_AND_TAGS = (contains_eager(models.Recipe.catalog_entry), *_LINES_AND_TAGS)
+
+
 def _escape_like(text: str) -> str:
     """``text`` with LIKE's metacharacters made literal, for ``escape="\\\\"`` (ERR-11)."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -311,11 +328,7 @@ def _catalog_rows(
         .join(models.Recipe.catalog_entry)
         .outerjoin(counts, counts.c.recipe_id == models.Recipe.id)
         .where(*membership, *criteria)
-        .options(
-            contains_eager(models.Recipe.catalog_entry),
-            selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
-            selectinload(models.Recipe.tags),
-        )
+        .options(*_ENTRY_LINES_AND_TAGS)
         # POP-7; the id makes equal titles deterministic too.
         .order_by(*ordering, models.Recipe.title.asc(), models.Recipe.id.asc())
         .limit(LISTING_CAP)
@@ -388,13 +401,17 @@ def adopt(session: Session, user: models.User, recipe_ids: Iterable[int]) -> Ado
         raise ValueError(f"catalog: at most {ADOPT_BATCH_MAX} recipes can be adopted at once")
     ids = set(requested)
 
-    # ERR-5, as for the listing: a missing account is named, not a 404.
-    system_user(session)
+    # ERR-5, as for the listing: a missing account is named, not a 404. Held in
+    # a local for the whole call, so ``duplicate``'s lookup of each source's
+    # author finds it in the identity map instead of selecting it again.
+    system = system_user(session)  # noqa: F841
 
+    # Each source's ingredients and tags arrive with it, not lazily per copy.
     sources = session.execute(
         select(models.Recipe)
         .join(models.Recipe.catalog_entry)
         .where(models.Recipe.id.in_(ids), models.CatalogEntry.status == "published")
+        .options(*_LINES_AND_TAGS)
         .order_by(models.Recipe.id)
     ).scalars().all()
     missing = ids - {source.id for source in sources}
@@ -654,11 +671,7 @@ def export_catalog(session: Session) -> list[dict]:
     recipes = session.scalars(
         select(models.Recipe)
         .join(models.Recipe.catalog_entry)
-        .options(
-            contains_eager(models.Recipe.catalog_entry),
-            selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
-            selectinload(models.Recipe.tags),
-        )
+        .options(*_ENTRY_LINES_AND_TAGS)
         .order_by(models.Recipe.title.asc(), models.Recipe.id.asc())
     ).all()
     return [
@@ -676,6 +689,11 @@ def export_catalog(session: Session) -> list[dict]:
         }
         for recipe in recipes
     ]
+
+
+def _owned_by(session: Session, model, owner: models.User) -> list:
+    """Every ``model`` row (an ingredient or a tag) ``owner`` owns, by name."""
+    return list(session.scalars(select(model).where(model.user_id == owner.id).order_by(model.name)))
 
 
 def system_ingredients(session: Session) -> list[models.Ingredient]:
