@@ -22,6 +22,7 @@ import crud
 import models
 import recipe_copy
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
+from scoping import scope
 
 __all__ = [
     "SYSTEM_ACCOUNT_USERNAME",
@@ -517,7 +518,8 @@ def retire(session: Session, recipe: models.Recipe) -> models.CatalogEntry:
 # resolves the names and owns the rules. Like publish/retire, these functions
 # flush and never commit.
 
-#: ``create_catalog_recipe``'s ``publish`` flag shadows the function inside it.
+#: Only for :func:`create_catalog_recipe`, whose documented ``publish=True``
+#: keyword shadows :func:`publish` inside it. Everywhere else calls ``publish``.
 _publish = publish
 
 
@@ -628,13 +630,13 @@ def update_catalog_recipe(session: Session, recipe_id: int, data) -> models.Reci
     draft may be left incomplete, and publishing it checks again.
     """
     system = system_user(session)
-    recipe = session.get(models.Recipe, recipe_id)
-    if recipe is None or recipe.user_id != system.id:
+    recipe = crud.get_recipe(session, recipe_id, system.id)
+    if recipe is None:
         raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not a catalog recipe")
     lines, tags = _resolve_names(session, system, data)
     _write(session, recipe, data, lines, tags)
     if recipe.catalog_entry is not None and recipe.catalog_entry.status == "published":
-        _publish(session, recipe)
+        publish(session, recipe)
     return recipe
 
 
@@ -693,24 +695,14 @@ def export_catalog(session: Session) -> list[dict]:
 
 def _owned_by(session: Session, model, owner: models.User) -> list:
     """Every ``model`` row (an ingredient or a tag) ``owner`` owns, by name."""
-    return list(session.scalars(select(model).where(model.user_id == owner.id).order_by(model.name)))
+    return list(session.scalars(scope(select(model), model.user_id, owner.id).order_by(model.name)))
 
 
 def system_ingredients(session: Session) -> list[models.Ingredient]:
     """The system account's ingredients by name: the names catalog recipes may use (D3)."""
-    system = system_user(session)
-    return list(
-        session.scalars(
-            select(models.Ingredient)
-            .where(models.Ingredient.user_id == system.id)
-            .order_by(models.Ingredient.name)
-        )
-    )
+    return _owned_by(session, models.Ingredient, system_user(session))
 
 
 def system_tags(session: Session) -> list[models.Tag]:
     """The system account's tags by name (D3)."""
-    system = system_user(session)
-    return list(
-        session.scalars(select(models.Tag).where(models.Tag.user_id == system.id).order_by(models.Tag.name))
-    )
+    return _owned_by(session, models.Tag, system_user(session))
