@@ -38,6 +38,16 @@ def test_the_catalog_router_is_included():
     assert catalog_paths and catalog_paths <= served
 
 
+def test_the_catalog_admin_router_is_included():
+    """TST-10: ``/admin/catalog/*`` is served by ``catalog_admin_routes``, mounted by ``main``."""
+    import catalog_admin_routes
+
+    assert main.catalog_admin_routes is catalog_admin_routes
+    admin_paths = {route.path for route in catalog_admin_routes.router.routes}
+    served = {getattr(route, "path", None) for route in main.app.routes}
+    assert admin_paths and admin_paths <= served
+
+
 def test_static_is_mounted_for_the_public_stylesheet():
     """D-4: ``/static`` serves ``backend/static/public.css`` in Phase 1B."""
     assert any(

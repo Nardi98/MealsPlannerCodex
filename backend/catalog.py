@@ -45,6 +45,12 @@ __all__ = [
     "adopt",
     "publish",
     "retire",
+    "list_all",
+    "create_catalog_recipe",
+    "update_catalog_recipe",
+    "export_catalog",
+    "system_ingredients",
+    "system_tags",
 ]
 
 #: SYS-3. Used **only** when the account is created (SYS-6): everything else
@@ -275,23 +281,26 @@ def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _published_rows(session: Session, criteria: list, sort: str) -> list[CatalogRow]:
-    """Published entries matching ``criteria``, with counts and eager relations.
+def _catalog_rows(
+    session: Session, criteria: list, sort: str, *, published_only: bool = True
+) -> list[CatalogRow]:
+    """Entries matching ``criteria``, with counts and eager relations.
 
-    Membership is a ``published`` entry and nothing else -- there is no
-    ownership filter, so a user-published recipe would join by its entry alone
-    (P2-1, FC-1). The count is an outer join on one grouped subquery, and the
-    ingredients (with each ingredient row, whose name callers render) and tags
-    are loaded by ``selectinload``, so the statement count is the same for one
-    row or five hundred (CAT-5).
+    Membership is an entry and nothing else -- ``published`` unless
+    ``published_only`` is false, which the admin listing uses to see retired
+    entries too (API-9). There is no ownership filter, so a user-published
+    recipe would join by its entry alone (P2-1, FC-1). The count is an outer
+    join on one grouped subquery, and the ingredients (with each ingredient row,
+    whose name callers render) and tags are loaded by ``selectinload``, so the
+    statement count is the same for one row or five hundred (CAT-5).
     """
     # ERR-5: with no system account the catalog is broken, not empty. Say so by
     # name instead of returning a quiet ``[]``.
     system_user(session)
 
-    published = models.CatalogEntry.status == "published"
+    membership = [models.CatalogEntry.status == "published"] if published_only else []
     counts = _adopter_counts(
-        select(models.CatalogEntry.recipe_id).where(published)
+        select(models.CatalogEntry.recipe_id).where(*membership)
     ).subquery()
     adoption_count = func.coalesce(counts.c.adoption_count, 0)
     ordering = {"popular": [adoption_count.desc()], "title": []}[sort]
@@ -300,7 +309,7 @@ def _published_rows(session: Session, criteria: list, sort: str) -> list[Catalog
         select(models.Recipe, adoption_count)
         .join(models.Recipe.catalog_entry)
         .outerjoin(counts, counts.c.recipe_id == models.Recipe.id)
-        .where(published, *criteria)
+        .where(*membership, *criteria)
         .options(
             contains_eager(models.Recipe.catalog_entry),
             selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
@@ -339,7 +348,7 @@ def list_published(
         criteria.append(models.Recipe.tags.any(models.Tag.name == name))
     if query:
         criteria.append(models.Recipe.title.ilike(f"%{_escape_like(query)}%", escape="\\"))
-    return _published_rows(session, criteria, sort)
+    return _catalog_rows(session, criteria, sort)
 
 
 def get_published(session: Session, recipe_id: int) -> CatalogRow:
@@ -348,7 +357,7 @@ def get_published(session: Session, recipe_id: int) -> CatalogRow:
     Retired, never-catalogued and other users' recipes are all simply not found:
     the caller cannot tell them apart.
     """
-    rows = _published_rows(session, [models.Recipe.id == recipe_id], "title")
+    rows = _catalog_rows(session, [models.Recipe.id == recipe_id], "title")
     if not rows:
         raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not published")
     return rows[0]
@@ -480,3 +489,196 @@ def retire(session: Session, recipe: models.Recipe) -> models.CatalogEntry:
         entry.retired_at = datetime.utcnow()
         session.flush()
     return entry
+
+
+# --- Administration (§9, §9.1, API-9..13, D3) ---------------------------------
+#
+# ``data`` is a plain mapping: ``title``, ``course``, ``servings``, ``bulk_prep``,
+# ``procedure``, ``image_url``, ``tags`` (names) and ``ingredients`` (``name``,
+# ``quantity``, ``unit``). Validating its shape is the router's job; this module
+# resolves the names and owns the rules. Like publish/retire, these functions
+# flush and never commit.
+
+#: ``create_catalog_recipe``'s ``publish`` flag shadows the function inside it.
+_publish = publish
+
+
+def list_all(session: Session) -> list[CatalogRow]:
+    """Every entry, published and retired, by title, with adoption counts (API-9, RET-4).
+
+    A draft -- a system recipe with no entry yet -- is not an entry and is not
+    listed. Capped at :data:`LISTING_CAP`, like the user-facing listing.
+    """
+    return _catalog_rows(session, [], "title", published_only=False)
+
+
+def _resolve_names(session: Session, system: models.User, data) -> tuple[list, list[models.Tag]]:
+    """``data``'s ingredient lines and tags, bound to the system account's rows.
+
+    Names resolve **only** onto rows the system account already owns: nothing
+    is created, and the admin's own pantry and tags are never consulted, so
+    authoring can neither grow the shared vocabulary by a typo nor touch the
+    admin's data (D3, ADM-12). Matching is exact, as it is in
+    ``crud.get_or_create_ingredient`` and ``crud.get_or_create_tag``. Callers
+    resolve before writing anything, so an unknown name leaves no partial rows.
+
+    Returns ``([(ingredient, quantity, unit), ...], [tag, ...])``; repeated tag
+    names collapse to one.
+    """
+    names = [line["name"] for line in data["ingredients"]]
+    ingredients = {
+        row.name: row
+        for row in session.scalars(
+            select(models.Ingredient).where(
+                models.Ingredient.user_id == system.id, models.Ingredient.name.in_(names)
+            )
+        )
+    }
+    seen = set()
+    for name in names:
+        if name not in ingredients:
+            raise ValueError(f"Unknown ingredient: {name}")
+        if name in seen:
+            # One line per ingredient per recipe: the association's primary key.
+            raise ValueError(f"Duplicate ingredient: {name}")
+        seen.add(name)
+
+    tag_names = list(dict.fromkeys(data["tags"]))
+    tags = {
+        row.name: row
+        for row in session.scalars(
+            select(models.Tag).where(models.Tag.user_id == system.id, models.Tag.name.in_(tag_names))
+        )
+    }
+    for name in tag_names:
+        if name not in tags:
+            raise ValueError(f"Unknown tag: {name}")
+
+    lines = [(ingredients[line["name"]], line["quantity"], line["unit"]) for line in data["ingredients"]]
+    return lines, [tags[name] for name in tag_names]
+
+
+def _write(session: Session, recipe: models.Recipe, data, lines: list, tags: list[models.Tag]) -> None:
+    """Write every field of ``recipe`` from ``data`` and its resolved names.
+
+    Ingredients and tags are replaced wholesale; a line whose ingredient the
+    recipe already had becomes an UPDATE of that row at flush.
+    """
+    for field in ("title", "course", "servings", "bulk_prep", "procedure"):
+        setattr(recipe, field, data[field])
+    recipe.image_url = data.get("image_url")
+    recipe.ingredients.clear()
+    recipe.ingredients.extend(
+        models.RecipeIngredient(ingredient=ingredient, quantity=quantity, unit=models.UnitEnum(unit))
+        for ingredient, quantity, unit in lines
+    )
+    recipe.tags = tags
+    session.flush()
+
+
+def create_catalog_recipe(session: Session, data, *, publish: bool = True) -> models.Recipe:
+    """Create a system-owned recipe and, by default, its published entry (API-10, ADM-7).
+
+    Owned by the account found by its flag (SYS-6) and ``private`` (P2-2).
+    With ``publish`` the entry goes through :func:`publish`, so CAT-10 rejects
+    an incomplete recipe with :class:`IncompleteRecipe`; its rows are flushed
+    by then, so the caller must roll back rather than commit. With
+    ``publish=False`` the recipe is a draft with no entry until it is published.
+    """
+    system = system_user(session)
+    lines, tags = _resolve_names(session, system, data)
+    recipe = models.Recipe(user_id=system.id, visibility="private")
+    session.add(recipe)
+    _write(session, recipe, data, lines, tags)
+    if publish:
+        _publish(session, recipe)
+    return recipe
+
+
+def update_catalog_recipe(session: Session, recipe_id: int, data) -> models.Recipe:
+    """Rewrite a catalog recipe from ``data`` (API-11).
+
+    A catalog recipe is one the system account owns, catalogued or still a
+    draft; anything else -- another account's recipe, or no recipe -- raises
+    :class:`CatalogEntryNotFound`. This is not CAT-9's publish rule (FC-2): an
+    admin may never edit someone else's recipe, whoever may publish later
+    (ADM-9). Adopters' copies are their own rows and are not re-synced.
+
+    A **published** entry must stay complete (CAT-10), so the result is checked
+    by :func:`publish`, which changes nothing else for it; on
+    :class:`IncompleteRecipe` the caller must roll back. A retired entry or a
+    draft may be left incomplete, and publishing it checks again.
+    """
+    system = system_user(session)
+    recipe = session.get(models.Recipe, recipe_id)
+    if recipe is None or recipe.user_id != system.id:
+        raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not a catalog recipe")
+    lines, tags = _resolve_names(session, system, data)
+    _write(session, recipe, data, lines, tags)
+    if recipe.catalog_entry is not None and recipe.catalog_entry.status == "published":
+        _publish(session, recipe)
+    return recipe
+
+
+def _iso(moment: datetime | None) -> str | None:
+    return moment.isoformat() if moment is not None else None
+
+
+def export_catalog(session: Session) -> list[dict]:
+    """The whole catalog, published and retired, as pack-shaped dicts by title (§9.1).
+
+    A superset of the pack format (EXP-4): the pack's fields plus ``status``,
+    ``published_at`` and ``retired_at`` as ISO strings, which the loader ignores
+    (EXP-5). Nothing about people is included: no ids, counts, emails or
+    handles (EXP-3). Uncapped, because a backup that silently dropped entries
+    would be worse than none.
+    """
+    system_user(session)
+    recipes = session.scalars(
+        select(models.Recipe)
+        .join(models.Recipe.catalog_entry)
+        .options(
+            contains_eager(models.Recipe.catalog_entry),
+            selectinload(models.Recipe.ingredients).joinedload(models.RecipeIngredient.ingredient),
+            selectinload(models.Recipe.tags),
+        )
+        .order_by(models.Recipe.title.asc(), models.Recipe.id.asc())
+    ).all()
+    return [
+        {
+            "title": recipe.title,
+            "course": recipe.course,
+            "servings": recipe.servings,
+            "bulk_prep": bool(recipe.bulk_prep),
+            "tags": [tag.name for tag in recipe.tags],
+            "procedure": recipe.procedure,
+            "ingredients": [
+                {"name": line.ingredient.name, "quantity": line.quantity, "unit": line.unit.value}
+                for line in recipe.ingredients
+            ],
+            "status": recipe.catalog_entry.status,
+            "published_at": _iso(recipe.catalog_entry.published_at),
+            "retired_at": _iso(recipe.catalog_entry.retired_at),
+        }
+        for recipe in recipes
+    ]
+
+
+def system_ingredients(session: Session) -> list[models.Ingredient]:
+    """The system account's ingredients by name: the names catalog recipes may use (D3)."""
+    system = system_user(session)
+    return list(
+        session.scalars(
+            select(models.Ingredient)
+            .where(models.Ingredient.user_id == system.id)
+            .order_by(models.Ingredient.name)
+        )
+    )
+
+
+def system_tags(session: Session) -> list[models.Tag]:
+    """The system account's tags by name (D3)."""
+    system = system_user(session)
+    return list(
+        session.scalars(select(models.Tag).where(models.Tag.user_id == system.id).order_by(models.Tag.name))
+    )
