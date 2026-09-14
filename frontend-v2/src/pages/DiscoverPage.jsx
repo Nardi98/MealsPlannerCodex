@@ -1,16 +1,15 @@
 import React from 'react'
-import { FunnelIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon } from '@heroicons/react/24/outline'
 import {
   ActiveFilterChips,
   Badge,
-  BottomSheet,
   Button,
   CatalogRecipeCard,
   Icon,
   IconButton,
   Input,
   Modal,
-  RecipeFilters,
+  RecipeFilterControl,
   RecipeMedia,
   RecipeSort,
 } from '../components'
@@ -26,8 +25,6 @@ import { courseColor, dishIcon } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
 import { downloadJson } from '../utils/download'
 import { toggleIn } from '../utils/toggleIn'
-import { useEscapeKey } from '../hooks/useEscapeKey'
-import { useIsMobile } from '../hooks/useIsMobile'
 import { useUnitSystem } from '../hooks/useUnitSystem'
 
 // The catalog's two server-side orderings (API-1). Each has one fixed
@@ -172,7 +169,6 @@ function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
  * enforces the same line with a 403, so this only decides what is shown.
  */
 export default function DiscoverPage() {
-  const isMobile = useIsMobile()
   const isAdmin = useOptionalAuth()?.user?.is_admin === true
 
   const [rows, setRows] = React.useState([])
@@ -186,7 +182,6 @@ export default function DiscoverPage() {
   const [search, setSearch] = React.useState('')
   const [query, setQuery] = React.useState('')
   const [sort, setSort] = React.useState('popular')
-  const [showFilters, setShowFilters] = React.useState(false)
 
   const [selectedIds, setSelectedIds] = React.useState([])
   const [adding, setAdding] = React.useState(false)
@@ -374,20 +369,6 @@ export default function DiscoverPage() {
     clearAllFilters()
   }
 
-  // The desktop popover dismisses on Escape and outside click; the sheet
-  // handles its own Escape.
-  const filterRef = React.useRef(null)
-  const closeFilters = React.useCallback(() => setShowFilters(false), [])
-  useEscapeKey(showFilters && !isMobile, closeFilters)
-  React.useEffect(() => {
-    if (!showFilters || isMobile) return undefined
-    const onDown = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [showFilters, isMobile])
-
   // Locked while adding: a tick landing mid-request would be wiped by the
   // success path and would clear the in-flight notice (UI-8/UI-15).
   const toggleSelected = (id) => {
@@ -433,32 +414,12 @@ export default function DiscoverPage() {
         {/* Browsing controls; the admin listing is unfiltered, so they would do nothing there. */}
         {!managing && (
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-            <div className="relative" ref={filterRef}>
-              <Button
-                variant="ghost"
-                aria-label="Filter"
-                className="relative"
-                onClick={() => setShowFilters((s) => !s)}
-                Icon={FunnelIcon}
-              >
-                {activeFilters.length > 0 && (
-                  <span
-                    className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
-                    style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
-                  >
-                    {activeFilters.length}
-                  </span>
-                )}
-              </Button>
-              {showFilters && !isMobile && (
-                <div
-                  className="absolute left-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2 md:left-auto md:right-0"
-                  style={{ borderColor: 'var(--border-default)' }}
-                >
-                  <RecipeFilters groups={filterGroups} />
-                </div>
-              )}
-            </div>
+            <RecipeFilterControl
+              groups={filterGroups}
+              activeCount={activeFilters.length}
+              resultCount={rows.length}
+              popoverPosition="left-0 md:left-auto md:right-0"
+            />
             <Input
               placeholder="Search the library…"
               aria-label="Search the library"
@@ -611,20 +572,6 @@ export default function DiscoverPage() {
           onSave={saveRecipe}
           onClose={() => closeForm(form)}
         />
-      )}
-
-      {showFilters && isMobile && (
-        <BottomSheet
-          title="Filters"
-          onClose={closeFilters}
-          footer={
-            <Button variant="accent" className="w-full" onClick={closeFilters}>
-              {`Show ${recipesLabel(rows.length)}`}
-            </Button>
-          }
-        >
-          <RecipeFilters groups={filterGroups} />
-        </BottomSheet>
       )}
     </div>
   )

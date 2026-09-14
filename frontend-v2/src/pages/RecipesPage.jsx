@@ -1,7 +1,6 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  FunnelIcon,
   GlobeAltIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -22,7 +21,7 @@ import {
   FavoriteSidesSelect,
   ImportRecipeModal,
   NewRecipeModal,
-  RecipeFilters,
+  RecipeFilterControl,
   RecipeMedia,
   RecipeSort,
   ShareRecipeModal,
@@ -34,7 +33,6 @@ import { toggleIn } from '../utils/toggleIn'
 import Quantity from '../components/Quantity'
 import { alternateForms } from '../utils/units'
 import { useUnitSystem } from '../hooks/useUnitSystem'
-import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -98,7 +96,6 @@ export default function RecipesPage() {
     setConfirmingDelete(false)
   }, [opened])
   const [search, setSearch] = React.useState('')
-  const [showFilters, setShowFilters] = React.useState(false)
   const [tags, setTags] = React.useState([])
   const [ingredientNames, setIngredientNames] = React.useState([])
   const [selectedTags, setSelectedTags] = React.useState([])
@@ -209,21 +206,6 @@ export default function RecipesPage() {
   // above and silently survive "clear all".
   const clearAllFilters = () => filterGroups.forEach((group) => group.clear())
 
-  // The popover had no way out but the funnel itself. DateRangePicker two
-  // files away already dismisses on outside-click and Escape; this is that.
-  const filterRef = React.useRef(null)
-  const closeFilters = React.useCallback(() => setShowFilters(false), [])
-  // The sheet handles its own Escape; this is only for the desktop popover.
-  useEscapeKey(showFilters && !isMobile, closeFilters)
-  React.useEffect(() => {
-    if (!showFilters || isMobile) return undefined
-    const onDown = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [showFilters, isMobile])
-
   const handleSave = async (recipe) => {
     try {
       if (editing) {
@@ -299,36 +281,12 @@ export default function RecipesPage() {
           Recipes
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative" ref={filterRef}>
-            <Button
-              variant="ghost"
-              aria-label="Filter"
-              data-tour="recipes-filter"
-              className="relative"
-              onClick={() => setShowFilters((s) => !s)}
-              Icon={FunnelIcon}
-            >
-              {activeFilters.length > 0 && (
-                <span
-                  className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
-                  style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
-                >
-                  {activeFilters.length}
-                </span>
-              )}
-            </Button>
-            {showFilters && !isMobile && (
-              <div
-                // 20rem, up from 14: the chips inside grew from 13px checkboxes to
-                // `px-4 min-h-11`, and a long ingredient name wrapped three
-                // times in 224px. Still clamped to the viewport, per §8.
-                className="absolute right-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
-                style={{ borderColor: 'var(--border-default)' }}
-              >
-                <RecipeFilters groups={filterGroups} />
-              </div>
-            )}
-          </div>
+          <RecipeFilterControl
+            groups={filterGroups}
+            activeCount={activeFilters.length}
+            resultCount={filteredRecipes.length}
+            tour="recipes-filter"
+          />
           {/* `min-w-0` is the fix for the squeezed row: without it a flex
               item refuses to go below its content width, so the input claimed
               the row and then starved every button beside it. */}
@@ -708,26 +666,6 @@ export default function RecipesPage() {
               Import from a website
             </Button>
           </div>
-        </BottomSheet>
-      )}
-
-      {showFilters && isMobile && (
-        <BottomSheet
-          title="Filters"
-          onClose={() => setShowFilters(false)}
-          footer={
-            <Button
-              variant="accent"
-              className="w-full"
-              onClick={() => setShowFilters(false)}
-            >
-              {`Show ${filteredRecipes.length} ${
-                filteredRecipes.length === 1 ? 'recipe' : 'recipes'
-              }`}
-            </Button>
-          }
-        >
-          <RecipeFilters groups={filterGroups} />
         </BottomSheet>
       )}
 
