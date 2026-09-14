@@ -126,6 +126,15 @@ def test_export_catalog_service_matches_the_route(admin, db_session, two_entries
     assert catalog.export_catalog(db_session) == _export(admin).json()
 
 
+def test_the_export_body_is_the_service_output_byte_for_byte(admin, db_session, two_entries):
+    """The route's local models only validate: they add, drop and reshape nothing."""
+    expected = json.dumps(
+        catalog.export_catalog(db_session), ensure_ascii=False, allow_nan=False, separators=(",", ":")
+    ).encode("utf-8")
+
+    assert _export(admin).content == expected
+
+
 def test_an_export_round_trips_through_the_pack_loader(admin, db_session, two_entries, tmp_path):
     """EXP-5: export, empty the catalog, load the file: every entry is back, published."""
     exported = _export(admin).json()

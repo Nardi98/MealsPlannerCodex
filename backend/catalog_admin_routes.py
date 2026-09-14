@@ -109,6 +109,8 @@ class RecipeCreate(RecipeWrite):
 
 
 class AdminIngredient(BaseModel):
+    """One ingredient line, in an admin row and in the export alike (units are stored as g|ml|piece)."""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -149,28 +151,13 @@ class AdminRecipe(BaseModel):
             bulk_prep=bool(recipe.bulk_prep),
             image_url=recipe.image_url,
             tags=[tag.name for tag in recipe.tags],
-            ingredients=[
-                AdminIngredient(
-                    name=line.ingredient.name,
-                    quantity=line.quantity,
-                    unit=line.unit.value if line.unit is not None else None,
-                )
-                for line in recipe.ingredients
-            ],
+            ingredients=[AdminIngredient(**line) for line in catalog.ingredient_lines(recipe)],
             adoption_count=row.adoption_count,
             procedure=recipe.procedure,
             status=entry.status if entry else None,
             published_at=entry.published_at if entry else None,
             retired_at=entry.retired_at if entry else None,
         )
-
-
-class ExportIngredient(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    name: str
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
 
 
 class ExportItem(BaseModel):
@@ -184,7 +171,7 @@ class ExportItem(BaseModel):
     bulk_prep: bool
     tags: List[str]
     procedure: Optional[str] = None
-    ingredients: List[ExportIngredient]
+    ingredients: List[AdminIngredient]
     status: Literal["published", "retired"]
     published_at: str
     retired_at: Optional[str] = None

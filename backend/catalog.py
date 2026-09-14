@@ -49,6 +49,7 @@ __all__ = [
     "create_catalog_recipe",
     "update_catalog_recipe",
     "export_catalog",
+    "ingredient_lines",
     "system_ingredients",
     "system_tags",
 ]
@@ -620,6 +621,22 @@ def update_catalog_recipe(session: Session, recipe_id: int, data) -> models.Reci
     return recipe
 
 
+def ingredient_lines(recipe: models.Recipe) -> list[dict]:
+    """``recipe``'s ingredient lines as ``{"name", "quantity", "unit"}`` dicts.
+
+    ``unit`` is the plain string value, or ``None``. The one extraction the export
+    and both routers' bodies share; each router still picks its own fields.
+    """
+    return [
+        {
+            "name": line.ingredient.name,
+            "quantity": line.quantity,
+            "unit": line.unit.value if line.unit is not None else None,
+        }
+        for line in recipe.ingredients
+    ]
+
+
 def _iso(moment: datetime | None) -> str | None:
     return moment.isoformat() if moment is not None else None
 
@@ -652,10 +669,7 @@ def export_catalog(session: Session) -> list[dict]:
             "bulk_prep": bool(recipe.bulk_prep),
             "tags": [tag.name for tag in recipe.tags],
             "procedure": recipe.procedure,
-            "ingredients": [
-                {"name": line.ingredient.name, "quantity": line.quantity, "unit": line.unit.value}
-                for line in recipe.ingredients
-            ],
+            "ingredients": ingredient_lines(recipe),
             "status": recipe.catalog_entry.status,
             "published_at": _iso(recipe.catalog_entry.published_at),
             "retired_at": _iso(recipe.catalog_entry.retired_at),
