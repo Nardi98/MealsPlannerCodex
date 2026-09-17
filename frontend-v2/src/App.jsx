@@ -123,10 +123,15 @@ function Shell() {
         {/* All three stay in the header at every width: a tutorial nobody can
             find is a tutorial nobody runs, logging out must never be more than
             one tap away, and an admin who cannot see which hat they are wearing
-            is the confusion this pill exists to end. */}
+            is the confusion this pill exists to end.
+
+            Help comes first because it is the only one that disappears -- it
+            unmounts on a page with no tour. In this right-aligned row anything
+            after the pill takes the pill sideways with it as you navigate,
+            while anything before it leaves the pill where it was. */}
         <div className="flex items-center gap-3">
-          <ViewModePill />
           <ReplayTutorialButton />
+          <ViewModePill />
           <ProfileMenu />
         </div>
       </header>

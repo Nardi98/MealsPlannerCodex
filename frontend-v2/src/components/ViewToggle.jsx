@@ -7,11 +7,15 @@
  * keys, and a `role="tablist"` that ignores arrow keys is a worse promise than
  * no tablist at all. This is a two-state switch, not a tab strip.
  */
-export default function ViewToggle({ value, onChange, options }) {
+export default function ViewToggle({ value, onChange, options, className = '', style = {} }) {
   return (
     <div
-      className="flex gap-1 p-1"
-      style={{ border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)' }}
+      className={`flex gap-1 p-1 ${className}`}
+      style={{
+        border: '1px solid var(--border-default)',
+        borderRadius: 'var(--radius-md)',
+        ...style,
+      }}
     >
       {options.map(([option, label]) => {
         const active = value === option
