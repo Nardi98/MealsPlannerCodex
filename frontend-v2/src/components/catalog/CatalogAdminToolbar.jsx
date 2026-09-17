@@ -1,14 +1,29 @@
-import { ArchiveBoxIcon, ArrowDownTrayIcon, PlusIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, PlusIcon } from '@heroicons/react/24/outline'
 import { Button } from '../Button'
+import { Input } from '../Input'
+import RecipeSort from '../RecipeSort'
 
 /**
- * The library admin's controls on Discover (UI-12). The page mounts this only
- * for an admin, so nobody else gets so much as a hidden node (UI-11).
+ * The library admin's one control bar: the two authoring actions on the left,
+ * and the three controls that narrow the listing on the right.
  *
- * "Show retired" is a two-state switch (`aria-pressed`) between browsing the
- * published library and the admin listing of every entry.
+ * Search, status and sort all run server-side, like the browse listing's, so
+ * each is a plain value handed back up and nothing here filters rows itself.
+ * There is no "show retired" switch any more -- the admin listing shows every
+ * entry and the status filter is how you look at one state at a time.
  */
-export default function CatalogAdminToolbar({ showRetired, exporting, onNew, onToggleRetired, onExport }) {
+export default function CatalogAdminToolbar({
+  search,
+  status,
+  sort,
+  sortOptions,
+  exporting,
+  onSearch,
+  onStatus,
+  onSort,
+  onNew,
+  onExport,
+}) {
   return (
     <div
       role="group"
@@ -16,27 +31,33 @@ export default function CatalogAdminToolbar({ showRetired, exporting, onNew, onT
       className="flex flex-wrap items-center gap-2 border-t pt-3"
       style={{ borderColor: 'var(--border-default)' }}
     >
-      <span
-        className="w-full md:w-auto"
-        style={{
-          fontSize: 'var(--text-xs)',
-          fontWeight: 'var(--weight-semibold)',
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          color: 'var(--text-subtle)',
-        }}
-      >
-        Library admin
-      </span>
       <Button variant="secondary" Icon={PlusIcon} onClick={onNew}>
         New catalog recipe
-      </Button>
-      <Button variant="ghost" Icon={ArchiveBoxIcon} aria-pressed={showRetired} onClick={onToggleRetired}>
-        Show retired
       </Button>
       <Button variant="ghost" Icon={ArrowDownTrayIcon} disabled={exporting} onClick={onExport}>
         {exporting ? 'Exporting…' : 'Export'}
       </Button>
+
+      <div className="flex w-full flex-wrap items-center gap-2 md:ml-auto md:w-auto">
+        <Input
+          placeholder="Search the library…"
+          aria-label="Search the library"
+          className="min-w-0 flex-1 md:w-56 md:flex-none"
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+        />
+        <Input
+          as="select"
+          aria-label="Filter by status"
+          value={status}
+          onChange={(e) => onStatus(e.target.value)}
+        >
+          <option value="">All entries</option>
+          <option value="published">Published</option>
+          <option value="retired">Retired</option>
+        </Input>
+        <RecipeSort sortKey={sort} options={sortOptions} showDirection={false} onChange={onSort} />
+      </div>
     </div>
   )
 }

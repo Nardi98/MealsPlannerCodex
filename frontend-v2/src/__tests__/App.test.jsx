@@ -32,6 +32,7 @@ vi.mock('../pages/ShoppingListPage', () => ({ default: () => <div>shopping-page<
 vi.mock('../pages/ImportExportPage', () => ({ default: () => <div>import-page</div> }))
 vi.mock('../pages/SharedWithMePage', () => ({ default: () => <div>shared-with-me-page</div> }))
 vi.mock('../pages/DiscoverPage', () => ({ default: () => <div>discover-page</div> }))
+vi.mock('../pages/CatalogAdminPage', () => ({ default: () => <div>catalog-admin-page</div> }))
 vi.mock('../pages/SharedRecipePage', () => ({ default: () => <div>shared-recipe-page</div> }))
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
@@ -39,6 +40,7 @@ import App from '../App'
 import { stubViewport } from '../test/stubViewport'
 
 const CONFIRMED = { email: 'demo@x.test', username: 'demo', username_confirmed: true }
+const ADMIN = { ...CONFIRMED, is_admin: true }
 // The counterpart of CONFIRMED. Extracted because the UN-11 assertions check
 // that neither the handle nor the address it was derived from is rendered, and
 // five hand-copied literals that must stay byte-identical for those assertions
@@ -324,4 +326,104 @@ test('keeps the tutorial reachable from the header on mobile', async () => {
   await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
   expect(screen.getByRole('dialog', { name: /main navigation/i })).toBeInTheDocument()
   expect(screen.getAllByRole('button', { name: /replay tutorial/i })).toHaveLength(1)
+})
+
+
+// ---------------------------------------------------------------------------
+// Admin vs user view
+// ---------------------------------------------------------------------------
+//
+// An admin account has two jobs, and the pill is the only thing in the shell
+// that says which one is live. Everything else -- the sidebar's length, what
+// `/discover` renders -- follows from it, so these tests drive the real pill
+// rather than the mode directly.
+
+const switchTo = (name) => userEvent.click(screen.getByRole('button', { name }))
+
+test('the header carries no placeholder search box', async () => {
+  stubViewport(true)
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  expect(screen.queryByPlaceholderText('Search…')).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
+  expect(screen.getByRole('dialog', { name: /main navigation/i })).toBeInTheDocument()
+  expect(screen.queryByPlaceholderText('Search…')).not.toBeInTheDocument()
+})
+
+test('the help button sits left of the pill, so the pill never shifts', () => {
+  // `ReplayTutorialButton` unmounts on any page with no tour. The header group
+  // is right-aligned, so anything that comes *after* the pill and disappears
+  // drags the pill sideways as you navigate; anything before it cannot.
+  signedIn(ADMIN)
+  render(<App />)
+
+  const replay = screen.getByRole('button', { name: /replay tutorial/i })
+  const user = screen.getByRole('button', { name: 'User' })
+
+  expect(replay.compareDocumentPosition(user) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
+test('a non-admin account gets no view switch', () => {
+  signedIn(CONFIRMED)
+  render(<App />)
+
+  expect(screen.queryByRole('button', { name: 'Admin' })).not.toBeInTheDocument()
+})
+
+test('an admin account gets the switch, starting on the user side', () => {
+  signedIn(ADMIN)
+  render(<App />)
+
+  expect(screen.getByRole('button', { name: 'User' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByText('recipes-page')).toBeInTheDocument()
+})
+
+test('switching to admin opens the library as an admin and narrows the sidebar', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+
+  await switchTo('Admin')
+
+  expect(screen.getByText('catalog-admin-page')).toBeInTheDocument()
+  expect(screen.queryByText('discover-page')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /shared with me/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /discover/i })).toBeInTheDocument()
+})
+
+test('the other pages stay reachable by url in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  visit('/meal-plan')
+  cleanup()
+  render(<App />)
+
+  expect(screen.getByText('meal-plan-page')).toBeInTheDocument()
+})
+
+test('switching back to user restores the app and the plain discover page', async () => {
+  signedIn(ADMIN)
+  visit('/discover')
+  render(<App />)
+  await switchTo('Admin')
+
+  await switchTo('User')
+
+  expect(screen.getByText('recipes-page')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /shared with me/i })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: /discover/i }))
+  expect(screen.getByText('discover-page')).toBeInTheDocument()
+})
+
+test('an admin browsing in user mode sees the plain discover page', () => {
+  signedIn(ADMIN)
+  visit('/discover')
+  render(<App />)
+
+  expect(screen.getByText('discover-page')).toBeInTheDocument()
+  expect(screen.queryByText('catalog-admin-page')).not.toBeInTheDocument()
 })

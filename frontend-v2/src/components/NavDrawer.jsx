@@ -5,7 +5,7 @@ import Sidebar from './Sidebar'
 // The mobile counterpart of the desktop sidebar column: a scrim plus a
 // left-anchored panel holding the same `Sidebar`, so the two can never drift
 // apart. Rendered only below `md` — see `useIsMobile`.
-export default function NavDrawer({ open, onClose, header, footer }) {
+export default function NavDrawer({ open, onClose }) {
   React.useEffect(() => {
     if (!open) return undefined
     const onKeyDown = (e) => {
@@ -44,9 +44,7 @@ export default function NavDrawer({ open, onClose, header, footer }) {
           boxSizing: 'border-box',
         }}
       >
-        {header && <div className="flex flex-col gap-2">{header}</div>}
         <Sidebar onNavigate={onClose} />
-        {footer && <div className="flex flex-col gap-2">{footer}</div>}
       </div>
     </div>
   )

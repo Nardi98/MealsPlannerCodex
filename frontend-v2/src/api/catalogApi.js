@@ -12,11 +12,16 @@ import { basisOf } from '../utils/servings';
 // `course` and `tags` are repeatable keys (`?course=main&course=side`), which
 // is why this appends rather than building the string from an object. Empty
 // values are dropped so an unset filter is absent, not sent blank.
-function listQuery({ courses = [], tags = [], q, sort } = {}) {
+//
+// Both listings share it: `status` is only meaningful to the admin one, and
+// `courses`/`tags` only to the browse one, but an unset key costs nothing and
+// one builder means one set of escaping rules.
+function listQuery({ courses = [], tags = [], q, sort, status } = {}) {
   const params = new URLSearchParams();
   courses.forEach((course) => params.append('course', course));
   tags.forEach((tag) => params.append('tags', tag));
   if (q && q.trim()) params.append('q', q.trim());
+  if (status) params.append('status', status);
   if (sort) params.append('sort', sort);
   const query = params.toString();
   return query ? `?${query}` : '';
@@ -127,7 +132,8 @@ export const catalogApi = {
   admin: {
     // Published AND retired entries, with status -- a separate endpoint from
     // `list`, which hides retired entries from admins too (RET-1, UI-16).
-    list: () => request(`${ADMIN}/recipes`),
+    // Searched, filtered by status and sorted server-side, like the browse one.
+    list: (filters) => request(`${ADMIN}/recipes${listQuery(filters)}`),
     // Created published: a new catalog recipe is meant to be seen.
     create: (form) => request(`${ADMIN}/recipes`, json('POST', { ...toRecipeWrite(form), publish: true })),
     update: (recipeId, form) =>

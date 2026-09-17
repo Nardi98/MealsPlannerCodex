@@ -10,11 +10,11 @@ import NavDrawer from '../NavDrawer'
 
 afterEach(cleanup)
 
-function open(props = {}) {
+function open() {
   const onClose = vi.fn()
   render(
     <MemoryRouter>
-      <NavDrawer open onClose={onClose} footer={<button type="button">Replay tutorial</button>} {...props} />
+      <NavDrawer open onClose={onClose} />
     </MemoryRouter>,
   )
   return onClose
@@ -37,11 +37,6 @@ test('renders the navigation as a modal dialog when open', () => {
   expect(screen.getByRole('button', { name: /shopping list/i })).toBeInTheDocument()
 })
 
-test('renders the footer slot', () => {
-  open()
-  expect(screen.getByRole('button', { name: /replay tutorial/i })).toBeInTheDocument()
-})
-
 test('closes when the scrim is clicked', async () => {
   const onClose = open()
   await userEvent.click(screen.getByTestId('nav-drawer-scrim'))
@@ -58,25 +53,4 @@ test('closes after a navigation item is chosen', async () => {
   const onClose = open()
   await userEvent.click(screen.getByRole('button', { name: /ingredients/i }))
   expect(onClose).toHaveBeenCalled()
-})
-
-test('renders the header slot above the navigation', () => {
-  render(
-    <MemoryRouter>
-      <NavDrawer
-        open
-        onClose={vi.fn()}
-        header={<input placeholder="Search…" />}
-        footer={<button type="button">Replay tutorial</button>}
-      />
-    </MemoryRouter>,
-  )
-
-  const dialog = screen.getByRole('dialog')
-  const search = screen.getByPlaceholderText('Search…')
-  const firstNavItem = screen.getByRole('button', { name: /recipes/i })
-
-  expect(dialog).toContainElement(search)
-  // Node order, not just presence: the search box is the first thing in the menu.
-  expect(search.compareDocumentPosition(firstNavItem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })

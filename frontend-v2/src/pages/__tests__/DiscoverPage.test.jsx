@@ -8,7 +8,6 @@ import '@testing-library/jest-dom/vitest'
 import DiscoverPage from '../DiscoverPage'
 import { catalogApi } from '../../api/catalogApi'
 import { tagsApi } from '../../api/tagsApi'
-import { ingredientsApi } from '../../api/ingredientsApi'
 import { AuthContext } from '../../auth/AuthContext'
 import { stubViewport } from '../../test/stubViewport'
 
@@ -19,27 +18,12 @@ vi.mock('../../api/catalogApi', async (importOriginal) => ({
     list: vi.fn(),
     get: vi.fn(),
     adopt: vi.fn(),
-    admin: {
-      list: vi.fn(),
-      create: vi.fn(),
-      update: vi.fn(),
-      publish: vi.fn(),
-      retire: vi.fn(),
-      exportCatalog: vi.fn(),
-      ingredients: vi.fn(),
-      tags: vi.fn(),
-    },
+    admin: { list: vi.fn() },
   },
 }))
 
 vi.mock('../../api/tagsApi', () => ({
   tagsApi: {
-    fetchAll: vi.fn(),
-  },
-}))
-
-vi.mock('../../api/ingredientsApi', () => ({
-  ingredientsApi: {
     fetchAll: vi.fn(),
   },
 }))
@@ -88,10 +72,6 @@ beforeEach(() => {
     { id: 2, name: 'quick', is_system: true },
     { id: 3, name: 'my-own-tag', is_system: false },
   ])
-  ingredientsApi.fetchAll.mockResolvedValue([])
-  catalogApi.admin.list.mockResolvedValue(ADMIN_ROWS)
-  catalogApi.admin.ingredients.mockResolvedValue([])
-  catalogApi.admin.tags.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -354,6 +334,23 @@ test('a search with no results offers to clear it', async () => {
   expect(await screen.findByText('Roast chicken')).toBeInTheDocument()
 })
 
+test('clearing the search asks for everything back in one request', async () => {
+  // Regression: clearing used to fall into the search debounce, which spent a
+  // request on the term just deleted and left the old rows up for 300ms.
+  await renderLoaded()
+  catalogApi.list.mockResolvedValue([])
+  fireEvent.change(screen.getByPlaceholderText('Search the library…'), { target: { value: 'zzz' } })
+  await screen.findByRole('button', { name: /clear search and filters/i })
+  expect(lastListArgs().q).toBe('zzz')
+  const settled = catalogApi.list.mock.calls.length
+  catalogApi.list.mockResolvedValue(ROWS)
+
+  fireEvent.click(screen.getByRole('button', { name: /clear search and filters/i }))
+
+  await waitFor(() => expect(lastListArgs().q).toBe(''))
+  expect(catalogApi.list.mock.calls.length).toBe(settled + 1)
+})
+
 test('a failed load shows an error with a retry (UI-14)', async () => {
   catalogApi.list.mockRejectedValueOnce(new Error('boom'))
   render(<DiscoverPage />)
@@ -363,7 +360,12 @@ test('a failed load shows an error with a retry (UI-14)', async () => {
   expect(await screen.findByText('Roast chicken')).toBeInTheDocument()
 })
 
-// --- Admin: nothing for anyone else (UI-11) ---------------------------------
+// --- Curation is not here (UI-11) -------------------------------------------
+//
+// The admin's controls moved to `CatalogAdminPage`, which the shell mounts at
+// this same route in admin mode. So this page has no admin branch left to get
+// wrong -- these assert the absence for every account, admin included, because
+// "an admin in user mode sees what a user sees" is the whole point of the split.
 
 const withUser = (user) => (
   <AuthContext.Provider value={{ user }}>
@@ -382,9 +384,9 @@ function expectNoAdminTrace() {
 test.each([
   ['no auth provider', <DiscoverPage key="none" />],
   ['no signed-in user', withUser(null)],
-  ['is_admin missing', withUser({ username: 'friend' })],
   ['is_admin false', withUser({ username: 'friend', is_admin: false })],
-])('%s: no admin controls anywhere, detail view included (UI-11)', async (_label, ui) => {
+  ['an admin, in user mode', withUser({ username: 'demo', is_admin: true })],
+])('%s: no curation controls anywhere, detail view included', async (_label, ui) => {
   catalogApi.get.mockResolvedValue({ ...ROWS[1], procedure: 'Roast for an hour.' })
   await renderLoaded(ui)
   expectNoAdminTrace()
@@ -394,401 +396,4 @@ test.each([
 
   expectNoAdminTrace()
   expect(catalogApi.admin.list).not.toHaveBeenCalled()
-})
-
-// --- Admin controls (UI-12) -------------------------------------------------
-
-const ADMIN = { username: 'demo', is_admin: true }
-
-function adminRow(overrides) {
-  // AdminRow = CatalogRow − in_my_book + {procedure, status, published_at, retired_at}.
-  // eslint-disable-next-line no-unused-vars
-  const { in_my_book, ...rest } = row(overrides)
-  return {
-    procedure: 'Cook it.',
-    status: 'published',
-    published_at: '2026-09-01T10:00:00Z',
-    retired_at: null,
-    ...rest,
-    ...overrides,
-  }
-}
-
-const ADMIN_ROWS = [
-  adminRow({ id: 1, title: 'Spaghetti al pomodoro', adoption_count: 12 }),
-  adminRow({
-    id: 9,
-    title: 'Old stew',
-    course: 'main',
-    adoption_count: 5,
-    status: 'retired',
-    retired_at: '2026-09-10T10:00:00Z',
-  }),
-]
-
-const renderAdmin = () => renderLoaded(withUser(ADMIN))
-
-const adminListing = () => screen.findByRole('list', { name: 'All library entries' })
-const adminItemFor = async (title) =>
-  within(await adminListing()).getByText(title).closest('li')
-
-// Fills the fields a catalog recipe needs and saves the open form.
-function fillAndSave({ title }) {
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: title } })
-  fireEvent.change(screen.getByLabelText('Course'), { target: { value: 'main' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-}
-
-test('an admin sees the toolbar: new recipe, show retired and export', async () => {
-  await renderAdmin()
-  expect(screen.getByRole('button', { name: /new catalog recipe/i })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: /show retired/i })).toHaveAttribute('aria-pressed', 'false')
-  expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
-})
-
-test('on a phone the admin toolbar keeps 44px tap targets', async () => {
-  stubViewport(true)
-  await renderAdmin()
-  for (const name of [/new catalog recipe/i, /show retired/i, /export/i]) {
-    expect(screen.getByRole('button', { name })).toHaveClass('min-h-11')
-  }
-})
-
-test('"New catalog recipe" opens the form on the library sources, with no pantry writes', async () => {
-  catalogApi.admin.ingredients.mockResolvedValue([
-    { id: 50, name: 'Cavolo nero', season_months: [], grams_per_ml: null, grams_per_piece: null, preferred_dimension: null },
-  ])
-  catalogApi.admin.tags.mockResolvedValue([{ id: 60, name: 'soup' }])
-  await renderAdmin()
-  const pageTagLoads = tagsApi.fetchAll.mock.calls.length
-
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-
-  expect(screen.getByRole('heading', { name: 'New catalog recipe' })).toBeInTheDocument()
-  await waitFor(() => expect(catalogApi.admin.ingredients).toHaveBeenCalled())
-  expect(catalogApi.admin.tags).toHaveBeenCalled()
-  expect(ingredientsApi.fetchAll).not.toHaveBeenCalled()
-  expect(tagsApi.fetchAll).toHaveBeenCalledTimes(pageTagLoads)
-  fireEvent.focus(screen.getByPlaceholderText('ingredient'))
-  expect(await screen.findByText('Cavolo nero')).toBeInTheDocument()
-  expect(screen.queryByText(/add new ingredient/i)).not.toBeInTheDocument()
-})
-
-test('the catalog form offers library tags only, never a free-text new tag', async () => {
-  catalogApi.admin.tags.mockResolvedValue([{ id: 60, name: 'soup' }])
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-  await waitFor(() => expect(catalogApi.admin.tags).toHaveBeenCalled())
-
-  const tagInput = screen.getByPlaceholderText('tag')
-  fireEvent.focus(tagInput)
-  fireEvent.change(tagInput, { target: { value: 'so' } })
-
-  expect(await screen.findByText('soup')).toBeInTheDocument()
-  expect(screen.queryByText(/^Add "/)).not.toBeInTheDocument()
-})
-
-test('saving a new catalog recipe calls admin.create, confirms it and refetches', async () => {
-  catalogApi.admin.create.mockResolvedValue(adminRow({ id: 30, title: 'Ribollita' }))
-  await renderAdmin()
-  const listCalls = catalogApi.list.mock.calls.length
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-
-  fillAndSave({ title: 'Ribollita' })
-
-  await waitFor(() => expect(catalogApi.admin.create).toHaveBeenCalledTimes(1))
-  expect(catalogApi.admin.create).toHaveBeenCalledWith(
-    expect.objectContaining({ title: 'Ribollita', course: 'main', servings: 1 }),
-  )
-  expect(await screen.findByRole('status')).toHaveTextContent(/saved .*ribollita/i)
-  await waitFor(() => expect(catalogApi.list.mock.calls.length).toBeGreaterThan(listCalls))
-  expect(catalogApi.admin.update).not.toHaveBeenCalled()
-})
-
-test('Edit from the detail view pre-fills the whole recipe and calls admin.update', async () => {
-  catalogApi.get.mockResolvedValue({
-    ...ROWS[1],
-    servings: 2,
-    bulk_prep: true,
-    ingredients: [{ name: 'Chicken', quantity: 1, unit: 'piece' }],
-    procedure: 'Roast for an hour.',
-  })
-  catalogApi.admin.update.mockResolvedValue(adminRow({ id: 2, title: 'Roast chicken, lemon' }))
-  await renderAdmin()
-  const listCalls = catalogApi.list.mock.calls.length
-
-  fireEvent.click(screen.getByRole('button', { name: /Roast chicken/ }))
-  await screen.findByText('Roast for an hour.')
-  fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-
-  expect(screen.getByRole('heading', { name: 'Edit catalog recipe' })).toBeInTheDocument()
-  expect(screen.getByLabelText('Title')).toHaveValue('Roast chicken')
-  expect(screen.getByDisplayValue('Roast for an hour.')).toBeInTheDocument()
-  expect(screen.getByPlaceholderText('ingredient')).toHaveValue('Chicken')
-  expect(screen.getByLabelText('Serves')).toHaveValue(2)
-
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Roast chicken, lemon' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-  await waitFor(() => expect(catalogApi.admin.update).toHaveBeenCalledTimes(1))
-  expect(catalogApi.admin.update).toHaveBeenCalledWith(
-    2,
-    expect.objectContaining({
-      title: 'Roast chicken, lemon',
-      course: 'main',
-      servings: 2,
-      hot: true,
-      procedure: 'Roast for an hour.',
-      tags: ['meat'],
-      ingredients: [expect.objectContaining({ name: 'Chicken', amount: 1, unit: 'piece' })],
-    }),
-  )
-  expect(catalogApi.admin.create).not.toHaveBeenCalled()
-  await waitFor(() => expect(catalogApi.list.mock.calls.length).toBeGreaterThan(listCalls))
-})
-
-test('Retire from the detail view retires it, closes the detail and refetches', async () => {
-  catalogApi.get.mockResolvedValue({ ...ROWS[1], procedure: 'Roast for an hour.' })
-  catalogApi.admin.retire.mockResolvedValue(adminRow({ id: 2, status: 'retired' }))
-  await renderAdmin()
-  const listCalls = catalogApi.list.mock.calls.length
-
-  fireEvent.click(screen.getByRole('button', { name: /Roast chicken/ }))
-  await screen.findByText('Roast for an hour.')
-  fireEvent.click(screen.getByRole('button', { name: 'Retire' }))
-
-  await waitFor(() => expect(catalogApi.admin.retire).toHaveBeenCalledWith(2))
-  expect(await screen.findByRole('status')).toHaveTextContent(/retired .*roast chicken/i)
-  expect(screen.queryByText('Roast for an hour.')).not.toBeInTheDocument()
-  await waitFor(() => expect(catalogApi.list.mock.calls.length).toBeGreaterThan(listCalls))
-})
-
-test('"Show retired" loads the admin listing in a separate request, with a status per row (UI-16)', async () => {
-  await renderAdmin()
-  const userListCalls = catalogApi.list.mock.calls.length
-  expect(catalogApi.admin.list).not.toHaveBeenCalled()
-
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-
-  await waitFor(() => expect(catalogApi.admin.list).toHaveBeenCalledTimes(1))
-  expect(screen.getByRole('button', { name: /show retired/i })).toHaveAttribute('aria-pressed', 'true')
-  // The user-facing listing is never asked for retired rows (RET-1).
-  expect(catalogApi.list.mock.calls.length).toBe(userListCalls)
-  catalogApi.list.mock.calls.forEach(([args]) => expect(Object.keys(args)).not.toContain('status'))
-
-  const published = await adminItemFor('Spaghetti al pomodoro')
-  expect(within(published).getByText('Published')).toBeInTheDocument()
-  expect(within(published).getByRole('button', { name: 'Retire' })).toHaveClass('min-h-11')
-  expect(within(published).queryByRole('button', { name: 'Publish' })).not.toBeInTheDocument()
-
-  const retired = await adminItemFor('Old stew')
-  expect(within(retired).getByText('Retired')).toBeInTheDocument()
-  expect(within(retired).getByRole('button', { name: 'Publish' })).toHaveClass('min-h-11')
-  expect(within(retired).queryByRole('button', { name: 'Retire' })).not.toBeInTheDocument()
-
-  // The browse grid and its selection are not mixed into the admin view.
-  expect(screen.queryAllByTestId('catalog-card')).toHaveLength(0)
-})
-
-test('turning "Show retired" off returns to the browse grid', async () => {
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-  await adminListing()
-
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-
-  expect(screen.queryByRole('list', { name: 'All library entries' })).not.toBeInTheDocument()
-  expect(screen.getAllByTestId('catalog-card')).toHaveLength(4)
-})
-
-test.each([
-  ['Publish', 'Old stew', 9, 'publish', /published .*old stew/i],
-  ['Retire', 'Spaghetti al pomodoro', 1, 'retire', /retired .*spaghetti/i],
-])('%s in the admin listing calls its endpoint and refreshes both listings', async (label, title, id, method, message) => {
-  catalogApi.admin[method].mockResolvedValue(adminRow({ id }))
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-  const item = await adminItemFor(title)
-  const userListCalls = catalogApi.list.mock.calls.length
-
-  fireEvent.click(within(item).getByRole('button', { name: label }))
-
-  await waitFor(() => expect(catalogApi.admin[method]).toHaveBeenCalledWith(id))
-  expect(await screen.findByRole('status')).toHaveTextContent(message)
-  await waitFor(() => expect(catalogApi.admin.list).toHaveBeenCalledTimes(2))
-  await waitFor(() => expect(catalogApi.list.mock.calls.length).toBeGreaterThan(userListCalls))
-})
-
-test('Edit in the admin listing pre-fills from the admin row, so a retired entry is editable', async () => {
-  catalogApi.admin.update.mockResolvedValue(adminRow({ id: 9 }))
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-  const item = await adminItemFor('Old stew')
-
-  fireEvent.click(within(item).getByRole('button', { name: 'Edit' }))
-
-  expect(screen.getByLabelText('Title')).toHaveValue('Old stew')
-  expect(screen.getByDisplayValue('Cook it.')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() =>
-    expect(catalogApi.admin.update).toHaveBeenCalledWith(9, expect.objectContaining({ title: 'Old stew' })),
-  )
-  // A retired entry is not reachable through the user-facing detail endpoint.
-  expect(catalogApi.get).not.toHaveBeenCalled()
-  await waitFor(() => expect(catalogApi.admin.list).toHaveBeenCalledTimes(2))
-})
-
-test('Export downloads the catalog as a JSON file through a Blob URL', async () => {
-  const exported = [{ title: 'Old stew', status: 'retired' }]
-  catalogApi.admin.exportCatalog.mockResolvedValue(exported)
-  URL.createObjectURL = vi.fn(() => 'blob:catalog')
-  URL.revokeObjectURL = vi.fn()
-  const written = []
-  class FakeBlob {
-    constructor(parts, options) {
-      written.push({ parts, type: options?.type })
-    }
-  }
-  vi.stubGlobal('Blob', FakeBlob)
-  const downloads = []
-  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function record() {
-    downloads.push({ href: this.getAttribute('href'), download: this.download })
-  })
-  await renderAdmin()
-
-  fireEvent.click(screen.getByRole('button', { name: /export/i }))
-
-  await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:catalog'))
-  expect(catalogApi.admin.exportCatalog).toHaveBeenCalledTimes(1)
-  expect(written).toHaveLength(1)
-  expect(written[0].type).toBe('application/json')
-  expect(JSON.parse(written[0].parts.join(''))).toEqual(exported)
-  expect(downloads).toEqual([{ href: 'blob:catalog', download: expect.stringMatching(/^catalog-export.*\.json$/) }])
-  click.mockRestore()
-  vi.unstubAllGlobals()
-})
-
-// --- Admin errors ------------------------------------------------------------
-
-// The Error `client.request` throws: the message, plus the parsed body on `data`.
-function httpError(status, body) {
-  const message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body)
-  return Object.assign(new Error(message), { status, data: body })
-}
-
-// Types into the ingredient row at `idx` (rows past the first are added first).
-function fillIngredient(idx, { name, amount }) {
-  if (idx > 0) fireEvent.click(screen.getByRole('button', { name: '+ Add ingredient' }))
-  fireEvent.change(screen.getAllByPlaceholderText('ingredient')[idx], { target: { value: name } })
-  fireEvent.change(screen.getAllByPlaceholderText('amt')[idx], { target: { value: amount } })
-}
-
-test('an ingredient without an amount is caught before any request, naming the ingredient', async () => {
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Ribollita' } })
-  fireEvent.change(screen.getByLabelText('Course'), { target: { value: 'main' } })
-  fillIngredient(0, { name: 'Cavolo nero', amount: '800' })
-  fillIngredient(1, { name: 'Olive oil', amount: '' })
-
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-  const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('Couldn\'t save “Ribollita”: "Olive oil" needs an amount and a unit.')
-  expect(catalogApi.admin.create).not.toHaveBeenCalled()
-  // The form is still there, with everything that was typed.
-  expect(screen.getByLabelText('Title')).toHaveValue('Ribollita')
-  expect(screen.getAllByPlaceholderText('ingredient').map((i) => i.value)).toEqual(['Cavolo nero', 'Olive oil'])
-})
-
-test('a duplicate ingredient is caught before any request, with the server wording', async () => {
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-  fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Ribollita' } })
-  fireEvent.change(screen.getByLabelText('Course'), { target: { value: 'main' } })
-  fillIngredient(0, { name: 'Basil', amount: '5' })
-  fillIngredient(1, { name: 'Basil', amount: '10' })
-
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-  expect(await screen.findByRole('alert')).toHaveTextContent('Duplicate ingredient: Basil')
-  expect(catalogApi.admin.create).not.toHaveBeenCalled()
-})
-
-test('a 422 from the server reads as sentences, not raw JSON', async () => {
-  catalogApi.admin.create.mockRejectedValue(
-    httpError(422, {
-      detail: [{ loc: ['body', 'servings'], msg: 'Input should be greater than or equal to 1', type: 'greater_than_equal' }],
-    }),
-  )
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-
-  fillAndSave({ title: 'Ribollita' })
-
-  const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent('servings: Input should be greater than or equal to 1')
-  expect(alert.textContent).not.toMatch(/[{}[\]]|"loc"|greater_than_equal/)
-})
-
-test('a failed save names the failure and reopens the form with what was typed', async () => {
-  catalogApi.admin.create.mockRejectedValue(httpError(400, { detail: 'Unknown tag: brunch' }))
-  await renderAdmin()
-  fireEvent.click(screen.getByRole('button', { name: /new catalog recipe/i }))
-
-  fillAndSave({ title: 'Ribollita' })
-
-  const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent(/couldn.t save .*ribollita/i)
-  expect(alert).toHaveTextContent('Unknown tag: brunch')
-  expect(screen.getByLabelText('Title')).toHaveValue('Ribollita')
-
-  // Saving again from the reopened form still creates rather than updates.
-  catalogApi.admin.create.mockResolvedValue(adminRow({ id: 30 }))
-  fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(catalogApi.admin.create).toHaveBeenCalledTimes(2))
-  expect(catalogApi.admin.update).not.toHaveBeenCalled()
-})
-
-test.each([
-  ['the admin listing', 'list', async () => {
-    fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-  }, /couldn.t load .*retired/i],
-  ['an export', 'exportCatalog', async () => {
-    fireEvent.click(screen.getByRole('button', { name: /export/i }))
-  }, /couldn.t export/i],
-  ['a retire', 'retire', async () => {
-    catalogApi.admin.list.mockResolvedValue(ADMIN_ROWS)
-    fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-    fireEvent.click(within(await adminItemFor('Spaghetti al pomodoro')).getByRole('button', { name: 'Retire' }))
-  }, /couldn.t retire .*spaghetti/i],
-  ['a publish', 'publish', async () => {
-    catalogApi.admin.list.mockResolvedValue(ADMIN_ROWS)
-    fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-    fireEvent.click(within(await adminItemFor('Old stew')).getByRole('button', { name: 'Publish' }))
-  }, /couldn.t publish .*old stew/i],
-])('a failed %s shows an alert naming it', async (_label, method, act, message) => {
-  await renderAdmin()
-  catalogApi.admin[method].mockRejectedValue(new Error('Forbidden'))
-
-  await act()
-
-  const alert = await screen.findByRole('alert')
-  expect(alert).toHaveTextContent(message)
-  expect(alert).toHaveTextContent('Forbidden')
-})
-
-test('there is no hard-delete control anywhere in the admin UI (RET-5)', async () => {
-  catalogApi.get.mockResolvedValue({ ...ROWS[1], procedure: 'Roast for an hour.' })
-  await renderAdmin()
-  expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0)
-
-  fireEvent.click(screen.getByRole('button', { name: /Roast chicken/ }))
-  await screen.findByText('Roast for an hour.')
-  expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0)
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-
-  fireEvent.click(screen.getByRole('button', { name: /show retired/i }))
-  await adminListing()
-  expect(screen.queryAllByRole('button', { name: /delete/i })).toHaveLength(0)
 })

@@ -191,6 +191,27 @@ test('admin.list GETs /admin/catalog/recipes', async () => {
   expect(opts.method ?? 'GET').toBe('GET')
 })
 
+test('admin.list passes q, status and sort as query parameters', async () => {
+  mockFetch([])
+
+  await catalogApi.admin.list({ q: '50% a&b', status: 'retired', sort: 'popular' })
+
+  const url = globalThis.fetch.mock.calls[0][0]
+  expect(url).not.toContain('50% a&b')
+  const params = paramsOf()
+  expect(params.get('q')).toBe('50% a&b')
+  expect(params.get('status')).toBe('retired')
+  expect(params.get('sort')).toBe('popular')
+})
+
+test('admin.list omits empty filters rather than sending blank keys', async () => {
+  mockFetch([])
+
+  await catalogApi.admin.list({ q: '   ', status: '', sort: undefined })
+
+  expect(globalThis.fetch.mock.calls[0][0]).not.toContain('?')
+})
+
 test('admin.create POSTs the serialised recipe and publishes it', async () => {
   mockFetch({ id: 30, status: 'published' }, { status: 201 })
 

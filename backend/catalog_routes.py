@@ -118,7 +118,7 @@ def list_catalog_recipes(
     course: Annotated[Optional[List[str]], Query()] = None,
     tags: Annotated[Optional[List[str]], Query()] = None,
     q: Optional[str] = None,
-    sort: Literal["popular", "title"] = "popular",
+    sort: catalog.Sort = "popular",
 ) -> List[CatalogRecipe]:
     """Published entries, filtered and sorted (API-1), capped at ``catalog.LISTING_CAP``.
 

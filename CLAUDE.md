@@ -77,7 +77,8 @@ points at, including a deployment. `docker-compose.yml` sets the flag; no deploy
 
 ### Frontend (`frontend-v2/src/`)
 - `api/` — one module per resource (`recipesApi`, `mealPlansApi`, `ingredientsApi`, etc.); all go through `api/client.js`'s `request()` helper, which unwraps FastAPI's `{detail}` errors and returns `null` on 204.
-- `pages/` — `RecipesPage`, `DiscoverPage` (the recipe library at `/discover`, with admin curation controls shown only when `/auth/me` reports `is_admin`), `MealPlanPage`, `IngredientsPage`, `ShoppingListPage`, `ImportExportPage`, routed in `App.jsx`.
+- `pages/` — `RecipesPage`, `DiscoverPage` (browsing and adopting from the recipe library at `/discover`), `CatalogAdminPage` (curating that library, at the same `/discover`), `MealPlanPage`, `IngredientsPage`, `ShoppingListPage`, `ImportExportPage`, routed in `App.jsx`.
+- **User vs admin view.** An admin account wears one hat at a time. `auth/ViewModeContext.jsx` holds the mode (`useViewMode()` → `{ mode, isAdminMode, canAdmin, setMode }`); it is React state only, so every reload and sign-in starts in user mode, and it fails closed — `isAdminMode` re-reads `is_admin` on every render. `components/ViewModePill.jsx` is the header switch, rendered only for an admin, and it navigates (`/discover` into admin, `/recipes` out). In admin mode `Sidebar` lists Discover alone and `/discover` renders `CatalogAdminPage`; every other route stays reachable by URL. **The mode is presentation, never permission** — the server enforces admin with `require_admin` on every `/admin/catalog/*` route. In user mode an admin's screens are byte-for-byte a normal user's.
 - `components/` — shared primitives (`Button`, `Card`, `Badge`, modals, seasonality/month grids), re-exported from `components/index.js`.
 - Styling is Tailwind + CSS variables from the design guide (`--c-pos: #0C3A2D`, `--c-neg: #BD210F`, etc.). All UI work must follow `MEAL_PLANNER_DESIGN_GUIDE.md`.
 

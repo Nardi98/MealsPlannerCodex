@@ -136,7 +136,7 @@ class AdminRecipe(BaseModel):
     ingredients: List[AdminIngredient]
     adoption_count: int
     procedure: Optional[str] = None
-    status: Optional[Literal["published", "retired"]] = None
+    status: Optional[catalog.Status] = None
     published_at: Optional[datetime] = None
     retired_at: Optional[datetime] = None
 
@@ -172,7 +172,7 @@ class ExportItem(BaseModel):
     tags: List[str]
     procedure: Optional[str] = None
     ingredients: List[AdminIngredient]
-    status: Literal["published", "retired"]
+    status: catalog.Status
     published_at: str
     retired_at: Optional[str] = None
 
@@ -231,9 +231,20 @@ def _recipe_or_404(db: Session, recipe_id: int) -> models.Recipe:
 # routes
 # ---------------------------------------------------------------------------
 @router.get("/recipes", response_model=List[AdminRecipe])
-def list_catalog_entries(db: Db) -> List[AdminRecipe]:
-    """Every entry, published and retired, with its status and adoption count (API-9)."""
-    return [AdminRecipe.build(row) for row in catalog.list_all(db)]
+def list_catalog_entries(
+    db: Db,
+    q: Optional[str] = None,
+    status: Optional[catalog.Status] = None,
+    sort: catalog.Sort = "title",
+) -> List[AdminRecipe]:
+    """Every entry, published and retired, with its status and adoption count (API-9).
+
+    ``q``, ``status`` and ``sort`` narrow and order the listing the way the
+    curation screen asks for it; an unknown value is a 422 here, as on the
+    browse route, so the service's ``ValueError`` is unreachable.
+    """
+    rows = catalog.list_all(db, query=q, status=status, sort=sort)
+    return [AdminRecipe.build(row) for row in rows]
 
 
 @router.post("/recipes", response_model=AdminRecipe, status_code=201)

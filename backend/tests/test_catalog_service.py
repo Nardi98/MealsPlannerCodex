@@ -347,6 +347,72 @@ def test_rendering_a_listing_issues_no_further_queries(db_session, engine, make_
     assert len(listing) <= 5, listing
 
 
+# --- list_all: the admin listing (API-9, RET-4) -----------------------------
+
+def test_list_all_returns_every_entry_by_title(db_session, make_catalog_recipe):
+    make_catalog_recipe("Live")
+    make_catalog_recipe("Gone", status="retired")
+
+    assert _titles(catalog.list_all(db_session)) == ["Gone", "Live"]
+
+
+def test_list_all_query_is_a_case_insensitive_title_substring(db_session, make_catalog_recipe):
+    make_catalog_recipe("Spaghetti Carbonara")
+    make_catalog_recipe("Risotto", status="retired")
+
+    assert _titles(catalog.list_all(db_session, query="CARBON")) == ["Spaghetti Carbonara"]
+
+
+def test_list_all_query_wildcards_match_literally(db_session, make_catalog_recipe):
+    make_catalog_recipe("50% rye bread")
+    make_catalog_recipe("500 rye bread", status="retired")
+
+    assert _titles(catalog.list_all(db_session, query="50%")) == ["50% rye bread"]
+
+
+@pytest.mark.parametrize("status, expected", [("published", ["Live"]), ("retired", ["Gone"])])
+def test_list_all_status_keeps_only_that_status(
+    db_session, make_catalog_recipe, status, expected
+):
+    make_catalog_recipe("Live")
+    make_catalog_recipe("Gone", status="retired")
+
+    assert _titles(catalog.list_all(db_session, status=status)) == expected
+
+
+def test_a_status_filter_keeps_each_row_own_adoption_count(
+    db_session, make_catalog_recipe, user
+):
+    """Scoping the listing to one state must not cost its rows their counts."""
+    _copy(db_session, make_catalog_recipe("Gone", status="retired"), user)
+
+    [row] = catalog.list_all(db_session, status="retired")
+
+    assert row.adoption_count == 1
+
+
+def test_list_all_sorts_by_popularity_on_request(
+    db_session, make_catalog_recipe, user, other_user
+):
+    alpha = make_catalog_recipe("Alpha")
+    beta = make_catalog_recipe("Beta", status="retired")
+    for person in (user, other_user):
+        _copy(db_session, beta, person)
+    _copy(db_session, alpha, user)
+
+    assert _titles(catalog.list_all(db_session, sort="popular")) == ["Beta", "Alpha"]
+
+
+def test_list_all_refuses_an_unknown_sort(db_session, system_account):
+    with pytest.raises(ValueError, match="sort"):
+        catalog.list_all(db_session, sort="newest")
+
+
+def test_list_all_refuses_an_unknown_status(db_session, system_account):
+    with pytest.raises(ValueError, match="status"):
+        catalog.list_all(db_session, status="draft")
+
+
 def test_get_published_returns_the_row(db_session, make_catalog_recipe, user):
     recipe = make_catalog_recipe("Pesto")
     _copy(db_session, recipe, user)

@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Literal, get_args
 
 from sqlalchemy import Select, distinct, func, select
 from sqlalchemy.orm import Session, aliased, contains_eager, selectinload
@@ -25,6 +26,10 @@ from mealplanner.seed import seed_system_ingredients, seed_system_tags
 from scoping import scope
 
 __all__ = [
+    "Sort",
+    "Status",
+    "SORTS",
+    "STATUSES",
     "SYSTEM_ACCOUNT_USERNAME",
     "SYSTEM_ACCOUNT_EMAIL",
     "LISTING_CAP",
@@ -300,24 +305,51 @@ def _escape_like(text: str) -> str:
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+#: The orderings both listings offer (API-1), and the states an entry can be in
+#: -- a recipe with no entry is a draft, not a state. The routers annotate their
+#: query parameters with these aliases, so the vocabulary is spelled once and a
+#: route can never 422 a value the service would have accepted.
+Sort = Literal["popular", "title"]
+Status = Literal["published", "retired"]
+SORTS = get_args(Sort)
+STATUSES = get_args(Status)
+
+
+def _title_match(query: str):
+    """A case-insensitive *literal* substring criterion on the title (ERR-11)."""
+    return models.Recipe.title.ilike(f"%{_escape_like(query)}%", escape="\\")
+
+
 def _catalog_rows(
-    session: Session, criteria: list, sort: str, *, published_only: bool = True
+    session: Session, criteria: list, sort: str, *, status: str | None = None
 ) -> list[CatalogRow]:
     """Entries matching ``criteria``, with counts and eager relations.
 
-    Membership is an entry and nothing else -- ``published`` unless
-    ``published_only`` is false, which the admin listing uses to see retired
-    entries too (API-9). There is no ownership filter, so a user-published
-    recipe would join by its entry alone (P2-1, FC-1). The count is an outer
-    join on one grouped subquery, and the ingredients (with each ingredient row,
-    whose name callers render) and tags are loaded by ``selectinload``, so the
-    statement count is the same for one row or five hundred (CAT-5).
+    Membership is an entry and nothing else, narrowed to one ``status`` when
+    given: ``"published"`` for the browse listing, an admin's chosen state for
+    the curation one, and ``None`` for every entry whatever its state (API-9).
+    It scopes the count subquery as well as the rows, so the two can never
+    disagree about which entries exist. There is no ownership filter, so a
+    user-published recipe would join by its entry alone (P2-1, FC-1). The count
+    is an outer join on one grouped subquery, and the ingredients (with each
+    ingredient row, whose name callers render) and tags are loaded by
+    ``selectinload``, so the statement count is the same for one row or five
+    hundred (CAT-5).
+
+    Both vocabularies are checked here rather than in the callers: this is the
+    only code that consumes them, so no caller can forget to and leave a
+    ``KeyError`` to surface from the statement builder.
     """
     # ERR-5: with no system account the catalog is broken, not empty. Say so by
     # name instead of returning a quiet ``[]``.
     system_user(session)
 
-    membership = [models.CatalogEntry.status == "published"] if published_only else []
+    if sort not in SORTS:
+        raise ValueError(f"catalog: unknown sort {sort!r}; expected {' or '.join(map(repr, SORTS))}")
+    if status is not None and status not in STATUSES:
+        raise ValueError(f"catalog: unknown status {status!r}; expected {' or '.join(map(repr, STATUSES))}")
+
+    membership = [models.CatalogEntry.status == status] if status is not None else []
     counts = _adopter_counts(
         select(models.CatalogEntry.recipe_id).where(*membership)
     ).subquery()
@@ -352,9 +384,6 @@ def list_published(
     ``"popular"`` (adopters descending, then title) or ``"title"``. At most
     :data:`LISTING_CAP` rows are returned.
     """
-    if sort not in ("popular", "title"):
-        raise ValueError(f"catalog: unknown sort {sort!r}; expected 'popular' or 'title'")
-
     criteria = []
     if course:
         courses = [course] if isinstance(course, str) else list(course)
@@ -362,8 +391,8 @@ def list_published(
     for name in tags or ():
         criteria.append(models.Recipe.tags.any(models.Tag.name == name))
     if query:
-        criteria.append(models.Recipe.title.ilike(f"%{_escape_like(query)}%", escape="\\"))
-    return _catalog_rows(session, criteria, sort)
+        criteria.append(_title_match(query))
+    return _catalog_rows(session, criteria, sort, status="published")
 
 
 def get_published(session: Session, recipe_id: int) -> CatalogRow:
@@ -372,7 +401,7 @@ def get_published(session: Session, recipe_id: int) -> CatalogRow:
     Retired, never-catalogued and other users' recipes are all simply not found:
     the caller cannot tell them apart.
     """
-    rows = _catalog_rows(session, [models.Recipe.id == recipe_id], "title")
+    rows = _catalog_rows(session, [models.Recipe.id == recipe_id], "title", status="published")
     if not rows:
         raise CatalogEntryNotFound(f"catalog: recipe {recipe_id} is not published")
     return rows[0]
@@ -523,13 +552,27 @@ def retire(session: Session, recipe: models.Recipe) -> models.CatalogEntry:
 _publish = publish
 
 
-def list_all(session: Session) -> list[CatalogRow]:
-    """Every entry, published and retired, by title, with adoption counts (API-9, RET-4).
+def list_all(
+    session: Session,
+    *,
+    query: str | None = None,
+    status: str | None = None,
+    sort: str = "title",
+) -> list[CatalogRow]:
+    """Every entry, published and retired, with adoption counts (API-9, RET-4).
+
+    ``query`` is a case-insensitive literal substring of the title and ``status``
+    keeps only entries in that state, both as the curation screen asks for them;
+    ``sort`` is as in :func:`list_published`, defaulting to title here because a
+    curator is looking for a known recipe more often than a popular one.
 
     A draft -- a system recipe with no entry yet -- is not an entry and is not
     listed. Capped at :data:`LISTING_CAP`, like the user-facing listing.
     """
-    return _catalog_rows(session, [], "title", published_only=False)
+    criteria = []
+    if query:
+        criteria.append(_title_match(query))
+    return _catalog_rows(session, criteria, sort, status=status)
 
 
 def _resolve_names(session: Session, system: models.User, data) -> tuple[list, list[models.Tag]]:

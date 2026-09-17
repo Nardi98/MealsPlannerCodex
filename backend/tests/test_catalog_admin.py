@@ -397,6 +397,43 @@ def test_the_admin_listing_shows_published_and_retired_with_status_and_counts(
     assert "mealplanner" not in response.text
 
 
+def test_the_admin_listing_can_be_searched_by_title(admin, make_catalog_recipe):
+    make_catalog_recipe("Spaghetti Carbonara")
+    make_catalog_recipe("Risotto", status="retired")
+
+    rows = admin.get("/admin/catalog/recipes", params={"q": "CARBON"}).json()
+
+    assert [row["title"] for row in rows] == ["Spaghetti Carbonara"]
+
+
+@pytest.mark.parametrize("status, expected", [("published", ["Live"]), ("retired", ["Gone"])])
+def test_the_admin_listing_can_be_filtered_by_status(
+    admin, make_catalog_recipe, status, expected
+):
+    make_catalog_recipe("Live")
+    make_catalog_recipe("Gone", status="retired")
+
+    rows = admin.get("/admin/catalog/recipes", params={"status": status}).json()
+
+    assert [row["title"] for row in rows] == expected
+
+
+def test_the_admin_listing_can_be_sorted_by_popularity(
+    admin, db_session, make_catalog_recipe, other_user
+):
+    make_catalog_recipe("Alpha")
+    catalog.adopt(db_session, other_user, [make_catalog_recipe("Beta").id])
+
+    rows = admin.get("/admin/catalog/recipes", params={"sort": "popular"}).json()
+
+    assert [row["title"] for row in rows] == ["Beta", "Alpha"]
+
+
+@pytest.mark.parametrize("params", [{"status": "draft"}, {"sort": "newest"}])
+def test_the_admin_listing_refuses_an_unknown_filter(admin, params):
+    assert admin.get("/admin/catalog/recipes", params=params).status_code == 422
+
+
 # --- Update (API-11) ----------------------------------------------------------
 
 

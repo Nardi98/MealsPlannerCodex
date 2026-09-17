@@ -1,6 +1,5 @@
 import React from 'react'
 import { Badge } from '../Badge'
-import { Button } from '../Button'
 import { Icon } from '../Icon'
 import { Modal } from '../Modal'
 import Quantity from '../Quantity'
@@ -14,11 +13,10 @@ import { mutedTextStyle, sectionHeadingStyle } from './textStyles'
 /**
  * The detail view of one catalog recipe: everything needed to decide (UI-7).
  *
- * `onEdit` / `onRetire` are passed for an admin only, and receive the full
- * detail row -- procedure and ingredients included -- so the edit form starts
- * from the whole recipe, not the listing's summary.
+ * Read-only, for every account. Curation happens on `CatalogAdminPage`, which
+ * edits and retires from its listing rows and never opens this.
  */
-export default function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire }) {
+export default function CatalogRecipeDetail({ recipe, onClose }) {
   const unitSystem = useUnitSystem()
   const [detail, setDetail] = React.useState(null)
   const [failed, setFailed] = React.useState(false)
@@ -95,20 +93,6 @@ export default function CatalogRecipeDetail({ recipe, onClose, onEdit, onRetire 
                   {detail.procedure}
                 </p>
               </>
-            )}
-          </div>
-        )}
-        {detail && (onEdit || onRetire) && (
-          <div className="flex flex-wrap justify-end gap-2 pt-2">
-            {onRetire && (
-              <Button variant="ghost" onClick={() => onRetire(detail)}>
-                Retire
-              </Button>
-            )}
-            {onEdit && (
-              <Button variant="secondary" onClick={() => onEdit(detail)}>
-                Edit
-              </Button>
             )}
           </div>
         )}
