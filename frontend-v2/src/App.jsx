@@ -1,11 +1,14 @@
 import React from 'react'
 import { BrowserRouter, Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import { Bars3Icon } from '@heroicons/react/24/outline'
-import { Input, ProfileMenu } from './components'
+import { ProfileMenu } from './components'
+import ViewModePill from './components/ViewModePill'
 import Sidebar from './components/Sidebar'
 import NavDrawer from './components/NavDrawer'
 import { useIsMobile } from './hooks/useIsMobile'
 import RecipesPage from './pages/RecipesPage'
+import DiscoverPage from './pages/DiscoverPage'
+import CatalogAdminPage from './pages/CatalogAdminPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
@@ -18,6 +21,7 @@ import SharedWithMePage from './pages/SharedWithMePage'
 import SharedRecipePage from './pages/SharedRecipePage'
 import ChooseHandlePage from './pages/ChooseHandlePage'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { ViewModeProvider, useViewMode } from './auth/ViewModeContext'
 import { nextFromSearch } from './auth/nextDestination'
 import { TutorialProvider, ReplayTutorialButton } from './tutorial/TutorialProvider'
 
@@ -50,6 +54,15 @@ function ReturnToNext({ children }) {
   const destination = nextFromSearch(useLocation().search)
   if (destination) return <Navigate to={destination} replace />
   return children
+}
+
+
+// The one route that differs between the two modes: browsing the library and
+// keeping it are separate jobs, and each gets its own page rather than one page
+// with an `is_admin` branch through the middle of it. Only the rendering
+// differs -- every `/admin/catalog/*` write is still admin-only on the server.
+function DiscoverRoute() {
+  return useViewMode().isAdminMode ? <CatalogAdminPage /> : <DiscoverPage />
 }
 
 
@@ -107,21 +120,23 @@ function Shell() {
             style={{ opacity: 0.9 }}
           />
         </div>
-        {/* Only the search moves into the drawer on mobile. Help and the account
-            menu stay put: a tutorial nobody can find is a tutorial nobody runs,
-            and logging out must never be more than one tap away. */}
+        {/* All three stay in the header at every width: a tutorial nobody can
+            find is a tutorial nobody runs, logging out must never be more than
+            one tap away, and an admin who cannot see which hat they are wearing
+            is the confusion this pill exists to end.
+
+            Help comes first because it is the only one that disappears -- it
+            unmounts on a page with no tour. In this right-aligned row anything
+            after the pill takes the pill sideways with it as you navigate,
+            while anything before it leaves the pill where it was. */}
         <div className="flex items-center gap-3">
-          <Input placeholder="Search…" style={{ width: 220 }} className="hidden md:block" />
           <ReplayTutorialButton />
+          <ViewModePill />
           <ProfileMenu />
         </div>
       </header>
 
-      <NavDrawer
-        open={isMobile && menuOpen}
-        onClose={closeMenu}
-        header={<Input placeholder="Search…" className="w-full" />}
-      />
+      <NavDrawer open={isMobile && menuOpen} onClose={closeMenu} />
 
       <div
         style={{
@@ -153,6 +168,7 @@ function Shell() {
             <Routes>
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
+              <Route path="/discover" element={<DiscoverRoute />} />
               <Route path="/meal-plan" element={<MealPlanPage />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
@@ -215,11 +231,16 @@ function Gate() {
 
   return (
     <ReturnToNext>
-      {/* Wraps the shell, not the routes: the replay button lives in the header
-          and the tours live in the pages, so both need the same provider. */}
-      <TutorialProvider>
-        <Shell />
-      </TutorialProvider>
+      {/* Both wrap the shell, not the routes: the replay button and the
+          user/admin pill live in the header and their consumers live in the
+          pages, so each needs a provider around the whole thing. Mounting the
+          view mode here also means signing out unmounts it, so the next account
+          starts as a plain user. */}
+      <ViewModeProvider>
+        <TutorialProvider>
+          <Shell />
+        </TutorialProvider>
+      </ViewModeProvider>
     </ReturnToNext>
   )
 }

@@ -35,6 +35,9 @@ function normaliseRecipe(recipe) {
     source_author_username: recipe.source_author_username ?? null,
     source_recipe_title: recipe.source_recipe_title ?? null,
     copied_at: recipe.copied_at ?? null,
+    // UI-10: a copy adopted from the recipe library. Read-only, like the
+    // snapshot above.
+    from_library: recipe.from_library ?? false,
   };
 }
 

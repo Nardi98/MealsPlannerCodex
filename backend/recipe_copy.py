@@ -12,12 +12,13 @@ production and not in CI. Renaming is the whole fix.
 
 What a copy is made of
 ----------------------
-Exactly what the share disclosed. The fields duplicated below are the PRV-2
-allowlist that :mod:`public_schema` renders on the share page, and nothing
-else: the copier never saw ``bulk_prep``, ``score``, or the source's planner
-dates, and seeding their planner with a stranger's kitchen habits is precisely
-what CP-7 is protecting against. Reading the field list as "what was shared"
-rather than "every column" also means a future column on ``Recipe`` is *not*
+The fields duplicated below are the PRV-2 allowlist that :mod:`public_schema`
+renders on the share page, plus ``bulk_prep``, and nothing else. ``bulk_prep``
+was added by the catalog work (its decision D2): whether a dish keeps as
+leftovers is a fact about the recipe, not about its owner's habits. The copier
+never gets ``score`` or the source's planner dates -- seeding their planner
+with a stranger's kitchen habits is precisely what CP-7 is protecting against.
+Reading the field list as an allowlist rather than "every column" also means a future column on ``Recipe`` is *not*
 copied until someone adds it here deliberately -- the same default-private
 posture ``public_schema`` takes.
 
@@ -49,7 +50,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 
-__all__ = ["copy_recipe", "is_named_recipient", "existing_copy"]
+__all__ = ["copy_recipe", "duplicate", "is_named_recipient", "existing_copy"]
 
 
 def is_named_recipient(share: models.RecipeShare, user: models.User | None) -> bool:
@@ -90,13 +91,17 @@ def existing_copy(
     ).scalars().first()
 
 
-def _duplicate(
+def duplicate(
     session: Session, source: models.Recipe, copier: models.User
 ) -> models.Recipe:
     """Build one un-committed copy of ``source`` owned by ``copier``.
 
     Flushes (via ``crud.get_or_create_*``) but never commits, so the caller can
     build several and land them together.
+
+    Public (ADO-4) because catalog adoption needs exactly this and not
+    :func:`copy_recipe`: adoption must copy the recipe alone, never its
+    favourite sides (ADO-2), and commits a whole batch once.
     """
     author = session.get(models.User, source.user_id) if source.user_id else None
 
@@ -109,6 +114,10 @@ def _duplicate(
         # Quantities are copied verbatim below, so the basis they were written
         # for has to come with them or the copy means something else.
         servings=source.servings,
+        # D2: whether a recipe keeps as leftovers is part of the recipe, not
+        # planner history, so it travels with it -- for share copies and catalog
+        # adoptions alike.
+        bulk_prep=source.bulk_prep,
         # CP-4. Spelled out rather than left to the column defaults so the
         # requirement is visible at the point it is satisfied.
         visibility="private",
@@ -168,14 +177,14 @@ def copy_recipe(
     if source.user_id is not None and source.user_id == copier.id:
         raise PermissionError("Cannot copy your own recipe")
 
-    made = _duplicate(session, source, copier)
+    made = duplicate(session, source, copier)
     source.copy_count = (source.copy_count or 0) + 1  # AT-7
 
     if models.takes_favorite_sides(source.course):
         for side in source.favorite_sides:
             if side.user_id != source.user_id:
                 continue
-            side_copy = _duplicate(session, side, copier)
+            side_copy = duplicate(session, side, copier)
             side.copy_count = (side.copy_count or 0) + 1
             made.favorite_sides.append(side_copy)
 

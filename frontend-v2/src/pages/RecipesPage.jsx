@@ -1,6 +1,6 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  FunnelIcon,
   GlobeAltIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -21,17 +21,19 @@ import {
   FavoriteSidesSelect,
   ImportRecipeModal,
   NewRecipeModal,
-  RecipeFilters,
+  RecipeFilterControl,
+  RecipeMedia,
   RecipeSort,
   ShareRecipeModal,
 } from '../components'
+import { sectionHeadingStyle } from '../components/catalog/textStyles'
 import { dishIcon, courseColor } from '../constants/recipeIcons'
 import { basisOf, peopleLabel } from '../utils/servings'
 import { defaultDirectionFor, sortRecipes } from '../utils/sortRecipes'
+import { toggleIn } from '../utils/toggleIn'
 import Quantity from '../components/Quantity'
 import { alternateForms } from '../utils/units'
 import { useUnitSystem } from '../hooks/useUnitSystem'
-import { useEscapeKey } from '../hooks/useEscapeKey'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { recipesApi } from '../api/recipesApi'
 import { tagsApi } from '../api/tagsApi'
@@ -40,13 +42,6 @@ import { ingredientsApi } from '../api/ingredientsApi'
 // Only a main dish is served with a side. Mirrors the backend's
 // COURSES_WITH_FAVORITE_SIDES (models.py), which rejects anything else.
 const COURSES_WITH_SIDES = ['main']
-
-const sectionHeadingStyle = {
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  marginBottom: 6,
-  color: 'var(--text-strong)',
-}
 
 // The learned preference score, always two decimals so the corner pill keeps a
 // stable width across the grid.
@@ -70,68 +65,20 @@ const scorePillStyle = {
   color: 'var(--text-muted)',
 }
 
-function RecipeMedia({ recipe, rounded }) {
-  const color = courseColor[recipe.course] || 'var(--c-a3)'
-  if (recipe.image_url) {
-    return (
-      <img
-        src={recipe.image_url}
-        alt={`${recipe.title} photo`}
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          borderRadius: rounded,
-        }}
-      />
-    )
-  }
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: rounded,
-        background: `linear-gradient(135deg, color-mix(in srgb, ${color} 24%, #fff), color-mix(in srgb, ${color} 8%, #fff))`,
-      }}
-    >
-      <Icon set="mdi" name={dishIcon(recipe)} size={48} color={color} />
-    </div>
-  )
-}
-
-// Lazy: the starter pack carries a 30 KB recipe catalogue that only a
-// brand-new, empty account ever renders. Importing it through the barrel would
-// put it in every page's bundle, login included.
-const StarterRecipesModal = React.lazy(() => import('../components/StarterRecipesModal'))
-
-const STARTER_DISMISSED_KEY = 'starterRecipesDismissed'
-
 export default function RecipesPage() {
   const unitSystem = useUnitSystem()
   const isMobile = useIsMobile()
+  const navigate = useNavigate()
   const [recipes, setRecipes] = React.useState([])
   const [opened, setOpened] = React.useState(null)
   const [showModal, setShowModal] = React.useState(false)
   const [showImport, setShowImport] = React.useState(false)
   const [showAddSheet, setShowAddSheet] = React.useState(false)
-  // The starter-recipe offer (SR): shown once the first load comes back empty.
-  // Dismissal lives in sessionStorage rather than on the account, so a user who
-  // says "maybe later" is not asked again this session but is offered the pack
-  // again next time they sign in with a book that is still empty.
-  const [showStarter, setShowStarter] = React.useState(false)
-  // The tutorial waits for this. `showStarter` is false until the first load
-  // comes back, so gating the tour on it alone would let the tour open in front
-  // of a starter modal that is about to appear.
-  const [loaded, setLoaded] = React.useState(false)
+  // The first load: 'loading' | 'ready' | 'failed'. The tutorial and both empty
+  // states wait for it to settle, so neither flashes up before the recipes
+  // arrive. A failed load leaves `recipes` empty without the book being empty,
+  // so the RM-6 call to action must not read it as one.
+  const [status, setStatus] = React.useState('loading')
   const [editing, setEditing] = React.useState(null)
   const [sharing, setSharing] = React.useState(false)
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
@@ -142,16 +89,8 @@ export default function RecipesPage() {
     setConfirmingDelete(false)
   }, [opened])
   const [search, setSearch] = React.useState('')
-  const [showFilters, setShowFilters] = React.useState(false)
   const [tags, setTags] = React.useState([])
-  // The account's full ingredient rows. The filter list needs only the names,
-  // but the starter-pack import needs each row's id, unit and seasonality —
-  // fetching them twice was the alternative.
-  const [ingredientRows, setIngredientRows] = React.useState([])
-  const ingredientNames = React.useMemo(
-    () => ingredientRows.map((i) => i.name),
-    [ingredientRows],
-  )
+  const [ingredientNames, setIngredientNames] = React.useState([])
   const [selectedTags, setSelectedTags] = React.useState([])
   const [selectedIngredients, setSelectedIngredients] = React.useState([])
   const [selectedCourses, setSelectedCourses] = React.useState([])
@@ -167,15 +106,12 @@ export default function RecipesPage() {
           ingredientsApi.fetchAll(),
         ])
         setRecipes(recipesRes)
-        if (recipesRes.length === 0 && sessionStorage.getItem(STARTER_DISMISSED_KEY) !== '1') {
-          setShowStarter(true)
-        }
         setTags(tagsRes.map((t) => t.name))
-        setIngredientRows(ingRes)
+        setIngredientNames(ingRes.map((i) => i.name))
+        setStatus('ready')
       } catch (err) {
         console.error('Failed to load recipes, tags or ingredients', err)
-      } finally {
-        setLoaded(true)
+        setStatus('failed')
       }
     }
     load()
@@ -212,16 +148,9 @@ export default function RecipesPage() {
 
   const openRecipe = filteredRecipes.find((r) => r.id === opened)
 
-  const toggleTag = (tag) =>
-    setSelectedTags((t) => (t.includes(tag) ? t.filter((x) => x !== tag) : [...t, tag]))
-  const toggleIngredient = (ing) =>
-    setSelectedIngredients((ings) =>
-      ings.includes(ing) ? ings.filter((x) => x !== ing) : [...ings, ing]
-    )
-  const toggleCourse = (course) =>
-    setSelectedCourses((cs) =>
-      cs.includes(course) ? cs.filter((c) => c !== course) : [...cs, course]
-    )
+  const toggleTag = (tag) => setSelectedTags((ts) => toggleIn(ts, tag))
+  const toggleIngredient = (ing) => setSelectedIngredients((ings) => toggleIn(ings, ing))
+  const toggleCourse = (course) => setSelectedCourses((cs) => toggleIn(cs, course))
 
   // One list drives the popover, the sheet and the active-filter chips, so a
   // new group cannot be added to one surface and forgotten on the others.
@@ -268,21 +197,6 @@ export default function RecipesPage() {
   // Derived from the group list too: a fourth filter could otherwise be added
   // above and silently survive "clear all".
   const clearAllFilters = () => filterGroups.forEach((group) => group.clear())
-
-  // The popover had no way out but the funnel itself. DateRangePicker two
-  // files away already dismisses on outside-click and Escape; this is that.
-  const filterRef = React.useRef(null)
-  const closeFilters = React.useCallback(() => setShowFilters(false), [])
-  // The sheet handles its own Escape; this is only for the desktop popover.
-  useEscapeKey(showFilters && !isMobile, closeFilters)
-  React.useEffect(() => {
-    if (!showFilters || isMobile) return undefined
-    const onDown = (e) => {
-      if (filterRef.current && !filterRef.current.contains(e.target)) setShowFilters(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [showFilters, isMobile])
 
   const handleSave = async (recipe) => {
     try {
@@ -351,44 +265,20 @@ export default function RecipesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Held back until the first load settles, so a brand-new account is
-          offered the starter pack before being taught about the grid. */}
-      <PageTour id="recipes" enabled={loaded && !showStarter} />
+      {/* RM-5: held back until the first load settles, then runs on every
+          account -- an empty one included, whose steps fall back to the grid. */}
+      <PageTour id="recipes" enabled={status !== 'loading'} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
           Recipes
         </h1>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative" ref={filterRef}>
-            <Button
-              variant="ghost"
-              aria-label="Filter"
-              data-tour="recipes-filter"
-              className="relative"
-              onClick={() => setShowFilters((s) => !s)}
-              Icon={FunnelIcon}
-            >
-              {activeFilters.length > 0 && (
-                <span
-                  className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs"
-                  style={{ backgroundColor: 'var(--c-neg)', color: '#fff' }}
-                >
-                  {activeFilters.length}
-                </span>
-              )}
-            </Button>
-            {showFilters && !isMobile && (
-              <div
-                // 20rem, up from 14: the chips inside grew from 13px checkboxes to
-                // `px-4 min-h-11`, and a long ingredient name wrapped three
-                // times in 224px. Still clamped to the viewport, per §8.
-                className="absolute right-0 z-10 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-2xl border bg-white p-2"
-                style={{ borderColor: 'var(--border-default)' }}
-              >
-                <RecipeFilters groups={filterGroups} />
-              </div>
-            )}
-          </div>
+          <RecipeFilterControl
+            groups={filterGroups}
+            activeCount={activeFilters.length}
+            resultCount={filteredRecipes.length}
+            tour="recipes-filter"
+          />
           {/* `min-w-0` is the fix for the squeezed row: without it a flex
               item refuses to go below its content width, so the input claimed
               the row and then starved every button beside it. */}
@@ -535,9 +425,23 @@ export default function RecipesPage() {
         ))}
       </div>
 
-      {/* Held back on a brand-new account, which gets the starter-pack offer
-          instead -- two empty states firing at once is worse than none. */}
-      {loaded && recipes.length > 0 && filteredRecipes.length === 0 && (
+      {/* RM-6: an empty book is pointed at the recipe library, its route to a
+          populated book -- only after a load that succeeded and found none. */}
+      {status === 'ready' && recipes.length === 0 && (
+        <Card className="flex flex-col items-center gap-3 py-8 text-center">
+          <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+            Your recipe book is empty. Start with a few dishes from the recipe library.
+          </p>
+          <Button variant="primary" onClick={() => navigate('/discover')}>
+            Browse the recipe library
+          </Button>
+        </Card>
+      )}
+
+      {/* RM-7: the `recipes.length > 0` guard keeps this about filters. An
+          empty book belongs to the RM-6 call to action above -- two empty
+          states firing at once is worse than one. */}
+      {status !== 'loading' && recipes.length > 0 && filteredRecipes.length === 0 && (
         <div
           className="flex flex-col items-center gap-3 py-12 text-center"
           style={{ color: 'var(--text-subtle)' }}
@@ -717,22 +621,6 @@ export default function RecipesPage() {
         />
       )}
 
-      {showStarter && (
-        <React.Suspense fallback={null}>
-          <StarterRecipesModal
-            ingredients={ingredientRows}
-            onClose={() => {
-              sessionStorage.setItem(STARTER_DISMISSED_KEY, '1')
-              setShowStarter(false)
-            }}
-            onImported={async () => {
-              setShowStarter(false)
-              setRecipes(await recipesApi.fetchAll())
-            }}
-          />
-        </React.Suspense>
-      )}
-
       {isMobile && (
         <Fab
           Icon={PlusIcon}
@@ -770,26 +658,6 @@ export default function RecipesPage() {
               Import from a website
             </Button>
           </div>
-        </BottomSheet>
-      )}
-
-      {showFilters && isMobile && (
-        <BottomSheet
-          title="Filters"
-          onClose={() => setShowFilters(false)}
-          footer={
-            <Button
-              variant="accent"
-              className="w-full"
-              onClick={() => setShowFilters(false)}
-            >
-              {`Show ${filteredRecipes.length} ${
-                filteredRecipes.length === 1 ? 'recipe' : 'recipes'
-              }`}
-            </Button>
-          }
-        >
-          <RecipeFilters groups={filterGroups} />
         </BottomSheet>
       )}
 

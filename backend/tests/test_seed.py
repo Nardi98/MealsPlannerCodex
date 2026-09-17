@@ -191,8 +191,8 @@ def test_seed_system_tags_includes_meat(db_session):
 
 
 def test_system_tags_fixture_is_valid():
-    # Guards hand-edits to data/system_tags.json, which the starter pack's
-    # frontend test reads as the tag vocabulary it is allowed to use.
+    # Guards hand-edits to data/system_tags.json, which tests/test_catalog_pack.py
+    # reads as the tag vocabulary the catalog pack is allowed to use (INIT-6).
     names = [entry["name"] for entry in SYSTEM_TAGS]
     assert len(names) == len(set(names)), "duplicate tag names in fixture"
     for entry in SYSTEM_TAGS:

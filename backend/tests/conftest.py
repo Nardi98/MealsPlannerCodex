@@ -58,6 +58,69 @@ def reset_schema(bind):
 reset_schema(_app_engine)
 
 
+def remove_system_catalog(session):
+    """Delete the system account and everything it owns; does not commit.
+
+    ``main`` loads the catalog pack at import (INIT-8), so without this every
+    test would run against 60 extra system recipes -- or not, depending on
+    whether an earlier test happened to reset the schema. Removing them once
+    puts every test back on the pre-catalog state, whatever the order. Catalog
+    tests build their own rows (``system_account``, ``make_catalog_recipe``),
+    and the bootstrap tests call the loader explicitly.
+
+    The account is found by ``is_system``, never by handle (SYS-6); with none
+    this deletes nothing. Children go first and each delete is explicit, so
+    nothing rests on which foreign keys happen to cascade (``recipe_tag`` does
+    not). Copies elsewhere lose ``source_recipe_id`` by ``ON DELETE SET NULL``.
+    The reserved-usernames table is not touched.
+    """
+    from sqlalchemy import delete, or_, select
+
+    system_ids = select(models.User.id).where(models.User.is_system.is_(True))
+    recipe_ids = select(models.Recipe.id).where(models.Recipe.user_id.in_(system_ids))
+    ingredient_ids = select(models.Ingredient.id).where(models.Ingredient.user_id.in_(system_ids))
+    tag_ids = select(models.Tag.id).where(models.Tag.user_id.in_(system_ids))
+    tag_link = models.recipe_tag_table.c
+    side_link = models.recipe_favorite_side_table.c
+
+    for stmt in (
+        delete(models.CatalogEntry).where(models.CatalogEntry.recipe_id.in_(recipe_ids)),
+        delete(models.recipe_tag_table).where(
+            or_(tag_link.recipe_id.in_(recipe_ids), tag_link.tag_id.in_(tag_ids))
+        ),
+        delete(models.recipe_favorite_side_table).where(
+            or_(side_link.main_recipe_id.in_(recipe_ids), side_link.side_recipe_id.in_(recipe_ids))
+        ),
+        delete(models.RecipeIngredient).where(
+            or_(
+                models.RecipeIngredient.recipe_id.in_(recipe_ids),
+                models.RecipeIngredient.ingredient_id.in_(ingredient_ids),
+            )
+        ),
+        delete(models.Recipe).where(models.Recipe.id.in_(recipe_ids)),
+        delete(models.Ingredient).where(models.Ingredient.id.in_(ingredient_ids)),
+        delete(models.Tag).where(models.Tag.id.in_(tag_ids)),
+        delete(models.User).where(models.User.id.in_(system_ids)),
+    ):
+        session.execute(stmt, execution_options={"synchronize_session": False})
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _without_import_time_catalog():
+    """Once per run: undo what ``main``'s import-time bootstrap loaded.
+
+    ``main`` is imported here first, so its bootstrap has certainly run before
+    the cleanup -- a lazy import inside some later test would otherwise
+    repopulate the catalog mid-run.
+    """
+    import main  # noqa: F401  the import runs ``_bootstrap``
+    from database import SessionLocal
+
+    with SessionLocal() as session:
+        remove_system_catalog(session)
+        session.commit()
+
+
 @pytest.fixture(scope="session")
 def engine():
     """The application's own engine, pointed at ``TEST_DATABASE_URL`` above.
@@ -73,9 +136,24 @@ def engine():
 
 @pytest.fixture
 def db_session(engine):
+    """A session inside a transaction that is rolled back after the test.
+
+    Every ``commit``/``rollback`` the code under test issues is scoped to a
+    SAVEPOINT (``create_savepoint``). Under the default join mode a session
+    ``rollback()`` would roll back the test's *outer* transaction, so an
+    all-or-nothing test would pass vacuously -- its fixtures would vanish along
+    with the half-built work. This way services commit and roll back as they do
+    in production, and the outer transaction still discards everything.
+    """
     connection = engine.connect()
     trans = connection.begin()
-    TestingSessionLocal = sessionmaker(bind=connection, autoflush=False, autocommit=False, future=True)
+    TestingSessionLocal = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
     session = TestingSessionLocal()
     try:
         yield session
@@ -134,6 +212,95 @@ def make_recipe(db_session, user):
         )
 
     return _make
+
+
+@pytest.fixture
+def system_account(db_session):
+    """The ``is_system`` account, with an empty catalog for this test.
+
+    From T8 onward ``main._bootstrap`` loads the catalog pack into the test DB at
+    import time, so a catalog test cannot assume it starts from nothing. The
+    entries are cleared here, inside the test's rolled-back transaction, which
+    is what lets catalog tests assert on exactly the rows they created.
+    """
+    import catalog
+    from sqlalchemy import delete
+
+    account = catalog.ensure_system_account(db_session)
+    db_session.execute(delete(models.CatalogEntry))
+    return account
+
+
+@pytest.fixture
+def make_catalog_recipe(db_session, system_account):
+    """Factory for a system-owned recipe with a catalog entry.
+
+    Inserts the rows directly rather than through ``catalog.publish`` so tests
+    of the service are not built on the service. Ingredient and tag names are
+    resolved in the system account's namespace, as every catalog recipe's are.
+    """
+    from datetime import datetime
+
+    import crud
+
+    def _make(
+        title,
+        course="main",
+        status="published",
+        ingredients=(("Pasta", 80, "g"),),
+        tags=("pasta",),
+        procedure="Cook it.",
+        bulk_prep=False,
+        servings=1,
+    ):
+        recipe = models.Recipe(
+            user_id=system_account.id,
+            title=title,
+            course=course,
+            procedure=procedure,
+            bulk_prep=bulk_prep,
+            servings=servings,
+        )
+        for name, quantity, unit in ingredients:
+            ingredient = crud.get_or_create_ingredient(
+                db_session, None, name, system_account.id
+            )
+            recipe.ingredients.append(
+                models.RecipeIngredient(
+                    ingredient=ingredient, quantity=quantity, unit=models.UnitEnum(unit)
+                )
+            )
+        for name in tags:
+            recipe.tags.append(crud.get_or_create_tag(db_session, name, system_account.id))
+        recipe.catalog_entry = models.CatalogEntry(
+            status=status,
+            retired_at=datetime.utcnow() if status == "retired" else None,
+        )
+        db_session.add(recipe)
+        db_session.flush()
+        return recipe
+
+    return _make
+
+
+@pytest.fixture
+def admin_user(db_session):
+    """An account with ``is_admin`` set.
+
+    Test-only. ADM-2: nothing in the application writes ``is_admin`` -- it is
+    granted by SQL alone -- so a test needing an admin sets it directly here.
+    """
+    import crud
+
+    account = crud.create_user(
+        db_session,
+        email="admin@test.local",
+        username="admin_account",
+        hashed_password="x",
+    )
+    account.is_admin = True
+    db_session.flush()
+    return account
 
 
 def db_client(session):

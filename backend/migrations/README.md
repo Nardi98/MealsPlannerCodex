@@ -35,6 +35,15 @@ two different databases.
 database with real data, restoring the platform's backup is usually both safer
 and faster.
 
+## Alembic revisions
+
+A one-line changelog of revisions, newest first. The revision script's own
+docstring is the full record; this table is for finding the right one.
+
+| Revision | Change | Details |
+|----------|--------|---------|
+| `67f3715acf44` | System recipe catalog | Adds `catalog_entries` (`recipe_id` PK → `recipes.id` `ON DELETE CASCADE`, `status`, `published_at`, `retired_at`) with the named CHECKs `ck_catalog_entry_status` and `ck_catalog_entry_retired_all_or_nothing`; `ix_recipes_source_recipe_id`; `users.is_system` and `users.is_admin` (NOT NULL, default false); the unique partial index `uq_user_single_system` (`WHERE is_system`). Schema only -- the catalog's data is loaded at startup, not by the migration. |
+
 ## Historical changelog (pre-Alembic)
 
 Everything below predates the migration system. It is a paper trail, not

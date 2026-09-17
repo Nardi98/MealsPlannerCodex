@@ -11,11 +11,33 @@ import {
 } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import RecipesPage from '../RecipesPage'
 import { recipesApi } from '../../api/recipesApi'
 import { tagsApi } from '../../api/tagsApi'
 import { ingredientsApi } from '../../api/ingredientsApi'
 import { stubViewport } from '../../test/stubViewport'
+
+// Stands in for the tour so a test can read the gate RecipesPage passes it.
+vi.mock('../../tutorial/PageTour', async () => {
+  const { createElement } = await vi.importActual('react')
+  return {
+    PageTour: ({ id, enabled }) =>
+      createElement('div', { 'data-testid': `page-tour-${id}`, 'data-enabled': String(enabled) }),
+  }
+})
+
+// The empty-book call to action navigates, so the page needs a router; the
+// /discover stub lets a test see where it went.
+const renderPage = () =>
+  render(
+    <MemoryRouter initialEntries={['/recipes']}>
+      <Routes>
+        <Route path="/recipes" element={<RecipesPage />} />
+        <Route path="/discover" element={<p>Discover page</p>} />
+      </Routes>
+    </MemoryRouter>
+  )
 
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: {
@@ -39,8 +61,6 @@ vi.mock('../../api/ingredientsApi', () => ({
 beforeEach(() => {
   // The dish-glyph Icon fetches SVGs from a CDN; keep tests hermetic.
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('no network')))
-  // The starter-recipe offer remembers its dismissal here; each test starts fresh.
-  sessionStorage.clear()
 })
 
 afterEach(() => {
@@ -56,7 +76,7 @@ test('filters recipes as user types', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   // Wait for recipes to load
   await screen.findByText('Spaghetti')
@@ -101,7 +121,7 @@ test('filters recipes by tags and ingredients', async () => {
     { id: 3, name: 'Salt' },
   ])
 
-  render(<RecipesPage />)
+  renderPage()
 
   await screen.findByText('Spaghetti')
   await screen.findByText('Salad')
@@ -137,7 +157,7 @@ test('filters recipes by course', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   await screen.findByText('Soup')
   await screen.findByText('Cake')
@@ -166,7 +186,7 @@ test('clicking a card opens a detail modal with ingredients and procedure', asyn
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
 
   await screen.findByText('Procedure')
@@ -181,7 +201,7 @@ test('renders the recipe image when image_url is present', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Tacos')
   const img = screen.getByAltText('Tacos photo')
   expect(img).toHaveAttribute('src', 'https://x/y.jpg')
@@ -194,7 +214,7 @@ test('shows a placeholder (no photo) when image_url is absent', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Tacos')
   expect(screen.queryByAltText('Tacos photo')).toBeNull()
 })
@@ -221,7 +241,7 @@ const openDetail = async (recipes, title = 'Roast Chicken') => {
   recipesApi.fetchAll.mockResolvedValue(recipes)
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText(title))
   return screen.findByText('Procedure')
 }
@@ -310,7 +330,7 @@ test('deletes a recipe from the detail modal', async () => {
   ingredientsApi.fetchAll.mockResolvedValue([])
   recipesApi.delete = vi.fn().mockResolvedValue(null)
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
   // The delete is now guarded: the first click only asks.
@@ -328,7 +348,7 @@ test('opens the share dialog from the recipe detail modal', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
   fireEvent.click(await screen.findByRole('button', { name: /^share$/i }))
 
@@ -345,7 +365,7 @@ test('closing the detail modal also drops the share dialog', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
   fireEvent.click(await screen.findByRole('button', { name: /^share$/i }))
   await screen.findByText(/Anyone with the link can open this recipe/i)
@@ -374,7 +394,7 @@ test('shows the attribution line for a copied recipe', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
 
   expect(
@@ -389,47 +409,133 @@ test('shows no attribution line for an original recipe', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
   await screen.findByText(/Ingredients for/i)
 
   expect(screen.queryByText(/^Adapted from/)).toBeNull()
 })
 
-test('offers the starter recipes when the book is empty', async () => {
+// --- the empty book (RM-4 .. RM-7) -------------------------------------------
+
+const loadEmptyBook = () => {
   recipesApi.fetchAll.mockResolvedValue([])
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
+}
 
-  render(<RecipesPage />)
+const libraryButton = () => screen.findByRole('button', { name: 'Browse the recipe library' })
 
-  expect(await screen.findByText('Start with a few recipes')).toBeInTheDocument()
+// RM-6: the empty book points at Discover, the route to a populated book.
+test('an empty book offers a way to the recipe library', async () => {
+  loadEmptyBook()
+
+  renderPage()
+
+  expect(await libraryButton()).toBeInTheDocument()
 })
 
-test('does not offer the starter recipes when the book has recipes', async () => {
+test('the library call to action navigates to /discover', async () => {
+  loadEmptyBook()
+
+  renderPage()
+  fireEvent.click(await libraryButton())
+
+  expect(await screen.findByText('Discover page')).toBeInTheDocument()
+})
+
+// A failed load says nothing about the book: a network blip must not tell a
+// user with fifty recipes that theirs is empty.
+test('a failed load shows no library call to action', async () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  recipesApi.fetchAll.mockRejectedValue(new Error('offline'))
+  tagsApi.fetchAll.mockResolvedValue([])
+  ingredientsApi.fetchAll.mockResolvedValue([])
+
+  renderPage()
+  // The tour gate flips once the load settles, failed or not (RM-5).
+  await waitFor(() =>
+    expect(screen.getByTestId('page-tour-recipes')).toHaveAttribute('data-enabled', 'true'),
+  )
+
+  expect(screen.queryByRole('button', { name: 'Browse the recipe library' })).toBeNull()
+})
+
+test('a book with recipes shows no library call to action', async () => {
   recipesApi.fetchAll.mockResolvedValue([{ id: 1, title: 'Risotto', course: 'main' }])
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Risotto')
 
-  expect(screen.queryByText('Start with a few recipes')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Browse the recipe library' })).toBeNull()
 })
 
-test('does not offer the starter recipes again after they were dismissed', async () => {
-  recipesApi.fetchAll.mockResolvedValue([])
+// RM-4: no modal of any kind opens on its own over an empty book.
+test('an empty book opens no dialog', async () => {
+  loadEmptyBook()
+
+  renderPage()
+  await libraryButton()
+
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+// RM-4: the sessionStorage dismissal flag went with the modal it remembered.
+test('the page does not touch sessionStorage', async () => {
+  const touched = []
+  for (const method of ['getItem', 'setItem', 'removeItem']) {
+    const original = Storage.prototype[method]
+    vi.spyOn(Storage.prototype, method).mockImplementation(function (...args) {
+      if (this === window.sessionStorage) touched.push([method, ...args])
+      return original.apply(this, args)
+    })
+  }
+  loadEmptyBook()
+
+  renderPage()
+  await libraryButton()
+
+  expect(touched).toEqual([])
+})
+
+// RM-7: the filtered-empty message stays about filters; the empty book is RM-6's.
+test('an empty book never says no recipe matches the search', async () => {
+  loadEmptyBook()
+
+  renderPage()
+  await libraryButton()
+  fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
+    target: { value: 'zzz' },
+  })
+
+  expect(screen.queryByText('No recipes match your search.')).toBeNull()
+})
+
+// RM-5: the tour waits for the first load, then runs -- on an empty account too.
+test('the page tour is held back until the first load settles', async () => {
+  let resolve
+  recipesApi.fetchAll.mockReturnValue(new Promise((r) => { resolve = r }))
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  const { unmount } = render(<RecipesPage />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Maybe later' }))
-  expect(screen.queryByText('Start with a few recipes')).toBeNull()
-  unmount()
+  renderPage()
 
-  render(<RecipesPage />)
-  await waitFor(() => expect(recipesApi.fetchAll).toHaveBeenCalledTimes(2))
-  expect(screen.queryByText('Start with a few recipes')).toBeNull()
+  expect(screen.getByTestId('page-tour-recipes')).toHaveAttribute('data-enabled', 'false')
+  resolve([])
+  await waitFor(() =>
+    expect(screen.getByTestId('page-tour-recipes')).toHaveAttribute('data-enabled', 'true'),
+  )
+})
+
+test('the page tour is enabled on an empty account once loaded', async () => {
+  loadEmptyBook()
+
+  renderPage()
+  await libraryButton()
+
+  expect(screen.getByTestId('page-tour-recipes')).toHaveAttribute('data-enabled', 'true')
 })
 
 test('marks the first recipe card as the tutorial anchor, not the whole grid', async () => {
@@ -440,7 +546,7 @@ test('marks the first recipe card as the tutorial anchor, not the whole grid', a
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  const { container } = render(<RecipesPage />)
+  const { container } = renderPage()
   await screen.findByText('Spaghetti')
 
   const anchors = container.querySelectorAll('[data-tour="recipes-card"]')
@@ -458,7 +564,7 @@ test('a recipe card says how many people its quantities are written for', async 
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   await screen.findByText('Ribollita')
   expect(screen.getByText(/serves 4/i)).toBeInTheDocument()
@@ -477,7 +583,7 @@ test('the opened recipe says how many people its quantities are written for', as
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   fireEvent.click(await screen.findByText('Ribollita'))
 
@@ -503,7 +609,7 @@ test('the card meta line is abbreviated on mobile so it fits one line', async ()
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   expect(await screen.findByText('main · 2 ingr · 4p')).toBeInTheDocument()
 })
@@ -523,7 +629,7 @@ test('the card meta line keeps full words on desktop', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   expect(
     await screen.findByText('main · 2 ingredients · serves 4'),
@@ -538,7 +644,7 @@ test('cancelling the delete confirmation keeps the recipe', async () => {
   ingredientsApi.fetchAll.mockResolvedValue([])
   recipesApi.delete = vi.fn().mockResolvedValue(null)
 
-  render(<RecipesPage />)
+  renderPage()
   fireEvent.click(await screen.findByText('Risotto'))
   fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
@@ -558,7 +664,7 @@ test('filter options are buttons, not sub-floor checkboxes', async () => {
   tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
   fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
@@ -580,7 +686,7 @@ test('the funnel counts the active filters', async () => {
   tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   // jest-dom's toHaveTextContent('') matches anything, so assert the negative
@@ -602,7 +708,7 @@ test('an active filter shows as a removable chip', async () => {
   tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
   fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
@@ -623,7 +729,7 @@ test('clear all drops every filter at once', async () => {
   tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
   fireEvent.click(screen.getByRole('button', { name: 'Tags' }))
@@ -644,7 +750,7 @@ test('Escape closes the filter popover', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
   expect(screen.getByRole('button', { name: 'Course' })).toBeInTheDocument()
@@ -664,7 +770,7 @@ test('the filter opens a bottom sheet on mobile', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
 
@@ -679,7 +785,7 @@ test('the filter stays a popover on desktop', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
 
@@ -696,7 +802,7 @@ test('the sheet footer reports the filtered count and closes the sheet', async (
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
 
@@ -717,7 +823,7 @@ test('the mobile header holds only search and filter', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   expect(screen.queryByRole('button', { name: 'Import from web' })).toBeNull()
@@ -733,7 +839,7 @@ test('the mobile add button offers both ways to create a recipe', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
@@ -752,7 +858,7 @@ test('the add sheet opens the import dialog', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   fireEvent.click(screen.getByRole('button', { name: 'Add a recipe' }))
@@ -772,7 +878,7 @@ test('desktop keeps both header buttons and shows no FAB', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   expect(screen.getByRole('button', { name: 'Import from web' })).toBeInTheDocument()
@@ -787,7 +893,7 @@ test('says so when no recipe matches the search', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
 
   fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {
@@ -804,7 +910,7 @@ test('the empty state clears the search and the filters together', async () => {
   tagsApi.fetchAll.mockResolvedValue([{ name: 'quick' }])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
   fireEvent.click(screen.getByRole('button', { name: 'Course' }))
@@ -838,7 +944,7 @@ test('only the ingredient filter is searchable', async () => {
     { id: 2, name: 'Lettuce' },
   ])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Spaghetti')
   fireEvent.click(screen.getByLabelText('Filter'))
 
@@ -861,7 +967,7 @@ test('shows the recipe score on the card, and in the detail view', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   const title = await screen.findByText('Spaghetti')
   expect(screen.getByText('7.42')).toBeInTheDocument()
@@ -878,7 +984,7 @@ test('shows a zero score when the recipe has none', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
 
   await screen.findByText('Spaghetti')
   expect(screen.getByText('0.00')).toBeInTheDocument()
@@ -893,7 +999,7 @@ test('sorts recipes by score, name and course, and flips direction', async () =>
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Zuppa')
 
   const order = () =>
@@ -928,7 +1034,7 @@ test('sorting applies to the filtered recipes', async () => {
   tagsApi.fetchAll.mockResolvedValue([])
   ingredientsApi.fetchAll.mockResolvedValue([])
 
-  render(<RecipesPage />)
+  renderPage()
   await screen.findByText('Pizza')
 
   fireEvent.change(screen.getByPlaceholderText('Search recipes…'), {

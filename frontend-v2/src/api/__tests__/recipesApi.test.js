@@ -94,6 +94,27 @@ test('normaliseRecipe exposes visibility, copy_count and the attribution snapsho
   expect(recipe.copied_at).toBe('2026-08-01T10:00:00')
 })
 
+// UI-10: AttributionLine needs to know a copy came from the recipe library.
+test('normaliseRecipe passes from_library through', async () => {
+  mockJson({ id: 1, title: 'Ribollita', from_library: true })
+
+  expect((await recipesApi.fetch(1)).from_library).toBe(true)
+})
+
+test('normaliseRecipe defaults from_library to false when the backend omits it', async () => {
+  mockJson({ id: 1, title: 'Ribollita' })
+
+  expect((await recipesApi.fetch(1)).from_library).toBe(false)
+})
+
+test('serialiseRecipe never sends from_library', async () => {
+  mockJson({ id: 1, title: 'Ribollita' }, 201)
+
+  await recipesApi.create({ title: 'Ribollita', from_library: true })
+
+  expect(sentBody()).not.toHaveProperty('from_library')
+})
+
 test('serialiseRecipe sends visibility but never the attribution fields (AT-4)', async () => {
   mockJson({ id: 1, title: 'My ribollita' }, 201)
 

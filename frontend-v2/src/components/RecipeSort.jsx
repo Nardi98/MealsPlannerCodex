@@ -8,8 +8,19 @@ import { SORT_OPTIONS, defaultDirectionFor } from '../utils/sortRecipes'
  * Sort picker for the recipe grid: a key select plus an arrow that flips the
  * direction. Picking a key reports the direction that key reads best in, so
  * the common case ("show me my best recipes") needs no second click.
+ *
+ * `options` defaults to the recipe book's keys. The Discover catalog passes its
+ * own server-side orderings, each of which has one fixed direction, so it also
+ * turns the arrow off with `showDirection={false}`.
  */
-export default function RecipeSort({ sortKey, direction, onChange, onDirectionChange }) {
+export default function RecipeSort({
+  sortKey,
+  direction,
+  onChange,
+  onDirectionChange,
+  options = SORT_OPTIONS,
+  showDirection = true,
+}) {
   const next = direction === 'asc' ? 'desc' : 'asc'
 
   return (
@@ -20,19 +31,21 @@ export default function RecipeSort({ sortKey, direction, onChange, onDirectionCh
         value={sortKey}
         onChange={(e) => onChange?.(e.target.value, defaultDirectionFor(e.target.value))}
       >
-        {SORT_OPTIONS.map((option) => (
+        {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
       </Input>
-      <IconButton
-        Icon={next === 'desc' ? BarsArrowDownIcon : BarsArrowUpIcon}
-        label={next === 'desc' ? 'Sort descending' : 'Sort ascending'}
-        // Nothing to reverse while the list is in the server's own order.
-        disabled={sortKey === 'default'}
-        onClick={() => onDirectionChange?.(next)}
-      />
+      {showDirection && (
+        <IconButton
+          Icon={next === 'desc' ? BarsArrowDownIcon : BarsArrowUpIcon}
+          label={next === 'desc' ? 'Sort descending' : 'Sort ascending'}
+          // Nothing to reverse while the list is in the server's own order.
+          disabled={sortKey === 'default'}
+          onClick={() => onDirectionChange?.(next)}
+        />
+      )}
     </div>
   )
 }

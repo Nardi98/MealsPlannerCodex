@@ -35,7 +35,7 @@ SYSTEM_INGREDIENTS: list[dict] = json.loads(
 )
 
 # Curated system tags, same story: one data file, read by the backend here and
-# by the starter pack's tests across the repo. Format tags carry the repetition
+# by the catalog pack's integrity test (INIT-6). Format tags carry the repetition
 # penalty; attribute tags do not (repeating them every meal is fine).
 SYSTEM_TAGS: list[dict] = json.loads(
     (_DATA_DIR / "system_tags.json").read_text(encoding="utf-8")
@@ -88,7 +88,9 @@ def _create_recipe(
         )
 
     for tag_name in tags:
-        recipe.tags.append(crud.get_or_create_tag(session, tag_name))
+        # Deliberately ownerless: this helper builds test-only global demo data
+        # (``seed_sample_data``), which no route, startup hook or deploy step runs.
+        recipe.tags.append(crud.get_or_create_tag(session, tag_name, user_id=None))
 
 
 def seed_system_tags(session: Session, user_id: int | None = None) -> None:

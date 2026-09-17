@@ -8,6 +8,9 @@ composed** (see ``docker-compose.yml``). It performs a *complete* reset:
 2. Inserts a coherent, self-contained dataset with **at least 40 recipes,
    50 ingredients and 10 tags**, wired together through the
    ``RecipeIngredient`` association objects and the recipe/tag many-to-many.
+3. Creates the ``is_system`` account and a small recipe catalog it owns, with
+   a retired entry and adoptions by the demo accounts (SEED-1..5), and makes
+   ``demo_chef`` the one admin (SEED-6).
 
 The data is deterministic (no randomness) so tests and manual QA see the same
 database on every ``docker compose up``.
@@ -33,8 +36,13 @@ from typing import NamedTuple
 # ``database`` / ``models`` modules that live at the backend root.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from sqlalchemy import select  # noqa: E402
+
+import catalog  # noqa: E402
+import recipe_copy  # noqa: E402
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (  # noqa: E402
+    CatalogEntry,
     Ingredient,
     Recipe,
     RecipeIngredient,
@@ -608,6 +616,149 @@ RECIPES: list[SeedRecipe] = [SeedRecipe(*row) for row in [
 ]]
 
 
+class SeedCatalogEntry(NamedTuple):
+    """One recipe of :data:`CATALOG`: a :data:`RECIPES` title, plus curation."""
+
+    title: str
+    retired: bool = False
+    # Usernames of the demo accounts that adopt it (SEED-5).
+    adopted_by: tuple[str, ...] = ()
+
+
+# The system account's catalog (SEED-3), drawn from ``RECIPES`` so the dataset
+# stays coherent. The adoption overlap differs per entry -- three adopters, two,
+# one, none -- so the popularity sort visibly orders something (SEED-5).
+#
+# demo_chef already owns every ``RECIPES`` title, so its adoption puts a second
+# "Spaghetti Pomodoro" in its book. That is exactly what adopting a dish you
+# already cook looks like, and it is kept to that one entry. None of these
+# titles is shared or copied above, so the sharing walkthrough stays unambiguous.
+CATALOG: list[SeedCatalogEntry] = [
+    SeedCatalogEntry(
+        "Spaghetti Pomodoro",
+        adopted_by=(DEMO_USER_USERNAME, FRIEND_USER_USERNAME, GUEST_USER_USERNAME),
+    ),
+    # bulk_prep, so adoption copies are seen to carry it (D2).
+    SeedCatalogEntry(
+        "Chickpea Curry", adopted_by=(FRIEND_USER_USERNAME, GUEST_USER_USERNAME)
+    ),
+    SeedCatalogEntry("Mushroom Risotto", adopted_by=(GUEST_USER_USERNAME,)),
+    SeedCatalogEntry("Grilled Salmon"),
+    SeedCatalogEntry("Greek Salad"),
+    # "Pork Loin" is not in ``system_ingredients.json``, so this entry exercises
+    # resolving a missing ingredient into the system namespace.
+    SeedCatalogEntry("Pork Loin Roast"),
+    SeedCatalogEntry("Tomato Basil Soup"),
+    SeedCatalogEntry("Black Bean Tacos"),
+    SeedCatalogEntry("Steamed Broccoli"),
+    # SEED-4: the retired path, represented in every seeded database.
+    SeedCatalogEntry("Scrambled Eggs", retired=True),
+]
+
+
+_INGREDIENTS_BY_NAME = {row[0]: row for row in INGREDIENTS}
+
+
+def _seed_ingredient(name: str, user_id: int) -> Ingredient:
+    """A new ``Ingredient`` for ``user_id`` built from :data:`INGREDIENTS`."""
+    _name, dimension, months, categories = _INGREDIENTS_BY_NAME[name]
+    grams_per_ml, grams_per_piece = CONVERSIONS.get(name, (None, None))
+    return Ingredient(
+        name=name,
+        preferred_dimension=dimension,
+        grams_per_ml=grams_per_ml,
+        grams_per_piece=grams_per_piece,
+        season_months=months,
+        categories=categories,
+        user_id=user_id,
+    )
+
+
+def _seed_recipe(
+    spec: SeedRecipe,
+    user_id: int,
+    ingredients: dict[str, Ingredient],
+    tags: dict[str, Tag],
+) -> Recipe:
+    """A new ``Recipe`` for ``user_id``, wired to the given name-keyed rows."""
+    recipe = Recipe(
+        title=spec.title,
+        procedure=f"Prepare {spec.title.lower()}.",
+        course=spec.course,
+        bulk_prep=spec.bulk_prep,
+        servings=spec.servings,
+        user_id=user_id,
+    )
+    for ing_name, qty, unit in spec.ingredients:
+        recipe.ingredients.append(
+            RecipeIngredient(ingredient=ingredients[ing_name], quantity=qty, unit=unit)
+        )
+    for tag_name in spec.tags:
+        recipe.tags.append(tags[tag_name])
+    return recipe
+
+
+def link_catalog(
+    session,
+    system: User,
+    users_by_username: dict[str, User],
+    now: datetime | None = None,
+) -> None:
+    """Insert :data:`CATALOG` for ``system`` and the demo accounts' adoptions.
+
+    Every name resolves in the **system** namespace (SYS-8), never a demo
+    account's. The account's pantry comes from ``system_ingredients.json``; a
+    name it lacks is created there from :data:`INGREDIENTS`, and likewise for
+    tags. Adoptions go through ``recipe_copy.duplicate`` -- the same builder
+    catalog adoption uses -- and bump ``copy_count`` as adoption does (ADO-16).
+    Flushes, never commits: ``populate`` owns the commit.
+    """
+    now = now or datetime.utcnow()
+    recipes_by_title = {r.title: r for r in RECIPES}
+    pantry = {
+        i.name: i
+        for i in session.execute(
+            select(Ingredient).where(Ingredient.user_id == system.id)
+        ).scalars()
+    }
+    shelf = {
+        t.name: t
+        for t in session.execute(select(Tag).where(Tag.user_id == system.id)).scalars()
+    }
+    penalized = {name: penalize for name, penalize, _system in TAGS}
+
+    entries: list[tuple[SeedCatalogEntry, Recipe]] = []
+    for entry in CATALOG:
+        spec = recipes_by_title[entry.title]
+        for name, _qty, _unit in spec.ingredients:
+            if name not in pantry:
+                pantry[name] = _seed_ingredient(name, system.id)
+        for name in spec.tags:
+            if name not in shelf:
+                shelf[name] = Tag(
+                    name=name,
+                    penalize_repetition=penalized[name],
+                    is_system=True,
+                    user_id=system.id,
+                )
+        recipe = _seed_recipe(spec, system.id, pantry, shelf)
+        recipe.catalog_entry = CatalogEntry(
+            status="retired" if entry.retired else "published",
+            published_at=now - timedelta(days=30),
+            # DM-4: a retired entry has its timestamp, a published one none.
+            retired_at=now if entry.retired else None,
+        )
+        session.add(recipe)
+        entries.append((entry, recipe))
+
+    # ``duplicate`` reads the source's ids, and ``copy_count`` its stored 0.
+    session.flush()
+    for entry, recipe in entries:
+        for username in entry.adopted_by:
+            recipe_copy.duplicate(session, recipe, users_by_username[username])
+            recipe.copy_count += 1
+
+
 # Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever
 # database the process was handed -- on Railway, the deployed one. Requiring an
 # explicit opt-in means the destruction can only happen where someone put the
@@ -656,6 +807,8 @@ def populate(session) -> None:
         )
 
     demo_user = _account(DEMO_USER_EMAIL, DEMO_USER_USERNAME, "Demo User")
+    # SEED-6: demo_chef (demo@mealplanner.test / demo1234) is the only admin
+    demo_user.is_admin = True
     friend_user = _account(FRIEND_USER_EMAIL, FRIEND_USER_USERNAME, "Friend Cook")
     guest_user = _account(GUEST_USER_EMAIL, GUEST_USER_USERNAME, "Guest Cook")
     session.add_all([demo_user, friend_user, guest_user])
@@ -665,6 +818,13 @@ def populate(session) -> None:
     users_by_username = {
         u.username: u for u in (demo_user, friend_user, guest_user)
     }
+
+    # SEED-1/SEED-2: the catalog's owner, with its own tags and ingredients.
+    # NOTE: this is not the only commit. The system tag and ingredient seeders
+    # commit internally, so the three accounts above land here together with
+    # the system account. Harmless for a script that drops every table first:
+    # a run that fails later leaves a partial database the next run wipes.
+    system_user = catalog.ensure_system_account(session)
 
     # UN-4 must hold in a seeded database too, or a manual walkthrough of
     # acceptance criterion 1 would find ``admin`` claimable.
@@ -682,39 +842,16 @@ def populate(session) -> None:
         tags[name] = tag
 
     ingredients: dict[str, Ingredient] = {}
-    for name, dimension, months, categories in INGREDIENTS:
-        ing = Ingredient(
-            name=name,
-            preferred_dimension=dimension,
-            grams_per_ml=CONVERSIONS.get(name, (None, None))[0],
-            grams_per_piece=CONVERSIONS.get(name, (None, None))[1],
-            season_months=months,
-            categories=categories,
-            user_id=demo_user.id,
-        )
+    for name, *_metadata in INGREDIENTS:
+        ing = _seed_ingredient(name, demo_user.id)
         session.add(ing)
         ingredients[name] = ing
 
     recipes_by_title: dict[str, Recipe] = {}
-    for title, course, bulk, ing_list, tag_list, servings in RECIPES:
-        recipe = Recipe(
-            title=title,
-            procedure=f"Prepare {title.lower()}.",
-            course=course,
-            bulk_prep=bulk,
-            servings=servings,
-            user_id=demo_user.id,
-        )
-        for ing_name, qty, unit in ing_list:
-            recipe.ingredients.append(
-                RecipeIngredient(
-                    ingredient=ingredients[ing_name], quantity=qty, unit=unit
-                )
-            )
-        for tag_name in tag_list:
-            recipe.tags.append(tags[tag_name])
+    for spec in RECIPES:
+        recipe = _seed_recipe(spec, demo_user.id, ingredients, tags)
         session.add(recipe)
-        recipes_by_title[title] = recipe
+        recipes_by_title[spec.title] = recipe
 
     link_favorite_sides(recipes_by_title)
     session.flush()
@@ -722,6 +859,9 @@ def populate(session) -> None:
     link_copies(
         session, recipes_by_title, users_by_username, ingredients, demo_user
     )
+    # After the share copies, so ``duplicate`` finds the ingredient rows those
+    # already gave friend_cook instead of creating a second set.
+    link_catalog(session, system_user, users_by_username)
     session.commit()
 
 
@@ -735,12 +875,13 @@ def main() -> None:
         n_t = session.query(Tag).count()
         n_s = session.query(RecipeShare).count()
         n_u = session.query(User).count()
+        n_c = session.query(CatalogEntry).count()
     finally:
         session.close()
     print(
         f"[seed_testing_data] Database reset and populated: "
         f"{n_r} recipes, {n_i} ingredients, {n_t} tags, "
-        f"{n_u} users, {n_s} shares."
+        f"{n_u} users, {n_s} shares, {n_c} catalog entries."
     )
 
 

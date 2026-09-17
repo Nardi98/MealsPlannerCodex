@@ -7,6 +7,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import NewRecipeModal from '../NewRecipeModal'
 import { recipesApi } from '../../api/recipesApi'
+import { ingredientsApi } from '../../api/ingredientsApi'
+import { tagsApi } from '../../api/tagsApi'
 
 vi.mock('../../api/recipesApi', () => ({
   recipesApi: { uploadImage: vi.fn(), fetchAll: vi.fn(() => Promise.resolve([])) },
@@ -222,4 +224,104 @@ test('saving keeps the conversions an imported line arrived with', async () => {
   expect(onSave.mock.calls[0][0].ingredients[0]).toMatchObject({
     grams_per_piece: 150,
   })
+})
+
+// --- Injectable sources (catalog mode, plan D3) -----------------------------
+
+// Opens the first ingredient row's dropdown.
+const openIngredientDropdown = () => fireEvent.focus(screen.getByPlaceholderText('ingredient'))
+
+test('by default it loads the user pantry and tags and offers to add an ingredient', async () => {
+  ingredientsApi.fetchAll.mockResolvedValue([{ id: 1, name: 'Basil', unit: 'g' }])
+  tagsApi.fetchAll.mockResolvedValue([{ id: 2, name: 'quick' }])
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} />)
+
+  await waitFor(() => expect(ingredientsApi.fetchAll).toHaveBeenCalled())
+  expect(tagsApi.fetchAll).toHaveBeenCalled()
+  expect(screen.getByRole('heading', { name: 'New Recipe' })).toBeInTheDocument()
+  openIngredientDropdown()
+  expect(await screen.findByText('Basil')).toBeInTheDocument()
+  expect(screen.getByText('+ Add new ingredient')).toBeInTheDocument()
+})
+
+test('loadIngredients and loadTags replace the user sources when passed', async () => {
+  const loadIngredients = vi.fn(() => Promise.resolve([{ id: 50, name: 'Cavolo nero' }]))
+  const loadTags = vi.fn(() => Promise.resolve([{ id: 60, name: 'soup' }]))
+  render(
+    <NewRecipeModal
+      onClose={() => {}}
+      onSave={() => {}}
+      loadIngredients={loadIngredients}
+      loadTags={loadTags}
+    />,
+  )
+
+  await waitFor(() => expect(loadIngredients).toHaveBeenCalled())
+  expect(loadTags).toHaveBeenCalled()
+  expect(ingredientsApi.fetchAll).not.toHaveBeenCalled()
+  expect(tagsApi.fetchAll).not.toHaveBeenCalled()
+  openIngredientDropdown()
+  expect(await screen.findByText('Cavolo nero')).toBeInTheDocument()
+  fireEvent.focus(screen.getByPlaceholderText('tag'))
+  expect(await screen.findByText('soup')).toBeInTheDocument()
+})
+
+test('allowCreateIngredient={false} removes the add-ingredient control', async () => {
+  const loadIngredients = vi.fn(() => Promise.resolve([{ id: 50, name: 'Cavolo nero' }]))
+  render(
+    <NewRecipeModal
+      onClose={() => {}}
+      onSave={() => {}}
+      loadIngredients={loadIngredients}
+      allowCreateIngredient={false}
+    />,
+  )
+
+  openIngredientDropdown()
+  expect(await screen.findByText('Cavolo nero')).toBeInTheDocument()
+  expect(screen.queryByText(/add new ingredient/i)).toBeNull()
+})
+
+const typeTag = (text) => {
+  const input = screen.getByPlaceholderText('tag')
+  fireEvent.focus(input)
+  fireEvent.change(input, { target: { value: text } })
+}
+
+test('by default the tag picker offers to add a typed tag', () => {
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} />)
+  typeTag('brunch')
+  expect(screen.getByText('Add "brunch"')).toBeInTheDocument()
+})
+
+test('allowCreateTag={false} removes the free-text add-tag option but keeps existing tags', async () => {
+  const loadTags = vi.fn(() => Promise.resolve([{ id: 60, name: 'brunchy' }]))
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} loadTags={loadTags} allowCreateTag={false} />)
+  await waitFor(() => expect(loadTags).toHaveBeenCalled())
+
+  typeTag('brunch')
+
+  expect(await screen.findByText('brunchy')).toBeInTheDocument()
+  expect(screen.queryByText(/^Add "/)).toBeNull()
+})
+
+test('heading replaces the form title', () => {
+  render(<NewRecipeModal onClose={() => {}} onSave={() => {}} heading="New catalog recipe" />)
+  expect(screen.getByRole('heading', { name: 'New catalog recipe' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'New Recipe' })).toBeNull()
+})
+
+test('save hands the recipe over and closes without waiting on onSave', () => {
+  // The page owns error feedback for a failed save: the form is already gone.
+  const order = []
+  const onSave = vi.fn(() => {
+    order.push('save')
+    return new Promise(() => {})
+  })
+  const onClose = vi.fn(() => order.push('close'))
+  render(<NewRecipeModal onClose={onClose} onSave={onSave} initialRecipe={{ title: 'Roast', course: 'main' }} />)
+
+  fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+  expect(order).toEqual(['save', 'close'])
 })

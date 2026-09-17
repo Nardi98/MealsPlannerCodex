@@ -55,3 +55,30 @@ test('direction is meaningless without a sort, so the arrow is disabled', () => 
   render(<RecipeSort sortKey="default" direction="asc" />)
   expect(screen.getByLabelText('Sort descending')).toBeDisabled()
 })
+
+test('offers caller-supplied options instead of the recipe-book ones', () => {
+  const options = [
+    { value: 'popular', label: 'Most added' },
+    { value: 'title', label: 'Title' },
+  ]
+  const onChange = vi.fn()
+  render(<RecipeSort sortKey="popular" options={options} onChange={onChange} />)
+
+  const select = screen.getByLabelText('Sort recipes')
+  expect([...select.options].map((o) => o.textContent)).toEqual(['Most added', 'Title'])
+  expect(select).toHaveValue('popular')
+
+  fireEvent.change(select, { target: { value: 'title' } })
+  expect(onChange).toHaveBeenCalledWith('title', 'asc')
+})
+
+test('showDirection={false} hides the direction arrow', () => {
+  render(<RecipeSort sortKey="name" direction="asc" showDirection={false} />)
+  expect(screen.queryByLabelText('Sort descending')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Sort ascending')).not.toBeInTheDocument()
+})
+
+test('the direction arrow shows by default', () => {
+  render(<RecipeSort sortKey="name" direction="asc" />)
+  expect(screen.getByLabelText('Sort descending')).toBeInTheDocument()
+})
