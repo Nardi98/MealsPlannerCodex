@@ -43,6 +43,8 @@ import recipe_copy  # noqa: E402
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (  # noqa: E402
     CatalogEntry,
+    CatalogImportBatch,
+    CatalogImportItem,
     Ingredient,
     Recipe,
     RecipeIngredient,
@@ -759,6 +761,142 @@ def link_catalog(
             recipe.copy_count += 1
 
 
+# One staged import file, left **open** so the review page has something to
+# render on a freshly composed database. Each entry is the pack-shaped dict an
+# upload carries, plus the staging outcome the uploader would have computed:
+#
+# * ``state`` -- ``pending`` unless the entry is malformed, which is staged
+#   ``invalid`` with its ``error`` rather than rejecting the whole file;
+# * ``duplicate_of`` -- the title of the published catalog recipe this entry
+#   collides with, flagged and never auto-skipped.
+#
+# An ingredient name the system account does not own stays unresolved
+# (``ingredient_id: None``) -- that is the case the review page exists for.
+IMPORT_BATCH_FILENAME = "summer-pack.json"
+
+IMPORT_ITEMS: list[dict] = [
+    {
+        "state": "pending",
+        "entry": {
+            "title": "Lentil Shepherd's Pie",
+            "course": "main",
+            "servings": 4,
+            "bulk_prep": True,
+            "procedure": "Simmer the lentils, top with mash and bake.",
+            "image_url": None,
+            "tags": ["stew", "vegetarian", "cheap"],
+            "ingredients": [
+                {"name": "Lentils", "quantity": 300.0, "unit": "g"},
+                {"name": "Potato", "quantity": 800.0, "unit": "g"},
+                {"name": "Carrot", "quantity": 2.0, "unit": "piece"},
+                {"name": "Onion", "quantity": 1.0, "unit": "piece"},
+            ],
+        },
+    },
+    {
+        # Names the system account has never heard of: the resolution case.
+        "state": "pending",
+        "entry": {
+            "title": "Smoky Chickpea Traybake",
+            "course": "main",
+            "servings": 3,
+            "bulk_prep": False,
+            "procedure": "Roast everything on one tray.",
+            "image_url": None,
+            "tags": ["roast", "vegan"],
+            "ingredients": [
+                {"name": "Smoked Paprika", "quantity": 10.0, "unit": "g"},
+                {"name": "Olive Oil", "quantity": 30.0, "unit": "ml"},
+                {"name": "Tomato", "quantity": 4.0, "unit": "piece"},
+            ],
+        },
+    },
+    {
+        # ``servings`` must be >= 1, so this entry never parses into a recipe.
+        "state": "invalid",
+        "error": "servings: Input should be greater than or equal to 1",
+        "entry": {
+            "title": "Mystery Bowl",
+            "course": "main",
+            "servings": 0,
+            "bulk_prep": False,
+            "procedure": None,
+            "image_url": None,
+            "tags": [],
+            "ingredients": [{"name": "Rice", "quantity": 200.0, "unit": "g"}],
+        },
+    },
+    {
+        "state": "pending",
+        "duplicate_of": "Greek Salad",
+        "entry": {
+            "title": "Greek Salad",
+            "course": "side",
+            "servings": 2,
+            "bulk_prep": False,
+            "procedure": "Chop, dress, serve cold.",
+            "image_url": None,
+            "tags": ["salad", "vegetarian"],
+            "ingredients": [
+                {"name": "Cucumber", "quantity": 1.0, "unit": "piece"},
+                {"name": "Tomato", "quantity": 3.0, "unit": "piece"},
+                {"name": "Olive Oil", "quantity": 20.0, "unit": "ml"},
+            ],
+        },
+    },
+]
+
+
+def link_catalog_imports(session, admin: User, system: User) -> None:
+    """Stage :data:`IMPORT_ITEMS` as one open batch uploaded by ``admin``.
+
+    Runs after :func:`link_catalog`, because the duplicate flag points at a
+    catalog recipe that must already exist. Names resolve in the **system**
+    namespace, the only one a catalog recipe may draw on (D3); a name it does
+    not own is left unresolved on purpose. ``source`` and ``draft`` start equal
+    -- ``source`` is never written again, so what the file said stays
+    answerable however much the draft is edited.
+
+    Flushes, never commits: ``populate`` owns the commit.
+    """
+    session.flush()
+    pantry = {
+        i.name: i.id
+        for i in session.execute(
+            select(Ingredient).where(Ingredient.user_id == system.id)
+        ).scalars()
+    }
+    catalogued = {
+        r.title: r.id
+        for r in session.execute(
+            select(Recipe).where(Recipe.user_id == system.id)
+        ).scalars()
+    }
+
+    batch = CatalogImportBatch(
+        created_by_user_id=admin.id, filename=IMPORT_BATCH_FILENAME
+    )
+    session.add(batch)
+    for position, spec in enumerate(IMPORT_ITEMS):
+        entry = spec["entry"]
+        draft = dict(entry)
+        draft["ingredients"] = [
+            {**line, "ingredient_id": pantry.get(line["name"])}
+            for line in entry["ingredients"]
+        ]
+        batch.items.append(
+            CatalogImportItem(
+                position=position,
+                source=entry,
+                draft=draft,
+                state=spec["state"],
+                error=spec.get("error"),
+                duplicate_recipe_id=catalogued.get(spec.get("duplicate_of")),
+            )
+        )
+    session.flush()
+
+
 # Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever
 # database the process was handed -- on Railway, the deployed one. Requiring an
 # explicit opt-in means the destruction can only happen where someone put the
@@ -862,6 +1000,8 @@ def populate(session) -> None:
     # After the share copies, so ``duplicate`` finds the ingredient rows those
     # already gave friend_cook instead of creating a second set.
     link_catalog(session, system_user, users_by_username)
+    # After the catalog: the duplicate flag points at one of its recipes.
+    link_catalog_imports(session, demo_user, system_user)
     session.commit()
 
 
