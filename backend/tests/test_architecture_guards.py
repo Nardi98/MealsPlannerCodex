@@ -67,13 +67,16 @@ def _imported_modules(path):
     return names
 
 
-def test_catalog_service_imports_no_router_and_no_main():
+@pytest.mark.parametrize("module", ["catalog.py", "catalog_import.py"])
+def test_catalog_service_imports_no_router_and_no_main(module):
     """CAT-11 / TST-11: startup, seed scripts and routers all call ``catalog``.
 
     It must not reach back into ``main``, any router or the frontend, or it
-    could no longer be imported from startup without a cycle.
+    could no longer be imported from startup without a cycle. The same holds
+    for ``catalog_import.py``, which is the catalog's other service module and
+    is called from two routers.
     """
-    imported = _imported_modules(BACKEND_ROOT / "catalog.py")
+    imported = _imported_modules(BACKEND_ROOT / module)
     assert imported, "the AST walk found no imports at all"
 
     forbidden = {
