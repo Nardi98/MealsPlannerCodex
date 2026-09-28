@@ -5,6 +5,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
+import { Link } from 'react-router-dom'
 import { PageTour } from '../tutorial/PageTour'
 
 let authState
@@ -34,6 +35,19 @@ vi.mock('../pages/SharedWithMePage', () => ({ default: () => <div>shared-with-me
 vi.mock('../pages/DiscoverPage', () => ({ default: () => <div>discover-page</div> }))
 vi.mock('../pages/CatalogAdminPage', () => ({ default: () => <div>catalog-admin-page</div> }))
 vi.mock('../pages/SharedRecipePage', () => ({ default: () => <div>shared-recipe-page</div> }))
+vi.mock('../pages/SystemVocabularyPage', () => ({ default: () => <div>vocabulary-page</div> }))
+// The stand-in keeps the real page's link to a batch: the review route is
+// reached that way and by no other means, so a test that pushed the URL by hand
+// would not be exercising how anyone actually gets there.
+vi.mock('../pages/CatalogImportPage', () => ({
+  default: () => (
+    <>
+      <div>catalog-import-page</div>
+      <Link to="/discover/import/7">Review batch 7</Link>
+    </>
+  ),
+}))
+vi.mock('../pages/CatalogImportReviewPage', () => ({ default: () => <div>catalog-import-review-page</div> }))
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
 import App from '../App'
@@ -426,4 +440,96 @@ test('an admin browsing in user mode sees the plain discover page', () => {
 
   expect(screen.getByText('discover-page')).toBeInTheDocument()
   expect(screen.queryByText('catalog-admin-page')).not.toBeInTheDocument()
+})
+
+
+// ---------------------------------------------------------------------------
+// Admin-only catalog surfaces: system vocabulary and batch import
+// ---------------------------------------------------------------------------
+//
+// Three pages that only exist for an admin: the vocabulary editor, the import
+// upload/overview, and the per-recipe review reached from it by link. Each is
+// wrapped the way `/discover` is -- admin mode renders it, anyone else is sent
+// to `/discover`. As with the pill, the mode is presentation: the server
+// enforces admin on every `/admin/catalog/*` route, and these assertions are
+// only that a non-admin never lands on a screen built for someone else.
+
+const ADMIN_ROUTES = [
+  ['/discover/vocabulary', 'vocabulary-page'],
+  ['/discover/import', 'catalog-import-page'],
+  ['/discover/import/7', 'catalog-import-review-page'],
+]
+
+// Admin mode is entered through the pill, which navigates to `/discover` as it
+// switches, so each of these walks the route the way an admin does: switch,
+// then click through.
+test('the vocabulary page is reachable in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  await userEvent.click(screen.getByRole('button', { name: /ingredients & tags/i }))
+
+  expect(screen.getByText('vocabulary-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/vocabulary')
+})
+
+test('the import page is reachable in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  await userEvent.click(screen.getByRole('button', { name: /^import$/i }))
+
+  expect(screen.getByText('catalog-import-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/import')
+})
+
+test('a batch link from the import page opens the review page', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+  await userEvent.click(screen.getByRole('button', { name: /^import$/i }))
+
+  await userEvent.click(screen.getByRole('link', { name: /review batch 7/i }))
+
+  expect(screen.getByText('catalog-import-review-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/import/7')
+})
+
+test.each(ADMIN_ROUTES)('%s sends a non-admin back to /discover', (path, text) => {
+  signedIn(CONFIRMED)
+  visit(path)
+  render(<App />)
+
+  expect(screen.queryByText(text)).not.toBeInTheDocument()
+  expect(screen.getByText('discover-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover')
+})
+
+test.each(ADMIN_ROUTES)('%s sends an admin browsing in user mode back to /discover', (path, text) => {
+  signedIn(ADMIN)
+  visit(path)
+  render(<App />)
+
+  expect(screen.queryByText(text)).not.toBeInTheDocument()
+  expect(screen.getByText('discover-page')).toBeInTheDocument()
+})
+
+test('admin mode offers the vocabulary and import entries alongside Discover', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  expect(screen.getByRole('button', { name: /ingredients & tags/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^import$/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /discover/i })).toBeInTheDocument()
+})
+
+test('user mode offers neither the vocabulary nor the import entry', () => {
+  signedIn(ADMIN)
+  render(<App />)
+
+  expect(screen.queryByRole('button', { name: /ingredients & tags/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /^import$/i })).not.toBeInTheDocument()
 })
