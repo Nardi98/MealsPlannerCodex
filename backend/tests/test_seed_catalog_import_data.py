@@ -9,6 +9,7 @@ to render.
 
 from sqlalchemy import select
 
+import catalog_import
 from models import CatalogImportBatch, CatalogImportItem, Recipe, User
 from scripts.seed_testing_data import populate
 
@@ -39,8 +40,9 @@ def test_the_batch_holds_a_pending_an_invalid_and_a_duplicate_item(db_session):
     assert len(by_state["pending"]) >= 2
     invalid = by_state["invalid"]
     assert len(invalid) == 1
-    # An invalid entry says why: one bad entry never rejects the whole file.
-    assert invalid[0].error
+    # An invalid entry says why -- and says it in the words the real staging
+    # path produces, so the seed cannot ship an error the app never generates.
+    assert invalid[0].error == catalog_import._entry_problem(invalid[0].source)
 
     duplicates = [item for item in items if item.duplicate_recipe_id is not None]
     assert len(duplicates) == 1

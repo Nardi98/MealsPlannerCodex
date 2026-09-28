@@ -9,6 +9,7 @@ import CatalogImportReviewPage from '../CatalogImportReviewPage'
 import { catalogApi } from '../../api/catalogApi'
 import { recipesApi } from '../../api/recipesApi'
 import { stubViewport } from '../../test/stubViewport'
+import { COURSES } from '../../constants/recipeImport'
 
 // The real mappers stay real; only the network calls are mocked.
 vi.mock('../../api/catalogApi', async (importOriginal) => ({
@@ -321,4 +322,20 @@ test('attaches an image through the recipe upload endpoint', async () => {
   await waitFor(() =>
     expect(catalogApi.imports.saveItem.mock.calls.at(-1)[2].image_url).toBe('https://img.test/pasta.png'),
   )
+})
+
+// --- Course options ---------------------------------------------------------
+
+// The server accepts exactly `constants/recipeImport`'s COURSES; offering any
+// other option only lets the reviewer stage an item the server must reject.
+test('offers only the courses the server accepts', async () => {
+  catalogApi.imports.get.mockResolvedValue(batch([DUPLICATE_ITEM]))
+  catalogApi.imports.item.mockResolvedValue(DUPLICATE_ITEM)
+  renderPage()
+
+  const select = await screen.findByLabelText('Course')
+  const offered = within(select)
+    .getAllByRole('option')
+    .map((option) => option.value)
+  expect(offered).toEqual([...COURSES])
 })

@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from sqlalchemy import select  # noqa: E402
 
 import catalog  # noqa: E402
+import catalog_import  # noqa: E402
 import recipe_copy  # noqa: E402
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (  # noqa: E402
@@ -813,8 +814,10 @@ IMPORT_ITEMS: list[dict] = [
     },
     {
         # ``servings`` must be >= 1, so this entry never parses into a recipe.
+        # Its ``error`` is not written here: ``link_catalog_imports`` asks
+        # ``catalog_import`` for it, so the seeded wording can never drift from
+        # the one a real upload produces.
         "state": "invalid",
-        "error": "servings: Input should be greater than or equal to 1",
         "entry": {
             "title": "Mystery Bowl",
             "course": "main",
@@ -890,7 +893,13 @@ def link_catalog_imports(session, admin: User, system: User) -> None:
                 source=entry,
                 draft=draft,
                 state=spec["state"],
-                error=spec.get("error"),
+                # The staging path is the only author of this text; deriving it
+                # keeps the seed from shipping a message the app never emits.
+                error=(
+                    catalog_import._entry_problem(entry)
+                    if spec["state"] == "invalid"
+                    else None
+                ),
                 duplicate_recipe_id=catalogued.get(spec.get("duplicate_of")),
             )
         )

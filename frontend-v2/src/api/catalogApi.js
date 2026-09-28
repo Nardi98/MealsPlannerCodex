@@ -170,10 +170,17 @@ export const catalogApi = {
     // 409 when a catalog recipe still uses it, with the count in `detail`.
     deleteIngredient: (ingredientId) =>
       request(`${ADMIN}/ingredients/${encodeURIComponent(ingredientId)}`, { method: 'DELETE' }),
+    // `{ count }`: how many recipes hold the row, in EVERY account. Only the
+    // server can answer that -- a count made from the catalog listing misses
+    // the private books that would still make the DELETE a 409.
+    ingredientUsage: (ingredientId) =>
+      request(`${ADMIN}/ingredients/${encodeURIComponent(ingredientId)}/usage`),
     createTag: (tag) => request(`${ADMIN}/tags`, json('POST', tag)),
     updateTag: (tagId, changes) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}`, json('PUT', changes)),
     // Allowed while in use: the tag is detached from its recipes (D3).
     deleteTag: (tagId) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}`, { method: 'DELETE' }),
+    // `{ count }`, counted across every account like `ingredientUsage`.
+    tagUsage: (tagId) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}/usage`),
   },
 
   // Staged batch import. The browser parses the file and posts the entries as

@@ -24,26 +24,23 @@ const norm = (name) => String(name || '').trim().toLowerCase()
 const uses = (count) => (count === 0 ? 'no recipes' : `${count} recipe${count === 1 ? '' : 's'}`)
 
 /**
- * How many catalog recipes name each ingredient and each tag.
+ * What the confirmation says about a row it is about to delete.
  *
- * Counted here, from the admin listing, because the vocabulary endpoints
- * answer with names alone: the server only reveals a count when it *refuses* a
- * delete, and a confirmation that cannot say what it is about to break is not
- * a confirmation. Names are matched case-insensitively, as the server resolves
- * them.
+ * The count comes from the server and nowhere else. It counts recipes in
+ * *every* account, while this page can only see the catalog, so a number
+ * worked out here would cheerfully say "no recipes" about an ingredient the
+ * DELETE then refuses with a 409. Until the answer lands -- or if it never
+ * does -- the sentence promises nothing.
  */
-function usageOf(recipes) {
-  const ingredients = new Map()
-  const tags = new Map()
-  const bump = (map, name) => {
-    const key = norm(name)
-    map.set(key, (map.get(key) || 0) + 1)
+function deleteMessage(kind, name, count) {
+  if (count == null) {
+    return kind === 'ingredient'
+      ? `Counting how many recipes use “${name}”. An ingredient a recipe still uses cannot be deleted.`
+      : `Counting how many recipes carry “${name}”. Deleting it removes the tag from them; the recipes stay.`
   }
-  for (const recipe of recipes || []) {
-    for (const line of recipe.ingredients || []) bump(ingredients, line.name)
-    for (const tag of recipe.tags || []) bump(tags, tag)
-  }
-  return { ingredients, tags }
+  return kind === 'ingredient'
+    ? `“${name}” is used by ${uses(count)}. An ingredient a recipe still uses cannot be deleted.`
+    : `“${name}” is on ${uses(count)}. Deleting it removes the tag from them; the recipes stay.`
 }
 
 /** The one-line summary under an ingredient's name. */
@@ -75,7 +72,6 @@ export default function SystemVocabularyPage() {
 
   const [ingredients, setIngredients] = React.useState(null)
   const [tags, setTags] = React.useState(null)
-  const [usage, setUsage] = React.useState({ ingredients: new Map(), tags: new Map() })
   const [failed, setFailed] = React.useState(false)
   const [reloadKey, setReloadKey] = React.useState(0)
 
@@ -91,12 +87,11 @@ export default function SystemVocabularyPage() {
   React.useEffect(() => {
     // A slower, older response must not overwrite a newer one.
     let stale = false
-    Promise.all([catalogApi.admin.ingredients(), catalogApi.admin.tags(), catalogApi.admin.list({})])
-      .then(([nextIngredients, nextTags, recipes]) => {
+    Promise.all([catalogApi.admin.ingredients(), catalogApi.admin.tags()])
+      .then(([nextIngredients, nextTags]) => {
         if (stale) return
         setIngredients(nextIngredients)
         setTags(nextTags)
-        setUsage(usageOf(recipes))
         setFailed(false)
       })
       .catch((err) => {
@@ -176,8 +171,22 @@ export default function SystemVocabularyPage() {
   const shownIngredients = ingredients === null ? null : match(ingredients)
   const shownTags = tags === null ? null : match(tags)
 
-  const askDelete = (kind, row) =>
-    setPendingDelete({ kind, row, count: usage[`${kind}s`].get(norm(row.name)) || 0 })
+  // The dialog opens at once and fills its count in when the server answers:
+  // only the server can see the recipes outside the catalog. A count that
+  // never arrives leaves the sentence making no promise rather than a wrong
+  // one -- the DELETE itself is still the authority, and answers 409.
+  const askDelete = (kind, row) => {
+    setPendingDelete({ kind, row, count: null })
+    const ask = kind === 'ingredient' ? catalogApi.admin.ingredientUsage : catalogApi.admin.tagUsage
+    ask(row.id)
+      .then(({ count }) =>
+        // A slower answer about a row the admin has moved on from is dropped.
+        setPendingDelete((open) =>
+          open && open.kind === kind && open.row.id === row.id ? { ...open, count } : open
+        )
+      )
+      .catch((err) => console.error('Failed to count what uses this row', err))
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -274,13 +283,7 @@ export default function SystemVocabularyPage() {
       {pendingDelete && (
         <ConfirmModal
           title={`Delete ${pendingDelete.row.name}?`}
-          message={
-            pendingDelete.kind === 'ingredient'
-              ? `“${pendingDelete.row.name}” is used by ${uses(pendingDelete.count)} in the library. ` +
-                'An ingredient a recipe still uses cannot be deleted.'
-              : `“${pendingDelete.row.name}” is on ${uses(pendingDelete.count)} in the library. ` +
-                'Deleting it removes the tag from them; the recipes stay.'
-          }
+          message={deleteMessage(pendingDelete.kind, pendingDelete.row.name, pendingDelete.count)}
           confirmLabel={pendingDelete.kind === 'ingredient' ? 'Delete ingredient' : 'Delete tag'}
           onConfirm={confirmDelete}
           onCancel={() => setPendingDelete(null)}
