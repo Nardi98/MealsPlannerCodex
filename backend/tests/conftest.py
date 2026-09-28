@@ -84,6 +84,12 @@ def remove_system_catalog(session):
     side_link = models.recipe_favorite_side_table.c
 
     for stmt in (
+        # Import staging is transient scaffolding for this same catalog, and an
+        # item's recipe foreign keys are ``SET NULL`` rather than cascading, so
+        # rows left here would outlive the account they were staged for. The
+        # whole staging area goes, not just the part pointing at system rows.
+        delete(models.CatalogImportItem),
+        delete(models.CatalogImportBatch),
         delete(models.CatalogEntry).where(models.CatalogEntry.recipe_id.in_(recipe_ids)),
         delete(models.recipe_tag_table).where(
             or_(tag_link.recipe_id.in_(recipe_ids), tag_link.tag_id.in_(tag_ids))
