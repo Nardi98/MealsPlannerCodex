@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 
 import catalog
 import catalog_admin_routes
+import catalog_import_routes
 import catalog_routes
 import crud
 import mailer
@@ -108,6 +109,7 @@ app.include_router(public_pages.router)
 app.include_router(ops_routes.router)
 app.include_router(catalog_routes.router)
 app.include_router(catalog_admin_routes.router)
+app.include_router(catalog_import_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
