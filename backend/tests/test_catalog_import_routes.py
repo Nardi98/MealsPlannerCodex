@@ -22,20 +22,18 @@ MISSING_ID = 10**9
 
 #: The route table this router serves, exactly.
 #:
-#: A sibling prefix (``/admin/imports``) rather than
-#: ``/admin/catalog/imports``: ``tests/test_catalog_admin.py`` asserts that *no*
-#: route mounted under ``/admin/catalog`` answers DELETE (API-14, RET-5), and
-#: abandoning a batch is a DELETE. The plan allows the sibling prefix for
-#: exactly this reason.
+#: Mounted under ``/admin/catalog/imports``, as the plan specified. The
+#: no-DELETE contract in ``tests/test_catalog_admin.py`` (API-14, RET-5) covers
+#: ``/admin/catalog/recipes`` only, so abandoning a batch may be a DELETE here.
 CONTRACT_ROUTES = {
-    ("GET", "/admin/imports"),
-    ("POST", "/admin/imports"),
-    ("GET", "/admin/imports/{batch_id}"),
-    ("DELETE", "/admin/imports/{batch_id}"),
-    ("GET", "/admin/imports/{batch_id}/items/{item_id}"),
-    ("PATCH", "/admin/imports/{batch_id}/items/{item_id}"),
-    ("POST", "/admin/imports/{batch_id}/items/{item_id}/skip"),
-    ("POST", "/admin/imports/{batch_id}/items/{item_id}/commit"),
+    ("GET", "/admin/catalog/imports"),
+    ("POST", "/admin/catalog/imports"),
+    ("GET", "/admin/catalog/imports/{batch_id}"),
+    ("DELETE", "/admin/catalog/imports/{batch_id}"),
+    ("GET", "/admin/catalog/imports/{batch_id}/items/{item_id}"),
+    ("PATCH", "/admin/catalog/imports/{batch_id}/items/{item_id}"),
+    ("POST", "/admin/catalog/imports/{batch_id}/items/{item_id}/skip"),
+    ("POST", "/admin/catalog/imports/{batch_id}/items/{item_id}/commit"),
 }
 WRITE_METHODS = {"POST", "PATCH", "DELETE"}
 WRITE_ROUTES = sorted((m, p) for m, p in CONTRACT_ROUTES if m in WRITE_METHODS)
@@ -193,7 +191,7 @@ def test_write_routes_are_rate_limited(db_session, admin_user, system_account, m
 
 
 def test_upload_stages_the_file_and_commits_it(admin, db_session):
-    response = admin.post("/admin/imports", json=upload_body())
+    response = admin.post("/admin/catalog/imports", json=upload_body())
 
     assert response.status_code == 201, response.text
     body = response.json()
@@ -214,7 +212,7 @@ def test_upload_stages_the_file_and_commits_it(admin, db_session):
 
 def test_a_malformed_entry_is_staged_invalid_rather_than_rejecting_the_file(admin):
     response = admin.post(
-        "/admin/imports",
+        "/admin/catalog/imports",
         json=upload_body(entries=[entry(), entry(title="", course="main")]),
     )
 
@@ -229,13 +227,13 @@ def test_a_malformed_entry_is_staged_invalid_rather_than_rejecting_the_file(admi
 def test_upload_flags_a_duplicate_title(admin, make_catalog_recipe):
     existing = make_catalog_recipe("Imported risotto")
 
-    body = admin.post("/admin/imports", json=upload_body()).json()
+    body = admin.post("/admin/catalog/imports", json=upload_body()).json()
 
     assert body["items"][0]["duplicate_recipe_id"] == existing.id
 
 
 def test_upload_refuses_an_unknown_field(admin):
-    response = admin.post("/admin/imports", json={**upload_body(), "publish": True})
+    response = admin.post("/admin/catalog/imports", json={**upload_body(), "publish": True})
 
     assert response.status_code == 422
 
@@ -244,23 +242,23 @@ def test_upload_refuses_an_unknown_field(admin):
 
 
 def test_the_listing_is_null_with_no_open_batch(admin):
-    response = admin.get("/admin/imports")
+    response = admin.get("/admin/catalog/imports")
 
     assert response.status_code == 200
     assert response.json() is None
 
 
 def test_the_listing_is_the_open_batch(admin):
-    created = admin.post("/admin/imports", json=upload_body()).json()
+    created = admin.post("/admin/catalog/imports", json=upload_body()).json()
 
-    body = admin.get("/admin/imports").json()
+    body = admin.get("/admin/catalog/imports").json()
 
     assert body["id"] == created["id"]
     assert set(body) == BATCH_KEYS
 
 
 def test_a_missing_batch_is_404(admin):
-    assert admin.get(f"/admin/imports/{MISSING_ID}").status_code == 404
+    assert admin.get(f"/admin/catalog/imports/{MISSING_ID}").status_code == 404
 
 
 # --- one item -----------------------------------------------------------------
@@ -268,10 +266,10 @@ def test_a_missing_batch_is_404(admin):
 
 def test_item_detail_carries_the_draft_the_source_and_the_duplicate(admin, make_catalog_recipe):
     existing = make_catalog_recipe("Imported risotto")
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = batch["items"][0]["id"]
 
-    response = admin.get(f"/admin/imports/{batch['id']}/items/{item_id}")
+    response = admin.get(f"/admin/catalog/imports/{batch['id']}/items/{item_id}")
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -283,38 +281,38 @@ def test_item_detail_carries_the_draft_the_source_and_the_duplicate(admin, make_
 
 
 def test_item_detail_has_no_duplicate_when_nothing_collides(admin):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = batch["items"][0]["id"]
 
-    body = admin.get(f"/admin/imports/{batch['id']}/items/{item_id}").json()
+    body = admin.get(f"/admin/catalog/imports/{batch['id']}/items/{item_id}").json()
 
     assert body["duplicate"] is None
 
 
 def test_an_item_of_another_batch_is_404(admin):
-    first = admin.post("/admin/imports", json=upload_body()).json()
-    second = admin.post("/admin/imports", json=upload_body()).json()
+    first = admin.post("/admin/catalog/imports", json=upload_body()).json()
+    second = admin.post("/admin/catalog/imports", json=upload_body()).json()
 
-    response = admin.get(f"/admin/imports/{second['id']}/items/{first['items'][0]['id']}")
+    response = admin.get(f"/admin/catalog/imports/{second['id']}/items/{first['items'][0]['id']}")
 
     assert response.status_code == 404
 
 
 def test_a_missing_item_is_404(admin):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
 
-    assert admin.get(f"/admin/imports/{batch['id']}/items/{MISSING_ID}").status_code == 404
+    assert admin.get(f"/admin/catalog/imports/{batch['id']}/items/{MISSING_ID}").status_code == 404
 
 
 # --- editing ------------------------------------------------------------------
 
 
 def test_patch_saves_the_working_copy_and_leaves_the_source_alone(admin, db_session):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = batch["items"][0]["id"]
 
     response = admin.patch(
-        f"/admin/imports/{batch['id']}/items/{item_id}",
+        f"/admin/catalog/imports/{batch['id']}/items/{item_id}",
         json={"draft": entry(title="Corrected risotto")},
     )
 
@@ -329,12 +327,12 @@ def test_patch_saves_the_working_copy_and_leaves_the_source_alone(admin, db_sess
 
 def test_patching_an_entry_into_shape_clears_invalid(admin):
     batch = admin.post(
-        "/admin/imports", json=upload_body(entries=[entry(title="")])
+        "/admin/catalog/imports", json=upload_body(entries=[entry(title="")])
     ).json()
     item_id = batch["items"][0]["id"]
 
     body = admin.patch(
-        f"/admin/imports/{batch['id']}/items/{item_id}", json={"draft": entry()}
+        f"/admin/catalog/imports/{batch['id']}/items/{item_id}", json={"draft": entry()}
     ).json()
 
     assert body["state"] == "pending"
@@ -342,11 +340,11 @@ def test_patching_an_entry_into_shape_clears_invalid(admin):
 
 
 def test_patching_out_of_shape_is_invalid_not_a_400(admin):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = batch["items"][0]["id"]
 
     body = admin.patch(
-        f"/admin/imports/{batch['id']}/items/{item_id}",
+        f"/admin/catalog/imports/{batch['id']}/items/{item_id}",
         json={"draft": entry(servings=0)},
     ).json()
 
@@ -358,10 +356,10 @@ def test_patching_out_of_shape_is_invalid_not_a_400(admin):
 
 
 def test_skip_marks_the_item_and_prunes_the_finished_batch(admin, db_session):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = batch["items"][0]["id"]
 
-    response = admin.post(f"/admin/imports/{batch['id']}/items/{item_id}/skip")
+    response = admin.post(f"/admin/catalog/imports/{batch['id']}/items/{item_id}/skip")
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -372,10 +370,10 @@ def test_skip_marks_the_item_and_prunes_the_finished_batch(admin, db_session):
 
 
 def test_skip_keeps_a_batch_with_work_left(admin, db_session):
-    batch = admin.post("/admin/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
 
     body = admin.post(
-        f"/admin/imports/{batch['id']}/items/{batch['items'][0]['id']}/skip"
+        f"/admin/catalog/imports/{batch['id']}/items/{batch['items'][0]['id']}/skip"
     ).json()
 
     assert body["batch_deleted"] is False
@@ -385,10 +383,10 @@ def test_skip_keeps_a_batch_with_work_left(admin, db_session):
 
 def test_commit_creates_a_draft_recipe_and_commits(admin, db_session, system_account):
     db_session.commit()
-    batch = admin.post("/admin/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
     item_id = batch["items"][0]["id"]
 
-    response = admin.post(f"/admin/imports/{batch['id']}/items/{item_id}/commit")
+    response = admin.post(f"/admin/catalog/imports/{batch['id']}/items/{item_id}/commit")
 
     assert response.status_code == 200, response.text
     body = response.json()
@@ -407,13 +405,13 @@ def test_commit_creates_a_draft_recipe_and_commits(admin, db_session, system_acc
 def test_committing_an_unresolved_item_is_400_and_writes_nothing(admin, db_session, system_account):
     db_session.commit()
     unknown = entry(ingredients=[{"name": "Unobtainium", "quantity": 1, "unit": "g"}])
-    batch = admin.post("/admin/imports", json=upload_body(entries=[unknown])).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body(entries=[unknown])).json()
     item_id = batch["items"][0]["id"]
     before = db_session.scalar(
         select(models.Recipe.id).where(models.Recipe.user_id == system_account.id).limit(1)
     )
 
-    response = admin.post(f"/admin/imports/{batch['id']}/items/{item_id}/commit")
+    response = admin.post(f"/admin/catalog/imports/{batch['id']}/items/{item_id}/commit")
 
     assert response.status_code == 400
     assert "Unknown ingredient: Unobtainium" in response.json()["detail"]
@@ -427,31 +425,31 @@ def test_committing_an_unresolved_item_is_400_and_writes_nothing(admin, db_sessi
 
 def test_committing_twice_is_400(admin, db_session):
     db_session.commit()
-    batch = admin.post("/admin/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body(entries=[entry(), entry(title="Other")])).json()
     item_id = batch["items"][0]["id"]
-    admin.post(f"/admin/imports/{batch['id']}/items/{item_id}/commit")
+    admin.post(f"/admin/catalog/imports/{batch['id']}/items/{item_id}/commit")
 
-    response = admin.post(f"/admin/imports/{batch['id']}/items/{item_id}/commit")
+    response = admin.post(f"/admin/catalog/imports/{batch['id']}/items/{item_id}/commit")
 
     assert response.status_code == 400
 
 
 def test_skip_and_commit_404_on_an_item_of_another_batch(admin):
-    first = admin.post("/admin/imports", json=upload_body()).json()
-    second = admin.post("/admin/imports", json=upload_body()).json()
+    first = admin.post("/admin/catalog/imports", json=upload_body()).json()
+    second = admin.post("/admin/catalog/imports", json=upload_body()).json()
     item_id = first["items"][0]["id"]
 
-    assert admin.post(f"/admin/imports/{second['id']}/items/{item_id}/skip").status_code == 404
-    assert admin.post(f"/admin/imports/{second['id']}/items/{item_id}/commit").status_code == 404
+    assert admin.post(f"/admin/catalog/imports/{second['id']}/items/{item_id}/skip").status_code == 404
+    assert admin.post(f"/admin/catalog/imports/{second['id']}/items/{item_id}/commit").status_code == 404
 
 
 # --- abandon ------------------------------------------------------------------
 
 
 def test_delete_abandons_the_batch(admin, db_session):
-    batch = admin.post("/admin/imports", json=upload_body()).json()
+    batch = admin.post("/admin/catalog/imports", json=upload_body()).json()
 
-    response = admin.delete(f"/admin/imports/{batch['id']}")
+    response = admin.delete(f"/admin/catalog/imports/{batch['id']}")
 
     assert response.status_code == 204
     db_session.expire_all()
@@ -460,4 +458,4 @@ def test_delete_abandons_the_batch(admin, db_session):
 
 
 def test_deleting_a_missing_batch_is_404(admin):
-    assert admin.delete(f"/admin/imports/{MISSING_ID}").status_code == 404
+    assert admin.delete(f"/admin/catalog/imports/{MISSING_ID}").status_code == 404

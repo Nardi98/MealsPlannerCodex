@@ -7,11 +7,10 @@ the catalog's availability check at the *router* level, so a non-admin gets one
 fixed 403 before any route code runs, identical whatever the path names, and an
 anonymous caller gets 401.
 
-**Prefix.** ``/admin/imports``, a sibling of ``/admin/catalog`` rather
-than a path under it: abandoning a batch is a ``DELETE``, and the admin catalog
-contract is that nothing mounted under ``/admin/catalog`` answers ``DELETE``
-(retiring is the only removal there). The plan allows the sibling prefix for
-exactly this reason.
+**Prefix.** ``/admin/catalog/imports``, a path under ``/admin/catalog`` as the
+plan specified. Abandoning a batch is a ``DELETE``; the admin catalog's
+no-DELETE contract covers ``/admin/catalog/recipes`` (retiring is the only
+removal a *recipe* has), not the import batches.
 
 **Upload is not multipart.** The body is the already-parsed JSON array plus the
 filename, following ``POST /data/import``: the browser parses the file, as
@@ -41,7 +40,7 @@ from database import get_db
 Db = Annotated[Session, Depends(get_db)]
 
 router = APIRouter(
-    prefix="/admin/imports",
+    prefix="/admin/catalog/imports",
     tags=["catalog-import"],
     dependencies=[Depends(auth_users.require_admin), Depends(_require_catalog)],
 )
