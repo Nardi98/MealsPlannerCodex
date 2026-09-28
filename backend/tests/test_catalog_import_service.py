@@ -368,19 +368,19 @@ def test_create_system_tag_refuses_a_name_it_already_owns(db_session, vocabulary
         catalog_import.create_system_tag(db_session, name="stew")
 
 
-def test_rename_system_tag(db_session, vocabulary, system_account):
+def test_update_system_tag(db_session, vocabulary, system_account):
     tag = next(row for row in catalog.system_tags(db_session) if row.name == "soup")
 
-    assert catalog_import.rename_system_tag(db_session, tag.id, name="broth").name == (
+    assert catalog_import.update_system_tag(db_session, tag.id, name="broth").name == (
         "broth"
     )
 
 
-def test_rename_system_tag_refuses_a_name_already_taken(db_session, vocabulary):
+def test_update_system_tag_refuses_a_name_already_taken(db_session, vocabulary):
     tag = next(row for row in catalog.system_tags(db_session) if row.name == "soup")
 
     with pytest.raises(ValueError):
-        catalog_import.rename_system_tag(db_session, tag.id, name="stew")
+        catalog_import.update_system_tag(db_session, tag.id, name="stew")
 
 
 def test_delete_system_tag_removes_it_whether_or_not_it_is_used(

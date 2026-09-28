@@ -12,7 +12,28 @@ import { IconButton } from '../IconButton'
  *
  * Sticky and in the flow rather than fixed, so it never covers the last row of
  * whatever it sits under.
+ *
+ * `CatalogNoticeText` is the paragraph on its own, exported for the review
+ * page, which reports into its own action row rather than a sticky bar but
+ * must say it the same way.
  */
+export function CatalogNoticeText({ notice }) {
+  if (!notice) return null
+  return (
+    <p
+      role={notice.kind}
+      className="min-w-0 flex-1"
+      style={{
+        margin: 0,
+        fontSize: 'var(--text-sm)',
+        color: notice.kind === 'alert' ? 'var(--c-neg)' : 'var(--text-strong)',
+      }}
+    >
+      {notice.text}
+    </p>
+  )
+}
+
 export default function CatalogNoticeBar({ notice, onDismiss, children }) {
   return (
     <div
@@ -24,19 +45,7 @@ export default function CatalogNoticeBar({ notice, onDismiss, children }) {
         marginBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {notice && (
-        <p
-          role={notice.kind}
-          className="min-w-0 flex-1"
-          style={{
-            margin: 0,
-            fontSize: 'var(--text-sm)',
-            color: notice.kind === 'alert' ? 'var(--c-neg)' : 'var(--text-strong)',
-          }}
-        >
-          {notice.text}
-        </p>
-      )}
+      <CatalogNoticeText notice={notice} />
       {children || (
         <IconButton Icon={XMarkIcon} label="Dismiss" className="ml-auto" onClick={onDismiss} />
       )}

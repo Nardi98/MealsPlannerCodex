@@ -9,7 +9,7 @@ import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import SystemIngredientForm from '../components/catalog/SystemIngredientForm'
 import { mutedTextStyle } from '../components/catalog/textStyles'
-import { apiErrorText, catalogApi } from '../api/catalogApi'
+import { apiErrorText, asSentence, catalogApi } from '../api/catalogApi'
 
 const TABS = [
   { value: 'ingredients', label: 'Ingredients' },
@@ -17,9 +17,6 @@ const TABS = [
 ]
 
 const DIMENSION_LABEL = { mass: 'by mass', volume: 'by volume', piece: 'by piece' }
-
-// Ends a reason with exactly one full stop, whether or not it came with one.
-const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
 
 const norm = (name) => String(name || '').trim().toLowerCase()
 
@@ -38,7 +35,10 @@ const uses = (count) => (count === 0 ? 'no recipes' : `${count} recipe${count ==
 function usageOf(recipes) {
   const ingredients = new Map()
   const tags = new Map()
-  const bump = (map, name) => map.set(norm(name), (map.get(norm(name)) || 0) + 1)
+  const bump = (map, name) => {
+    const key = norm(name)
+    map.set(key, (map.get(key) || 0) + 1)
+  }
   for (const recipe of recipes || []) {
     for (const line of recipe.ingredients || []) bump(ingredients, line.name)
     for (const tag of recipe.tags || []) bump(tags, tag)
@@ -136,37 +136,25 @@ export default function SystemVocabularyPage() {
     }
   }
 
-  const saveIngredient = (changes) => {
+  // Saving an ingredient and saving a tag differ only in which two endpoints
+  // they call: an edit with nothing changed just closes, an edit PUTs the
+  // changed keys, and a new row POSTs. One function, the pair of calls picked
+  // by kind -- the same shape `confirmDelete` uses.
+  const save = (kind) => (changes) => {
     const row = form.row
     if (row) {
       if (Object.keys(changes).length === 0) {
         closeForm()
         return
       }
-      return write(() => catalogApi.admin.updateIngredient(row.id, changes), {
+      const update = kind === 'ingredient' ? catalogApi.admin.updateIngredient : catalogApi.admin.updateTag
+      return write(() => update(row.id, changes), {
         done: `Saved “${row.name}”.`,
         failure: `Couldn't save “${row.name}”`,
       })
     }
-    return write(() => catalogApi.admin.createIngredient(changes), {
-      done: `Added “${changes.name}” to the vocabulary.`,
-      failure: `Couldn't add “${changes.name}”`,
-    })
-  }
-
-  const saveTag = (changes) => {
-    const row = form.row
-    if (row) {
-      if (Object.keys(changes).length === 0) {
-        closeForm()
-        return
-      }
-      return write(() => catalogApi.admin.updateTag(row.id, changes), {
-        done: `Saved “${row.name}”.`,
-        failure: `Couldn't save “${row.name}”`,
-      })
-    }
-    return write(() => catalogApi.admin.createTag(changes), {
+    const create = kind === 'ingredient' ? catalogApi.admin.createIngredient : catalogApi.admin.createTag
+    return write(() => create(changes), {
       done: `Added “${changes.name}” to the vocabulary.`,
       failure: `Couldn't add “${changes.name}”`,
     })
@@ -236,7 +224,7 @@ export default function SystemVocabularyPage() {
             submitLabel={form.row ? 'Save ingredient' : 'Create ingredient'}
             busy={busy}
             error={formError}
-            onSubmit={saveIngredient}
+            onSubmit={save('ingredient')}
             onCancel={closeForm}
           />
         </Card>
@@ -244,7 +232,7 @@ export default function SystemVocabularyPage() {
 
       {form?.kind === 'tag' && (
         <Card>
-          <TagForm key={form.row?.id ?? 'new'} tag={form.row} busy={busy} error={formError} onSubmit={saveTag} onCancel={closeForm} />
+          <TagForm key={form.row?.id ?? 'new'} tag={form.row} busy={busy} error={formError} onSubmit={save('tag')} onCancel={closeForm} />
         </Card>
       )}
 
@@ -273,7 +261,6 @@ export default function SystemVocabularyPage() {
               ? 'Penalizes repetition: the planner spaces these recipes out'
               : 'Repeats freely'
           }
-          badgesOf={() => []}
           onEdit={(row) => {
             setFormError(null)
             setForm({ kind: 'tag', row })
@@ -309,7 +296,7 @@ export default function SystemVocabularyPage() {
  *
  * `rows` is null until the first load lands.
  */
-function VocabularyList({ name, rows, empty, secondaryOf, badgesOf, onEdit, onDelete }) {
+function VocabularyList({ name, rows, empty, secondaryOf, badgesOf = () => [], onEdit, onDelete }) {
   const headingId = React.useId()
 
   return (

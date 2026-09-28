@@ -49,8 +49,10 @@ logger = logging.getLogger(__name__)
 Db = Annotated[Session, Depends(get_db)]
 
 #: The courses the app authors recipes in: the planner's main-slot courses and
-#: sides (``models``), which is also the frontend's recipe-form vocabulary.
-COURSES = (*models.MAIN_COURSES, models.SIDE_COURSE)
+#: sides (``models``), which is also the frontend's recipe-form vocabulary. One
+#: definition, shared with the import service, so the admin form and the staged
+#: import agree on what a valid course is.
+COURSES = catalog_import.COURSES
 
 #: What a system ingredient's quantities measure, spelled as the enum stores it.
 DIMENSION = Literal["mass", "volume", "piece"]
@@ -482,7 +484,7 @@ def create_system_tag(request: Request, payload: TagCreate, db: Db) -> SystemTag
 def update_system_tag(request: Request, tag_id: int, payload: TagUpdate, db: Db) -> SystemTag:
     """Rename a tag, keeping every recipe that carries it."""
     try:
-        tag = catalog_import.rename_system_tag(db, tag_id, **payload.model_dump(exclude_unset=True))
+        tag = catalog_import.update_system_tag(db, tag_id, **payload.model_dump(exclude_unset=True))
     except catalog_import.VocabularyNotFound:
         raise HTTPException(status_code=404, detail="Not found")
     except ValueError as exc:

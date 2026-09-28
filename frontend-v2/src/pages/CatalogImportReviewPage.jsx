@@ -6,10 +6,12 @@ import { Card } from '../components/Card'
 import { Input } from '../components/Input'
 import { IngredientDropdown } from '../components/NewRecipeModal'
 import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
+import { CatalogNoticeText } from '../components/catalog/CatalogNoticeBar'
 import SystemIngredientForm from '../components/catalog/SystemIngredientForm'
 import { mutedTextStyle, sectionHeadingStyle } from '../components/catalog/textStyles'
 import { apiErrorText, catalogApi } from '../api/catalogApi'
 import { recipesApi } from '../api/recipesApi'
+import { isImportItemOpen } from '../constants/catalog'
 
 const COURSES = ['main', 'first-course', 'side', 'dessert']
 
@@ -22,9 +24,14 @@ const EMPTY_LINE = { name: '', quantity: null, unit: 'g', ingredient_id: null }
 // A quantity field's text -> what the draft stores; a blank is "not given".
 const asQuantity = (text) => (String(text).trim() === '' ? null : Number(text))
 
-// The item states that still want a human -- the same pair the server derives a
-// batch's life from (`catalog_import.OPEN_STATES`).
-const openItems = (items) => (items || []).filter((row) => row.state === 'pending' || row.state === 'invalid')
+const openItems = (items) => (items || []).filter(isImportItemOpen)
+
+/** The next open item after `fromId` in the batch's stable order, or null. */
+const nextOpen = (rows, fromId) => {
+  const remaining = openItems(rows)
+  const at = remaining.findIndex((row) => row.id === fromId)
+  return remaining[at + 1] || remaining.find((row) => row.id !== fromId) || null
+}
 
 /** One ingredient line as a sentence: "4 piece Carrot". */
 const lineText = (line) => [line.quantity, line.unit, line.name].filter(Boolean).join(' ')
@@ -192,13 +199,6 @@ export default function CatalogImportReviewPage() {
   const open = openItems(items)
   const position = open.findIndex((row) => row.id === currentId)
 
-  /** The next open item after `fromId` in the batch's stable order, or null. */
-  const nextOpen = (rows, fromId) => {
-    const remaining = openItems(rows)
-    const at = remaining.findIndex((row) => row.id === fromId)
-    return remaining[at + 1] || remaining.find((row) => row.id !== fromId) || null
-  }
-
   const goTo = (row) => {
     if (row) setCurrentId(row.id)
     else navigate('/discover/import', { replace: true })
@@ -228,6 +228,7 @@ export default function CatalogImportReviewPage() {
     }
   }
 
+  const next = nextOpen(items, item.id)
   const problems = item.problems || []
   // The server refuses a commit that still has an unresolved name (400 listing
   // every one at once); saying so here means never sending it.
@@ -495,19 +496,7 @@ export default function CatalogImportReviewPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {notice && (
-          <p
-            role={notice.kind}
-            className="min-w-0 flex-1"
-            style={{
-              margin: 0,
-              fontSize: 'var(--text-sm)',
-              color: notice.kind === 'alert' ? 'var(--c-neg)' : 'var(--text-strong)',
-            }}
-          >
-            {notice.text}
-          </p>
-        )}
+        <CatalogNoticeText notice={notice} />
         {blocked && (
           <p role="status" className="w-full" style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>
             {blocked}
@@ -540,7 +529,7 @@ export default function CatalogImportReviewPage() {
         >
           Commit as draft
         </Button>
-        <Button variant="ghost" disabled={busy || !nextOpen(items, item.id)} onClick={() => goTo(nextOpen(items, item.id))}>
+        <Button variant="ghost" disabled={busy || !next} onClick={() => goTo(next)}>
           Next
         </Button>
       </div>

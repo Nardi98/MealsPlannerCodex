@@ -79,7 +79,13 @@ export function recipeWriteProblem(form) {
  * An API error as text a person can read. `client.request` only lifts a
  * string `detail` into the message; FastAPI's 422 carries an array of
  * `{loc, msg}` instead, which would otherwise surface as raw JSON.
+ *
+ * `asSentence` sits beside it: every catalog screen shows these reasons as a
+ * sentence, and one definition is what keeps the punctuation the same on all
+ * of them.
  */
+export const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`;
+
 export function apiErrorText(err) {
   const detail = err?.data?.detail;
   if (!Array.isArray(detail)) return err.message;

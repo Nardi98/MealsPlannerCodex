@@ -5,13 +5,10 @@ import CatalogAdminToolbar from '../components/catalog/CatalogAdminToolbar'
 import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle } from '../components/catalog/textStyles'
-import { apiErrorText, catalogApi, recipeWriteProblem, toRecipeForm } from '../api/catalogApi'
+import { apiErrorText, asSentence, catalogApi, recipeWriteProblem, toRecipeForm } from '../api/catalogApi'
 import { CATALOG_SORT_OPTIONS } from '../constants/catalog'
 import { useDebounced } from '../hooks/useDebounced'
 import { downloadJson } from '../utils/download'
-
-// Ends a reason with exactly one full stop, whether or not it came with one.
-const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`
 
 /**
  * The library admin's view of Discover: curate the catalog, don't shop in it.

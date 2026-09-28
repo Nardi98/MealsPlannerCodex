@@ -8,7 +8,8 @@ import ConfirmModal from '../components/ConfirmModal'
 import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle } from '../components/catalog/textStyles'
-import { apiErrorText, catalogApi } from '../api/catalogApi'
+import { apiErrorText, asSentence, catalogApi } from '../api/catalogApi'
+import { isImportItemOpen } from '../constants/catalog'
 
 // An item's state → how the overview labels it. `pending` reads as "to review"
 // rather than "pending": the label names what the admin has to do about it.
@@ -18,9 +19,6 @@ const STATE = {
   skipped: { label: 'Skipped', tone: 'caramel' },
   committed: { label: 'Committed', tone: 'forest' },
 }
-
-// The two states that still want the admin's attention, and so a way in.
-const OPEN_STATES = ['pending', 'invalid']
 
 const plural = (count, noun) => `${count} ${noun}${count === 1 ? '' : 's'}`
 
@@ -109,7 +107,9 @@ export default function CatalogImportPage() {
       setStaged(null)
       setNotice({ kind: 'status', text: `Staged ${plural(created.items.length, 'recipe')} from “${created.filename}”.` })
     } catch (err) {
-      setNotice({ kind: 'alert', text: `Couldn't upload “${staged.filename}”: ${apiErrorText(err)}` })
+      console.error("Couldn't upload the import", err)
+      const reason = asSentence(apiErrorText(err))
+      setNotice({ kind: 'alert', text: `Couldn't upload “${staged.filename}”: ${reason}` })
     } finally {
       setBusy(false)
     }
@@ -123,7 +123,9 @@ export default function CatalogImportPage() {
       setBatch(null)
       setNotice({ kind: 'status', text: `Discarded “${batch.filename}”. Nothing was added to the library.` })
     } catch (err) {
-      setNotice({ kind: 'alert', text: `Couldn't discard “${batch.filename}”: ${apiErrorText(err)}` })
+      console.error("Couldn't discard the import", err)
+      const reason = asSentence(apiErrorText(err))
+      setNotice({ kind: 'alert', text: `Couldn't discard “${batch.filename}”: ${reason}` })
     } finally {
       setBusy(false)
     }
@@ -204,7 +206,7 @@ function UploadCard({ staged, busy, onChoose, onUpload }) {
 function BatchOverview({ batch, busy, onAbandon }) {
   const headingId = React.useId()
   const items = batch.items || []
-  const left = items.filter((it) => OPEN_STATES.includes(it.state)).length
+  const left = items.filter(isImportItemOpen).length
   const reviewed = items.length - left
 
   return (
@@ -255,7 +257,7 @@ function BatchOverview({ batch, busy, onAbandon }) {
                 </div>
                 {item.duplicate_recipe_id != null && <Badge tone="gold">Duplicate</Badge>}
                 <Badge tone={state.tone}>{state.label}</Badge>
-                {OPEN_STATES.includes(item.state) && (
+                {isImportItemOpen(item) && (
                   <Link
                     to={`/discover/import/${batch.id}`}
                     className="inline-flex min-h-11 items-center justify-center border px-3 py-2 text-sm shadow-sm hover:opacity-95 font-[family:var(--font-display)]"

@@ -838,9 +838,13 @@ class MealSide(Base):
     )
 
 
-#: The states an import item passes through. ``pending`` and ``invalid`` are the
-#: unfinished ones -- a batch survives exactly as long as one of them remains.
-IMPORT_ITEM_STATES = ("pending", "invalid", "skipped", "committed")
+#: The states an import item passes through, open ones first. An item in an open
+#: state still needs a human -- a batch survives exactly as long as one of them
+#: remains -- so the split is named here and every other module derives from it
+#: rather than re-spelling the literals.
+IMPORT_ITEM_OPEN_STATES = ("pending", "invalid")
+IMPORT_ITEM_CLOSED_STATES = ("skipped", "committed")
+IMPORT_ITEM_STATES = (*IMPORT_ITEM_OPEN_STATES, *IMPORT_ITEM_CLOSED_STATES)
 
 
 class CatalogImportBatch(Base):
@@ -914,7 +918,9 @@ class CatalogImportItem(Base):
         # Named, like every other CHECK here, so autogenerate can match the
         # reflected constraint on later revisions (MIG-2).
         CheckConstraint(
-            "state IN ('pending', 'invalid', 'skipped', 'committed')",
+            "state IN ({})".format(
+                ", ".join(f"'{state}'" for state in IMPORT_ITEM_STATES)
+            ),
             name="ck_catalog_import_item_state",
         ),
         UniqueConstraint(
