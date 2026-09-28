@@ -148,7 +148,9 @@ def _title(item: models.CatalogImportItem) -> Optional[str]:
     return title if isinstance(title, str) else None
 
 
-def _problems(db: Session, item: models.CatalogImportItem) -> List[str]:
+def _problems(
+    db: Session, item: models.CatalogImportItem, system: Optional[models.User] = None
+) -> List[str]:
     """What still stands between this item and a recipe.
 
     Only asked of an item still under review: a committed or skipped one is
@@ -156,33 +158,38 @@ def _problems(db: Session, item: models.CatalogImportItem) -> List[str]:
     """
     if item.state not in catalog_import.OPEN_STATES:
         return []
-    return catalog_import.item_problems(db, item)
+    return catalog_import.item_problems(db, item, system)
 
 
-def _summary(db: Session, item: models.CatalogImportItem) -> ItemSummary:
+def _summary(
+    db: Session, item: models.CatalogImportItem, system: Optional[models.User] = None
+) -> ItemSummary:
     return ItemSummary(
         id=item.id,
         position=item.position,
         title=_title(item),
         state=item.state,
         error=item.error,
-        problems=_problems(db, item),
+        problems=_problems(db, item, system),
         duplicate_recipe_id=item.duplicate_recipe_id,
         committed_recipe_id=item.committed_recipe_id,
     )
 
 
 def _batch_body(db: Session, batch: models.CatalogImportBatch) -> BatchDetail:
-    counts = {state: 0 for state in ("pending", "invalid", "skipped", "committed")}
+    counts = {state: 0 for state in models.IMPORT_ITEM_STATES}
     for item in batch.items:
         counts[item.state] = counts.get(item.state, 0) + 1
+    # Resolved once for the whole batch: every open item asks the same question
+    # of the same account, and the router is already inside one transaction.
+    system = catalog.system_user(db)
     return BatchDetail(
         id=batch.id,
         filename=batch.filename,
         created_at=batch.created_at,
         created_by_user_id=batch.created_by_user_id,
         counts=counts,
-        items=[_summary(db, item) for item in batch.items],
+        items=[_summary(db, item, system) for item in batch.items],
     )
 
 
@@ -244,8 +251,11 @@ def _outcome(db: Session, item: models.CatalogImportItem) -> ItemOutcome:
     The body is built *before* the prune because pruning deletes the item it
     describes.
     """
-    body = ItemOutcome(item=_summary(db, item), batch_deleted=False)
-    body.batch_deleted = catalog_import.prune_if_finished(db, item.batch)
+    summary = _summary(db, item)
+    body = ItemOutcome(
+        item=summary,
+        batch_deleted=catalog_import.prune_if_finished(db, item.batch),
+    )
     db.commit()
     return body
 

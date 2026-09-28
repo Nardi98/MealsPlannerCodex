@@ -52,6 +52,11 @@ const fieldsOf = (ingredient) => ({
  *    impossible to express.
  *  - `onCancel`: omitted when there is nowhere to go back to, and then no
  *    Cancel button is rendered.
+ *
+ * The fields are seeded from `ingredient` once, so **callers must key this
+ * component by the row's identity** (both do) to switch it to another row.
+ * That is the whole reset mechanism: an effect watching the row as well would
+ * be a second one that can only disagree with the first.
  */
 export default function SystemIngredientForm({
   ingredient = null,
@@ -65,16 +70,6 @@ export default function SystemIngredientForm({
   const id = React.useId()
   const [fields, setFields] = React.useState(() => fieldsOf(ingredient))
   const [problem, setProblem] = React.useState(null)
-
-  // Editing a different row reuses this component; the fields follow it.
-  const rowId = ingredient?.id ?? null
-  React.useEffect(() => {
-    setFields(fieldsOf(ingredient))
-    setProblem(null)
-    // The row's identity is what resets the form; re-running on every render of
-    // a new object literal would wipe what is being typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowId])
 
   const set = (key) => (value) => setFields((current) => ({ ...current, [key]: value }))
   const onText = (key) => (event) => set(key)(event.target.value)

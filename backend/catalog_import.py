@@ -56,7 +56,7 @@ __all__ = [
     "delete_system_ingredient",
     "ingredient_usage",
     "create_system_tag",
-    "rename_system_tag",
+    "update_system_tag",
     "delete_system_tag",
     "tag_usage",
 ]
@@ -65,8 +65,9 @@ __all__ = [
 #: sides. The same tuple the admin recipe form validates against.
 COURSES = (*models.MAIN_COURSES, models.SIDE_COURSE)
 
-#: The units a stored quantity may carry: one per dimension.
-UNITS = ("g", "ml", "piece")
+#: The units a stored quantity may carry: one per dimension. Derived from the
+#: storage enum so the validator and the column can never disagree.
+UNITS = tuple(unit.value for unit in models.UnitEnum)
 
 #: The fields a draft keeps. An export file is a superset of the pack format --
 #: it carries ``status``, ``published_at`` and ``retired_at`` -- and those are
@@ -84,8 +85,9 @@ ITEM_FIELDS = (
 )
 
 #: The item states that still need a human. A batch lives exactly as long as one
-#: of them remains; a batch's state is never stored, only derived.
-OPEN_STATES = ("pending", "invalid")
+#: of them remains; a batch's state is never stored, only derived. ``models``
+#: owns the vocabulary (it is also the column's CHECK).
+OPEN_STATES = models.IMPORT_ITEM_OPEN_STATES
 
 
 class ImportBatchNotFound(LookupError):
@@ -223,16 +225,20 @@ def _ingredients_by_name(
     return {row.name: row for row in rows}
 
 
-def duplicate_of(session: Session, title: Any) -> int | None:
+def duplicate_of(
+    session: Session, title: Any, system: models.User | None = None
+) -> int | None:
     """The catalogued recipe already carrying ``title``, if there is one.
 
     Computed once at upload and stored, because it drives the side-by-side view
     and a duplicate is flagged rather than skipped: deciding what to do with it
-    is the admin's, not the importer's.
+    is the admin's, not the importer's. ``system`` is the account the caller has
+    already resolved, if it has one -- staging asks this per entry, and looking
+    the account up once per file rather than once per recipe is the difference.
     """
     if not isinstance(title, str):
         return None
-    system = catalog.system_user(session)
+    system = system or catalog.system_user(session)
     return session.scalars(
         select(models.Recipe.id)
         .join(models.Recipe.catalog_entry)
@@ -270,7 +276,7 @@ def stage_upload(
                 state="invalid" if problem else "pending",
                 error=problem,
                 duplicate_recipe_id=(
-                    None if problem else duplicate_of(session, entry.get("title"))
+                    None if problem else duplicate_of(session, entry.get("title"), system)
                 ),
             )
         )
@@ -326,19 +332,25 @@ def update_item(session: Session, item_id: int, draft: Any) -> models.CatalogImp
     return item
 
 
-def item_problems(session: Session, item: models.CatalogImportItem) -> list[str]:
+def item_problems(
+    session: Session, item: models.CatalogImportItem, system: models.User | None = None
+) -> list[str]:
     """Everything standing between ``item`` and a committable recipe.
 
     An item is committable only when it parses, every ingredient line resolves
     onto a system ingredient and every tag already exists -- the strictness
     ``catalog._resolve_names`` will apply anyway, reported here in full rather
     than one exception at a time, so the review page can list the work left.
+
+    ``system`` is the account the caller has already resolved, if it has one: a
+    whole batch is asked this at once, and that is one lookup instead of one per
+    item.
     """
     problem = _entry_problem(item.draft)
     if problem is not None:
         return [problem]
 
-    system = catalog.system_user(session)
+    system = system or catalog.system_user(session)
     problems = []
     lines = item.draft["ingredients"]
     known = _ingredients_by_name(session, system, [line["name"] for line in lines])
@@ -396,10 +408,11 @@ def _for_write(session: Session, item: models.CatalogImportItem) -> dict:
     existing ingredient for a misspelt line imports it correctly without the
     admin having to retype the name.
     """
+    system = catalog.system_user(session)
     data = {field: item.draft.get(field) for field in ITEM_FIELDS}
     data["ingredients"] = [
         {
-            "name": _resolved_name(session, line),
+            "name": _resolved_name(session, system, line),
             "quantity": line["quantity"],
             "unit": line["unit"],
         }
@@ -408,10 +421,9 @@ def _for_write(session: Session, item: models.CatalogImportItem) -> dict:
     return data
 
 
-def _resolved_name(session: Session, line: dict) -> str:
+def _resolved_name(session: Session, system: models.User, line: dict) -> str:
     chosen = line.get("ingredient_id")
     if isinstance(chosen, int):
-        system = catalog.system_user(session)
         ingredient = crud.get_ingredient(session, chosen, system.id)
         if ingredient is not None:
             return ingredient.name
@@ -532,11 +544,17 @@ def update_system_ingredient(
 def ingredient_usage(session: Session, ingredient_id: int) -> int:
     """How many recipes carry this ingredient, whoever owns them.
 
-    Unscoped on purpose (``user_id=None``): the question is whether deleting the
-    row would break a recipe, and a recipe in another account's book breaks just
-    as badly as a system one.
+    Unscoped on purpose: the question is whether deleting the row would break a
+    recipe, and a recipe in another account's book breaks just as badly as a
+    system one. Counted in the database, like :func:`tag_usage`: the link table
+    has one row per (recipe, ingredient) pair, so counting it is the number of
+    recipes without hydrating any of them.
     """
-    return len(crud.get_recipes_by_ingredient(session, ingredient_id, user_id=None))
+    return session.scalar(
+        select(func.count())
+        .select_from(models.RecipeIngredient)
+        .where(models.RecipeIngredient.ingredient_id == ingredient_id)
+    )
 
 
 def delete_system_ingredient(session: Session, ingredient_id: int) -> None:
@@ -577,7 +595,7 @@ def create_system_tag(
     return tag
 
 
-def rename_system_tag(
+def update_system_tag(
     session: Session,
     tag_id: int,
     *,
