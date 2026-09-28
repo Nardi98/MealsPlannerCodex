@@ -48,10 +48,14 @@ test('user mode lists the whole app', () => {
   expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(USER_NAV)
 })
 
-test('admin mode lists Discover alone', () => {
+test('admin mode lists the catalog surfaces and nothing else', () => {
   renderSidebar({ mode: 'admin' })
 
-  expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Discover'])
+  expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+    'Discover',
+    'Ingredients & Tags',
+    'Import',
+  ])
 })
 
 test('a nav item navigates and tells the drawer to close', async () => {
