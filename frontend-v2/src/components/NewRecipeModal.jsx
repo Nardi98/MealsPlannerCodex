@@ -11,7 +11,9 @@ import UnitField from './UnitField'
 import { toBaseUnit } from '../utils/units'
 import { useUnitSystem } from '../hooks/useUnitSystem'
 
-function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
+// Exported for the catalog import review page, which resolves an unknown
+// ingredient name with the same searchable picker this form uses.
+export function IngredientDropdown({ value, options, onChange, onSelect, onAddNew }) {
   const [open, setOpen] = React.useState(false)
   const filtered = options.filter((o) =>
     o.name.toLowerCase().includes(value.toLowerCase())
