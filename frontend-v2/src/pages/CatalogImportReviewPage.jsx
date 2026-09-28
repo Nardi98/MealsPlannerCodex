@@ -12,8 +12,7 @@ import { mutedTextStyle, sectionHeadingStyle } from '../components/catalog/textS
 import { apiErrorText, catalogApi } from '../api/catalogApi'
 import { recipesApi } from '../api/recipesApi'
 import { isImportItemOpen } from '../constants/catalog'
-
-const COURSES = ['main', 'first-course', 'side', 'dessert']
+import { COURSES } from '../constants/recipeImport'
 
 // The units a stored quantity may carry -- one per dimension, as the server
 // spells them (`catalog_import.UNITS`).

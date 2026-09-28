@@ -262,6 +262,19 @@ class SystemTag(BaseModel):
         return cls(id=tag.id, name=tag.name, penalize_repetition=bool(tag.penalize_repetition))
 
 
+class VocabularyUsage(BaseModel):
+    """How many recipes hold one vocabulary row, in every account.
+
+    The delete confirmation needs this number *before* it asks: the browser can
+    only see the catalog, while the service counts every book, so a count made
+    in the page would happily promise a delete the server then refuses (409).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    count: int
+
+
 class TagCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -459,6 +472,15 @@ def delete_system_ingredient(request: Request, ingredient_id: int, db: Db) -> No
     db.commit()
 
 
+@router.get("/ingredients/{ingredient_id}/usage", response_model=VocabularyUsage)
+def system_ingredient_usage(ingredient_id: int, db: Db) -> VocabularyUsage:
+    """How many recipes hold this ingredient -- the number the 409 would quote."""
+    try:
+        return VocabularyUsage(count=catalog_import.ingredient_usage(db, ingredient_id))
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 @router.get("/tags", response_model=List[SystemTag])
 def list_system_tags(db: Db) -> List[SystemTag]:
     """The system account's tags: the tag names a catalog recipe may use (D3)."""
@@ -504,3 +526,12 @@ def delete_system_tag(request: Request, tag_id: int, db: Db) -> None:
     except catalog_import.VocabularyNotFound:
         raise HTTPException(status_code=404, detail="Not found")
     db.commit()
+
+
+@router.get("/tags/{tag_id}/usage", response_model=VocabularyUsage)
+def system_tag_usage(tag_id: int, db: Db) -> VocabularyUsage:
+    """How many recipes carry this tag -- what the delete would detach it from."""
+    try:
+        return VocabularyUsage(count=catalog_import.tag_usage(db, tag_id))
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")

@@ -549,7 +549,11 @@ def ingredient_usage(session: Session, ingredient_id: int) -> int:
     system one. Counted in the database, like :func:`tag_usage`: the link table
     has one row per (recipe, ingredient) pair, so counting it is the number of
     recipes without hydrating any of them.
+
+    Raises :class:`VocabularyNotFound` for a row the system account does not
+    own, so asking about someone else's pantry is never answered.
     """
+    _system_row(session, models.Ingredient, ingredient_id)
     return session.scalar(
         select(func.count())
         .select_from(models.RecipeIngredient)
@@ -619,7 +623,12 @@ def update_system_tag(
 
 
 def tag_usage(session: Session, tag_id: int) -> int:
-    """How many recipes carry this tag -- the count the confirm dialog shows."""
+    """How many recipes carry this tag -- the count the confirm dialog shows.
+
+    Scoped like :func:`ingredient_usage`: a tag the system account does not own
+    raises :class:`VocabularyNotFound`.
+    """
+    _system_row(session, models.Tag, tag_id)
     link = models.recipe_tag_table.c
     return session.scalar(
         select(func.count()).select_from(models.recipe_tag_table).where(link.tag_id == tag_id)

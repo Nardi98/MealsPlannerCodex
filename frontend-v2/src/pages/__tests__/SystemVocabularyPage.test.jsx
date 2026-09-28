@@ -14,15 +14,16 @@ vi.mock('../../api/catalogApi', async (importOriginal) => ({
   ...(await importOriginal()),
   catalogApi: {
     admin: {
-      list: vi.fn(),
       ingredients: vi.fn(),
       tags: vi.fn(),
       createIngredient: vi.fn(),
       updateIngredient: vi.fn(),
       deleteIngredient: vi.fn(),
+      ingredientUsage: vi.fn(),
       createTag: vi.fn(),
       updateTag: vi.fn(),
       deleteTag: vi.fn(),
+      tagUsage: vi.fn(),
     },
   },
 }))
@@ -55,23 +56,22 @@ const TAGS = [
   { id: 4, name: 'quick', penalize_repetition: false },
 ]
 
-// Two catalog recipes, so "Chestnut" is in use twice and "Kale" not at all.
-const RECIPES = [
-  { id: 1, title: 'Chestnut soup', tags: ['soup'], ingredients: [{ name: 'Chestnut', quantity: 100, unit: 'g' }] },
-  { id: 2, title: 'Chestnut cake', tags: [], ingredients: [{ name: 'chestnut', quantity: 50, unit: 'g' }] },
-]
-
 beforeEach(() => {
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('no network in tests')))
   catalogApi.admin.ingredients.mockResolvedValue(INGREDIENTS)
   catalogApi.admin.tags.mockResolvedValue(TAGS)
-  catalogApi.admin.list.mockResolvedValue(RECIPES)
   catalogApi.admin.createIngredient.mockResolvedValue({ ...INGREDIENTS[0], id: 9, name: 'Leek' })
   catalogApi.admin.updateIngredient.mockResolvedValue(INGREDIENTS[0])
   catalogApi.admin.deleteIngredient.mockResolvedValue(null)
   catalogApi.admin.createTag.mockResolvedValue(TAGS[0])
   catalogApi.admin.updateTag.mockResolvedValue(TAGS[0])
   catalogApi.admin.deleteTag.mockResolvedValue(null)
+  // The server counts every account. Chestnut's two are the catalog ones a
+  // browser could also see; Kale's three are in private books it cannot.
+  catalogApi.admin.ingredientUsage.mockImplementation((id) =>
+    Promise.resolve({ count: id === 7 ? 2 : 3 })
+  )
+  catalogApi.admin.tagUsage.mockImplementation((id) => Promise.resolve({ count: id === 3 ? 1 : 0 }))
 })
 
 afterEach(() => {
@@ -154,6 +154,18 @@ test('deleting an ingredient confirms with how many recipes use it', async () =>
   fireEvent.click(within(dialog).getByRole('button', { name: 'Delete ingredient' }))
 
   await waitFor(() => expect(catalogApi.admin.deleteIngredient).toHaveBeenCalledWith(7))
+})
+
+test('the confirmation reports the server count, not one guessed from the catalog', async () => {
+  // Kale appears in no catalog recipe, so a count made in the browser would
+  // promise "no recipes" and the DELETE would then come back a 409.
+  await renderLoaded()
+
+  fireEvent.click(within(await rowFor(ingredientList(), 'Kale')).getByRole('button', { name: 'Delete' }))
+
+  const dialog = await screen.findByRole('dialog')
+  await waitFor(() => expect(dialog).toHaveTextContent('3 recipes'))
+  expect(catalogApi.admin.ingredientUsage).toHaveBeenCalledWith(8)
 })
 
 test('an in-use ingredient the server refuses reports the reason it gave', async () => {

@@ -47,10 +47,12 @@ CONTRACT_ROUTES = {
     ("POST", "/admin/catalog/ingredients"),
     ("PUT", "/admin/catalog/ingredients/{ingredient_id}"),
     ("DELETE", "/admin/catalog/ingredients/{ingredient_id}"),
+    ("GET", "/admin/catalog/ingredients/{ingredient_id}/usage"),
     ("GET", "/admin/catalog/tags"),
     ("POST", "/admin/catalog/tags"),
     ("PUT", "/admin/catalog/tags/{tag_id}"),
     ("DELETE", "/admin/catalog/tags/{tag_id}"),
+    ("GET", "/admin/catalog/tags/{tag_id}/usage"),
 }
 WRITE_ROUTES = sorted(
     (method, path) for method, path in CONTRACT_ROUTES if method in {"POST", "PUT", "DELETE"}
@@ -684,6 +686,52 @@ def test_the_tags_route_lists_only_the_system_accounts_rows(
     assert {row["id"] for row in rows} == system_ids
     assert {"admin-only", "other-only"}.isdisjoint(row["name"] for row in rows)
     assert "vegan" in {row["name"] for row in rows}
+
+
+def test_ingredient_usage_counts_recipes_in_every_account(
+    admin, db_session, other_user, system_account, make_catalog_recipe
+):
+    """The delete confirmation's number must be the one the 409 would use.
+
+    Counted server-side and unscoped: a recipe in someone else's book blocks
+    the delete just as hard as a catalog one, and the browser cannot see it.
+    """
+    make_catalog_recipe("Catalogued rice", ingredients=(("Rice", 80, "g"),))
+    rice = db_session.scalars(
+        select(models.Ingredient).where(
+            models.Ingredient.user_id == system_account.id, models.Ingredient.name == "Rice"
+        )
+    ).one()
+    mine = crud.create_recipe(db_session, title="Private risotto", user_id=other_user.id)
+    db_session.add(models.RecipeIngredient(recipe_id=mine.id, ingredient_id=rice.id, quantity=1, unit="g"))
+    db_session.flush()
+
+    response = admin.get(f"/admin/catalog/ingredients/{rice.id}/usage")
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 2}
+
+
+def test_tag_usage_counts_the_recipes_carrying_the_tag(
+    admin, db_session, system_account, make_catalog_recipe
+):
+    make_catalog_recipe("Tagged one", tags=("vegan",))
+    vegan = db_session.scalars(
+        select(models.Tag).where(models.Tag.user_id == system_account.id, models.Tag.name == "vegan")
+    ).one()
+
+    response = admin.get(f"/admin/catalog/tags/{vegan.id}/usage")
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 1}
+
+
+def test_usage_of_a_row_the_system_account_does_not_own_is_a_404(admin, db_session, admin_user):
+    mine = crud.get_or_create_ingredient(db_session, None, "Admin-only spice", admin_user.id)
+    db_session.flush()
+
+    assert admin.get(f"/admin/catalog/ingredients/{mine.id}/usage").status_code == 404
+    assert admin.get(f"/admin/catalog/tags/{MISSING_ID}/usage").status_code == 404
 
 
 # --- ADM-9 / ADM-10 and non-admin reach ------------------------------------------
