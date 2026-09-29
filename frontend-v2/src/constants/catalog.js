@@ -10,3 +10,10 @@ export const CATALOG_SORT_OPTIONS = [
   { value: 'popular', label: 'Most added' },
   { value: 'title', label: 'Title' },
 ]
+
+// The staged-import item states that still want a human -- the same pair the
+// server derives a batch's life from (`models.IMPORT_ITEM_OPEN_STATES`). Both
+// import screens ask this question, so they ask it of one definition.
+export const IMPORT_OPEN_STATES = ['pending', 'invalid']
+
+export const isImportItemOpen = (item) => IMPORT_OPEN_STATES.includes(item?.state)

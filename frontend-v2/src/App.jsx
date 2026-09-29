@@ -9,6 +9,9 @@ import { useIsMobile } from './hooks/useIsMobile'
 import RecipesPage from './pages/RecipesPage'
 import DiscoverPage from './pages/DiscoverPage'
 import CatalogAdminPage from './pages/CatalogAdminPage'
+import SystemVocabularyPage from './pages/SystemVocabularyPage'
+import CatalogImportPage from './pages/CatalogImportPage'
+import CatalogImportReviewPage from './pages/CatalogImportReviewPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
@@ -63,6 +66,20 @@ function ReturnToNext({ children }) {
 // differs -- every `/admin/catalog/*` write is still admin-only on the server.
 function DiscoverRoute() {
   return useViewMode().isAdminMode ? <CatalogAdminPage /> : <DiscoverPage />
+}
+
+
+// The catalog surfaces that exist for an admin and for nobody else: the system
+// vocabulary editor and the batch importer. A plain user has no version of
+// these pages to fall back to, so instead of a second component they are sent
+// to `/discover`, which every account can read.
+//
+// This is the same presentation-only rule the pill follows -- it keeps someone
+// off a screen that was not built for them, and it is *not* the protection.
+// Every write behind these pages is `/admin/catalog/*`, which the server guards
+// with `require_admin` regardless of what the client chose to render.
+function AdminOnlyRoute({ children }) {
+  return useViewMode().isAdminMode ? children : <Navigate to="/discover" replace />
 }
 
 
@@ -169,6 +186,19 @@ function Shell() {
               <Route path="/" element={<RecipesPage />} />
               <Route path="/recipes" element={<RecipesPage />} />
               <Route path="/discover" element={<DiscoverRoute />} />
+              <Route
+                path="/discover/vocabulary"
+                element={<AdminOnlyRoute><SystemVocabularyPage /></AdminOnlyRoute>}
+              />
+              <Route
+                path="/discover/import"
+                element={<AdminOnlyRoute><CatalogImportPage /></AdminOnlyRoute>}
+              />
+              {/* Reached by link from the overview above, not from the sidebar. */}
+              <Route
+                path="/discover/import/:batchId"
+                element={<AdminOnlyRoute><CatalogImportReviewPage /></AdminOnlyRoute>}
+              />
               <Route path="/meal-plan" element={<MealPlanPage />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />

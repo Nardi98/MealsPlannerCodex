@@ -28,6 +28,11 @@ ADMIN_ROW_KEYS = {
     "ingredients", "adoption_count", "procedure", "status", "published_at", "retired_at",
 }
 INGREDIENT_KEYS = {"name", "quantity", "unit"}
+INGREDIENT_ROW_KEYS = {
+    "id", "name", "season_months", "categories",
+    "grams_per_ml", "grams_per_piece", "preferred_dimension",
+}
+TAG_ROW_KEYS = {"id", "name", "penalize_repetition"}
 MISSING_ID = 10**9
 
 #: The Contracts' admin route table, exactly (plan "Admin HTTP").
@@ -39,10 +44,18 @@ CONTRACT_ROUTES = {
     ("POST", "/admin/catalog/recipes/{recipe_id}/retire"),
     ("GET", "/admin/catalog/export"),
     ("GET", "/admin/catalog/ingredients"),
+    ("POST", "/admin/catalog/ingredients"),
+    ("PUT", "/admin/catalog/ingredients/{ingredient_id}"),
+    ("DELETE", "/admin/catalog/ingredients/{ingredient_id}"),
+    ("GET", "/admin/catalog/ingredients/{ingredient_id}/usage"),
     ("GET", "/admin/catalog/tags"),
+    ("POST", "/admin/catalog/tags"),
+    ("PUT", "/admin/catalog/tags/{tag_id}"),
+    ("DELETE", "/admin/catalog/tags/{tag_id}"),
+    ("GET", "/admin/catalog/tags/{tag_id}/usage"),
 }
 WRITE_ROUTES = sorted(
-    (method, path) for method, path in CONTRACT_ROUTES if method in {"POST", "PUT"}
+    (method, path) for method, path in CONTRACT_ROUTES if method in {"POST", "PUT", "DELETE"}
 )
 
 
@@ -85,7 +98,22 @@ def recipe_body(**overrides):
 
 
 def _fill(path, recipe_id):
-    return path.replace("{recipe_id}", str(recipe_id))
+    """Fill whichever id placeholder the path carries with ``recipe_id``.
+
+    The vocabulary routes are keyed by ``ingredient_id``/``tag_id``; the sweeps
+    below only need *an* id, and every one of them is checked before the path
+    parameter is ever looked up.
+    """
+    for placeholder in ("{recipe_id}", "{ingredient_id}", "{tag_id}"):
+        path = path.replace(placeholder, str(recipe_id))
+    return path
+
+
+def _body_for(path, name="Sweep name"):
+    """A body the route would accept, so validation is never what answers."""
+    if "/ingredients" in path or "/tags" in path:
+        return {"name": name}
+    return recipe_body()
 
 
 def _call(client, method, path, recipe_id):
@@ -93,7 +121,7 @@ def _call(client, method, path, recipe_id):
     return client.request(
         method,
         _fill(path, recipe_id),
-        json=recipe_body() if method in {"POST", "PUT"} else None,
+        json=_body_for(path) if method in {"POST", "PUT"} else None,
     )
 
 
@@ -114,11 +142,16 @@ def test_the_router_serves_exactly_the_contract_routes():
     assert set(ROUTER_TABLE) == CONTRACT_ROUTES
 
 
-def test_no_delete_route_exists_under_admin_catalog():
-    """API-14 / RET-5: over every method, on the router and on the mounted app."""
-    assert all(method != "DELETE" for method, _ in ROUTER_TABLE)
+def test_no_delete_route_exists_for_catalog_recipes():
+    """API-14 / RET-5: retiring is the only removal a *recipe* has.
+
+    The vocabulary rows are a different thing: a name nothing references is
+    deletable, which is the whole point of the page (its DELETEs are guarded by
+    a usage check in the service, not by the absence of a route).
+    """
+    assert all(method != "DELETE" for method, path in ROUTER_TABLE if "/recipes" in path)
     for route in app.routes:
-        if getattr(route, "path", "").startswith("/admin/catalog"):
+        if getattr(route, "path", "").startswith("/admin/catalog/recipes"):
             assert "DELETE" not in (getattr(route, "methods", None) or set())
 
 
@@ -622,7 +655,7 @@ def test_the_ingredients_route_lists_only_the_system_accounts_rows(
     assert response.status_code == 200
     rows = response.json()
     assert all(
-        set(row) == {"id", "name", "season_months", "grams_per_ml", "grams_per_piece", "preferred_dimension"}
+        set(row) == INGREDIENT_ROW_KEYS
         for row in rows
     )
     names = {row["name"] for row in rows}
@@ -648,11 +681,57 @@ def test_the_tags_route_lists_only_the_system_accounts_rows(
 
     assert response.status_code == 200
     rows = response.json()
-    assert all(set(row) == {"id", "name"} for row in rows)
+    assert all(set(row) == TAG_ROW_KEYS for row in rows)
     system_ids = set(db_session.scalars(select(models.Tag.id).where(models.Tag.user_id == system_account.id)))
     assert {row["id"] for row in rows} == system_ids
     assert {"admin-only", "other-only"}.isdisjoint(row["name"] for row in rows)
     assert "vegan" in {row["name"] for row in rows}
+
+
+def test_ingredient_usage_counts_recipes_in_every_account(
+    admin, db_session, other_user, system_account, make_catalog_recipe
+):
+    """The delete confirmation's number must be the one the 409 would use.
+
+    Counted server-side and unscoped: a recipe in someone else's book blocks
+    the delete just as hard as a catalog one, and the browser cannot see it.
+    """
+    make_catalog_recipe("Catalogued rice", ingredients=(("Rice", 80, "g"),))
+    rice = db_session.scalars(
+        select(models.Ingredient).where(
+            models.Ingredient.user_id == system_account.id, models.Ingredient.name == "Rice"
+        )
+    ).one()
+    mine = crud.create_recipe(db_session, title="Private risotto", user_id=other_user.id)
+    db_session.add(models.RecipeIngredient(recipe_id=mine.id, ingredient_id=rice.id, quantity=1, unit="g"))
+    db_session.flush()
+
+    response = admin.get(f"/admin/catalog/ingredients/{rice.id}/usage")
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 2}
+
+
+def test_tag_usage_counts_the_recipes_carrying_the_tag(
+    admin, db_session, system_account, make_catalog_recipe
+):
+    make_catalog_recipe("Tagged one", tags=("vegan",))
+    vegan = db_session.scalars(
+        select(models.Tag).where(models.Tag.user_id == system_account.id, models.Tag.name == "vegan")
+    ).one()
+
+    response = admin.get(f"/admin/catalog/tags/{vegan.id}/usage")
+
+    assert response.status_code == 200
+    assert response.json() == {"count": 1}
+
+
+def test_usage_of_a_row_the_system_account_does_not_own_is_a_404(admin, db_session, admin_user):
+    mine = crud.get_or_create_ingredient(db_session, None, "Admin-only spice", admin_user.id)
+    db_session.flush()
+
+    assert admin.get(f"/admin/catalog/ingredients/{mine.id}/usage").status_code == 404
+    assert admin.get(f"/admin/catalog/tags/{MISSING_ID}/usage").status_code == 404
 
 
 # --- ADM-9 / ADM-10 and non-admin reach ------------------------------------------
@@ -699,7 +778,9 @@ def test_admin_write_routes_are_rate_limited(db_session, admin_user, system_acco
     client = client_as(db_session, admin_user)
     # Cheap calls: a missing id (404) or an unknown ingredient (400) still spends
     # the budget, and writes nothing.
-    body = recipe_body(ingredients=[{"name": "Unobtainium", "quantity": 1, "unit": "g"}])
+    body = _body_for(path, name="Rate limit probe")
+    if "/recipes" in path:
+        body = recipe_body(ingredients=[{"name": "Unobtainium", "quantity": 1, "unit": "g"}])
     try:
         statuses = []
         for _ in range(500):
@@ -738,3 +819,211 @@ def test_a_missing_system_account_is_a_named_500(admin, db_session, make_catalog
         record.levelno == logging.ERROR and "no is_system account" in record.getMessage()
         for record in caplog.records
     )
+
+
+# --- Vocabulary CRUD -----------------------------------------------------------
+
+
+def _system_ingredient(db_session, system_account, name):
+    return db_session.scalars(
+        select(models.Ingredient).where(
+            models.Ingredient.user_id == system_account.id, models.Ingredient.name == name
+        )
+    ).first()
+
+
+def test_post_ingredients_adds_a_system_owned_name_with_its_physics(admin, db_session, system_account):
+    response = admin.post(
+        "/admin/catalog/ingredients",
+        json={
+            "name": "Chestnut",
+            "season_months": [10, 11],
+            "categories": ["produce"],
+            "grams_per_piece": 8.5,
+            "preferred_dimension": "piece",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    row = response.json()
+    assert set(row) == INGREDIENT_ROW_KEYS
+    assert row["name"] == "Chestnut"
+    assert row["season_months"] == [10, 11]
+    assert row["categories"] == ["produce"]
+    assert row["grams_per_piece"] == 8.5
+    assert row["grams_per_ml"] is None
+    assert row["preferred_dimension"] == "piece"
+    assert db_session.get(models.Ingredient, row["id"]).user_id == system_account.id
+
+
+def test_post_ingredients_refuses_a_name_the_vocabulary_already_has(admin, system_account):
+    assert admin.post("/admin/catalog/ingredients", json={"name": "Chestnut"}).status_code == 201
+
+    response = admin.post("/admin/catalog/ingredients", json={"name": "Chestnut"})
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+def test_post_ingredients_refuses_a_body_carrying_ownership(admin, system_account):
+    response = admin.post("/admin/catalog/ingredients", json={"name": "Chestnut", "user_id": 1})
+
+    assert response.status_code == 422
+
+
+def test_put_ingredients_leaves_a_field_the_client_did_not_send_alone(admin, system_account):
+    created = admin.post(
+        "/admin/catalog/ingredients",
+        json={"name": "Chestnut", "season_months": [10, 11], "grams_per_piece": 8.5},
+    ).json()
+
+    response = admin.put(f"/admin/catalog/ingredients/{created['id']}", json={"name": "Sweet chestnut"})
+
+    assert response.status_code == 200, response.text
+    row = response.json()
+    assert row["name"] == "Sweet chestnut"
+    assert row["season_months"] == [10, 11]
+    assert row["grams_per_piece"] == 8.5
+
+
+def test_put_ingredients_clears_a_field_sent_as_null(admin, db_session, system_account):
+    """The page exists so a wrong ``grams_per_piece`` can be *removed* without psql."""
+    created = admin.post(
+        "/admin/catalog/ingredients",
+        json={"name": "Chestnut", "season_months": [10, 11], "grams_per_piece": 8.5},
+    ).json()
+
+    response = admin.put(
+        f"/admin/catalog/ingredients/{created['id']}",
+        json={"grams_per_piece": None, "season_months": []},
+    )
+
+    assert response.status_code == 200, response.text
+    row = response.json()
+    assert row["grams_per_piece"] is None
+    assert row["season_months"] == []
+    assert row["name"] == "Chestnut"
+    assert db_session.get(models.Ingredient, created["id"]).grams_per_piece is None
+
+
+def test_put_ingredients_is_404_for_a_row_the_system_account_does_not_own(
+    admin, db_session, admin_user, system_account
+):
+    mine = crud.get_or_create_ingredient(db_session, None, "Grandma's spice", admin_user.id)
+    db_session.flush()
+
+    assert admin.put(f"/admin/catalog/ingredients/{mine.id}", json={"name": "Renamed"}).status_code == 404
+    assert admin.put(f"/admin/catalog/ingredients/{MISSING_ID}", json={"name": "Renamed"}).status_code == 404
+
+
+def test_delete_ingredients_removes_an_unused_name(admin, db_session, system_account):
+    created = admin.post("/admin/catalog/ingredients", json={"name": "Chestnut"}).json()
+
+    response = admin.delete(f"/admin/catalog/ingredients/{created['id']}")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert db_session.get(models.Ingredient, created["id"]) is None
+
+
+def test_delete_ingredients_is_409_with_the_usage_count_while_a_recipe_uses_it(
+    admin, db_session, system_account, make_catalog_recipe
+):
+    make_catalog_recipe("Chestnut soup", ingredients=(("Chestnut", 200, "g"),))
+    make_catalog_recipe("Chestnut cake", ingredients=(("Chestnut", 100, "g"),))
+    db_session.flush()
+    ingredient = _system_ingredient(db_session, system_account, "Chestnut")
+
+    response = admin.delete(f"/admin/catalog/ingredients/{ingredient.id}")
+
+    assert response.status_code == 409
+    assert "2" in response.json()["detail"]
+    assert db_session.get(models.Ingredient, ingredient.id) is not None
+
+
+def test_delete_ingredients_is_404_for_a_row_the_system_account_does_not_own(
+    admin, db_session, admin_user, system_account
+):
+    mine = crud.get_or_create_ingredient(db_session, None, "Grandma's spice", admin_user.id)
+    db_session.flush()
+
+    assert admin.delete(f"/admin/catalog/ingredients/{mine.id}").status_code == 404
+    assert admin.delete(f"/admin/catalog/ingredients/{MISSING_ID}").status_code == 404
+    assert db_session.get(models.Ingredient, mine.id) is not None
+
+
+def test_post_tags_adds_a_system_tag(admin, db_session, system_account):
+    response = admin.post("/admin/catalog/tags", json={"name": "autumn", "penalize_repetition": True})
+
+    assert response.status_code == 201, response.text
+    row = response.json()
+    assert set(row) == TAG_ROW_KEYS
+    assert row["name"] == "autumn"
+    assert row["penalize_repetition"] is True
+    stored = db_session.get(models.Tag, row["id"])
+    assert stored.user_id == system_account.id and stored.is_system is True
+
+
+def test_post_tags_refuses_a_name_the_vocabulary_already_has(admin, system_account):
+    assert admin.post("/admin/catalog/tags", json={"name": "autumn"}).status_code == 201
+
+    response = admin.post("/admin/catalog/tags", json={"name": "autumn"})
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+def test_put_tags_renames_without_detaching_its_recipes(admin, db_session, system_account, make_catalog_recipe):
+    recipe = make_catalog_recipe("Tagged", tags=("pasta",))
+    db_session.flush()
+    tag = next(tag for tag in recipe.tags if tag.name == "pasta")
+
+    response = admin.put(f"/admin/catalog/tags/{tag.id}", json={"name": "pasta-dish"})
+
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "pasta-dish"
+    db_session.refresh(recipe)
+    assert [t.name for t in recipe.tags] == ["pasta-dish"]
+
+
+def test_put_tags_leaves_penalize_repetition_alone_when_it_is_not_sent(admin, system_account):
+    created = admin.post("/admin/catalog/tags", json={"name": "autumn", "penalize_repetition": True}).json()
+
+    response = admin.put(f"/admin/catalog/tags/{created['id']}", json={"name": "fall"})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": created["id"], "name": "fall", "penalize_repetition": True}
+
+
+def test_put_tags_is_404_for_a_row_the_system_account_does_not_own(admin, db_session, admin_user, system_account):
+    mine = crud.get_or_create_tag(db_session, "admin-only", admin_user.id)
+    db_session.flush()
+
+    assert admin.put(f"/admin/catalog/tags/{mine.id}", json={"name": "renamed"}).status_code == 404
+    assert admin.put(f"/admin/catalog/tags/{MISSING_ID}", json={"name": "renamed"}).status_code == 404
+
+
+def test_delete_tags_is_allowed_while_in_use_and_detaches_it(
+    admin, db_session, system_account, make_catalog_recipe
+):
+    recipe = make_catalog_recipe("Tagged", tags=("pasta",))
+    db_session.flush()
+    tag = next(tag for tag in recipe.tags if tag.name == "pasta")
+
+    response = admin.delete(f"/admin/catalog/tags/{tag.id}")
+
+    assert response.status_code == 204
+    assert db_session.get(models.Tag, tag.id) is None
+    db_session.refresh(recipe)
+    assert recipe.tags == []
+
+
+def test_delete_tags_is_404_for_a_row_the_system_account_does_not_own(
+    admin, db_session, admin_user, system_account
+):
+    mine = crud.get_or_create_tag(db_session, "admin-only", admin_user.id)
+    db_session.flush()
+
+    assert admin.delete(f"/admin/catalog/tags/{mine.id}").status_code == 404
+    assert admin.delete(f"/admin/catalog/tags/{MISSING_ID}").status_code == 404
+    assert db_session.get(models.Tag, mine.id) is not None

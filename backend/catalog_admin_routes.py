@@ -5,8 +5,17 @@ and back (CAT-1), and builds every body field by field from an explicit
 allowlist (API-7/8). Every route sits behind :func:`auth_users.require_admin`
 at the router level (ADM-4), so a non-admin gets one fixed 403 before any
 route code runs, identical whatever the path names (PRV-5), and an anonymous
-caller gets 401. Nothing here writes ``is_admin`` (ADM-2), and there is no
-DELETE route: retiring is the only removal (API-14, RET-5).
+caller gets 401. Nothing here writes ``is_admin`` (ADM-2), and no *recipe* has
+a DELETE route: retiring is the only removal (API-14, RET-5).
+
+The system vocabulary is the exception, and deliberately so: an ingredient or
+tag the system account owns is a name, not a curated artefact, and the admin
+page exists precisely so one can be added, corrected or dropped without psql.
+Its writes delegate to :mod:`catalog_import`'s vocabulary functions -- the
+router translates HTTP and nothing else. Deleting an ingredient any recipe
+still references is refused with a 409 naming the count, since the association
+cascades and forcing it would quietly strip lines from finished recipes; a tag
+may go while in use, costing a label and nothing more.
 
 Drafts: ``POST /recipes`` with ``"publish": false`` creates a system-owned
 recipe with no catalog entry. It is not listed by ``GET /recipes``, which lists
@@ -30,6 +39,7 @@ from sqlalchemy.orm import Session
 
 import auth_users
 import catalog
+import catalog_import
 import models
 import ratelimit
 from database import get_db
@@ -39,8 +49,13 @@ logger = logging.getLogger(__name__)
 Db = Annotated[Session, Depends(get_db)]
 
 #: The courses the app authors recipes in: the planner's main-slot courses and
-#: sides (``models``), which is also the frontend's recipe-form vocabulary.
-COURSES = (*models.MAIN_COURSES, models.SIDE_COURSE)
+#: sides (``models``), which is also the frontend's recipe-form vocabulary. One
+#: definition, shared with the import service, so the admin form and the staged
+#: import agree on what a valid course is.
+COURSES = catalog_import.COURSES
+
+#: What a system ingredient's quantities measure, spelled as the enum stores it.
+DIMENSION = Literal["mass", "volume", "piece"]
 
 
 def _require_catalog(db: Db) -> None:
@@ -183,9 +198,56 @@ class SystemIngredient(BaseModel):
     id: int
     name: str
     season_months: List[int]
+    categories: List[str]
     grams_per_ml: Optional[float] = None
     grams_per_piece: Optional[float] = None
     preferred_dimension: Optional[str] = None
+
+    @classmethod
+    def build(cls, ingredient: models.Ingredient) -> "SystemIngredient":
+        return cls(
+            id=ingredient.id,
+            name=ingredient.name,
+            season_months=ingredient.season_months or [],
+            categories=ingredient.categories or [],
+            grams_per_ml=ingredient.grams_per_ml,
+            grams_per_piece=ingredient.grams_per_piece,
+            preferred_dimension=(
+                ingredient.preferred_dimension.value if ingredient.preferred_dimension is not None else None
+            ),
+        )
+
+
+class IngredientCreate(BaseModel):
+    """A new system ingredient. Absent optional fields mean "no value recorded"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    season_months: List[int] = Field(default_factory=list)
+    categories: List[str] = Field(default_factory=list)
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DIMENSION] = None
+
+
+class IngredientUpdate(BaseModel):
+    """A partial write: only the fields the client actually sent are forwarded.
+
+    The distinction matters. The service leaves an omitted field alone and
+    writes an explicit ``null``, which is how a wrong ``grams_per_piece`` gets
+    *cleared*; forwarding a default ``None`` for every absent field would make
+    the two indistinguishable and silently wipe the rest of the row.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = None
+    season_months: Optional[List[int]] = None
+    categories: Optional[List[str]] = None
+    grams_per_ml: Optional[float] = None
+    grams_per_piece: Optional[float] = None
+    preferred_dimension: Optional[DIMENSION] = None
 
 
 class SystemTag(BaseModel):
@@ -193,6 +255,40 @@ class SystemTag(BaseModel):
 
     id: int
     name: str
+    penalize_repetition: bool
+
+    @classmethod
+    def build(cls, tag: models.Tag) -> "SystemTag":
+        return cls(id=tag.id, name=tag.name, penalize_repetition=bool(tag.penalize_repetition))
+
+
+class VocabularyUsage(BaseModel):
+    """How many recipes hold one vocabulary row, in every account.
+
+    The delete confirmation needs this number *before* it asks: the browser can
+    only see the catalog, while the service counts every book, so a count made
+    in the page would happily promise a delete the server then refuses (409).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    count: int
+
+
+class TagCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    penalize_repetition: bool = False
+
+
+class TagUpdate(BaseModel):
+    """Partial, like :class:`IngredientUpdate`; neither field is nullable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = None
+    penalize_repetition: Optional[bool] = None
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +314,17 @@ def _row_then_commit(db: Session, recipe: models.Recipe) -> AdminRecipe:
     row = _admin_row(db, recipe)
     db.commit()
     return row
+
+
+def _as_dimension(fields: dict) -> dict:
+    """Turn the wire's ``"mass"`` into the enum member the column stores.
+
+    The column is ``Enum(DimensionEnum)``, which matches on member *name*, so
+    handing it the raw value would be a 500 rather than a stored row.
+    """
+    if fields.get("preferred_dimension") is not None:
+        fields["preferred_dimension"] = models.DimensionEnum(fields["preferred_dimension"])
+    return fields
 
 
 def _recipe_or_404(db: Session, recipe_id: int) -> models.Recipe:
@@ -312,22 +419,119 @@ def export_catalog(db: Db) -> List[ExportItem]:
 @router.get("/ingredients", response_model=List[SystemIngredient])
 def list_system_ingredients(db: Db) -> List[SystemIngredient]:
     """The system account's ingredients: the names a catalog recipe may use (D3)."""
-    return [
-        SystemIngredient(
-            id=ingredient.id,
-            name=ingredient.name,
-            season_months=ingredient.season_months or [],
-            grams_per_ml=ingredient.grams_per_ml,
-            grams_per_piece=ingredient.grams_per_piece,
-            preferred_dimension=(
-                ingredient.preferred_dimension.value if ingredient.preferred_dimension is not None else None
-            ),
+    return [SystemIngredient.build(ingredient) for ingredient in catalog.system_ingredients(db)]
+
+
+@router.post("/ingredients", response_model=SystemIngredient, status_code=201)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def create_system_ingredient(request: Request, payload: IngredientCreate, db: Db) -> SystemIngredient:
+    """Grow the shared vocabulary on purpose, with the attributes scoring needs."""
+    try:
+        ingredient = catalog_import.create_system_ingredient(db, **_as_dimension(payload.model_dump()))
+    except ValueError as exc:  # a blank or already-taken name
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    row = SystemIngredient.build(ingredient)
+    db.commit()
+    return row
+
+
+@router.put("/ingredients/{ingredient_id}", response_model=SystemIngredient)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def update_system_ingredient(
+    request: Request, ingredient_id: int, payload: IngredientUpdate, db: Db
+) -> SystemIngredient:
+    """Correct one in place. Only the sent fields move; ``null`` clears a value."""
+    try:
+        ingredient = catalog_import.update_system_ingredient(
+            db, ingredient_id, **_as_dimension(payload.model_dump(exclude_unset=True))
         )
-        for ingredient in catalog.system_ingredients(db)
-    ]
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    row = SystemIngredient.build(ingredient)
+    db.commit()
+    return row
+
+
+@router.delete("/ingredients/{ingredient_id}", status_code=204)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def delete_system_ingredient(request: Request, ingredient_id: int, db: Db) -> None:
+    """Drop an unused name; a 409 states how many recipes still hold it."""
+    try:
+        catalog_import.delete_system_ingredient(db, ingredient_id)
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
+    except catalog_import.VocabularyInUse as exc:
+        # No rollback: the usage check runs before the delete, so nothing was
+        # written, and discarding the session here would take the caller's
+        # uncommitted work with it.
+        raise HTTPException(status_code=409, detail=str(exc))
+    db.commit()
+
+
+@router.get("/ingredients/{ingredient_id}/usage", response_model=VocabularyUsage)
+def system_ingredient_usage(ingredient_id: int, db: Db) -> VocabularyUsage:
+    """How many recipes hold this ingredient -- the number the 409 would quote."""
+    try:
+        return VocabularyUsage(count=catalog_import.ingredient_usage(db, ingredient_id))
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.get("/tags", response_model=List[SystemTag])
 def list_system_tags(db: Db) -> List[SystemTag]:
     """The system account's tags: the tag names a catalog recipe may use (D3)."""
-    return [SystemTag(id=tag.id, name=tag.name) for tag in catalog.system_tags(db)]
+    return [SystemTag.build(tag) for tag in catalog.system_tags(db)]
+
+
+@router.post("/tags", response_model=SystemTag, status_code=201)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def create_system_tag(request: Request, payload: TagCreate, db: Db) -> SystemTag:
+    """Add a label catalog recipes may carry."""
+    try:
+        tag = catalog_import.create_system_tag(db, **payload.model_dump())
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    row = SystemTag.build(tag)
+    db.commit()
+    return row
+
+
+@router.put("/tags/{tag_id}", response_model=SystemTag)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def update_system_tag(request: Request, tag_id: int, payload: TagUpdate, db: Db) -> SystemTag:
+    """Rename a tag, keeping every recipe that carries it."""
+    try:
+        tag = catalog_import.update_system_tag(db, tag_id, **payload.model_dump(exclude_unset=True))
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    row = SystemTag.build(tag)
+    db.commit()
+    return row
+
+
+@router.delete("/tags/{tag_id}", status_code=204)
+@ratelimit.limiter.limit(ratelimit.CATALOG_ADMIN_RATE_LIMIT)
+def delete_system_tag(request: Request, tag_id: int, db: Db) -> None:
+    """Remove a tag, detaching it from its recipes -- allowed while in use (D3)."""
+    try:
+        catalog_import.delete_system_tag(db, tag_id)
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")
+    db.commit()
+
+
+@router.get("/tags/{tag_id}/usage", response_model=VocabularyUsage)
+def system_tag_usage(tag_id: int, db: Db) -> VocabularyUsage:
+    """How many recipes carry this tag -- what the delete would detach it from."""
+    try:
+        return VocabularyUsage(count=catalog_import.tag_usage(db, tag_id))
+    except catalog_import.VocabularyNotFound:
+        raise HTTPException(status_code=404, detail="Not found")

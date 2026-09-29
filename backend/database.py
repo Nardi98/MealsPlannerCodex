@@ -16,6 +16,14 @@ def resolve_database_url() -> str:
     variable is a deployment error, and guessing a URL would let the app serve
     traffic against the wrong database. Railway sometimes emits the bare
     ``postgres://`` scheme, which SQLAlchemy rejects, so it is normalized.
+
+    The driver is pinned to ``psycopg2`` explicitly. A bare ``postgresql://``
+    URL picks whichever DBAPI the installed SQLAlchemy defaults to, and 2.1
+    changed that default from ``psycopg2`` to ``psycopg`` (v3) -- which this
+    image does not install, so a fresh build died at import with
+    ``ModuleNotFoundError: No module named 'psycopg'``. Naming the driver here
+    means the app, Alembic and every deployment resolve the same one no matter
+    which SQLAlchemy is installed.
     """
 
     url = os.environ.get("DATABASE_URL")
@@ -26,6 +34,8 @@ def resolve_database_url() -> str:
         )
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
     return url
 
 

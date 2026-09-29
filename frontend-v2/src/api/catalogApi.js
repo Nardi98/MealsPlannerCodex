@@ -79,7 +79,13 @@ export function recipeWriteProblem(form) {
  * An API error as text a person can read. `client.request` only lifts a
  * string `detail` into the message; FastAPI's 422 carries an array of
  * `{loc, msg}` instead, which would otherwise surface as raw JSON.
+ *
+ * `asSentence` sits beside it: every catalog screen shows these reasons as a
+ * sentence, and one definition is what keeps the punctuation the same on all
+ * of them.
  */
+export const asSentence = (text) => `${String(text).replace(/\.+$/, '')}.`;
+
 export function apiErrorText(err) {
   const detail = err?.data?.detail;
   if (!Array.isArray(detail)) return err.message;
@@ -116,6 +122,9 @@ export function toRecipeForm(row) {
 
 const ADMIN = '/admin/catalog';
 
+const itemPath = (batchId, itemId) =>
+  `${ADMIN}/imports/${encodeURIComponent(batchId)}/items/${encodeURIComponent(itemId)}`;
+
 export const catalogApi = {
   // Published catalog recipes, filtered, searched and sorted server-side.
   list: (filters) => request(`/catalog/recipes${listQuery(filters)}`),
@@ -147,6 +156,48 @@ export const catalogApi = {
     // The system account's rows: the only names a catalog recipe may use (D3).
     ingredients: () => request(`${ADMIN}/ingredients`),
     tags: () => request(`${ADMIN}/tags`),
+
+    // The system vocabulary, written. `changes` is passed to the server as
+    // given, and that is the contract, not laziness: the PUTs are PARTIAL, so
+    // a key that is absent leaves the stored value alone while an explicit
+    // `null` clears it. A mapper that filled in every field would make
+    // "leave it" and "clear it" indistinguishable and quietly wipe the rest of
+    // the row. Callers must therefore send only what the admin actually
+    // changed. Unknown keys are a 422 (every admin body forbids extras).
+    createIngredient: (ingredient) => request(`${ADMIN}/ingredients`, json('POST', ingredient)),
+    updateIngredient: (ingredientId, changes) =>
+      request(`${ADMIN}/ingredients/${encodeURIComponent(ingredientId)}`, json('PUT', changes)),
+    // 409 when a catalog recipe still uses it, with the count in `detail`.
+    deleteIngredient: (ingredientId) =>
+      request(`${ADMIN}/ingredients/${encodeURIComponent(ingredientId)}`, { method: 'DELETE' }),
+    // `{ count }`: how many recipes hold the row, in EVERY account. Only the
+    // server can answer that -- a count made from the catalog listing misses
+    // the private books that would still make the DELETE a 409.
+    ingredientUsage: (ingredientId) =>
+      request(`${ADMIN}/ingredients/${encodeURIComponent(ingredientId)}/usage`),
+    createTag: (tag) => request(`${ADMIN}/tags`, json('POST', tag)),
+    updateTag: (tagId, changes) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}`, json('PUT', changes)),
+    // Allowed while in use: the tag is detached from its recipes (D3).
+    deleteTag: (tagId) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}`, { method: 'DELETE' }),
+    // `{ count }`, counted across every account like `ingredientUsage`.
+    tagUsage: (tagId) => request(`${ADMIN}/tags/${encodeURIComponent(tagId)}/usage`),
+  },
+
+  // Staged batch import. The browser parses the file and posts the entries as
+  // JSON -- the precedent is `/data/import`, not a multipart upload. A batch
+  // is auto-deleted once nothing is left to review, which is why every
+  // skip/commit answers with `batch_deleted`.
+  imports: {
+    create: (filename, entries) => request(`${ADMIN}/imports`, json('POST', { filename, entries })),
+    // The open batch, or null when there is none.
+    open: () => request(`${ADMIN}/imports`),
+    get: (batchId) => request(`${ADMIN}/imports/${encodeURIComponent(batchId)}`),
+    remove: (batchId) => request(`${ADMIN}/imports/${encodeURIComponent(batchId)}`, { method: 'DELETE' }),
+    item: (batchId, itemId) => request(itemPath(batchId, itemId)),
+    // Saves the working copy; `source` is never touched.
+    saveItem: (batchId, itemId, draft) => request(itemPath(batchId, itemId), json('PATCH', { draft })),
+    skipItem: (batchId, itemId) => request(`${itemPath(batchId, itemId)}/skip`, { method: 'POST' }),
+    commitItem: (batchId, itemId) => request(`${itemPath(batchId, itemId)}/commit`, { method: 'POST' }),
   },
 };
 

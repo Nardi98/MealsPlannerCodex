@@ -7,6 +7,8 @@ import {
   BeakerIcon,
   ArrowUpTrayIcon,
   InboxArrowDownIcon,
+  TagIcon,
+  CloudArrowUpIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { useViewMode } from '../auth/ViewModeContext'
@@ -17,12 +19,18 @@ import { useViewMode } from '../auth/ViewModeContext'
 // cannot silently empty the menu.
 const BOTH = ['user', 'admin']
 const USER_ONLY = ['user']
+const ADMIN_ONLY = ['admin']
 
 const NAV = [
   { label: 'Recipes', path: '/recipes', Icon: BookmarkIcon, color: 'var(--cat-berry)', modes: USER_ONLY, match: (p) => p === '/' || p === '/recipes' },
   // Terracotta: the last distinct category hue not already on a nav icon (the
   // other unused tokens -- sage, clay, forest -- alias core chrome colours).
   { label: 'Discover', path: '/discover', Icon: SparklesIcon, color: 'var(--cat-terracotta)', modes: BOTH, match: (p) => p === '/discover' },
+  // Admin-only catalog surfaces, kept next to Discover because they are the
+  // same library seen from the other side: its vocabulary and its intake. The
+  // import review page has no entry -- it is reached per recipe from Import.
+  { label: 'Ingredients & Tags', path: '/discover/vocabulary', Icon: TagIcon, color: 'var(--cat-sky)', modes: ADMIN_ONLY, match: (p) => p === '/discover/vocabulary' },
+  { label: 'Import', path: '/discover/import', Icon: CloudArrowUpIcon, color: 'var(--cat-plum)', modes: ADMIN_ONLY, match: (p) => p.startsWith('/discover/import') },
   { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', modes: USER_ONLY, match: (p) => p === '/meal-plan' },
   { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', modes: USER_ONLY, match: (p) => p === '/shared-with-me' },
   { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', modes: USER_ONLY, match: (p) => p === '/ingredients' },

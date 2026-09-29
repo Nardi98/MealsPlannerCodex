@@ -836,3 +836,94 @@ class MealSide(Base):
             ondelete="CASCADE",
         ),
     )
+
+
+#: The states an import item passes through, open ones first. An item in an open
+#: state still needs a human -- a batch survives exactly as long as one of them
+#: remains -- so the split is named here and every other module derives from it
+#: rather than re-spelling the literals.
+IMPORT_ITEM_OPEN_STATES = ("pending", "invalid")
+IMPORT_ITEM_CLOSED_STATES = ("skipped", "committed")
+IMPORT_ITEM_STATES = (*IMPORT_ITEM_OPEN_STATES, *IMPORT_ITEM_CLOSED_STATES)
+
+
+class CatalogImportBatch(Base):
+    """One uploaded file, staged server-side for review.
+
+    There is deliberately **no status column**: a batch's state is derivable
+    from its items, and a denormalised copy of it is one more thing to drift.
+    The batch is transient -- it is deleted once nothing is left to review.
+    """
+
+    __tablename__ = "catalog_import_batches"
+
+    id = Column(Integer, primary_key=True)
+    created_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    filename = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    items = relationship(
+        "CatalogImportItem",
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        order_by="CatalogImportItem.position",
+    )
+
+
+class CatalogImportItem(Base):
+    """One entry of an uploaded file, and the admin's working copy of it.
+
+    ``source`` is the entry exactly as uploaded and is never mutated, so "what
+    was actually in the file" stays answerable after any amount of editing;
+    ``draft`` starts as a normalised copy and takes every edit.
+
+    Both are ``JSON`` rather than real columns because an item is *not* a recipe
+    yet: it may be half-resolved, name ingredients that do not exist and carry
+    quantities that are not valid. The moment it is valid it stops being an item
+    and becomes a :class:`Recipe`.
+    """
+
+    __tablename__ = "catalog_import_items"
+
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(
+        Integer,
+        ForeignKey("catalog_import_batches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    #: Stable review order, taken from the order of the file.
+    position = Column(Integer, nullable=False)
+    source = Column(JSON, nullable=False)
+    draft = Column(JSON, nullable=False)
+    state = Column(String, nullable=False, server_default="pending", default="pending")
+    #: Why an ``invalid`` entry failed to parse; null for every other state.
+    error = Column(Text, nullable=True)
+    # Both point at recipes that outlive the item, so neither cascades a delete:
+    # dropping the committed recipe must not erase the record of the commit.
+    committed_recipe_id = Column(
+        Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True
+    )
+    #: The existing catalog recipe with the same title, computed at upload time;
+    #: drives the side-by-side view. A duplicate is flagged, never auto-skipped.
+    duplicate_recipe_id = Column(
+        Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True
+    )
+
+    batch = relationship("CatalogImportBatch", back_populates="items")
+
+    __table_args__ = (
+        # Named, like every other CHECK here, so autogenerate can match the
+        # reflected constraint on later revisions (MIG-2).
+        CheckConstraint(
+            "state IN ({})".format(
+                ", ".join(f"'{state}'" for state in IMPORT_ITEM_STATES)
+            ),
+            name="ck_catalog_import_item_state",
+        ),
+        UniqueConstraint(
+            "batch_id", "position", name="uq_catalog_import_item_position"
+        ),
+    )
