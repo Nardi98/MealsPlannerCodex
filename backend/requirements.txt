@@ -1,4 +1,8 @@
-SQLAlchemy
+# Pinned below 2.1: that release switched the default DBAPI for a bare
+# ``postgresql://`` URL from psycopg2 to psycopg (v3), which is not
+# installed here. ``database.resolve_database_url`` also names the driver
+# explicitly, so lifting this pin does not on its own break the build.
+SQLAlchemy<2.1
 # Schema migrations; see backend/migrations/README.md.
 alembic
 psycopg2-binary
