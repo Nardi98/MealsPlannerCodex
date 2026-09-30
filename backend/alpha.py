@@ -143,16 +143,13 @@ def add_invites(session: Session, raw: str, *, invited_by_user_id: int | None) -
         else:
             invalid.append(token)
 
-    wanted = list(candidates)
-    already = set()
-    if wanted:
-        already = set(
-            session.execute(
-                select(models.AlphaInvite.email).where(
-                    models.AlphaInvite.email.in_(wanted)
-                )
-            ).scalars()
-        )
+    already = set(
+        session.execute(
+            select(models.AlphaInvite.email).where(
+                models.AlphaInvite.email.in_(candidates)
+            )
+        ).scalars()
+    )
 
     for email in candidates:
         if email in already:

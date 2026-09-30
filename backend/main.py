@@ -26,8 +26,8 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
-import alpha
-import alpha_routes
+import alpha  # ALPHA-GATE
+import alpha_routes  # ALPHA-GATE
 import catalog
 import catalog_admin_routes
 import catalog_import_routes
@@ -480,7 +480,11 @@ def register(
         # email, the handle is a *public* identifier, so saying it is taken
         # discloses nothing the availability endpoint (UN-7) does not.
         raise HTTPException(status_code=409, detail=usernames.CONFLICT_MESSAGE)
-    alpha.assert_email_allowed(db, payload.email)  # ALPHA-GATE: closed-alpha allowlist
+    # ALPHA-GATE: closed-alpha allowlist. Deliberately *before* the duplicate
+    # lookup below, so an uninvited address that already has an account is
+    # indistinguishable from an uninvited unknown one -- the anti-enumeration
+    # property this endpoint is built around.
+    alpha.assert_email_allowed(db, payload.email)  # ALPHA-GATE
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
         try:

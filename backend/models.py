@@ -936,7 +936,7 @@ class AlphaInvite(Base):
 
     __tablename__ = "alpha_invites"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     # Stored normalized, so the stored value is the only form that exists.
     email = Column(String, nullable=False, unique=True, index=True)
     note = Column(String, nullable=True)

@@ -10,6 +10,8 @@ route cannot appear without a test noticing.
 
 from pathlib import Path
 
+import re
+
 import pytest
 from sqlalchemy import func, select
 
@@ -344,18 +346,30 @@ ALPHA_SOURCES = [
 ]
 
 
-def test_main_carries_exactly_three_alpha_gate_lines():
-    """The removal checklist, enforced: three marked lines in ``main.py``.
+def test_every_alpha_line_in_main_is_marked_for_removal():
+    """The removal checklist, enforced as a property rather than a count.
 
-    One ``include_router`` and the two signup guards. A fourth marked line means
-    the feature has grown a hook the spec does not know about; fewer means a
-    guard was lost.
+    Deleting the alpha means deleting every ``main.py`` line that mentions it,
+    and ``git grep ALPHA-GATE`` is how the deleter finds them -- so a line that
+    names ``alpha`` without the marker is a line the checklist would leave
+    behind. Counting markers alone once let the two imports slip through: they
+    were unmarked, so the grep pointed at three lines while removal needed
+    five. Asserting the property instead cannot drift that way.
     """
     text = (BACKEND_ROOT / "main.py").read_text(encoding="utf-8")
 
-    marked = [line for line in text.splitlines() if "ALPHA-GATE" in line]
+    mentions = [
+        line
+        for line in text.splitlines()
+        if re.search(r"\balpha\b|\balpha_routes\b", line)
+    ]
+    unmarked = [line for line in mentions if "ALPHA-GATE" not in line]
 
-    assert len(marked) == 3, marked
+    assert unmarked == [], unmarked
+    # Six: two imports, the router, one guard per signup path, and the comment
+    # explaining the ordering of the register guard. A seventh means a hook the
+    # spec does not know about; fewer means one was lost.
+    assert len(mentions) == 6, mentions
 
 
 @pytest.mark.parametrize("source", ALPHA_SOURCES)

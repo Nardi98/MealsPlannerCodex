@@ -85,57 +85,51 @@ export default function AlphaPage() {
 
   const signedUp = (invites || []).filter((row) => row.signed_up).length
 
-  const submitAdd = async (event) => {
-    event.preventDefault()
+  /**
+   * Every mutation has the same shape: busy while it runs, a status line
+   * reporting what happened, an alert naming what failed otherwise. `what`
+   * names the action once, for the log and for the reader ("add the invites"),
+   * so the two can never describe different things.
+   */
+  const run = async (what, body) => {
     setBusy(true)
     setNotice(null)
     try {
+      setNotice({ kind: 'status', text: await body() })
+      reload()
+    } catch (err) {
+      console.error(`Failed to ${what}`, err)
+      setNotice({ kind: 'alert', text: `Couldn’t ${what}: ${asSentence(apiErrorText(err))}` })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submitAdd = (event) => {
+    event.preventDefault()
+    return run('add the invites', async () => {
       const result = await alphaApi.add(draft)
       // Cleared only on success: a failed paste is the one thing nobody wants
       // to retype.
       setDraft('')
-      setNotice({ kind: 'status', text: addSummary(result || {}) })
-      reload()
-    } catch (err) {
-      console.error('Failed to add the invites', err)
-      setNotice({ kind: 'alert', text: `Couldn’t add the invites: ${asSentence(apiErrorText(err))}` })
-    } finally {
-      setBusy(false)
-    }
+      return addSummary(result || {})
+    })
   }
 
-  const saveNote = async (row, text) => {
-    const trimmed = text.trim()
-    setBusy(true)
-    setNotice(null)
-    try {
-      await alphaApi.updateNote(row.id, trimmed || null)
+  const saveNote = (row, text) =>
+    run('save the note', async () => {
+      await alphaApi.updateNote(row.id, text.trim() || null)
       setEditing(null)
-      setNotice({ kind: 'status', text: `Saved the note for ${row.email}.` })
-      reload()
-    } catch (err) {
-      console.error('Failed to save the note', err)
-      setNotice({ kind: 'alert', text: `Couldn’t save the note: ${asSentence(apiErrorText(err))}` })
-    } finally {
-      setBusy(false)
-    }
-  }
+      return `Saved the note for ${row.email}.`
+    })
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     const row = pendingDelete
     setPendingDelete(null)
-    setBusy(true)
-    setNotice(null)
-    try {
+    return run('remove the invite', async () => {
       await alphaApi.remove(row.id)
-      setNotice({ kind: 'status', text: `Removed the invite for ${row.email}.` })
-      reload()
-    } catch (err) {
-      console.error('Failed to remove the invite', err)
-      setNotice({ kind: 'alert', text: `Couldn’t remove the invite: ${asSentence(apiErrorText(err))}` })
-    } finally {
-      setBusy(false)
-    }
+      return `Removed the invite for ${row.email}.`
+    })
   }
 
   return (
@@ -272,42 +266,46 @@ function InviteList({ rows, editing, busy, onEdit, onSaveNote, onDelete }) {
                 {row.signed_up ? 'Signed up' : 'Invited'}
               </Badge>
 
-              {editing?.id === row.id ? (
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  <Input
-                    className="min-w-0 flex-1"
-                    aria-label={`Note for ${row.email}`}
-                    value={editing.note}
-                    onChange={(event) => onEdit({ id: row.id, note: event.target.value })}
-                    autoComplete="off"
-                  />
-                  <Button
-                    variant="primary"
-                    disabled={busy}
-                    onClick={() => onSaveNote(row, editing.note)}
-                  >
-                    Save note
-                  </Button>
-                  <Button variant="ghost" onClick={() => onEdit(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  <span className="min-w-0 flex-1" style={{ ...mutedTextStyle, fontSize: 'var(--text-xs)' }}>
-                    {row.note || 'No note'}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    onClick={() => onEdit({ id: row.id, note: row.note || '' })}
-                  >
-                    Edit note
-                  </Button>
-                  <Button variant="ghost" onClick={() => onDelete(row)}>
-                    Delete
-                  </Button>
-                </div>
-              )}
+              {/* One wrapper, two contents: the reading and editing rows must
+                  keep identical geometry, so the classes live in one place. */}
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                {editing?.id === row.id ? (
+                  <>
+                    <Input
+                      className="min-w-0 flex-1"
+                      aria-label={`Note for ${row.email}`}
+                      value={editing.note}
+                      onChange={(event) => onEdit({ id: row.id, note: event.target.value })}
+                      autoComplete="off"
+                    />
+                    <Button
+                      variant="primary"
+                      disabled={busy}
+                      onClick={() => onSaveNote(row, editing.note)}
+                    >
+                      Save note
+                    </Button>
+                    <Button variant="ghost" onClick={() => onEdit(null)}>
+                      Cancel
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 flex-1" style={{ ...mutedTextStyle, fontSize: 'var(--text-xs)' }}>
+                      {row.note || 'No note'}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      onClick={() => onEdit({ id: row.id, note: row.note || '' })}
+                    >
+                      Edit note
+                    </Button>
+                    <Button variant="ghost" onClick={() => onDelete(row)}>
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </div>
             </li>
           ))}
         </ul>

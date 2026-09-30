@@ -123,11 +123,8 @@ def add_invites(payload: InvitesIn, db: Db, current_user: CurrentUser) -> AddRes
     result = alpha.add_invites(
         db, payload.emails, invited_by_user_id=current_user.id
     )
-    return AddResultOut(
-        added=result.added,
-        skipped_duplicates=result.skipped_duplicates,
-        invalid=result.invalid,
-    )
+    # The buckets are the service's own; ``extra="forbid"`` still pins the names.
+    return AddResultOut(**result._asdict())
 
 
 @router.patch("/invites/{invite_id}", response_model=InviteOut)
