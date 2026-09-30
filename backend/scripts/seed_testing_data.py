@@ -43,6 +43,7 @@ import catalog_import  # noqa: E402
 import recipe_copy  # noqa: E402
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (  # noqa: E402
+    AlphaInvite,  # ALPHA-GATE
     CatalogEntry,
     CatalogImportBatch,
     CatalogImportItem,
@@ -1011,6 +1012,19 @@ def populate(session) -> None:
     link_catalog(session, system_user, users_by_username)
     # After the catalog: the duplicate flag points at one of its recipes.
     link_catalog_imports(session, demo_user, system_user)
+    # ALPHA-GATE: the closed alpha's signup allowlist. Every seeded account is
+    # invited (or it could not have signed up), plus one address that has not
+    # yet, so the admin table shows both badges out of the box. Remove this
+    # block when the alpha ends.
+    for email, note in (
+        (DEMO_USER_EMAIL, "the demo admin"),
+        (FRIEND_USER_EMAIL, "the friend who shares recipes"),
+        (GUEST_USER_EMAIL, "the guest account"),
+        ("alpha-pending@mealplanner.test", "invited, has not signed up yet"),
+    ):
+        session.add(
+            AlphaInvite(email=email, note=note, invited_by_user_id=demo_user.id)
+        )
     session.commit()
 
 
