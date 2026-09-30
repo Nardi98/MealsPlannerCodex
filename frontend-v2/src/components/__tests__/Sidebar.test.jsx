@@ -55,6 +55,7 @@ test('admin mode lists the catalog surfaces and nothing else', () => {
     'Discover',
     'Ingredients & Tags',
     'Import',
+    'Alpha', // ALPHA-GATE
   ])
 })
 
