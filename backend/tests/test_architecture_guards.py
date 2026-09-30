@@ -67,7 +67,7 @@ def _imported_modules(path):
     return names
 
 
-@pytest.mark.parametrize("module", ["catalog.py", "catalog_import.py"])
+@pytest.mark.parametrize("module", ["catalog.py", "catalog_import.py", "alpha.py"])
 def test_catalog_service_imports_no_router_and_no_main(module):
     """CAT-11 / TST-11: startup, seed scripts and routers all call ``catalog``.
 
@@ -85,6 +85,43 @@ def test_catalog_service_imports_no_router_and_no_main(module):
         if name.split(".")[0] in {"main", "public_pages", "ops_routes"}
         or name.split(".")[0].endswith("_routes")
         or "frontend" in name.replace("-", "_").split(".")[0]
+    }
+    assert forbidden == set()
+
+
+# --------------------------------------------------------------------------
+# ALPHA-GATE: the closed-alpha allowlist is scaffolding built for removal, so
+# every dependency arrow must point *into* it. These two tests are what make the
+# spec's three-step deletion true rather than hoped for -- if some other module
+# quietly started importing ``alpha``, deleting the file would break it.
+# --------------------------------------------------------------------------
+def test_only_main_and_its_router_import_alpha():
+    """``alpha`` has exactly two importers, both of them marked for deletion."""
+    importers = {
+        path.name
+        for path in _production_modules()
+        if "alpha" in _imported_modules(path)
+    }
+
+    assert importers == {"main.py", "alpha_routes.py"}
+
+
+def test_alpha_imports_nothing_of_ours_but_models():
+    """The service reaches for ``models`` and libraries, nothing else of ours.
+
+    Depending on ``crud``, ``schemas`` or ``auth_users`` would make the alpha a
+    participant in the application's layering instead of a leaf hanging off it,
+    and the spec's "delete the file" would stop being a complete instruction.
+    """
+    imported = _imported_modules(BACKEND_ROOT / "alpha.py")
+    assert imported, "the AST walk found no imports at all"
+
+    forbidden = {
+        name
+        for name in imported
+        if name.split(".")[0]
+        in {"main", "schemas", "crud", "auth_users", "catalog", "catalog_import"}
+        or name.split(".")[0].endswith("_routes")
     }
     assert forbidden == set()
 
