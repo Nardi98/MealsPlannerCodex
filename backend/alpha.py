@@ -136,11 +136,14 @@ def add_invites(session: Session, raw: str, *, invited_by_user_id: int | None) -
     skipped: list[str] = []
     invalid: list[str] = []
 
-    tokens = split_emails(raw)
-    candidates = [(token, normalize(token)) for token in tokens if is_valid_email(token)]
-    invalid = [token for token in tokens if not is_valid_email(token)]
+    candidates: list[str] = []
+    for token in split_emails(raw):
+        if is_valid_email(token):
+            candidates.append(normalize(token))
+        else:
+            invalid.append(token)
 
-    wanted = [email for _token, email in candidates]
+    wanted = list(candidates)
     already = set()
     if wanted:
         already = set(
@@ -151,7 +154,7 @@ def add_invites(session: Session, raw: str, *, invited_by_user_id: int | None) -
             ).scalars()
         )
 
-    for _token, email in candidates:
+    for email in candidates:
         if email in already:
             skipped.append(email)
             continue
