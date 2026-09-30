@@ -12,6 +12,7 @@ import CatalogAdminPage from './pages/CatalogAdminPage'
 import SystemVocabularyPage from './pages/SystemVocabularyPage'
 import CatalogImportPage from './pages/CatalogImportPage'
 import CatalogImportReviewPage from './pages/CatalogImportReviewPage'
+import AlphaPage from './pages/AlphaPage' // ALPHA-GATE
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
@@ -199,6 +200,8 @@ function Shell() {
                 path="/discover/import/:batchId"
                 element={<AdminOnlyRoute><CatalogImportReviewPage /></AdminOnlyRoute>}
               />
+              {/* ALPHA-GATE */}
+              <Route path="/discover/alpha" element={<AdminOnlyRoute><AlphaPage /></AdminOnlyRoute>} />
               <Route path="/meal-plan" element={<MealPlanPage />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />

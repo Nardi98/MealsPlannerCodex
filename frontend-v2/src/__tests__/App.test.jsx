@@ -48,6 +48,7 @@ vi.mock('../pages/CatalogImportPage', () => ({
   ),
 }))
 vi.mock('../pages/CatalogImportReviewPage', () => ({ default: () => <div>catalog-import-review-page</div> }))
+vi.mock('../pages/AlphaPage', () => ({ default: () => <div>alpha-page</div> }))  // ALPHA-GATE
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
 import App from '../App'
@@ -458,6 +459,7 @@ const ADMIN_ROUTES = [
   ['/discover/vocabulary', 'vocabulary-page'],
   ['/discover/import', 'catalog-import-page'],
   ['/discover/import/7', 'catalog-import-review-page'],
+  ['/discover/alpha', 'alpha-page'],  // ALPHA-GATE
 ]
 
 // Admin mode is entered through the pill, which navigates to `/discover` as it
@@ -532,4 +534,30 @@ test('user mode offers neither the vocabulary nor the import entry', () => {
 
   expect(screen.queryByRole('button', { name: /ingredients & tags/i })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /^import$/i })).not.toBeInTheDocument()
+})
+
+
+// ALPHA-GATE: the closed-alpha allowlist screen is a fourth admin-only surface,
+// reached from the sidebar after Import and gated exactly like the other three.
+test('the alpha page is reachable in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  await userEvent.click(screen.getByRole('button', { name: /^alpha$/i }))
+
+  expect(screen.getByText('alpha-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/alpha')
+})
+
+test('admin mode offers the alpha entry after import, and user mode offers none', async () => {  // ALPHA-GATE
+  signedIn(ADMIN)
+  render(<App />)
+
+  expect(screen.queryByRole('button', { name: /^alpha$/i })).not.toBeInTheDocument()
+
+  await switchTo('Admin')
+
+  const labels = screen.getAllByRole('button').map((b) => b.textContent)
+  expect(labels.indexOf('Alpha')).toBe(labels.indexOf('Import') + 1)
 })
