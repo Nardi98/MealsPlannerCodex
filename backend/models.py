@@ -927,3 +927,25 @@ class CatalogImportItem(Base):
             "batch_id", "position", name="uq_catalog_import_item_position"
         ),
     )
+
+
+# ALPHA-GATE: the closed-alpha signup allowlist. Deleted whole when the alpha
+# ends (docs/superpowers/specs/2026-09-30-alpha-allowlist-design.md).
+class AlphaInvite(Base):
+    """One email address permitted to create an account during the closed alpha."""
+
+    __tablename__ = "alpha_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Stored normalized, so the stored value is the only form that exists.
+    email = Column(String, nullable=False, unique=True, index=True)
+    note = Column(String, nullable=True)
+    # Null once the admin who added the row is gone: the invite outlives them.
+    invited_by_user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+
+    @validates("email")
+    def _normalize_email(self, _key, value):
+        return normalize_email(value)
