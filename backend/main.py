@@ -26,6 +26,8 @@ from slowapi.util import get_remote_address
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session, selectinload
 
+import alpha
+import alpha_routes
 import catalog
 import catalog_admin_routes
 import catalog_import_routes
@@ -110,6 +112,7 @@ app.include_router(ops_routes.router)
 app.include_router(catalog_routes.router)
 app.include_router(catalog_admin_routes.router)
 app.include_router(catalog_import_routes.router)
+app.include_router(alpha_routes.router)  # ALPHA-GATE: closed-alpha allowlist admin
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
@@ -477,6 +480,7 @@ def register(
         # email, the handle is a *public* identifier, so saying it is taken
         # discloses nothing the availability endpoint (UN-7) does not.
         raise HTTPException(status_code=409, detail=usernames.CONFLICT_MESSAGE)
+    alpha.assert_email_allowed(db, payload.email)  # ALPHA-GATE: closed-alpha allowlist
     existing = crud.get_user_by_email(db, payload.email)
     if existing is None:
         try:
@@ -605,6 +609,7 @@ def login_with_google(
             raise HTTPException(
                 status_code=401, detail="Google email is not verified"
             )
+        alpha.assert_email_allowed(db, email)  # ALPHA-GATE: closed-alpha allowlist
         user = _create_account(
             db,
             email=email,
