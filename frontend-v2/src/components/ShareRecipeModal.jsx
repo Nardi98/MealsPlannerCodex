@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { Button } from './Button'
 import { Input } from './Input'
 import { sharesApi } from '../api/sharesApi'
+import { fieldHelpStyle, fieldLabelStyle } from './catalog/textStyles'
 
 /**
  * Share dialog for a single recipe (SH-7 / SH-8 / SH-9 / SH-12 / SH-20).
@@ -28,20 +29,7 @@ const MODES = [
   },
 ]
 
-const labelStyle = {
-  display: 'block',
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  color: 'var(--text-strong)',
-  marginBottom: 4,
-}
-
-const helpStyle = {
-  margin: '4px 0 0',
-  fontSize: 'var(--text-xs)',
-  color: 'var(--text-muted)',
-  lineHeight: 1.4,
-}
+const helpStyle = { ...fieldHelpStyle, margin: '4px 0 0' }
 
 const sectionTitleStyle = {
   fontSize: 'var(--text-sm)',
@@ -247,7 +235,7 @@ export function ShareRecipeModal({ recipe, open, onClose }) {
         </fieldset>
 
         <div>
-          <label htmlFor="share-recipient" style={labelStyle}>
+          <label htmlFor="share-recipient" style={fieldLabelStyle}>
             {mode === 'person' ? 'Recipient email' : 'Recipient email (optional)'}
           </label>
           <Input
@@ -267,7 +255,7 @@ export function ShareRecipeModal({ recipe, open, onClose }) {
         </div>
 
         <div>
-          <label htmlFor="share-expires" style={labelStyle}>
+          <label htmlFor="share-expires" style={fieldLabelStyle}>
             Expires on (optional)
           </label>
           <Input
@@ -315,7 +303,7 @@ export function ShareRecipeModal({ recipe, open, onClose }) {
               backgroundColor: 'var(--surface-sunken)',
             }}
           >
-            <label htmlFor="share-url" style={labelStyle}>
+            <label htmlFor="share-url" style={fieldLabelStyle}>
               Your share link
             </label>
             <div className="flex items-center gap-2">

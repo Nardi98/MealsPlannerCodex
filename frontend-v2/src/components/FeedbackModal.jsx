@@ -6,6 +6,7 @@ import { Input } from './Input'
 import SegmentedControl from './SegmentedControl'
 import { userFeedbackApi } from '../api/userFeedbackApi'
 import { apiErrorText, asSentence } from '../api/catalogApi'
+import { fieldHelpStyle, fieldLabelStyle } from './catalog/textStyles'
 
 /**
  * "Send feedback" dialog, opened from the profile menu.
@@ -21,21 +22,6 @@ const TYPES = [
   { value: 'improvement', label: 'Improvement' },
   { value: 'not_working', label: 'Not working' },
 ]
-
-const labelStyle = {
-  display: 'block',
-  fontSize: 'var(--text-sm)',
-  fontWeight: 'var(--weight-semibold)',
-  color: 'var(--text-strong)',
-  marginBottom: 4,
-}
-
-const helpStyle = {
-  margin: 0,
-  fontSize: 'var(--text-xs)',
-  color: 'var(--text-muted)',
-  lineHeight: 1.4,
-}
 
 // The rate limit is the one error a well-meaning user hits by being helpful,
 // so it gets its own calm copy instead of the server's "Too Many Requests".
@@ -101,7 +87,7 @@ export default function FeedbackModal({ onClose }) {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <SegmentedControl label="Kind" options={TYPES} value={type} onChange={setType} />
         <div>
-          <label htmlFor="feedback-title" style={labelStyle}>Title</label>
+          <label htmlFor="feedback-title" style={fieldLabelStyle}>Title</label>
           <Input
             id="feedback-title"
             value={title}
@@ -110,7 +96,7 @@ export default function FeedbackModal({ onClose }) {
           />
         </div>
         <div>
-          <label htmlFor="feedback-body" style={labelStyle}>Details</label>
+          <label htmlFor="feedback-body" style={fieldLabelStyle}>Details</label>
           <Input
             as="textarea"
             id="feedback-body"
@@ -121,7 +107,7 @@ export default function FeedbackModal({ onClose }) {
           />
         </div>
         <div>
-          <label htmlFor="feedback-screenshot" style={labelStyle}>Screenshot (optional)</label>
+          <label htmlFor="feedback-screenshot" style={fieldLabelStyle}>Screenshot (optional)</label>
           <input
             id="feedback-screenshot"
             type="file"
@@ -130,7 +116,7 @@ export default function FeedbackModal({ onClose }) {
             className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:px-3 file:py-2 file:text-sm file:text-white file:bg-[color:var(--c-a1)]"
           />
         </div>
-        <p style={helpStyle}>We'll include the page you're on ({pathname}).</p>
+        <p style={{ ...fieldHelpStyle, margin: 0 }}>We'll include the page you're on ({pathname}).</p>
         {error && (
           <p role="alert" className="text-sm" style={{ margin: 0, color: 'var(--c-neg)' }}>
             {error}
