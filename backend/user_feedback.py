@@ -25,10 +25,19 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import models
 import storage
+
+
+class FeedbackItemNotFound(LookupError):
+    """No ``feedback_items`` row with the requested id."""
+
+
+class FeedbackTagNotFound(LookupError):
+    """No ``feedback_tags`` row with the requested id."""
 
 
 def _required_text(value: str | None, field: str) -> str:
@@ -92,3 +101,46 @@ def submit(
         session.rollback()
         raise
     return item
+
+
+def get_item(session: Session, item_id: int) -> models.FeedbackItem:
+    """The item with ``item_id``; raises ``FeedbackItemNotFound`` if none."""
+    item = session.get(models.FeedbackItem, item_id)
+    if item is None:
+        raise FeedbackItemNotFound(item_id)
+    return item
+
+
+def _commit(session: Session, item):
+    session.commit()
+    return item
+
+
+def mark_seen(session: Session, item: models.FeedbackItem, seen: bool = True) -> models.FeedbackItem:
+    """Mark ``item`` read (or, with ``seen=False``, unread). Status is untouched."""
+    item.seen = seen
+    return _commit(session, item)
+
+
+def set_status(session: Session, item: models.FeedbackItem, status: str) -> models.FeedbackItem:
+    """Move ``item`` to ``status``. Never touches ``seen``: the axes are orthogonal."""
+    item.status = _one_of(status, models.FEEDBACK_STATUS_VALUES, "status")
+    return _commit(session, item)
+
+
+def set_priority(session: Session, item: models.FeedbackItem, priority: str) -> models.FeedbackItem:
+    item.priority = _one_of(priority, models.FEEDBACK_PRIORITY_VALUES, "priority")
+    return _commit(session, item)
+
+
+def set_notes(session: Session, item: models.FeedbackItem, notes: str | None) -> models.FeedbackItem:
+    """Set the admin's private notes, stripped; ``None`` or blank clears them."""
+    item.admin_notes = (notes or "").strip() or None
+    return _commit(session, item)
+
+
+def unseen_count(session: Session) -> int:
+    """How many items no admin has opened yet -- the sidebar badge."""
+    return session.execute(
+        select(func.count()).select_from(models.FeedbackItem).where(models.FeedbackItem.seen.is_(False))
+    ).scalar_one()

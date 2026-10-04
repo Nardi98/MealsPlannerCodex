@@ -96,3 +96,104 @@ def test_submit_with_an_unsupported_screenshot_writes_no_row(db_session, user):
 
 def test_submit_without_a_screenshot_stores_no_key(db_session, user):
     assert _submit(db_session, user).screenshot_key is None
+
+
+# --- reading one item and triage ---------------------------------------------
+
+
+def test_get_item_returns_the_item(db_session, user):
+    item = _submit(db_session, user)
+
+    assert user_feedback.get_item(db_session, item.id) is item
+
+
+def test_get_item_raises_not_found_for_an_unknown_id(db_session):
+    with pytest.raises(user_feedback.FeedbackItemNotFound):
+        user_feedback.get_item(db_session, 999_999)
+
+
+def test_not_found_errors_are_lookup_errors():
+    assert issubclass(user_feedback.FeedbackItemNotFound, LookupError)
+    assert issubclass(user_feedback.FeedbackTagNotFound, LookupError)
+
+
+def test_mark_seen_marks_read_and_unread_without_touching_status(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.mark_seen(db_session, item)
+    db_session.expire_all()
+    assert (item.seen, item.status) == (True, "open")
+
+    user_feedback.mark_seen(db_session, item, seen=False)
+    db_session.expire_all()
+    assert (item.seen, item.status) == (False, "open")
+
+
+def test_closing_an_item_does_not_mark_it_seen(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.set_status(db_session, item, "closed_fixed")
+    db_session.expire_all()
+
+    assert (item.status, item.seen) == ("closed_fixed", False)
+
+
+def test_set_status_rejects_an_unknown_status(db_session, user):
+    item = _submit(db_session, user)
+
+    with pytest.raises(ValueError):
+        user_feedback.set_status(db_session, item, "done")
+
+
+def test_set_priority_stores_the_priority(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.set_priority(db_session, item, "high")
+    db_session.expire_all()
+
+    assert item.priority == "high"
+
+
+def test_set_priority_rejects_an_unknown_priority(db_session, user):
+    item = _submit(db_session, user)
+
+    with pytest.raises(ValueError):
+        user_feedback.set_priority(db_session, item, "urgent")
+
+
+def test_set_notes_stores_stripped_notes_and_none_or_blank_clears_them(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.set_notes(db_session, item, "  check on iOS  ")
+    db_session.expire_all()
+    assert item.admin_notes == "check on iOS"
+
+    user_feedback.set_notes(db_session, item, None)
+    db_session.expire_all()
+    assert item.admin_notes is None
+
+    user_feedback.set_notes(db_session, item, "x")
+    user_feedback.set_notes(db_session, item, "   ")
+    db_session.expire_all()
+    assert item.admin_notes is None
+
+
+def test_a_triage_mutation_does_not_move_updated_at_backwards(db_session, user):
+    item = _submit(db_session, user)
+    before = item.updated_at
+
+    user_feedback.set_priority(db_session, item, "low")
+    db_session.expire_all()
+
+    assert item.updated_at >= before
+
+
+def test_unseen_count_matches_the_rows(db_session, user):
+    first = _submit(db_session, user)
+    _submit(db_session, user)
+    _submit(db_session, user)
+    assert user_feedback.unseen_count(db_session) == 3
+
+    user_feedback.mark_seen(db_session, first)
+
+    assert user_feedback.unseen_count(db_session) == 2
