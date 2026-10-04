@@ -79,12 +79,9 @@ def test_catalog_service_imports_no_router_and_no_main(module):
     could no longer be imported from startup without a cycle. The same holds
     for ``catalog_import.py``, which is the catalog's other service module and
     is called from two routers, and for the other domain modules listed.
-
-    No "found some imports" sanity check here: ``user_feedback.py`` may
-    legitimately import nothing yet. ``test_alpha_imports_nothing_of_ours_but_models``
-    keeps that check on the AST walk itself.
     """
     imported = _imported_modules(BACKEND_ROOT / module)
+    assert imported, "the AST walk found no imports at all"
 
     forbidden = {
         name

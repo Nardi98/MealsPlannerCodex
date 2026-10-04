@@ -1038,6 +1038,9 @@ class FeedbackItem(Base):
         secondary=feedback_item_tags,
         order_by="FeedbackTag.name",
     )
+    #: Who filed the item, for the admin inbox; ``None`` once the account is
+    #: gone. Read-only: ``user_id`` is the one thing that writes the link.
+    author = relationship("User", viewonly=True)
 
     __table_args__ = (
         # Named, like every other CHECK here, so autogenerate can match the
