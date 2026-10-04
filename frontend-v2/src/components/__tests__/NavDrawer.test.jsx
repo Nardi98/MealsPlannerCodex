@@ -8,7 +8,16 @@ import { afterEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import NavDrawer from '../NavDrawer'
 
-afterEach(cleanup)
+vi.mock('../../auth/ViewModeContext', () => ({
+  useViewMode: () => ({ mode: viewMode, isAdminMode: viewMode === 'admin' }),
+}))
+
+let viewMode = 'user'
+
+afterEach(() => {
+  cleanup()
+  viewMode = 'user'
+})
 
 function open() {
   const onClose = vi.fn()
@@ -53,4 +62,14 @@ test('closes after a navigation item is chosen', async () => {
   const onClose = open()
   await userEvent.click(screen.getByRole('button', { name: /ingredients/i }))
   expect(onClose).toHaveBeenCalled()
+})
+
+test('hands the badge counts through to its sidebar', () => {
+  viewMode = 'admin'
+  render(
+    <MemoryRouter>
+      <NavDrawer open onClose={vi.fn()} badges={{ '/discover/feedback': 2 }} />
+    </MemoryRouter>,
+  )
+  expect(screen.getByLabelText('2 unread')).toBeInTheDocument()
 })
