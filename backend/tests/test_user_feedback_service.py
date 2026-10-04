@@ -16,11 +16,6 @@ from models import FeedbackItem, FeedbackTag
 PNG = b"\x89PNG\r\n\x1a\nfake"
 
 
-@pytest.fixture(autouse=True)
-def _media(tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "MEDIA_DIR", tmp_path)
-
-
 def _count(session) -> int:
     return session.execute(select(func.count()).select_from(FeedbackItem)).scalar_one()
 
@@ -178,6 +173,38 @@ def test_set_notes_stores_stripped_notes_and_none_or_blank_clears_them(db_sessio
     user_feedback.set_notes(db_session, item, "   ")
     db_session.expire_all()
     assert item.admin_notes is None
+
+
+def test_update_item_applies_every_field_passed(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.update_item(
+        db_session, item, status="in_progress", priority="high", admin_notes=" n ", tags=["UI"], seen=True
+    )
+    db_session.expire_all()
+
+    assert (item.status, item.priority, item.admin_notes, item.seen) == ("in_progress", "high", "n", True)
+    assert [tag.name for tag in item.tags] == ["ui"]
+
+
+def test_update_item_leaves_fields_not_passed_alone(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_notes(db_session, item, "keep me")
+
+    user_feedback.update_item(db_session, item, priority="low")
+    db_session.expire_all()
+
+    assert (item.priority, item.status, item.admin_notes, item.seen) == ("low", "open", "keep me", False)
+
+
+def test_update_item_with_one_bad_value_changes_nothing(db_session, user):
+    item = _submit(db_session, user)
+
+    with pytest.raises(ValueError):
+        user_feedback.update_item(db_session, item, status="in_progress", priority="urgent")
+    db_session.expire_all()
+
+    assert (item.status, item.priority) == ("open", "normal")
 
 
 LONG_AGO = datetime(2000, 1, 1)

@@ -9,7 +9,7 @@ and keeps its Pydantic models local rather than adding them to ``schemas.py``.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict
@@ -29,8 +29,7 @@ Db = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[models.User, Depends(auth_users.get_current_user)]
 
 # At least one non-whitespace character: a blank title or body is a 422 here,
-# at the HTTP layer, so the only ``ValueError`` left for the service to raise
-# is the screenshot's content type (see the handler).
+# at the HTTP layer.
 _NOT_BLANK = r"\S"
 
 # Upper bounds on what one row can hold. Generous for honest use; they cap what
@@ -42,10 +41,6 @@ TITLE_MAX = 200
 BODY_MAX = 10_000
 CONTEXT_MAX = 500  # page_path, user_agent: truncated to this
 VIEWPORT_MAX = 100_000  # keeps the value inside a Postgres INTEGER; outside -> null
-
-# Built from the model's tuple so the allowed set has one source; subscripting
-# ``Literal`` with a tuple unpacks it at runtime (static checkers object).
-FeedbackType = Literal[models.FEEDBACK_TYPE_VALUES]  # type: ignore[valid-type]
 
 
 def _clamp_context(
@@ -77,7 +72,7 @@ async def submit_feedback(
     current_user: CurrentUser,
     title: Annotated[str, Form(max_length=TITLE_MAX, pattern=_NOT_BLANK)],
     body: Annotated[str, Form(max_length=BODY_MAX, pattern=_NOT_BLANK)],
-    type: Annotated[FeedbackType, Form()],
+    type: Annotated[user_feedback.FeedbackType, Form()],
     page_path: Annotated[Optional[str], Form()] = None,
     user_agent: Annotated[Optional[str], Form()] = None,
     viewport_width: Annotated[Optional[int], Form()] = None,
@@ -114,10 +109,9 @@ async def submit_feedback(
             viewport_width=viewport_width,
             screenshot=image,
         )
-    except ValueError:
-        # The text fields were validated above, so this can only be the
-        # screenshot's content type; the service stores the image before adding
-        # the row, so nothing was written. 400 per the feedback design, where
-        # the recipe image upload answers the same case with 415.
+    except storage.UnsupportedImageType:
+        # The service stores the image before adding the row, so nothing was
+        # written. 400 per the feedback design, where the recipe image upload
+        # answers the same case with 415.
         raise HTTPException(status_code=400, detail="Unsupported image type")
     return FeedbackSubmitted(ref_code=item.ref_code)

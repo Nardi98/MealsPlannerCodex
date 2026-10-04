@@ -15,14 +15,15 @@ accept/reject signal.
 
 Every function takes the session first and commits its own work. The routers
 translate the errors: ``FeedbackItemNotFound`` / ``FeedbackTagNotFound`` (both
-``LookupError``) to 404, ``FeedbackTagNameTaken`` to 409 and any other
-``ValueError`` -- a blank string, an unknown enum value, an unsupported
-screenshot type -- to 4xx. Pydantic normally rejects bad input before it gets
-here, so that validation is defence in depth.
+``LookupError``) to 404, ``FeedbackTagNameTaken`` to 409 and
+``storage.UnsupportedImageType`` to 400. Every other ``ValueError`` raised here
+-- a blank string, an unknown enum value -- is defence in depth: the routers'
+Pydantic models reject that input before it gets here.
 """
 
 from __future__ import annotations
 
+from typing import Any, Literal
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -30,6 +31,14 @@ from sqlalchemy.orm import Session, selectinload
 
 import models
 import storage
+
+
+# The enum vocabularies as types, for the routers' Pydantic models, built from
+# the models' tuples so the allowed sets have one source. Subscripting
+# ``Literal`` with a tuple unpacks it at runtime; static checkers object.
+FeedbackType = Literal[models.FEEDBACK_TYPE_VALUES]  # type: ignore[valid-type]
+FeedbackStatus = Literal[models.FEEDBACK_STATUS_VALUES]  # type: ignore[valid-type]
+FeedbackPriority = Literal[models.FEEDBACK_PRIORITY_VALUES]  # type: ignore[valid-type]
 
 
 class FeedbackItemNotFound(LookupError):
@@ -75,8 +84,8 @@ def submit(
     """File one item and return it, committed, with its ``FB-<id>`` ref code.
 
     ``screenshot`` is ``None`` or a ``(data, content_type)`` pair. It is stored
-    *before* the row is added, so an unsupported content type (``ValueError``
-    from ``storage``) leaves no row behind.
+    *before* the row is added, so an unsupported content type
+    (``storage.UnsupportedImageType``) leaves no row behind.
     """
     title = _required_text(title, "title")
     body = _required_text(body, "body")
@@ -145,53 +154,83 @@ def get_item(session: Session, item_id: int) -> models.FeedbackItem:
     return item
 
 
-def _commit(session: Session, item):
+# Marks an ``update_item`` field as "not passed": ``None`` is a real value for
+# ``admin_notes`` (it clears them), so it cannot double as "leave alone".
+_UNSET: Any = object()
+
+
+def update_item(
+    session: Session,
+    item: models.FeedbackItem,
+    *,
+    status: str = _UNSET,
+    priority: str = _UNSET,
+    admin_notes: str | None = _UNSET,
+    tags: list[str] = _UNSET,
+    seen: bool = _UNSET,
+) -> models.FeedbackItem:
+    """Apply whichever triage fields are passed to ``item``, in one commit.
+
+    Every value is validated before anything is mutated, so a bad one raises
+    ``ValueError`` with ``item`` untouched: an edit is applied whole or not at
+    all. ``seen`` and ``status`` are orthogonal -- neither implies the other.
+
+    ``admin_notes`` is stripped, and ``None`` or blank clears them. ``tags``
+    replaces the item's tags, creating any that are missing: names are
+    normalized (``models.normalize_feedback_tag_name``), so ``Mobile`` and
+    ``mobile `` are one tag; duplicates collapse and blank names are silently
+    ignored. An empty list removes every tag from the item; the tags
+    themselves are kept.
+    """
+    changes: dict[str, Any] = {}
+    if status is not _UNSET:
+        changes["status"] = _one_of(status, models.FEEDBACK_STATUS_VALUES, "status")
+    if priority is not _UNSET:
+        changes["priority"] = _one_of(priority, models.FEEDBACK_PRIORITY_VALUES, "priority")
+    if admin_notes is not _UNSET:
+        changes["admin_notes"] = (admin_notes or "").strip() or None
+    if seen is not _UNSET:
+        changes["seen"] = seen
+    if tags is not _UNSET:
+        wanted = {models.normalize_feedback_tag_name(name) for name in tags} - {""}
+        existing = {
+            tag.name: tag
+            for tag in session.execute(
+                select(models.FeedbackTag).where(models.FeedbackTag.name.in_(wanted))
+            ).scalars()
+        }
+        changes["tags"] = [existing.get(name) or models.FeedbackTag(name=name) for name in sorted(wanted)]
+        # Only the join table changes, so the column's ``onupdate`` would not fire.
+        changes["updated_at"] = func.now()
+
+    for field, value in changes.items():
+        setattr(item, field, value)
     session.commit()
     return item
 
 
 def mark_seen(session: Session, item: models.FeedbackItem, seen: bool = True) -> models.FeedbackItem:
     """Mark ``item`` read (or, with ``seen=False``, unread). Status is untouched."""
-    item.seen = seen
-    return _commit(session, item)
+    return update_item(session, item, seen=seen)
 
 
 def set_status(session: Session, item: models.FeedbackItem, status: str) -> models.FeedbackItem:
     """Move ``item`` to ``status``. Never touches ``seen``: the axes are orthogonal."""
-    item.status = _one_of(status, models.FEEDBACK_STATUS_VALUES, "status")
-    return _commit(session, item)
+    return update_item(session, item, status=status)
 
 
 def set_priority(session: Session, item: models.FeedbackItem, priority: str) -> models.FeedbackItem:
-    item.priority = _one_of(priority, models.FEEDBACK_PRIORITY_VALUES, "priority")
-    return _commit(session, item)
+    return update_item(session, item, priority=priority)
 
 
 def set_notes(session: Session, item: models.FeedbackItem, notes: str | None) -> models.FeedbackItem:
     """Set the admin's private notes, stripped; ``None`` or blank clears them."""
-    item.admin_notes = (notes or "").strip() or None
-    return _commit(session, item)
+    return update_item(session, item, admin_notes=notes)
 
 
 def set_tags(session: Session, item: models.FeedbackItem, names: list[str]) -> models.FeedbackItem:
-    """Replace ``item``'s tags with ``names``, creating any tag that is missing.
-
-    Names are normalized (``models.normalize_feedback_tag_name``), so ``Mobile``
-    and ``mobile `` are one tag; duplicates collapse and blank names are
-    silently ignored. An empty list removes every tag from the item; the tags
-    themselves are kept.
-    """
-    wanted = {models.normalize_feedback_tag_name(name) for name in names} - {""}
-    existing = {
-        tag.name: tag
-        for tag in session.execute(
-            select(models.FeedbackTag).where(models.FeedbackTag.name.in_(wanted))
-        ).scalars()
-    }
-    item.tags = [existing.get(name) or models.FeedbackTag(name=name) for name in sorted(wanted)]
-    # Only the join table changes, so the column's ``onupdate`` would not fire.
-    item.updated_at = func.now()
-    return _commit(session, item)
+    """Replace ``item``'s tags with ``names``; see ``update_item`` for the rules."""
+    return update_item(session, item, tags=names)
 
 
 def list_tags(session: Session) -> list[models.FeedbackTag]:
@@ -222,7 +261,8 @@ def rename_tag(session: Session, tag: models.FeedbackTag, name: str) -> models.F
     if clash is not None:
         raise FeedbackTagNameTaken(normalized)
     tag.name = normalized
-    return _commit(session, tag)
+    session.commit()
+    return tag
 
 
 def unseen_count(session: Session) -> int:

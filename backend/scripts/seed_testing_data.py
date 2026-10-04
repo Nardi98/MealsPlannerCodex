@@ -31,6 +31,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from typing import NamedTuple
+from uuid import uuid4
 
 # Allow ``python scripts/seed_testing_data.py`` to resolve the top-level
 # ``database`` / ``models`` modules that live at the backend root.
@@ -996,7 +997,7 @@ def link_user_feedback(session, users_by_username: dict[str, User]) -> None:
     """File :data:`FEEDBACK_ITEMS` as the seeded accounts and tag them.
 
     ``ref_code`` is ``FB-<id>``, so it is set after a flush has assigned the id,
-    in the same transaction as the insert -- the shape the service will use.
+    in the same transaction as the insert -- mirroring ``user_feedback.submit``.
 
     Flushes, never commits: ``populate`` owns the commit.
     """
@@ -1004,8 +1005,8 @@ def link_user_feedback(session, users_by_username: dict[str, User]) -> None:
     session.add_all(tags.values())
     for spec in FEEDBACK_ITEMS:
         item = FeedbackItem(
-            # A placeholder that satisfies NOT NULL until the id exists.
-            ref_code=f"FB-pending-{spec['title']}",
+            # A unique placeholder that satisfies NOT NULL / UNIQUE until the id exists.
+            ref_code=f"pending-{uuid4().hex}",
             user_id=users_by_username[spec["by"]].id,
             title=spec["title"],
             body=spec["body"],
@@ -1026,7 +1027,6 @@ def link_user_feedback(session, users_by_username: dict[str, User]) -> None:
         session.add(item)
         session.flush()
         item.ref_code = f"FB-{item.id}"
-    session.flush()
 
 
 # Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever

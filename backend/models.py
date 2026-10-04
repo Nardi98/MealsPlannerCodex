@@ -960,7 +960,7 @@ FEEDBACK_STATUS_VALUES = ("open", "in_progress", "closed_fixed", "closed_ignored
 FEEDBACK_PRIORITY_VALUES = ("low", "normal", "high")
 
 
-def _one_of(column: str, values: tuple[str, ...]) -> str:
+def _in_check_sql(column: str, values: tuple[str, ...]) -> str:
     """The SQL of a ``CHECK (<column> IN (...))`` over ``values``."""
     return "{} IN ({})".format(column, ", ".join(f"'{value}'" for value in values))
 
@@ -1045,10 +1045,10 @@ class FeedbackItem(Base):
     __table_args__ = (
         # Named, like every other CHECK here, so autogenerate can match the
         # reflected constraints on later revisions.
-        CheckConstraint(_one_of("type", FEEDBACK_TYPE_VALUES), name="ck_feedback_item_type"),
-        CheckConstraint(_one_of("status", FEEDBACK_STATUS_VALUES), name="ck_feedback_item_status"),
+        CheckConstraint(_in_check_sql("type", FEEDBACK_TYPE_VALUES), name="ck_feedback_item_type"),
+        CheckConstraint(_in_check_sql("status", FEEDBACK_STATUS_VALUES), name="ck_feedback_item_status"),
         CheckConstraint(
-            _one_of("priority", FEEDBACK_PRIORITY_VALUES), name="ck_feedback_item_priority"
+            _in_check_sql("priority", FEEDBACK_PRIORITY_VALUES), name="ck_feedback_item_priority"
         ),
     )
 
