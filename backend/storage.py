@@ -41,6 +41,14 @@ _CONTENT_TYPE_BY_EXT = {
 }
 
 
+class UnsupportedImageType(ValueError):
+    """The upload's content type is not one we store as an image.
+
+    A ``ValueError`` so callers that catch the broad class keep working; a
+    distinct class so a route can catch exactly this case and nothing else.
+    """
+
+
 def _bucket_name() -> str | None:
     return os.environ.get("AWS_S3_BUCKET_NAME") or None
 
@@ -60,13 +68,13 @@ def _s3_client():
 def _key_for(content_type: str, prefix: str) -> str:
     ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower())
     if ext is None:
-        raise ValueError(f"Unsupported image content type: {content_type!r}")
+        raise UnsupportedImageType(f"Unsupported image content type: {content_type!r}")
     return f"{prefix}/{uuid4().hex}{ext}"
 
 
 def save_image(data: bytes, content_type: str, prefix: str = "recipes") -> str:
-    """Persist ``data`` and return its object key. Raises ``ValueError`` for
-    non-image content types.
+    """Persist ``data`` and return its object key. Raises ``UnsupportedImageType``
+    (a ``ValueError``) for non-image content types.
 
     ``prefix`` namespaces the key by what the image belongs to -- recipe images
     under ``recipes/``, feedback screenshots under ``feedback/`` -- so the two

@@ -15,10 +15,10 @@ accept/reject signal.
 
 Every function takes the session first and commits its own work. The routers
 translate the errors: ``FeedbackItemNotFound`` / ``FeedbackTagNotFound`` (both
-``LookupError``) to 404, ``FeedbackTagNameTaken`` to 409 and any other
-``ValueError`` -- a blank string, an unknown enum value, an unsupported
-screenshot type -- to 4xx. Pydantic normally rejects bad input before it gets
-here, so that validation is defence in depth.
+``LookupError``) to 404, ``FeedbackTagNameTaken`` to 409 and
+``storage.UnsupportedImageType`` to 400. Every other ``ValueError`` raised here
+-- a blank string, an unknown enum value -- is defence in depth: the routers'
+Pydantic models reject that input before it gets here.
 """
 
 from __future__ import annotations
@@ -75,8 +75,8 @@ def submit(
     """File one item and return it, committed, with its ``FB-<id>`` ref code.
 
     ``screenshot`` is ``None`` or a ``(data, content_type)`` pair. It is stored
-    *before* the row is added, so an unsupported content type (``ValueError``
-    from ``storage``) leaves no row behind.
+    *before* the row is added, so an unsupported content type
+    (``storage.UnsupportedImageType``) leaves no row behind.
     """
     title = _required_text(title, "title")
     body = _required_text(body, "body")

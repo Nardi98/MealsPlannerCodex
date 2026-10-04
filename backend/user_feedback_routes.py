@@ -29,8 +29,7 @@ Db = Annotated[Session, Depends(get_db)]
 CurrentUser = Annotated[models.User, Depends(auth_users.get_current_user)]
 
 # At least one non-whitespace character: a blank title or body is a 422 here,
-# at the HTTP layer, so the only ``ValueError`` left for the service to raise
-# is the screenshot's content type (see the handler).
+# at the HTTP layer.
 _NOT_BLANK = r"\S"
 
 # Upper bounds on what one row can hold. Generous for honest use; they cap what
@@ -114,10 +113,9 @@ async def submit_feedback(
             viewport_width=viewport_width,
             screenshot=image,
         )
-    except ValueError:
-        # The text fields were validated above, so this can only be the
-        # screenshot's content type; the service stores the image before adding
-        # the row, so nothing was written. 400 per the feedback design, where
-        # the recipe image upload answers the same case with 415.
+    except storage.UnsupportedImageType:
+        # The service stores the image before adding the row, so nothing was
+        # written. 400 per the feedback design, where the recipe image upload
+        # answers the same case with 415.
         raise HTTPException(status_code=400, detail="Unsupported image type")
     return FeedbackSubmitted(ref_code=item.ref_code)

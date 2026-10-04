@@ -52,3 +52,11 @@ def test_max_image_bytes_is_the_shared_5_mb_upload_cap():
     import storage
 
     assert storage.MAX_IMAGE_BYTES == 5 * 1024 * 1024
+
+
+def test_an_unsupported_content_type_raises_the_specific_storage_error(local_storage):
+    """A distinct ``UnsupportedImageType`` lets a route catch exactly this case;
+    it stays a ``ValueError`` so callers catching the broad class keep working."""
+    with pytest.raises(local_storage.UnsupportedImageType):
+        local_storage.save_image(b"hello", "text/plain")
+    assert issubclass(local_storage.UnsupportedImageType, ValueError)
