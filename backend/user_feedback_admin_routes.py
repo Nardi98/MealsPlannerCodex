@@ -95,8 +95,9 @@ class ItemPatch(BaseModel):
     422, and an omitted field is left alone (defaults are not validated, so
     ``None`` here means "not sent"). ``admin_notes`` is the one field ``null``
     is meaningful for -- it clears -- so the route tells it apart from an
-    omitted one by ``model_fields_set``. Validating everything here, before any
-    setter runs, is what keeps a bad value from leaving half a PATCH applied.
+    omitted one by ``model_fields_set``. The sent fields are applied in one
+    ``user_feedback.update_item`` call -- one commit -- so a PATCH is never left
+    half applied.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -226,17 +227,7 @@ def get_feedback(item_id: int, db: Db) -> FeedbackItemAdmin:
 def update_feedback(request: Request, item_id: int, payload: ItemPatch, db: Db) -> FeedbackItemAdmin:
     """Apply whichever triage fields were sent; an empty body changes nothing."""
     item = _get_item(db, item_id)
-    sent = payload.model_fields_set
-    if "status" in sent:
-        user_feedback.set_status(db, item, payload.status)
-    if "priority" in sent:
-        user_feedback.set_priority(db, item, payload.priority)
-    if "admin_notes" in sent:
-        user_feedback.set_notes(db, item, payload.admin_notes)
-    if "tags" in sent:
-        user_feedback.set_tags(db, item, payload.tags)
-    if "seen" in sent:
-        user_feedback.mark_seen(db, item, payload.seen)
+    user_feedback.update_item(db, item, **{field: getattr(payload, field) for field in payload.model_fields_set})
     return _item(item)
 
 
