@@ -18,6 +18,11 @@ from uuid import uuid4
 # Absolute path so the location is stable regardless of the working directory.
 MEDIA_DIR = Path(__file__).resolve().parent / "media"
 
+# The upload cap for every image route (recipe photos, feedback screenshots):
+# over it a route answers 413. Lives here, public, so routers enforce the same
+# cap without importing ``main``.
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
 # Content types we accept, mapped to the extension used for the stored key.
 _EXT_BY_CONTENT_TYPE = {
     "image/jpeg": ".jpg",
