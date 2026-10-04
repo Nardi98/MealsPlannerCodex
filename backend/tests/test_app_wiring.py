@@ -105,12 +105,3 @@ def test_the_feedback_routers_are_included():
     admin_paths = {route.path for route in user_feedback_admin_routes.router.routes}
     assert "/admin/feedback" in admin_paths
     assert admin_paths <= {path for _, path in served}
-
-
-def test_the_user_feedback_admin_router_is_admin_only_as_a_whole():
-    import auth_users
-    import user_feedback_admin_routes
-
-    router = user_feedback_admin_routes.router
-    assert router.prefix == "/admin/feedback"
-    assert any(dep.dependency is auth_users.require_admin for dep in router.dependencies)

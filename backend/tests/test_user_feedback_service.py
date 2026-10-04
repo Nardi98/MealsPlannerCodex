@@ -16,11 +16,6 @@ from models import FeedbackItem, FeedbackTag
 PNG = b"\x89PNG\r\n\x1a\nfake"
 
 
-@pytest.fixture(autouse=True)
-def _media(tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "MEDIA_DIR", tmp_path)
-
-
 def _count(session) -> int:
     return session.execute(select(func.count()).select_from(FeedbackItem)).scalar_one()
 
