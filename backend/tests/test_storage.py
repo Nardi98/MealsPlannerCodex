@@ -35,3 +35,12 @@ def test_save_image_rejects_non_image_content_type(local_storage):
 def test_open_image_missing_key_raises(local_storage):
     with pytest.raises(FileNotFoundError):
         local_storage.open_image("recipes/does-not-exist.jpg")
+
+
+def test_a_custom_prefix_namespaces_the_key_and_roundtrips(local_storage):
+    """Feedback screenshots live under ``feedback/``, apart from recipe images."""
+    key = local_storage.save_image(b"pngbytes", "image/png", prefix="feedback")
+    assert key.startswith("feedback/")
+    data, content_type = local_storage.open_image(key)
+    assert data == b"pngbytes"
+    assert content_type == "image/png"
