@@ -7,13 +7,14 @@ import { useViewMode } from '../../auth/ViewModeContext'
  *
  * Owned by the shell, not by `Sidebar`: the sidebar is rendered twice (the
  * desktop column and the mobile drawer), so fetching inside it would ask the
- * server twice. The triage page reaches it through `useFeedbackBadge()` to take
- * one off as it reads an item, or put one back when it marks one unread.
+ * server twice. The triage page reaches it through `useFeedbackBadge()` and
+ * calls `refresh()` after it changes what is read -- the server is the one
+ * source of truth, so the page never does arithmetic on the pill.
  *
  * The default value is what a component outside the provider sees -- no count
- * and an `adjust` that does nothing -- so the page stays renderable on its own.
+ * and a `refresh` that does nothing -- so the page stays renderable on its own.
  */
-const FeedbackBadgeContext = React.createContext({ count: undefined, adjust: () => {} })
+const FeedbackBadgeContext = React.createContext({ count: undefined, refresh: () => {} })
 
 /**
  * Fetches the count each time the account enters admin mode -- the only mode
@@ -24,29 +25,35 @@ const FeedbackBadgeContext = React.createContext({ count: undefined, adjust: () 
 export function FeedbackBadgeProvider({ children }) {
   const enabled = useViewMode().isAdminMode
   const [count, setCount] = React.useState(undefined)
+  // Each fetch takes a ticket and only the newest may land, so a slow answer
+  // to an older question never overwrites a fresher count.
+  const latest = React.useRef(0)
+
+  const fetchCount = React.useCallback(() => {
+    const ticket = ++latest.current
+    userFeedbackAdminApi
+      .unseenCount()
+      .then((result) => {
+        if (ticket === latest.current) setCount(result?.count)
+      })
+      .catch(() => {})
+  }, [])
 
   React.useEffect(() => {
     setCount(undefined)
     if (!enabled) return undefined
-    let stale = false
-    userFeedbackAdminApi
-      .unseenCount()
-      .then((result) => {
-        if (!stale) setCount(result?.count)
-      })
-      .catch(() => {})
+    fetchCount()
     return () => {
-      stale = true
+      // Leaving admin mode orphans whatever is still in flight.
+      latest.current += 1
     }
-  }, [enabled])
+  }, [enabled, fetchCount])
 
-  // Never below zero: a decrement racing a fresh fetch must not show "-1".
-  const adjust = React.useCallback(
-    (delta) => setCount((current) => (current === undefined ? current : Math.max(0, current + delta))),
-    [],
-  )
+  const refresh = React.useCallback(() => {
+    if (enabled) fetchCount()
+  }, [enabled, fetchCount])
 
-  const value = React.useMemo(() => ({ count, adjust }), [count, adjust])
+  const value = React.useMemo(() => ({ count, refresh }), [count, refresh])
   return <FeedbackBadgeContext.Provider value={value}>{children}</FeedbackBadgeContext.Provider>
 }
 

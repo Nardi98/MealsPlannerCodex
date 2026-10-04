@@ -63,8 +63,9 @@ const NAV_FOR = {
 // them, and nothing here is a permission.
 //
 // `badges` maps an entry's path to a count shown beside it (the unread feedback
-// count). The caller fetches it once for both copies of this panel -- desktop
-// and drawer -- so a phone does not ask twice.
+// count). It arrives as a prop rather than being read from the badge context,
+// so this panel stays presentational: the shell's provider fetches the count
+// once and hands it to both copies -- desktop and drawer.
 export default function Sidebar({ onNavigate, badges }) {
   const navigate = useNavigate()
   const location = useLocation()
