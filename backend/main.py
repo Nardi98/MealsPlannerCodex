@@ -41,6 +41,8 @@ import ratelimit
 import schemas
 import share_routes
 import storage
+import user_feedback_admin_routes
+import user_feedback_routes
 import username_routes
 import usernames
 from mealplanner import planner
@@ -113,6 +115,8 @@ app.include_router(catalog_routes.router)
 app.include_router(catalog_admin_routes.router)
 app.include_router(catalog_import_routes.router)
 app.include_router(alpha_routes.router)  # ALPHA-GATE: closed-alpha allowlist admin
+app.include_router(user_feedback_routes.router)
+app.include_router(user_feedback_admin_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
