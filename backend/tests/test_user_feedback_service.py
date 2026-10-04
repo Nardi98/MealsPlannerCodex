@@ -7,7 +7,7 @@ SAVEPOINT and rolls the outer transaction back, so nothing leaks between tests.
 from datetime import datetime
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, inspect, select, update
 
 import storage
 import user_feedback
@@ -342,6 +342,69 @@ def test_rename_tag_to_another_tags_name_raises_taken(db_session, user):
 
     db_session.expire_all()
     assert sorted(_names(item)) == ["mobile", "ui"]
+
+
+def _ids(items):
+    return [item.id for item in items]
+
+
+def test_list_items_is_newest_first_with_ties_broken_by_id(db_session, user):
+    # Inside one transaction ``now()`` is constant, so every created_at ties.
+    first, second, third = (_submit(db_session, user) for _ in range(3))
+    db_session.execute(
+        update(FeedbackItem).where(FeedbackItem.id == first.id).values(created_at=datetime(2999, 1, 1))
+    )
+
+    assert _ids(user_feedback.list_items(db_session)) == [first.id, third.id, second.id]
+
+
+def test_list_items_filters_by_status_type_priority_and_seen(db_session, user):
+    plain = _submit(db_session, user)
+    request = _submit(db_session, user, type="request")
+    closed = _submit(db_session, user)
+    user_feedback.set_status(db_session, closed, "closed_ignored")
+    urgent = _submit(db_session, user)
+    user_feedback.set_priority(db_session, urgent, "high")
+    user_feedback.mark_seen(db_session, urgent)
+
+    assert _ids(user_feedback.list_items(db_session, status="closed_ignored")) == [closed.id]
+    assert _ids(user_feedback.list_items(db_session, type="request")) == [request.id]
+    assert _ids(user_feedback.list_items(db_session, priority="high")) == [urgent.id]
+    assert _ids(user_feedback.list_items(db_session, seen=True)) == [urgent.id]
+    assert _ids(user_feedback.list_items(db_session, seen=False)) == [closed.id, request.id, plain.id]
+
+
+def test_list_items_filters_by_a_normalized_tag_name(db_session, user):
+    tagged = _submit(db_session, user)
+    _submit(db_session, user)
+    user_feedback.set_tags(db_session, tagged, ["mobile", "ui"])
+
+    assert _ids(user_feedback.list_items(db_session, tag="  Mobile ")) == [tagged.id]
+    assert user_feedback.list_items(db_session, tag="nonexistent") == []
+
+
+def test_list_items_filters_compose(db_session, user):
+    match = _submit(db_session, user)
+    wrong_type = _submit(db_session, user, type="request")
+    untagged = _submit(db_session, user)
+    for item in (match, wrong_type):
+        user_feedback.set_tags(db_session, item, ["ui"])
+
+    found = user_feedback.list_items(db_session, type="issue", tag="ui", status="open", seen=False)
+
+    assert _ids(found) == [match.id]
+    assert untagged.id not in _ids(found)
+
+
+def test_list_items_loads_tags_and_author_up_front(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui"])
+    db_session.expire_all()
+
+    [listed] = user_feedback.list_items(db_session)
+
+    assert {"tags", "author"}.isdisjoint(inspect(listed).unloaded)
+    assert listed.author.email == user.email
 
 
 def test_rename_tag_rejects_a_blank_name(db_session, user):

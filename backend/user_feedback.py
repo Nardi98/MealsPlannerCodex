@@ -26,7 +26,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 import models
 import storage
@@ -109,6 +109,32 @@ def submit(
         session.rollback()
         raise
     return item
+
+
+def list_items(
+    session: Session,
+    *,
+    status: str | None = None,
+    type: str | None = None,
+    priority: str | None = None,
+    tag: str | None = None,
+    seen: bool | None = None,
+) -> list[models.FeedbackItem]:
+    """Every item matching all the given filters, newest first (ties by id).
+
+    ``tag`` is a name, normalized before matching. Tags and author are loaded
+    up front, since the inbox serialises both for every row.
+    """
+    Item = models.FeedbackItem
+    query = select(Item).options(selectinload(Item.tags), selectinload(Item.author))
+    for column, value in ((Item.status, status), (Item.type, type), (Item.priority, priority), (Item.seen, seen)):
+        if value is not None:
+            query = query.where(column == value)
+    if tag is not None:
+        query = query.where(
+            Item.tags.any(models.FeedbackTag.name == models.normalize_feedback_tag_name(tag))
+        )
+    return list(session.execute(query.order_by(Item.created_at.desc(), Item.id.desc())).scalars())
 
 
 def get_item(session: Session, item_id: int) -> models.FeedbackItem:
