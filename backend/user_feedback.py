@@ -23,7 +23,7 @@ Pydantic models reject that input before it gets here.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from sqlalchemy import func, select
@@ -31,6 +31,14 @@ from sqlalchemy.orm import Session, selectinload
 
 import models
 import storage
+
+
+# The enum vocabularies as types, for the routers' Pydantic models, built from
+# the models' tuples so the allowed sets have one source. Subscripting
+# ``Literal`` with a tuple unpacks it at runtime; static checkers object.
+FeedbackType = Literal[models.FEEDBACK_TYPE_VALUES]  # type: ignore[valid-type]
+FeedbackStatus = Literal[models.FEEDBACK_STATUS_VALUES]  # type: ignore[valid-type]
+FeedbackPriority = Literal[models.FEEDBACK_PRIORITY_VALUES]  # type: ignore[valid-type]
 
 
 class FeedbackItemNotFound(LookupError):

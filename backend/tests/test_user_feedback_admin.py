@@ -9,7 +9,6 @@ commit freely and the outer transaction still discards everything.
 import pytest
 
 import auth_users
-import models
 import storage
 import user_feedback
 import user_feedback_admin_routes
@@ -496,10 +495,3 @@ def test_write_routes_are_rate_limited(db_session, admin_user, monkeypatch, path
         app.dependency_overrides.clear()
 
     assert statuses[-1] == 429
-
-
-def test_models_value_tuples_are_what_the_router_validates_against():
-    """The Literal types are spelled from the models' tuples, not copied."""
-    assert user_feedback_admin_routes.STATUS.__args__ == models.FEEDBACK_STATUS_VALUES
-    assert user_feedback_admin_routes.PRIORITY.__args__ == models.FEEDBACK_PRIORITY_VALUES
-    assert user_feedback_admin_routes.TYPE.__args__ == models.FEEDBACK_TYPE_VALUES

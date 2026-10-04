@@ -9,7 +9,7 @@ and keeps its Pydantic models local rather than adding them to ``schemas.py``.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, ConfigDict
@@ -42,10 +42,6 @@ BODY_MAX = 10_000
 CONTEXT_MAX = 500  # page_path, user_agent: truncated to this
 VIEWPORT_MAX = 100_000  # keeps the value inside a Postgres INTEGER; outside -> null
 
-# Built from the model's tuple so the allowed set has one source; subscripting
-# ``Literal`` with a tuple unpacks it at runtime (static checkers object).
-FeedbackType = Literal[models.FEEDBACK_TYPE_VALUES]  # type: ignore[valid-type]
-
 
 def _clamp_context(
     page_path: str | None, user_agent: str | None, viewport_width: int | None
@@ -76,7 +72,7 @@ async def submit_feedback(
     current_user: CurrentUser,
     title: Annotated[str, Form(max_length=TITLE_MAX, pattern=_NOT_BLANK)],
     body: Annotated[str, Form(max_length=BODY_MAX, pattern=_NOT_BLANK)],
-    type: Annotated[FeedbackType, Form()],
+    type: Annotated[user_feedback.FeedbackType, Form()],
     page_path: Annotated[Optional[str], Form()] = None,
     user_agent: Annotated[Optional[str], Form()] = None,
     viewport_width: Annotated[Optional[int], Form()] = None,

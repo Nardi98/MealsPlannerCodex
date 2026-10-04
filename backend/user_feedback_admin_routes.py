@@ -21,10 +21,10 @@ Route order matters: ``/unseen-count`` and ``/tags`` are declared before
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 import auth_users
@@ -35,11 +35,6 @@ import user_feedback
 from database import get_db
 
 Db = Annotated[Session, Depends(get_db)]
-
-#: The enum vocabularies, spelled from the models' tuples so there is one list.
-STATUS = Literal[models.FEEDBACK_STATUS_VALUES]
-PRIORITY = Literal[models.FEEDBACK_PRIORITY_VALUES]
-TYPE = Literal[models.FEEDBACK_TYPE_VALUES]
 
 ITEM_NOT_FOUND = "Feedback item not found"
 TAG_NOT_FOUND = "Feedback tag not found"
@@ -102,8 +97,8 @@ class ItemPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: STATUS = None
-    priority: PRIORITY = None
+    status: user_feedback.FeedbackStatus = None
+    priority: user_feedback.FeedbackPriority = None
     admin_notes: Optional[str] = None
     tags: List[str] = None
     seen: bool = None
@@ -119,14 +114,8 @@ class TagOut(BaseModel):
 class TagRename(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-
-    @field_validator("name")
-    @classmethod
-    def _not_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("name must not be blank")
-        return value
+    # At least one non-whitespace character: a blank name is a 422.
+    name: Annotated[str, Field(pattern=r"\S")]
 
 
 class UnseenCountOut(BaseModel):
@@ -156,7 +145,7 @@ def _item(item: models.FeedbackItem) -> FeedbackItemAdmin:
         viewport_width=item.viewport_width,
         has_screenshot=item.screenshot_key is not None,
         admin_notes=item.admin_notes,
-        tags=sorted(tag.name for tag in item.tags),
+        tags=[tag.name for tag in item.tags],
         author=_author(item.author),
         created_at=item.created_at,
         updated_at=item.updated_at,
@@ -176,9 +165,9 @@ def _get_item(db: Session, item_id: int) -> models.FeedbackItem:
 @router.get("", response_model=List[FeedbackItemAdmin])
 def list_feedback(
     db: Db,
-    status: Optional[STATUS] = None,
-    type: Optional[TYPE] = None,
-    priority: Optional[PRIORITY] = None,
+    status: Optional[user_feedback.FeedbackStatus] = None,
+    type: Optional[user_feedback.FeedbackType] = None,
+    priority: Optional[user_feedback.FeedbackPriority] = None,
     tag: Optional[str] = None,
     seen: Optional[bool] = None,
 ) -> List[FeedbackItemAdmin]:
@@ -208,8 +197,6 @@ def rename_tag(request: Request, tag_id: int, payload: TagRename, db: Db) -> Tag
         raise HTTPException(status_code=404, detail=TAG_NOT_FOUND)
     except user_feedback.FeedbackTagNameTaken:
         raise HTTPException(status_code=409, detail="Another tag already has that name")
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
     return TagOut(id=tag.id, name=tag.name)
 
 
