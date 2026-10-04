@@ -10,37 +10,16 @@ import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle, sectionHeadingStyle } from '../components/catalog/textStyles'
 import { useFeedbackBadge } from '../components/feedback/FeedbackBadgeContext'
+import {
+  FEEDBACK_PRIORITIES,
+  FEEDBACK_STATUSES,
+  FEEDBACK_TYPES,
+  entryFor,
+} from '../components/feedback/vocabulary'
 import { useAdminAction } from '../hooks/useAdminAction'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { userFeedbackAdminApi } from '../api/userFeedbackAdminApi'
 import { shownDate } from '../utils/formatDate'
-
-// Each enumeration's wire value, its words, and its Badge tone, in the order the
-// selects offer them. Tones: a type is a category, so it takes a category hue;
-// a status runs from the neutral caramel (nothing decided yet) to the guide's
-// positive forest (fixed), with sage -- the quieter green -- for set aside.
-const TYPES = [
-  ['issue', 'Issue', 'terracotta'],
-  ['request', 'Request', 'sky'],
-  ['improvement', 'Improvement', 'teal'],
-  ['not_working', 'Not working', 'danger'],
-]
-const STATUSES = [
-  ['open', 'Open', 'caramel'],
-  ['in_progress', 'In progress', 'plum'],
-  ['closed_fixed', 'Closed: fixed', 'forest'],
-  ['closed_ignored', 'Closed: ignored', 'sage'],
-]
-const PRIORITIES = [
-  ['low', 'Low'],
-  ['normal', 'Normal'],
-  ['high', 'High'],
-]
-
-const lookup = (table) => Object.fromEntries(table.map(([value, ...rest]) => [value, rest]))
-const TYPE = lookup(TYPES)
-const STATUS = lookup(STATUSES)
-const PRIORITY = lookup(PRIORITIES)
 
 const NO_FILTERS = { status: '', type: '', priority: '', tag: '', unreadOnly: false }
 
@@ -212,19 +191,13 @@ export default function FeedbackAdminPage() {
  */
 function FeedbackFilters({ filters, vocabulary, onChange }) {
   const select = (key, label, allLabel, options) => (
-    <Input
-      as="select"
+    <EnumSelect
       aria-label={label}
+      allLabel={allLabel}
+      options={options}
       value={filters[key]}
-      onChange={(e) => onChange(key, e.target.value)}
-    >
-      <option value="">{allLabel}</option>
-      {options.map(([value, words]) => (
-        <option key={value} value={value}>
-          {words}
-        </option>
-      ))}
-    </Input>
+      onChange={(value) => onChange(key, value)}
+    />
   )
 
   return (
@@ -234,10 +207,10 @@ function FeedbackFilters({ filters, vocabulary, onChange }) {
       className="flex flex-wrap items-center gap-2 border-t pt-3"
       style={{ borderColor: 'var(--border-default)' }}
     >
-      {select('status', 'Filter by status', 'All statuses', STATUSES)}
-      {select('type', 'Filter by type', 'All types', TYPES)}
-      {select('priority', 'Filter by priority', 'All priorities', PRIORITIES)}
-      {select('tag', 'Filter by tag', 'All tags', vocabulary.map((tag) => [tag.name, tag.name]))}
+      {select('status', 'Filter by status', 'All statuses', FEEDBACK_STATUSES)}
+      {select('type', 'Filter by type', 'All types', FEEDBACK_TYPES)}
+      {select('priority', 'Filter by priority', 'All priorities', FEEDBACK_PRIORITIES)}
+      {select('tag', 'Filter by tag', 'All tags', vocabulary.map((tag) => ({ value: tag.name, label: tag.name })))}
       <ToggleChip
         size="lg"
         active={filters.unreadOnly}
@@ -305,8 +278,8 @@ function FeedbackList({ rows, labelledBy, selectedId, onOpen }) {
                   </span>
                 </span>
                 <span className="flex flex-wrap items-center gap-1">
-                  <TypeBadge type={row.type} />
-                  <StatusBadge status={row.status} />
+                  <EnumBadge table={FEEDBACK_TYPES} value={row.type} />
+                  <EnumBadge table={FEEDBACK_STATUSES} value={row.status} />
                   {row.tags.map((tag) => (
                     <Badge key={tag} tone="olive">
                       {tag}
@@ -338,19 +311,33 @@ function UnreadDot() {
   )
 }
 
-function TypeBadge({ type }) {
-  const [words, tone] = TYPE[type] || [type, 'caramel']
-  return <Badge tone={tone}>{words}</Badge>
+/**
+ * A native select over one of the feedback tables (`[{ value, label }]`). With
+ * `allLabel` it leads with an empty "all" option, which is how a filter says
+ * "no filter". Other props (an id, an aria-label) go to the select itself.
+ */
+function EnumSelect({ options, value, onChange, allLabel, ...rest }) {
+  return (
+    <Input as="select" {...rest} value={value} onChange={(e) => onChange(e.target.value)}>
+      {allLabel !== undefined && <option value="">{allLabel}</option>}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Input>
+  )
 }
 
-function StatusBadge({ status }) {
-  const [words, tone] = STATUS[status] || [status, 'caramel']
-  return <Badge tone={tone}>{words}</Badge>
+/** A value from a toned feedback table as its Badge; an unknown one in caramel. */
+function EnumBadge({ table, value }) {
+  const { label, tone } = entryFor(table, value) || { label: value, tone: 'caramel' }
+  return <Badge tone={tone}>{label}</Badge>
 }
 
 // High is the one priority worth catching the eye, so only it takes colour.
 function PriorityText({ priority }) {
-  const [words] = PRIORITY[priority] || [priority]
+  const words = entryFor(FEEDBACK_PRIORITIES, priority)?.label ?? priority
   return (
     <span style={priority === 'high' ? { color: 'var(--c-neg)', fontWeight: 'var(--weight-semibold)' } : undefined}>
       {`${words} priority`}
@@ -397,8 +384,8 @@ function FeedbackDetail({ item, vocabulary, busy, onPatch }) {
           {` · sent ${shownDate(item.created_at)} · updated ${shownDate(item.updated_at)}`}
         </p>
         <div className="mt-2 flex flex-wrap gap-1">
-          <TypeBadge type={item.type} />
-          <StatusBadge status={item.status} />
+          <EnumBadge table={FEEDBACK_TYPES} value={item.type} />
+          <EnumBadge table={FEEDBACK_STATUSES} value={item.status} />
         </div>
       </div>
 
@@ -411,35 +398,23 @@ function FeedbackDetail({ item, vocabulary, busy, onPatch }) {
           <label htmlFor={fieldId('status')} style={sectionHeadingStyle}>
             Status
           </label>
-          <Input
-            as="select"
+          <EnumSelect
             id={fieldId('status')}
+            options={FEEDBACK_STATUSES}
             value={item.status}
-            onChange={(e) => onPatch(item, { status: e.target.value }, 'save the status')}
-          >
-            {STATUSES.map(([value, words]) => (
-              <option key={value} value={value}>
-                {words}
-              </option>
-            ))}
-          </Input>
+            onChange={(status) => onPatch(item, { status }, 'save the status')}
+          />
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor={fieldId('priority')} style={sectionHeadingStyle}>
             Priority
           </label>
-          <Input
-            as="select"
+          <EnumSelect
             id={fieldId('priority')}
+            options={FEEDBACK_PRIORITIES}
             value={item.priority}
-            onChange={(e) => onPatch(item, { priority: e.target.value }, 'save the priority')}
-          >
-            {PRIORITIES.map(([value, words]) => (
-              <option key={value} value={value}>
-                {words}
-              </option>
-            ))}
-          </Input>
+            onChange={(priority) => onPatch(item, { priority }, 'save the priority')}
+          />
         </div>
         <Button
           variant="ghost"

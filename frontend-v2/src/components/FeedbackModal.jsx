@@ -7,6 +7,7 @@ import SegmentedControl from './SegmentedControl'
 import { userFeedbackApi } from '../api/userFeedbackApi'
 import { apiErrorText, asSentence } from '../api/catalogApi'
 import { fieldHelpStyle, fieldLabelStyle } from './catalog/textStyles'
+import { FEEDBACK_TYPES } from './feedback/vocabulary'
 
 /**
  * "Send feedback" dialog, opened from the profile menu.
@@ -16,12 +17,7 @@ import { fieldHelpStyle, fieldLabelStyle } from './catalog/textStyles'
  * never fetches on mount: nothing is sent until the user presses Send.
  */
 
-const TYPES = [
-  { value: 'issue', label: 'Issue' },
-  { value: 'request', label: 'Request' },
-  { value: 'improvement', label: 'Improvement' },
-  { value: 'not_working', label: 'Not working' },
-]
+const TYPES = FEEDBACK_TYPES.map(({ value, label }) => ({ value, label }))
 
 // The rate limit is the one error a well-meaning user hits by being helpful,
 // so it gets its own calm copy instead of the server's "Too Many Requests".
