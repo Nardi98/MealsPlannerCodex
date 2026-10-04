@@ -283,7 +283,7 @@ function Gate() {
       <ViewModeProvider>
         <TutorialProvider>
           {/* Inside the view mode: it fetches the unread count only in admin
-              mode. Around the shell: the sidebar shows it, the page adjusts it. */}
+              mode. Around the shell: the sidebar shows it, the page refreshes it. */}
           <FeedbackBadgeProvider>
             <Shell />
           </FeedbackBadgeProvider>
