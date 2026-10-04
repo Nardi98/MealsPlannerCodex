@@ -34,15 +34,31 @@ CurrentUser = Annotated[models.User, Depends(auth_users.get_current_user)]
 _NOT_BLANK = r"\S"
 
 # Upper bounds on what one row can hold. Generous for honest use; they cap what
-# a scripted caller can store per submission.
+# a scripted caller can store per submission. The user types title and body, so
+# going over is a 422 they can fix. The context fields are captured silently by
+# the client, so they are clamped instead (see ``_clamp_context``): rejecting
+# them would lose a report over a value the user never saw.
 TITLE_MAX = 200
 BODY_MAX = 10_000
-CONTEXT_MAX = 500  # page_path, user_agent
-VIEWPORT_MAX = 100_000  # keeps the value inside a Postgres INTEGER
+CONTEXT_MAX = 500  # page_path, user_agent: truncated to this
+VIEWPORT_MAX = 100_000  # keeps the value inside a Postgres INTEGER; outside -> null
 
 # Built from the model's tuple so the allowed set has one source; subscripting
 # ``Literal`` with a tuple unpacks it at runtime (static checkers object).
 FeedbackType = Literal[models.FEEDBACK_TYPE_VALUES]  # type: ignore[valid-type]
+
+
+def _clamp_context(
+    page_path: str | None, user_agent: str | None, viewport_width: int | None
+) -> tuple[str | None, str | None, int | None]:
+    """Bound the silently captured context instead of rejecting it."""
+    if viewport_width is not None and not 0 <= viewport_width <= VIEWPORT_MAX:
+        viewport_width = None
+    return (
+        page_path[:CONTEXT_MAX] if page_path is not None else None,
+        user_agent[:CONTEXT_MAX] if user_agent is not None else None,
+        viewport_width,
+    )
 
 
 class FeedbackSubmitted(BaseModel):
@@ -62,9 +78,9 @@ async def submit_feedback(
     title: Annotated[str, Form(max_length=TITLE_MAX, pattern=_NOT_BLANK)],
     body: Annotated[str, Form(max_length=BODY_MAX, pattern=_NOT_BLANK)],
     type: Annotated[FeedbackType, Form()],
-    page_path: Annotated[Optional[str], Form(max_length=CONTEXT_MAX)] = None,
-    user_agent: Annotated[Optional[str], Form(max_length=CONTEXT_MAX)] = None,
-    viewport_width: Annotated[Optional[int], Form(ge=0, le=VIEWPORT_MAX)] = None,
+    page_path: Annotated[Optional[str], Form()] = None,
+    user_agent: Annotated[Optional[str], Form()] = None,
+    viewport_width: Annotated[Optional[int], Form()] = None,
     screenshot: Annotated[Optional[UploadFile], File()] = None,
 ) -> FeedbackSubmitted:
     """File one feedback item as the caller and return its ``FB-<id>``.
@@ -72,6 +88,7 @@ async def submit_feedback(
     ``request`` is unused by the body and required by slowapi, which reads the
     rate-limit key off it.
     """
+    page_path, user_agent, viewport_width = _clamp_context(page_path, user_agent, viewport_width)
     image = None
     if screenshot is not None:
         # Bounded read: one byte past the cap is enough to know it is too big,

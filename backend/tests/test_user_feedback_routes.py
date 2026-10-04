@@ -94,22 +94,41 @@ def test_an_unknown_type_is_422(client, db_session):
     assert _items(db_session) == []
 
 
-@pytest.mark.parametrize("value", ["wide", "-1"])
-def test_an_invalid_viewport_width_is_422(client, value):
-    assert client.post("/feedback", data={**VALID, "viewport_width": value}).status_code == 422
+def test_a_non_integer_viewport_width_is_422(client):
+    assert client.post("/feedback", data={**VALID, "viewport_width": "wide"}).status_code == 422
 
 
-@pytest.mark.parametrize(
-    ("field", "limit"),
-    [("title", 200), ("body", 10_000), ("page_path", 500), ("user_agent", 500)],
-)
-def test_text_fields_are_length_bounded(client, db_session, field, limit):
+@pytest.mark.parametrize("value", ["-1", "100001"])
+def test_an_out_of_range_viewport_width_is_stored_as_null(client, db_session, value):
+    """Captured silently by the client, so a bad value must not cost the user their report."""
+    response = client.post("/feedback", data={**VALID, "viewport_width": value})
+
+    assert response.status_code == 201
+    [item] = _items(db_session)
+    assert item.viewport_width is None
+
+
+@pytest.mark.parametrize(("field", "limit"), [("title", 200), ("body", 10_000)])
+def test_typed_text_fields_are_length_bounded(client, db_session, field, limit):
     at_limit = client.post("/feedback", data={**VALID, field: "x" * limit})
     over_limit = client.post("/feedback", data={**VALID, field: "x" * (limit + 1)})
 
     assert at_limit.status_code == 201
     assert over_limit.status_code == 422
     assert len(_items(db_session)) == 1
+
+
+@pytest.mark.parametrize("field", ["page_path", "user_agent"])
+def test_overlong_context_is_truncated_not_rejected(client, db_session, field):
+    """The user never sees these fields, so a long one (a webview's user agent)
+    is cut to 500 characters rather than turned into a 422 they cannot fix."""
+    value = "".join(chr(ord("a") + i % 26) for i in range(600))
+
+    response = client.post("/feedback", data={**VALID, field: value})
+
+    assert response.status_code == 201
+    [item] = _items(db_session)
+    assert getattr(item, field) == value[:500]
 
 
 def test_a_screenshot_is_stored_under_feedback_and_readable_back(client, db_session):
