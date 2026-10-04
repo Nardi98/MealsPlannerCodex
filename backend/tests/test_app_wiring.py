@@ -90,3 +90,44 @@ def test_startup_bootstrap_is_idempotent(db_session):
     main._bootstrap(db_session)
     after = len(db_session.execute(select(ReservedUsername)).scalars().all())
     assert before == after
+
+
+def _routers_main_includes():
+    """``<module>`` for every ``app.include_router(<module>.router)`` in ``main.py``.
+
+    Read from the source because the user feedback routers start empty, and
+    including an empty router leaves no trace in the route table.
+    """
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse(Path(main.__file__).read_text(encoding="utf-8"))
+    return {
+        node.args[0].value.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "include_router"
+        and isinstance(node.args[0], ast.Attribute)
+        and isinstance(node.args[0].value, ast.Name)
+    }
+
+
+def test_the_user_feedback_routers_are_pre_wired():
+    """Both are mounted before they hold a route, so the waves that fill them
+    never have to edit ``main.py``."""
+    import user_feedback_admin_routes
+    import user_feedback_routes
+
+    assert main.user_feedback_routes is user_feedback_routes
+    assert main.user_feedback_admin_routes is user_feedback_admin_routes
+    assert {"user_feedback_routes", "user_feedback_admin_routes"} <= _routers_main_includes()
+
+
+def test_the_user_feedback_admin_router_is_admin_only_as_a_whole():
+    import auth_users
+    import user_feedback_admin_routes
+
+    router = user_feedback_admin_routes.router
+    assert router.prefix == "/admin/feedback"
+    assert any(dep.dependency is auth_users.require_admin for dep in router.dependencies)

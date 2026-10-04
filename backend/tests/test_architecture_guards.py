@@ -7,6 +7,8 @@ codebase still wired the way the docs say it is?"
 
 - Import layout -- one canonical set of ORM models / db / crud (audit #8), and
   ``catalog.py`` imports no router and no ``main`` (CAT-11).
+- Containment -- the alpha allowlist and the user feedback module are leaves:
+  only their own routers reach them, and they reach for nothing else of ours.
 - Scoping -- production calls to user-scoped ``crud``/``planner`` functions pass
   ``user_id``.
 - Pydantic v2 -- no v1-style ``class Config``, no deprecation warnings.
@@ -67,17 +69,22 @@ def _imported_modules(path):
     return names
 
 
-@pytest.mark.parametrize("module", ["catalog.py", "catalog_import.py", "alpha.py"])
+@pytest.mark.parametrize(
+    "module", ["catalog.py", "catalog_import.py", "alpha.py", "user_feedback.py"]
+)
 def test_catalog_service_imports_no_router_and_no_main(module):
     """CAT-11 / TST-11: startup, seed scripts and routers all call ``catalog``.
 
     It must not reach back into ``main``, any router or the frontend, or it
     could no longer be imported from startup without a cycle. The same holds
     for ``catalog_import.py``, which is the catalog's other service module and
-    is called from two routers.
+    is called from two routers, and for the other domain modules listed.
+
+    No "found some imports" sanity check here: ``user_feedback.py`` may
+    legitimately import nothing yet. ``test_alpha_imports_nothing_of_ours_but_models``
+    keeps that check on the AST walk itself.
     """
     imported = _imported_modules(BACKEND_ROOT / module)
-    assert imported, "the AST walk found no imports at all"
 
     forbidden = {
         name
@@ -124,6 +131,33 @@ def test_alpha_imports_nothing_of_ours_but_models():
         or name.split(".")[0].endswith("_routes")
     }
     assert forbidden == set()
+
+
+# --------------------------------------------------------------------------
+# User feedback: ``user_feedback`` is a pure domain module. Only ``main`` and the
+# two feedback routers may import it, and it imports nothing of ours but
+# ``models`` and ``storage`` -- the routers translate HTTP, the module owns the
+# rules, and neither can quietly grow a dependency on the other's neighbours.
+# --------------------------------------------------------------------------
+def test_only_main_and_the_feedback_routers_import_user_feedback():
+    """A subset rather than equality: the routers gain their imports in a later wave."""
+    importers = {
+        path.name
+        for path in _production_modules()
+        if "user_feedback" in _imported_modules(path)
+    }
+
+    assert importers <= {"main.py", "user_feedback_routes.py", "user_feedback_admin_routes.py"}
+
+
+def test_user_feedback_imports_nothing_of_ours_but_models_and_storage():
+    """Feedback is not owner-scoped, so not even ``scoping`` belongs here."""
+    ours = {path.stem for path in _production_modules()} | {"mealplanner", "scripts", "tests"}
+    imported = {
+        name.split(".")[0] for name in _imported_modules(BACKEND_ROOT / "user_feedback.py")
+    }
+
+    assert (imported & ours) - {"models", "storage"} == set()
 
 
 def _user_scoped_functions(path):
