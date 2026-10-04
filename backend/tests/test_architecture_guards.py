@@ -131,20 +131,19 @@ def test_alpha_imports_nothing_of_ours_but_models():
 
 
 # --------------------------------------------------------------------------
-# User feedback: ``user_feedback`` is a pure domain module. Only ``main`` and the
-# two feedback routers may import it, and it imports nothing of ours but
-# ``models`` and ``storage`` -- the routers translate HTTP, the module owns the
+# User feedback: ``user_feedback`` is a pure domain module. Only the two feedback
+# routers import it (``main`` mounts them and never calls it directly), and it
+# imports nothing of ours but ``models`` and ``storage`` -- the routers translate HTTP, the module owns the
 # rules, and neither can quietly grow a dependency on the other's neighbours.
 # --------------------------------------------------------------------------
-def test_only_main_and_the_feedback_routers_import_user_feedback():
-    """A subset rather than equality: the routers gain their imports in a later wave."""
+def test_only_the_feedback_routers_import_user_feedback():
     importers = {
         path.name
         for path in _production_modules()
         if "user_feedback" in _imported_modules(path)
     }
 
-    assert importers <= {"main.py", "user_feedback_routes.py", "user_feedback_admin_routes.py"}
+    assert importers == {"user_feedback_routes.py", "user_feedback_admin_routes.py"}
 
 
 def test_user_feedback_imports_nothing_of_ours_but_models_and_storage():

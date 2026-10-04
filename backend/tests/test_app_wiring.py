@@ -92,46 +92,19 @@ def test_startup_bootstrap_is_idempotent(db_session):
     assert before == after
 
 
-def _routers_main_includes():
-    """``<module>`` for every ``app.include_router(<module>.router)`` in ``main.py``.
-
-    Read from the source because the user feedback routers start empty, and
-    including an empty router leaves no trace in the route table.
-    """
-    import ast
-    from pathlib import Path
-
-    tree = ast.parse(Path(main.__file__).read_text(encoding="utf-8"))
-    return {
-        node.args[0].value.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "include_router"
-        and isinstance(node.args[0], ast.Attribute)
-        and isinstance(node.args[0].value, ast.Name)
-    }
-
-
-def test_the_user_feedback_routers_are_pre_wired():
-    """The user router is mounted before it holds a route, so the wave that
-    fills it never has to edit ``main.py``. (The admin router now has routes,
-    so ``test_the_feedback_routers_are_included`` checks it in the route table.)"""
+def test_the_feedback_routers_are_included():
+    """``POST /feedback`` and ``/admin/feedback/*`` are served by the two
+    ``user_feedback`` routers, both mounted by ``main``."""
+    import user_feedback_admin_routes
     import user_feedback_routes
 
     assert main.user_feedback_routes is user_feedback_routes
-    assert "user_feedback_routes" in _routers_main_includes()
-
-
-def test_the_feedback_routers_are_included():
-    """``/admin/feedback/*`` is served by ``user_feedback_admin_routes``, mounted by ``main``."""
-    import user_feedback_admin_routes
-
     assert main.user_feedback_admin_routes is user_feedback_admin_routes
+    served = {(method, route.path) for route in main.app.routes for method in getattr(route, "methods", ())}
+    assert ("POST", "/feedback") in served
     admin_paths = {route.path for route in user_feedback_admin_routes.router.routes}
-    served = {getattr(route, "path", None) for route in main.app.routes}
     assert "/admin/feedback" in admin_paths
-    assert admin_paths <= served
+    assert admin_paths <= {path for _, path in served}
 
 
 def test_the_user_feedback_admin_router_is_admin_only_as_a_whole():
