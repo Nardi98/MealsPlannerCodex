@@ -9,8 +9,9 @@ import ConfirmModal from '../components/ConfirmModal'
 import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle } from '../components/catalog/textStyles'
-import { apiErrorText, asSentence } from '../api/catalogApi'
+import { asSentence } from '../api/catalogApi'
 import { alphaApi } from '../api/alphaApi'
+import { useAdminAction } from '../hooks/useAdminAction'
 import { shownDate } from '../utils/formatDate'
 
 /**
@@ -49,7 +50,6 @@ export default function AlphaPage() {
   const [draft, setDraft] = React.useState('')
   // { kind: 'status' | 'alert', text } -- the kind doubles as the ARIA role.
   const [notice, setNotice] = React.useState(null)
-  const [busy, setBusy] = React.useState(false)
   // The row whose note is open for editing, and the text so far.
   const [editing, setEditing] = React.useState(null)
   const [pendingDelete, setPendingDelete] = React.useState(null)
@@ -77,25 +77,8 @@ export default function AlphaPage() {
 
   const signedUp = (invites || []).filter((row) => row.signed_up).length
 
-  /**
-   * Every mutation has the same shape: busy while it runs, a status line
-   * reporting what happened, an alert naming what failed otherwise. `what`
-   * names the action once, for the log and for the reader ("add the invites"),
-   * so the two can never describe different things.
-   */
-  const run = async (what, body) => {
-    setBusy(true)
-    setNotice(null)
-    try {
-      setNotice({ kind: 'status', text: await body() })
-      reload()
-    } catch (err) {
-      console.error(`Failed to ${what}`, err)
-      setNotice({ kind: 'alert', text: `Couldn’t ${what}: ${asSentence(apiErrorText(err))}` })
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Every mutation reports what happened and then re-reads the list.
+  const { busy, run } = useAdminAction(setNotice, { onSuccess: reload })
 
   const submitAdd = (event) => {
     event.preventDefault()

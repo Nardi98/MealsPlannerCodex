@@ -10,8 +10,8 @@ import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle, sectionHeadingStyle } from '../components/catalog/textStyles'
 import { useFeedbackBadge } from '../components/feedback/FeedbackBadgeContext'
+import { useAdminAction } from '../hooks/useAdminAction'
 import { useIsMobile } from '../hooks/useIsMobile'
-import { apiErrorText, asSentence } from '../api/catalogApi'
 import { userFeedbackAdminApi } from '../api/userFeedbackAdminApi'
 import { shownDate } from '../utils/formatDate'
 
@@ -74,7 +74,8 @@ export default function FeedbackAdminPage() {
   const [vocabulary, setVocabulary] = React.useState([])
   // { kind: 'status' | 'alert', text } -- the kind doubles as the ARIA role.
   const [notice, setNotice] = React.useState(null)
-  const [busy, setBusy] = React.useState(false)
+  // Most edits report nothing: the control that changed already shows it.
+  const { busy, run } = useAdminAction(setNotice)
   const [selectedId, setSelectedId] = React.useState(null)
 
   React.useEffect(() => {
@@ -112,28 +113,6 @@ export default function FeedbackAdminPage() {
 
   const selected = (rows || []).find((row) => row.id === selectedId) || null
   const unread = (rows || []).filter((row) => !row.seen).length
-
-  /**
-   * Every mutation has the same shape: busy while it runs, an alert naming
-   * what failed otherwise. `body` may return a sentence to report; most edits
-   * say nothing, because the control that changed already shows the result.
-   * Resolves to whether it worked, so a caller can keep a draft that failed.
-   */
-  const run = async (what, body) => {
-    setBusy(true)
-    setNotice(null)
-    try {
-      const text = await body()
-      if (text) setNotice({ kind: 'status', text })
-      return true
-    } catch (err) {
-      console.error(`Failed to ${what}`, err)
-      setNotice({ kind: 'alert', text: `Couldn’t ${what}: ${asSentence(apiErrorText(err))}` })
-      return false
-    } finally {
-      setBusy(false)
-    }
-  }
 
   /** PATCH one item and put the server's answer in its row. */
   const patch = (row, change, what, report) =>
