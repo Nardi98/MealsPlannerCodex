@@ -2,15 +2,21 @@ import React from 'react'
 // Aliased to a capitalized name so the lint config (no eslint-plugin-react)
 // recognizes the JSX usage below.
 import { AnimatePresence, motion as Motion } from 'framer-motion'
-import { ArrowRightOnRectangleIcon, Cog6ToothIcon } from '@heroicons/react/24/outline'
+import {
+  ArrowRightOnRectangleIcon,
+  ChatBubbleLeftEllipsisIcon,
+  Cog6ToothIcon,
+} from '@heroicons/react/24/outline'
 import Avatar from './Avatar'
 import PreferencesModal from './PreferencesModal'
+import FeedbackModal from './FeedbackModal'
 import { useAuth } from '../auth/AuthContext'
 
 export default function ProfileMenu() {
   const { user, logout } = useAuth()
   const [open, setOpen] = React.useState(false)
   const [showPreferences, setShowPreferences] = React.useState(false)
+  const [showFeedback, setShowFeedback] = React.useState(false)
   const ref = React.useRef(null)
 
   // Close the dropdown when clicking anywhere outside it.
@@ -91,6 +97,18 @@ export default function ProfileMenu() {
               type="button"
               onClick={() => {
                 setOpen(false)
+                setShowFeedback(true)
+              }}
+              className="flex items-center gap-2"
+              style={menuItemStyle}
+            >
+              <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
+              Send feedback
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
                 logout()
               }}
               className="flex items-center gap-2"
@@ -105,6 +123,7 @@ export default function ProfileMenu() {
       {showPreferences && (
         <PreferencesModal onClose={() => setShowPreferences(false)} />
       )}
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
     </div>
   )
 }
