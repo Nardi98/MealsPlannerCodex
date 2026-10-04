@@ -12,6 +12,7 @@ import { useFeedbackBadge } from '../components/feedback/FeedbackBadgeContext'
 import { useIsMobile } from '../hooks/useIsMobile'
 import { apiErrorText, asSentence } from '../api/catalogApi'
 import { userFeedbackAdminApi } from '../api/userFeedbackAdminApi'
+import { shownDate } from '../utils/formatDate'
 
 // Each enumeration's wire value, its words, and its Badge tone, in the order the
 // selects offer them. Tones: a type is a category, so it takes a category hue;
@@ -41,15 +42,6 @@ const STATUS = lookup(STATUSES)
 const PRIORITY = lookup(PRIORITIES)
 
 const NO_FILTERS = { status: '', type: '', priority: '', tag: '', unreadOnly: false }
-
-/** "4 Sep 2026" in whoever's locale is reading, or nothing for a missing date. */
-const shownDate = (value) => {
-  if (!value) return ''
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime())
-    ? String(value)
-    : parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-}
 
 /** Who sent it. The item outlives the account, so a missing author is normal. */
 const authorName = (author) =>

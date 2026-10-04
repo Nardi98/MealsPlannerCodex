@@ -11,15 +11,7 @@ import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle } from '../components/catalog/textStyles'
 import { apiErrorText, asSentence } from '../api/catalogApi'
 import { alphaApi } from '../api/alphaApi'
-
-/** "4 Sep 2026" in whoever's locale is reading, or nothing for a missing date. */
-const shownDate = (value) => {
-  if (!value) return ''
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime())
-    ? String(value)
-    : parsed.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-}
+import { shownDate } from '../utils/formatDate'
 
 /**
  * What a batch add did, in one sentence: only the parts that happened.
