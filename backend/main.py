@@ -922,9 +922,6 @@ def create_recipe(
     return crud.create_recipe(db, user_id=current_user.id, **data)
 
 
-_MAX_IMAGE_BYTES = 5 * 1024 * 1024
-
-
 @app.post("/recipes/upload-image", status_code=201)
 async def upload_recipe_image(
     request: Request,
@@ -933,7 +930,7 @@ async def upload_recipe_image(
 ) -> dict:
     """Store an uploaded image and return an absolute URL that serves it back."""
     data = await file.read()
-    if len(data) > _MAX_IMAGE_BYTES:
+    if len(data) > storage.MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Image exceeds the 5 MB limit")
     try:
         key = storage.save_image(data, file.content_type or "")

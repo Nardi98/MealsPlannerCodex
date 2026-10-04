@@ -44,3 +44,11 @@ def test_a_custom_prefix_namespaces_the_key_and_roundtrips(local_storage):
     data, content_type = local_storage.open_image(key)
     assert data == b"pngbytes"
     assert content_type == "image/png"
+
+
+def test_max_image_bytes_is_the_shared_5_mb_upload_cap():
+    """One cap for every image upload route, owned by ``storage`` so routers
+    need not import ``main`` to enforce it."""
+    import storage
+
+    assert storage.MAX_IMAGE_BYTES == 5 * 1024 * 1024
