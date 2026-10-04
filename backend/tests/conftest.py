@@ -127,6 +127,21 @@ def _without_import_time_catalog():
         session.commit()
 
 
+@pytest.fixture(autouse=True)
+def _media_in_a_temp_dir(tmp_path_factory, monkeypatch):
+    """Keep every image a test stores out of the tracked ``backend/media/``.
+
+    ``populate`` saves a feedback screenshot, and many tests call it; without
+    this each run would leave files in the working tree (or, with a bucket
+    configured, in that bucket). Tests needing their own directory still patch
+    ``MEDIA_DIR`` themselves, which simply overrides this.
+    """
+    import storage
+
+    monkeypatch.delenv("AWS_S3_BUCKET_NAME", raising=False)
+    monkeypatch.setattr(storage, "MEDIA_DIR", tmp_path_factory.getbasetemp() / "media")
+
+
 @pytest.fixture(scope="session")
 def engine():
     """The application's own engine, pointed at ``TEST_DATABASE_URL`` above.

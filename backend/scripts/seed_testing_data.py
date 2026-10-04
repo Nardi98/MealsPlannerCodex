@@ -41,12 +41,15 @@ from sqlalchemy import select  # noqa: E402
 import catalog  # noqa: E402
 import catalog_import  # noqa: E402
 import recipe_copy  # noqa: E402
+import storage  # noqa: E402
 from database import Base, SessionLocal, engine  # noqa: E402
 from models import (  # noqa: E402
     AlphaInvite,  # ALPHA-GATE
     CatalogEntry,
     CatalogImportBatch,
     CatalogImportItem,
+    FeedbackItem,
+    FeedbackTag,
     Ingredient,
     Recipe,
     RecipeIngredient,
@@ -907,6 +910,125 @@ def link_catalog_imports(session, admin: User, system: User) -> None:
     session.flush()
 
 
+# An admin feedback inbox with something in every filter: each type, status and
+# priority, read and unread, tagged and untagged, with and without the client
+# context the submission form captures. Exactly one item carries a screenshot,
+# stored for real so the admin detail view can open it.
+FEEDBACK_TAGS = ("mobile", "meal plan", "shopping list", "performance")
+
+_DESKTOP_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/129.0 Safari/537.36"
+)
+_PHONE_AGENT = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+)
+
+# A valid 1x1 PNG (one dark-green pixel), so the seed needs no binary fixture.
+FEEDBACK_SCREENSHOT_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06"
+    b"\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xe0\xb1\xd2\xfd\x0f\x00"
+    b"\x02<\x01s\x8d\xb6Z\r\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+FEEDBACK_ITEMS: list[dict] = [
+    {
+        "by": FRIEND_USER_USERNAME,
+        "type": "not_working",
+        "status": "open",
+        "priority": "high",
+        "seen": False,
+        "title": "Generate plan spins forever",
+        "body": "Clicking Generate on the meal plan page shows a spinner that never stops.",
+        "page_path": "/meal-plan",
+        "user_agent": _PHONE_AGENT,
+        "viewport_width": 390,
+        "tags": ("mobile", "meal plan"),
+        "screenshot": True,
+    },
+    {
+        "by": GUEST_USER_USERNAME,
+        "type": "issue",
+        "status": "in_progress",
+        "priority": "normal",
+        "seen": True,
+        "title": "Shopping list repeats onions",
+        "body": "Onion appears twice when two recipes use it in different units.",
+        "page_path": "/shopping-list",
+        "user_agent": _DESKTOP_AGENT,
+        "viewport_width": 1440,
+        "tags": ("shopping list",),
+        "admin_notes": "Reproduced: grams and pieces are not merged. Looking at unit_conversion.",
+    },
+    {
+        "by": FRIEND_USER_USERNAME,
+        "type": "request",
+        "status": "open",
+        "priority": "low",
+        "seen": False,
+        "title": "Let me print the weekly plan",
+        "body": "A printable one-page view of the week would be great for the fridge door.",
+    },
+    {
+        "by": GUEST_USER_USERNAME,
+        "type": "improvement",
+        "status": "closed_fixed",
+        "priority": "normal",
+        "seen": True,
+        "title": "Recipes page is slow with many recipes",
+        "body": "Scrolling the recipe list stutters once there are a few dozen recipes.",
+        "tags": ("performance",),
+    },
+    {
+        "by": DEMO_USER_USERNAME,
+        "type": "request",
+        "status": "closed_ignored",
+        "priority": "low",
+        "seen": True,
+        "title": "Dark mode for the whole app",
+        "body": "Would love a dark theme.",
+    },
+]
+
+
+def link_user_feedback(session, users_by_username: dict[str, User]) -> None:
+    """File :data:`FEEDBACK_ITEMS` as the seeded accounts and tag them.
+
+    ``ref_code`` is ``FB-<id>``, so it is set after a flush has assigned the id,
+    in the same transaction as the insert -- the shape the service will use.
+
+    Flushes, never commits: ``populate`` owns the commit.
+    """
+    tags = {name: FeedbackTag(name=name) for name in FEEDBACK_TAGS}
+    session.add_all(tags.values())
+    for spec in FEEDBACK_ITEMS:
+        item = FeedbackItem(
+            # A placeholder that satisfies NOT NULL until the id exists.
+            ref_code=f"FB-pending-{spec['title']}",
+            user_id=users_by_username[spec["by"]].id,
+            title=spec["title"],
+            body=spec["body"],
+            type=spec["type"],
+            status=spec["status"],
+            priority=spec["priority"],
+            seen=spec["seen"],
+            page_path=spec.get("page_path"),
+            user_agent=spec.get("user_agent"),
+            viewport_width=spec.get("viewport_width"),
+            admin_notes=spec.get("admin_notes"),
+            tags=[tags[name] for name in spec.get("tags", ())],
+        )
+        if spec.get("screenshot"):
+            item.screenshot_key = storage.save_image(
+                FEEDBACK_SCREENSHOT_PNG, "image/png", prefix="feedback"
+            )
+        session.add(item)
+        session.flush()
+        item.ref_code = f"FB-{item.id}"
+    session.flush()
+
+
 # Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever
 # database the process was handed -- on Railway, the deployed one. Requiring an
 # explicit opt-in means the destruction can only happen where someone put the
@@ -1025,6 +1147,7 @@ def populate(session) -> None:
         session.add(
             AlphaInvite(email=email, note=note, invited_by_user_id=demo_user.id)
         )
+    link_user_feedback(session, users_by_username)
     session.commit()
 
 
@@ -1039,12 +1162,14 @@ def main() -> None:
         n_s = session.query(RecipeShare).count()
         n_u = session.query(User).count()
         n_c = session.query(CatalogEntry).count()
+        n_f = session.query(FeedbackItem).count()
     finally:
         session.close()
     print(
         f"[seed_testing_data] Database reset and populated: "
         f"{n_r} recipes, {n_i} ingredients, {n_t} tags, "
-        f"{n_u} users, {n_s} shares, {n_c} catalog entries."
+        f"{n_u} users, {n_s} shares, {n_c} catalog entries, "
+        f"{n_f} feedback items."
     )
 
 

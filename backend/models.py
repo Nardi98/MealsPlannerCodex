@@ -949,3 +949,116 @@ class AlphaInvite(Base):
     @validates("email")
     def _normalize_email(self, _key, value):
         return normalize_email(value)
+
+
+# The user feedback system: bug reports and requests filed from inside the app
+# and triaged by an admin. The tables are ``feedback_*``, but code calls it
+# ``user_feedback`` throughout, because "feedback" already means the meal-plan
+# accept/reject signal.
+FEEDBACK_TYPE_VALUES = ("issue", "request", "improvement", "not_working")
+FEEDBACK_STATUS_VALUES = ("open", "in_progress", "closed_fixed", "closed_ignored")
+FEEDBACK_PRIORITY_VALUES = ("low", "normal", "high")
+
+
+def _one_of(column: str, values: tuple[str, ...]) -> str:
+    """The SQL of a ``CHECK (<column> IN (...))`` over ``values``."""
+    return "{} IN ({})".format(column, ", ".join(f"'{value}'" for value in values))
+
+
+def normalize_feedback_tag_name(name: str) -> str:
+    """Return the canonical stored form of a feedback tag name.
+
+    Trimmed, lowercased and with inner whitespace collapsed to single spaces, so
+    "Meal  Plan" and "meal plan" are one tag rather than two that look alike.
+    """
+    return " ".join(name.split()).lower()
+
+
+# No ``user_id`` here, matching ``recipe_tag_table``. ``CASCADE`` on both sides:
+# deleting an item or a tag silently drops the pairing.
+feedback_item_tags = Table(
+    "feedback_item_tags",
+    Base.metadata,
+    Column(
+        "item_id",
+        ForeignKey("feedback_items.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "tag_id",
+        ForeignKey("feedback_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+class FeedbackItem(Base):
+    """One piece of feedback a user filed: an issue, a request, an idea."""
+
+    __tablename__ = "feedback_items"
+
+    id = Column(Integer, primary_key=True)
+    #: The human-facing handle (``FB-<id>``), set by the service in the same
+    #: transaction as the insert, once the id is known.
+    ref_code = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, nullable=False)
+    body = Column(Text, nullable=False)
+    type = Column(String, nullable=False)
+    status = Column(String, nullable=False, server_default="open")
+    priority = Column(String, nullable=False, server_default="normal")
+    #: Whether an admin has opened the item; drives the inbox's unread state.
+    seen = Column(Boolean, nullable=False, server_default=false(), default=False)
+    # Provenance, not tenancy. Feedback is deliberately NOT owner-scoped: this
+    # records who filed the item, which is why it is nullable and ``SET NULL``
+    # rather than ``_owner_fk_column()``'s ``CASCADE`` -- the report outlives the
+    # account. Its only reader is an admin, who must see everyone's rows, so
+    # queries over this table are deliberately not passed through
+    # ``scoping.scope()``. That is a design decision, not a leak.
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Context the client captured at submission time, all optional.
+    page_path = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    viewport_width = Column(Integer, nullable=True)
+    #: Storage key of an attached screenshot (``feedback/...``), if any.
+    screenshot_key = Column(String, nullable=True)
+    admin_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    # The schema's first ``updated_at``: every other table records a change as
+    # its own nullable timestamp. Triage mutates a row repeatedly -- status,
+    # priority, tags, notes -- and "last touched" is the natural sort for an
+    # inbox, so one generic stamp is the honest model here.
+    updated_at = Column(
+        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+    tags = relationship(
+        "FeedbackTag",
+        secondary=feedback_item_tags,
+        order_by="FeedbackTag.name",
+    )
+
+    __table_args__ = (
+        # Named, like every other CHECK here, so autogenerate can match the
+        # reflected constraints on later revisions.
+        CheckConstraint(_one_of("type", FEEDBACK_TYPE_VALUES), name="ck_feedback_item_type"),
+        CheckConstraint(_one_of("status", FEEDBACK_STATUS_VALUES), name="ck_feedback_item_status"),
+        CheckConstraint(
+            _one_of("priority", FEEDBACK_PRIORITY_VALUES), name="ck_feedback_item_priority"
+        ),
+    )
+
+
+class FeedbackTag(Base):
+    """A free-form label an admin attaches to feedback items to group them."""
+
+    __tablename__ = "feedback_tags"
+
+    id = Column(Integer, primary_key=True)
+    # Stored normalized, so the stored value is the only form that exists.
+    name = Column(String, nullable=False, unique=True, index=True)
+
+    @validates("name")
+    def _normalize_name(self, _key, value):
+        return normalize_feedback_tag_name(value)
