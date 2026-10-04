@@ -4,12 +4,14 @@ Every service function commits; ``db_session`` scopes those commits to a
 SAVEPOINT and rolls the outer transaction back, so nothing leaks between tests.
 """
 
+from datetime import datetime
+
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 import storage
 import user_feedback
-from models import FeedbackItem
+from models import FeedbackItem, FeedbackTag
 
 PNG = b"\x89PNG\r\n\x1a\nfake"
 
@@ -178,14 +180,33 @@ def test_set_notes_stores_stripped_notes_and_none_or_blank_clears_them(db_sessio
     assert item.admin_notes is None
 
 
-def test_a_triage_mutation_does_not_move_updated_at_backwards(db_session, user):
-    item = _submit(db_session, user)
-    before = item.updated_at
+LONG_AGO = datetime(2000, 1, 1)
 
-    user_feedback.set_priority(db_session, item, "low")
+
+def _age(session, item):
+    """Backdate ``updated_at``, so a fresh stamp is observable inside one transaction."""
+    session.execute(update(FeedbackItem).where(FeedbackItem.id == item.id).values(updated_at=LONG_AGO))
+    session.expire_all()
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda s, i: user_feedback.mark_seen(s, i),
+        lambda s, i: user_feedback.set_status(s, i, "in_progress"),
+        lambda s, i: user_feedback.set_priority(s, i, "low"),
+        lambda s, i: user_feedback.set_notes(s, i, "note"),
+    ],
+    ids=["seen", "status", "priority", "notes"],
+)
+def test_a_triage_mutation_stamps_updated_at(db_session, user, mutate):
+    item = _submit(db_session, user)
+    _age(db_session, item)
+
+    mutate(db_session, item)
     db_session.expire_all()
 
-    assert item.updated_at >= before
+    assert item.updated_at > LONG_AGO
 
 
 def test_unseen_count_matches_the_rows(db_session, user):
@@ -197,3 +218,135 @@ def test_unseen_count_matches_the_rows(db_session, user):
     user_feedback.mark_seen(db_session, first)
 
     assert user_feedback.unseen_count(db_session) == 2
+
+
+# --- tags ------------------------------------------------------------------
+
+
+def _tag_count(session) -> int:
+    return session.execute(select(func.count()).select_from(FeedbackTag)).scalar_one()
+
+
+def _names(item):
+    return [tag.name for tag in item.tags]
+
+
+def test_set_tags_creates_missing_tags(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.set_tags(db_session, item, ["mobile", "shopping list"])
+    db_session.expire_all()
+
+    assert _names(item) == ["mobile", "shopping list"]
+    assert _tag_count(db_session) == 2
+
+
+def test_names_that_normalize_alike_are_one_tag(db_session, user):
+    first = _submit(db_session, user)
+    second = _submit(db_session, user)
+
+    user_feedback.set_tags(db_session, first, ["Mobile", "mobile ", "mobile"])
+    user_feedback.set_tags(db_session, second, ["  MOBILE"])
+    db_session.expire_all()
+
+    assert _names(first) == ["mobile"]
+    assert _names(second) == ["mobile"]
+    assert _tag_count(db_session) == 1
+
+
+def test_set_tags_replaces_the_set(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["a", "b"])
+
+    user_feedback.set_tags(db_session, item, ["b", "c"])
+    db_session.expire_all()
+
+    assert _names(item) == ["b", "c"]
+
+
+def test_set_tags_with_no_names_removes_every_tag_but_keeps_the_tags(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["a", "b"])
+
+    user_feedback.set_tags(db_session, item, [])
+    db_session.expire_all()
+
+    assert item.tags == []
+    assert _tag_count(db_session) == 2
+
+
+def test_set_tags_ignores_blank_names(db_session, user):
+    item = _submit(db_session, user)
+
+    user_feedback.set_tags(db_session, item, ["", "   ", "ui"])
+    db_session.expire_all()
+
+    assert _names(item) == ["ui"]
+    assert _tag_count(db_session) == 1
+
+
+def test_set_tags_stamps_updated_at_although_no_item_column_changes(db_session, user):
+    # A tag change only writes the join table, so ``onupdate`` alone would not fire.
+    item = _submit(db_session, user)
+    _age(db_session, item)
+
+    user_feedback.set_tags(db_session, item, ["ui"])
+    db_session.expire_all()
+
+    assert item.updated_at > LONG_AGO
+
+
+def test_list_tags_is_sorted_by_name(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["zeta", "alpha", "mid"])
+
+    assert [tag.name for tag in user_feedback.list_tags(db_session)] == ["alpha", "mid", "zeta"]
+
+
+def test_get_tag_returns_the_tag_or_raises_not_found(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui"])
+    tag = item.tags[0]
+
+    assert user_feedback.get_tag(db_session, tag.id) is tag
+    with pytest.raises(user_feedback.FeedbackTagNotFound):
+        user_feedback.get_tag(db_session, 999_999)
+
+
+def test_rename_tag_normalizes_the_new_name(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui"])
+
+    user_feedback.rename_tag(db_session, item.tags[0], "  User   Interface ")
+    db_session.expire_all()
+
+    assert _names(item) == ["user interface"]
+
+
+def test_rename_tag_to_its_own_name_in_another_case_is_fine(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui"])
+
+    tag = user_feedback.rename_tag(db_session, item.tags[0], "UI")
+
+    assert tag.name == "ui"
+
+
+def test_rename_tag_to_another_tags_name_raises_taken(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui", "mobile"])
+    ui = next(tag for tag in item.tags if tag.name == "ui")
+
+    with pytest.raises(user_feedback.FeedbackTagNameTaken):
+        user_feedback.rename_tag(db_session, ui, " Mobile")
+
+    db_session.expire_all()
+    assert sorted(_names(item)) == ["mobile", "ui"]
+
+
+def test_rename_tag_rejects_a_blank_name(db_session, user):
+    item = _submit(db_session, user)
+    user_feedback.set_tags(db_session, item, ["ui"])
+
+    with pytest.raises(ValueError):
+        user_feedback.rename_tag(db_session, item.tags[0], "   ")

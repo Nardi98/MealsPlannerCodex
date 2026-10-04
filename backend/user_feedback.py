@@ -40,6 +40,14 @@ class FeedbackTagNotFound(LookupError):
     """No ``feedback_tags`` row with the requested id."""
 
 
+class FeedbackTagNameTaken(Exception):
+    """A rename's normalized name already belongs to another tag (a 409).
+
+    Deliberately *not* a ``ValueError``: a router mapping ``ValueError`` to 422
+    must not swallow this conflict by catching the broader class first.
+    """
+
+
 def _required_text(value: str | None, field: str) -> str:
     stripped = (value or "").strip()
     if not stripped:
@@ -137,6 +145,58 @@ def set_notes(session: Session, item: models.FeedbackItem, notes: str | None) ->
     """Set the admin's private notes, stripped; ``None`` or blank clears them."""
     item.admin_notes = (notes or "").strip() or None
     return _commit(session, item)
+
+
+def set_tags(session: Session, item: models.FeedbackItem, names: list[str]) -> models.FeedbackItem:
+    """Replace ``item``'s tags with ``names``, creating any tag that is missing.
+
+    Names are normalized (``models.normalize_feedback_tag_name``), so ``Mobile``
+    and ``mobile `` are one tag; duplicates collapse and blank names are
+    silently ignored. An empty list removes every tag from the item; the tags
+    themselves are kept.
+    """
+    wanted = {models.normalize_feedback_tag_name(name) for name in names} - {""}
+    existing = {
+        tag.name: tag
+        for tag in session.execute(
+            select(models.FeedbackTag).where(models.FeedbackTag.name.in_(wanted))
+        ).scalars()
+    }
+    item.tags = [existing.get(name) or models.FeedbackTag(name=name) for name in sorted(wanted)]
+    # Only the join table changes, so the column's ``onupdate`` would not fire.
+    item.updated_at = func.now()
+    return _commit(session, item)
+
+
+def list_tags(session: Session) -> list[models.FeedbackTag]:
+    """Every tag, sorted by name."""
+    return list(session.execute(select(models.FeedbackTag).order_by(models.FeedbackTag.name)).scalars())
+
+
+def get_tag(session: Session, tag_id: int) -> models.FeedbackTag:
+    """The tag with ``tag_id``; raises ``FeedbackTagNotFound`` if none."""
+    tag = session.get(models.FeedbackTag, tag_id)
+    if tag is None:
+        raise FeedbackTagNotFound(tag_id)
+    return tag
+
+
+def rename_tag(session: Session, tag: models.FeedbackTag, name: str) -> models.FeedbackTag:
+    """Rename ``tag`` to the normalized ``name``.
+
+    Raises ``ValueError`` for a blank name and ``FeedbackTagNameTaken`` when
+    another tag already has it; renaming a tag to its own name is a no-op.
+    """
+    normalized = _required_text(models.normalize_feedback_tag_name(name or ""), "name")
+    clash = session.execute(
+        select(models.FeedbackTag.id).where(
+            models.FeedbackTag.name == normalized, models.FeedbackTag.id != tag.id
+        )
+    ).first()
+    if clash is not None:
+        raise FeedbackTagNameTaken(normalized)
+    tag.name = normalized
+    return _commit(session, tag)
 
 
 def unseen_count(session: Session) -> int:
