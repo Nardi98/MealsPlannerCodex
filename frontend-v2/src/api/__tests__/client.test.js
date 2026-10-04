@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { request, getToken, setAuthToken, setUnauthorizedHandler } from '../client'
+import { request, requestBlob, getToken, setAuthToken, setUnauthorizedHandler } from '../client'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => {
@@ -18,6 +18,10 @@ function jsonResponse(data, { ok = true, status = 200 } = {}) {
     json: () => Promise.resolve(data),
     text: () => Promise.resolve(JSON.stringify(data)),
   }
+}
+
+function blobResponse(blob, { ok = true, status = 200 } = {}) {
+  return { ok, status, blob: () => Promise.resolve(blob), text: () => Promise.resolve('') }
 }
 
 test('attaches Authorization bearer header when a token is set', async () => {
@@ -126,4 +130,52 @@ test('omits the json content-type when body is FormData', async () => {
 
   const [, opts] = globalThis.fetch.mock.calls[0]
   expect(opts.headers['Content-Type']).toBeUndefined()
+})
+
+
+// ---------------------------------------------------------------------------
+// requestBlob: the same request, read as bytes (an admin-only screenshot, which
+// a plain <img src> could not fetch because the token is never in a cookie).
+// ---------------------------------------------------------------------------
+
+test('requestBlob resolves to the response body as a blob, with the bearer header', async () => {
+  setAuthToken('jwt-123')
+  const png = new Blob(['png-bytes'], { type: 'image/png' })
+  globalThis.fetch = vi.fn(() => Promise.resolve(blobResponse(png)))
+
+  const result = await requestBlob('/admin/feedback/7/screenshot')
+
+  expect(result).toBe(png)
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/admin/feedback/7/screenshot')
+  expect(opts.headers['Authorization']).toBe('Bearer jwt-123')
+  expect(opts.credentials).toBe('include')
+})
+
+test('requestBlob refreshes once on 401 and replays as a blob request', async () => {
+  setAuthToken('stale-jwt')
+  const png = new Blob(['png-bytes'], { type: 'image/png' })
+  const fetch = vi.fn()
+  fetch.mockResolvedValueOnce(jsonResponse({ detail: 'expired' }, { ok: false, status: 401 }))
+  fetch.mockResolvedValueOnce(jsonResponse({ access_token: 'fresh-jwt' }))
+  fetch.mockResolvedValueOnce(blobResponse(png))
+  globalThis.fetch = fetch
+
+  const result = await requestBlob('/admin/feedback/7/screenshot')
+
+  expect(result).toBe(png)
+  expect(fetch).toHaveBeenCalledTimes(3)
+  expect(fetch.mock.calls[2][1].headers['Authorization']).toBe('Bearer fresh-jwt')
+})
+
+test('requestBlob unwraps a FastAPI detail into an error carrying the status', async () => {
+  globalThis.fetch = vi.fn(() =>
+    Promise.resolve(jsonResponse({ detail: 'No screenshot' }, { ok: false, status: 404 }))
+  )
+
+  const error = await requestBlob('/admin/feedback/7/screenshot').catch((err) => err)
+
+  expect(error).toBeInstanceOf(Error)
+  expect(error.message).toBe('No screenshot')
+  expect(error.status).toBe(404)
 })

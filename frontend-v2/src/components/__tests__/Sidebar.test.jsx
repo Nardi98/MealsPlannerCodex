@@ -56,7 +56,29 @@ test('admin mode lists the catalog surfaces and nothing else', () => {
     'Ingredients & Tags',
     'Import',
     'Alpha', // ALPHA-GATE
+    'Feedback',
   ])
+})
+
+test('user mode offers no Feedback entry', () => {
+  renderSidebar()
+
+  expect(screen.queryByRole('button', { name: /feedback/i })).not.toBeInTheDocument()
+})
+
+test('a positive count is shown as a labelled pill on its entry', () => {
+  renderSidebar({ mode: 'admin', badges: { '/discover/feedback': 3 } })
+
+  const entry = screen.getByRole('button', { name: /feedback/i })
+  expect(entry).toHaveTextContent('Feedback3')
+  expect(screen.getByLabelText('3 unread')).toHaveTextContent('3')
+})
+
+test.each([0, undefined])('a count of %s shows no pill', (count) => {
+  renderSidebar({ mode: 'admin', badges: { '/discover/feedback': count } })
+
+  expect(screen.getByRole('button', { name: /feedback/i }).textContent).toBe('Feedback')
+  expect(screen.queryByLabelText(/unread/)).not.toBeInTheDocument()
 })
 
 test('a nav item navigates and tells the drawer to close', async () => {

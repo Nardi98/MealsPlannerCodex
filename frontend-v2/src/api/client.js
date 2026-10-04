@@ -73,7 +73,10 @@ async function attemptRefresh() {
   return token;
 }
 
-async function request(path, options = {}, allowRefresh = true) {
+// The one code path behind `request()` and `requestBlob()`: config, the
+// refresh-once-and-replay on 401 and the `{detail}` error unwrapping are shared,
+// and only the reading of a successful body (`read`) differs between them.
+async function send(path, options, read, allowRefresh = true) {
   const url = `${API_BASE_URL}${path}`;
   const response = await fetch(url, buildConfig(options));
 
@@ -83,7 +86,7 @@ async function request(path, options = {}, allowRefresh = true) {
       // original request. /auth/refresh itself is exempt to avoid recursion.
       if (allowRefresh && path !== '/auth/refresh') {
         const newToken = await attemptRefresh();
-        if (newToken) return request(path, options, false);
+        if (newToken) return send(path, options, read, false);
       }
       // No recovery — the session is dead. Drop it and notify the app.
       setAuthToken(null);
@@ -107,10 +110,20 @@ async function request(path, options = {}, allowRefresh = true) {
     if (data) error.data = data;
     throw error;
   }
-  if (response.status === 204) {
-    return null;
-  }
-  return response.json();
+  return read(response);
 }
 
-export { request, getToken, setAuthToken, setUnauthorizedHandler };
+const readJson = (response) => (response.status === 204 ? null : response.json());
+
+function request(path, options = {}) {
+  return send(path, options, readJson);
+}
+
+// For bytes the browser cannot fetch on its own: an <img src> carries no
+// Authorization header, and the access token is deliberately never a cookie,
+// so an admin-only image has to come through here and be shown from a blob URL.
+function requestBlob(path, options = {}) {
+  return send(path, options, (response) => response.blob());
+}
+
+export { request, requestBlob, getToken, setAuthToken, setUnauthorizedHandler };
