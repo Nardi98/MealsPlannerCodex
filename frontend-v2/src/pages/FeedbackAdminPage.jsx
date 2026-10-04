@@ -1,5 +1,6 @@
 import React from 'react'
-import { ArrowLeftIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { RemovableChip } from '../components/ActiveFilterChips'
 import { Badge } from '../components/Badge'
 import { Button } from '../components/Button'
 import { Card } from '../components/Card'
@@ -476,19 +477,13 @@ function FeedbackDetail({ item, vocabulary, busy, onPatch }) {
         <div style={{ ...sectionHeadingStyle, marginBottom: 0 }}>Tags</div>
         {item.tags.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            {/* The removable chip of `ActiveFilterChips`: same 44px target. */}
             {item.tags.map((tag) => (
-              <button
+              <RemovableChip
                 key={tag}
-                type="button"
-                aria-label={`Remove tag ${tag}`}
-                onClick={() => onPatch(item, { tags: item.tags.filter((t) => t !== tag) }, 'remove the tag')}
-                className="inline-flex min-h-11 items-center gap-1 rounded-full border px-3 text-xs"
-                style={{ borderColor: 'var(--border-default)', color: 'var(--text-strong)' }}
-              >
-                {tag}
-                <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
+                label={tag}
+                ariaLabel={`Remove tag ${tag}`}
+                onRemove={() => onPatch(item, { tags: item.tags.filter((t) => t !== tag) }, 'remove the tag')}
+              />
             ))}
           </div>
         )}
