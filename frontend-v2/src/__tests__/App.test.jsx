@@ -1,9 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import '@testing-library/jest-dom/vitest'
 import { Link } from 'react-router-dom'
 import { PageTour } from '../tutorial/PageTour'
@@ -49,9 +49,29 @@ vi.mock('../pages/CatalogImportPage', () => ({
 }))
 vi.mock('../pages/CatalogImportReviewPage', () => ({ default: () => <div>catalog-import-review-page</div> }))
 vi.mock('../pages/AlphaPage', () => ({ default: () => <div>alpha-page</div> }))  // ALPHA-GATE
+// The stand-in reports into the badge exactly as the real page does, so the
+// test exercises the shell's wiring rather than an imitation of it.
+vi.mock('../pages/FeedbackAdminPage', async () => {
+  const { useFeedbackBadge } = await import('../components/feedback/FeedbackBadgeContext')
+  function FeedbackAdminStandIn() {
+    const { adjust } = useFeedbackBadge()
+    return (
+      <>
+        <div>feedback-admin-page</div>
+        <button type="button" onClick={() => adjust(-1)}>read one</button>
+      </>
+    )
+  }
+  return { default: FeedbackAdminStandIn }
+})
+vi.mock('../api/userFeedbackAdminApi', async (importOriginal) => ({
+  ...(await importOriginal()),
+  userFeedbackAdminApi: { unseenCount: vi.fn(() => Promise.resolve({ count: 0 })) },
+}))
 vi.mock('../pages/ChooseHandlePage', () => ({ default: () => <div>choose-handle-page</div> }))
 
 import App from '../App'
+import { userFeedbackAdminApi } from '../api/userFeedbackAdminApi'
 import { stubViewport } from '../test/stubViewport'
 
 const CONFIRMED = { email: 'demo@x.test', username: 'demo', username_confirmed: true }
@@ -74,6 +94,10 @@ function signedIn(user) {
 function visit(path) {
   window.history.pushState({}, '', path)
 }
+
+beforeEach(() => {
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 0 })
+})
 
 afterEach(() => {
   cleanup()
@@ -460,6 +484,7 @@ const ADMIN_ROUTES = [
   ['/discover/import', 'catalog-import-page'],
   ['/discover/import/7', 'catalog-import-review-page'],
   ['/discover/alpha', 'alpha-page'],  // ALPHA-GATE
+  ['/discover/feedback', 'feedback-admin-page'],
 ]
 
 // Admin mode is entered through the pill, which navigates to `/discover` as it
@@ -560,4 +585,90 @@ test('admin mode offers the alpha entry after import, and user mode offers none'
 
   const labels = screen.getAllByRole('button').map((b) => b.textContent)
   expect(labels.indexOf('Alpha')).toBe(labels.indexOf('Import') + 1)
+})
+
+
+// ---------------------------------------------------------------------------
+// User feedback triage: an admin-only page, plus an unread count on its entry
+// ---------------------------------------------------------------------------
+
+test('the feedback page is reachable in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  await userEvent.click(screen.getByRole('button', { name: /^feedback/i }))
+
+  expect(screen.getByText('feedback-admin-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/feedback')
+})
+
+test('the unread count is not fetched outside admin mode', () => {
+  signedIn(ADMIN)
+  render(<App />)
+
+  expect(userFeedbackAdminApi.unseenCount).not.toHaveBeenCalled()
+})
+
+test('entering admin mode fetches the unread count once and shows it', async () => {
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 3 })
+  signedIn(ADMIN)
+  render(<App />)
+
+  await switchTo('Admin')
+
+  expect(await screen.findByLabelText('3 unread')).toBeInTheDocument()
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(1)
+})
+
+test('the drawer on mobile shows the count without fetching it a second time', async () => {
+  stubViewport(true)
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 2 })
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  try {
+    await userEvent.click(screen.getByRole('button', { name: /open menu/i }))
+
+    const drawer = screen.getByRole('dialog', { name: /main navigation/i })
+    expect(await within(drawer).findByLabelText('2 unread')).toBeInTheDocument()
+    expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(1)
+  } finally {
+    stubViewport(false)
+  }
+})
+
+test('a failed count shows no badge and leaves the shell working', async () => {
+  userFeedbackAdminApi.unseenCount.mockRejectedValue(new Error('down'))
+  signedIn(ADMIN)
+  render(<App />)
+
+  await switchTo('Admin')
+
+  expect(await screen.findByText('catalog-admin-page')).toBeInTheDocument()
+  expect(screen.queryByLabelText(/unread/)).not.toBeInTheDocument()
+})
+
+test('the page can take one off the count as it reads an item', async () => {
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 3 })
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+  await userEvent.click(await screen.findByRole('button', { name: /^feedback/i }))
+
+  await userEvent.click(screen.getByRole('button', { name: 'read one' }))
+
+  expect(screen.getByLabelText('2 unread')).toBeInTheDocument()
+})
+
+test('re-entering admin mode asks for the count again', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+  await switchTo('User')
+
+  await switchTo('Admin')
+
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(2)
 })
