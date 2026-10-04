@@ -238,13 +238,15 @@ test('the detail pane invites a choice until a row is opened', async () => {
   expect(screen.getByText(/select an item/i)).toBeInTheDocument()
 })
 
-test('opening an unread row marks it read and takes one off the badge', async () => {
+test('opening an unread row marks it read and re-reads the badge count', async () => {
   await renderLoaded()
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 1 })
 
   openRow('FB-7')
 
   await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenCalledWith(7, { seen: true }))
   await waitFor(() => expect(screen.getByLabelText('badge')).toHaveTextContent('1'))
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(2)
   expect(within(rowFor('FB-7')).queryByLabelText('Unread')).not.toBeInTheDocument()
 })
 
@@ -255,6 +257,7 @@ test('opening a row already read changes nothing on the server', async () => {
 
   await detail('Dark mode please')
   expect(userFeedbackAdminApi.update).not.toHaveBeenCalled()
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(1)
   expect(screen.getByLabelText('badge')).toHaveTextContent('2')
 })
 
@@ -275,15 +278,17 @@ test('the detail shows the full item and its captured context', async () => {
   expect(pane).toHaveTextContent('Mozilla/5.0 (iPhone)')
 })
 
-test('marking a read item unread puts one back on the badge', async () => {
+test('marking a read item unread re-reads the badge count', async () => {
   await renderLoaded()
   openRow('FB-5')
   const pane = await detail('Dark mode please')
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 3 })
 
   fireEvent.click(within(pane).getByRole('button', { name: 'Mark unread' }))
 
   await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenCalledWith(5, { seen: false }))
   await waitFor(() => expect(screen.getByLabelText('badge')).toHaveTextContent('3'))
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(2)
   expect(within(rowFor('FB-5')).getByLabelText('Unread')).toBeInTheDocument()
 })
 
@@ -338,7 +343,7 @@ test('changing the status saves it and updates the row', async () => {
   await waitFor(() => expect(rowFor('FB-5')).toHaveTextContent('Closed: fixed'))
 })
 
-test('changing the priority saves it', async () => {
+test('changing the priority saves it, and leaves the badge count alone', async () => {
   await renderLoaded()
   openRow('FB-5')
   const pane = await detail('Dark mode please')
@@ -346,6 +351,7 @@ test('changing the priority saves it', async () => {
   fireEvent.change(within(pane).getByLabelText('Priority'), { target: { value: 'low' } })
 
   await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenCalledWith(5, { priority: 'low' }))
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(1)
 })
 
 test('notes are saved only by the Save button, and blank notes clear them', async () => {
@@ -367,11 +373,13 @@ test('notes are saved only by the Save button, and blank notes clear them', asyn
   await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenLastCalledWith(5, { admin_notes: null }))
 })
 
-test('typing a new tag adds it to the whole set, and the vocabulary is re-read', async () => {
+test('typing a new tag sends it trimmed, shows the answer, and re-reads the vocabulary', async () => {
   await renderLoaded()
   openRow('FB-7')
   const pane = await detail('Shopping list crashes')
   userFeedbackAdminApi.listTags.mockClear()
+  // The server normalizes the names; the row shows whatever it answers.
+  userFeedbackAdminApi.update.mockResolvedValueOnce({ ...UNREAD, seen: true, tags: [...UNREAD.tags, 'crash report'] })
 
   const input = within(pane).getByLabelText('Add a tag')
   fireEvent.change(input, { target: { value: '  Crash  Report ' } })
@@ -379,11 +387,23 @@ test('typing a new tag adds it to the whole set, and the vocabulary is re-read',
 
   await waitFor(() =>
     expect(userFeedbackAdminApi.update).toHaveBeenLastCalledWith(7, {
-      tags: ['mobile', 'shopping-list', 'crash report'],
+      tags: ['mobile', 'shopping-list', 'Crash  Report'],
     }),
   )
   await waitFor(() => expect(input).toHaveValue(''))
+  expect(within(rowFor('FB-7')).getByText('crash report')).toBeInTheDocument()
   expect(userFeedbackAdminApi.listTags).toHaveBeenCalled()
+})
+
+test('a blank tag draft sends nothing', async () => {
+  await renderLoaded()
+  openRow('FB-5')
+  const pane = await detail('Dark mode please')
+
+  fireEvent.change(within(pane).getByLabelText('Add a tag'), { target: { value: '   ' } })
+  fireEvent.click(within(pane).getByRole('button', { name: 'Add tag' }))
+
+  expect(userFeedbackAdminApi.update).not.toHaveBeenCalled()
 })
 
 test('a failed tag add keeps the typed name', async () => {
@@ -401,26 +421,33 @@ test('a failed tag add keeps the typed name', async () => {
   expect(input).toHaveValue('ui')
 })
 
-test('a tag the item already has is not sent again', async () => {
+test('a tag the vocabulary already has does not re-read it', async () => {
   await renderLoaded()
-  openRow('FB-7')
-  const pane = await detail('Shopping list crashes')
-  await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenCalledTimes(1)) // the read mark
+  openRow('FB-5')
+  const pane = await detail('Dark mode please')
+  userFeedbackAdminApi.listTags.mockClear()
+  userFeedbackAdminApi.update.mockResolvedValueOnce({ ...READ, tags: ['mobile'] })
 
-  fireEvent.change(within(pane).getByLabelText('Add a tag'), { target: { value: 'Mobile' } })
+  const input = within(pane).getByLabelText('Add a tag')
+  fireEvent.change(input, { target: { value: 'Mobile' } })
   fireEvent.click(within(pane).getByRole('button', { name: 'Add tag' }))
 
-  expect(userFeedbackAdminApi.update).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenLastCalledWith(5, { tags: ['Mobile'] }))
+  await waitFor(() => expect(input).toHaveValue(''))
+  expect(userFeedbackAdminApi.listTags).not.toHaveBeenCalled()
 })
 
-test('removing a tag sends the set without it', async () => {
+test('removing a tag sends the set without it, and leaves the vocabulary alone', async () => {
   await renderLoaded()
   openRow('FB-7')
   const pane = await detail('Shopping list crashes')
+  userFeedbackAdminApi.listTags.mockClear()
 
   fireEvent.click(within(pane).getByRole('button', { name: 'Remove tag mobile' }))
 
   await waitFor(() => expect(userFeedbackAdminApi.update).toHaveBeenLastCalledWith(7, { tags: ['shopping-list'] }))
+  await waitFor(() => expect(within(rowFor('FB-7')).queryByText('mobile')).not.toBeInTheDocument())
+  expect(userFeedbackAdminApi.listTags).not.toHaveBeenCalled()
 })
 
 test('a failed save is announced', async () => {

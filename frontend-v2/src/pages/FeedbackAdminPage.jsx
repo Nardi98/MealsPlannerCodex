@@ -56,13 +56,6 @@ const authorName = (author) =>
   author ? author.username || author.display_name || author.email : 'Deleted account'
 
 /**
- * The server's tag normalization, repeated so a name the item already has is
- * recognised before a round-trip. The server stays the authority: whatever it
- * answers is what the row shows.
- */
-const normalizeTag = (name) => name.trim().toLowerCase().replace(/\s+/g, ' ')
-
-/**
  * Triage of what testers sent in: a filtered list on the left and the selected
  * item on the right, where it is read, prioritised, tagged and closed.
  *
@@ -71,8 +64,8 @@ const normalizeTag = (name) => name.trim().toLowerCase().replace(/\s+/g, ' ')
  * walked. Below the `md` breakpoint there is no room for both, so the list
  * gives way to the detail and a back control returns to it.
  *
- * Opening an unread item marks it read and takes one off the sidebar badge;
- * "Mark unread" puts it back. Read and status are separate axes -- closing an
+ * Opening an unread item marks it read and "Mark unread" undoes that; either
+ * way the sidebar badge re-reads its count from the server. Read and status are separate axes -- closing an
  * item does not read it.
  */
 export default function FeedbackAdminPage() {
@@ -154,8 +147,11 @@ export default function FeedbackAdminPage() {
     run(what, async () => {
       const updated = await userFeedbackAdminApi.update(row.id, change)
       setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)))
-      if ('seen' in change && change.seen !== row.seen) badge.adjust(change.seen ? -1 : 1)
-      if ('tags' in change) loadVocabulary()
+      if ('seen' in change && change.seen !== row.seen) badge.refresh()
+      // Removing a tag never changes the vocabulary; only a name it lacks does.
+      if ('tags' in change && updated.tags.some((name) => !vocabulary.some((tag) => tag.name === name))) {
+        loadVocabulary()
+      }
       return report
     })
 
@@ -402,12 +398,9 @@ function FeedbackDetail({ item, vocabulary, busy, onPatch }) {
 
   const addTag = (event) => {
     event.preventDefault()
-    const name = normalizeTag(tagDraft)
+    // The server normalizes and dedupes the set; its answer is what the row shows.
+    const name = tagDraft.trim()
     if (!name) return
-    if (item.tags.includes(name)) {
-      setTagDraft('')
-      return
-    }
     onPatch(item, { tags: [...item.tags, name] }, 'add the tag').then((ok) => {
       // Cleared only on success, so a refused name need not be retyped.
       if (ok) setTagDraft('')

@@ -92,8 +92,9 @@ function Shell() {
   const isMobile = useIsMobile()
   const [menuOpen, setMenuOpen] = React.useState(false)
   const closeMenu = React.useCallback(() => setMenuOpen(false), [])
-  // Read once here and handed to both copies of the sidebar (column and
-  // drawer), so a phone does not fetch the count twice.
+  // The provider fetches the count once; it is read here and handed to both
+  // copies of the sidebar (column and drawer) as a prop, which keeps `Sidebar`
+  // presentational rather than tied to the badge context.
   const unreadFeedback = useFeedbackBadge().count
   const badges = React.useMemo(() => ({ '/discover/feedback': unreadFeedback }), [unreadFeedback])
 

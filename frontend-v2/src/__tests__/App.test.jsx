@@ -54,11 +54,11 @@ vi.mock('../pages/AlphaPage', () => ({ default: () => <div>alpha-page</div> })) 
 vi.mock('../pages/FeedbackAdminPage', async () => {
   const { useFeedbackBadge } = await import('../components/feedback/FeedbackBadgeContext')
   function FeedbackAdminStandIn() {
-    const { adjust } = useFeedbackBadge()
+    const { refresh } = useFeedbackBadge()
     return (
       <>
         <div>feedback-admin-page</div>
-        <button type="button" onClick={() => adjust(-1)}>read one</button>
+        <button type="button" onClick={refresh}>read one</button>
       </>
     )
   }
@@ -650,16 +650,19 @@ test('a failed count shows no badge and leaves the shell working', async () => {
   expect(screen.queryByLabelText(/unread/)).not.toBeInTheDocument()
 })
 
-test('the page can take one off the count as it reads an item', async () => {
+test('the page can have the count re-read from the server as it reads an item', async () => {
   userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 3 })
   signedIn(ADMIN)
   render(<App />)
   await switchTo('Admin')
   await userEvent.click(await screen.findByRole('button', { name: /^feedback/i }))
+  await screen.findByLabelText('3 unread')
+  userFeedbackAdminApi.unseenCount.mockResolvedValue({ count: 2 })
 
   await userEvent.click(screen.getByRole('button', { name: 'read one' }))
 
-  expect(screen.getByLabelText('2 unread')).toBeInTheDocument()
+  expect(await screen.findByLabelText('2 unread')).toBeInTheDocument()
+  expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(2)
 })
 
 test('re-entering admin mode asks for the count again', async () => {
