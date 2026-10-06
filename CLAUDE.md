@@ -23,7 +23,7 @@ make lint / make test              # Makefile shortcuts
 (`docker start mp_test_pg`); in CI it is a `postgres:16` service. The schema is dropped and rebuilt
 per run, so never point it at anything you care about.
 
-Note: the app module is `main` at the backend root, not `app.main`. CI (`.github/workflows/ci.yml`) runs `flake8 .` then `pytest` from `backend/` on Python 3.11.
+CI (`.github/workflows/ci.yml`) runs `flake8 .` then `pytest` from `backend/` on Python 3.11.
 
 ### Frontend (run from `frontend-v2/`)
 ```bash
@@ -38,7 +38,7 @@ Set `VITE_API_BASE_URL` to point the frontend at the backend; otherwise requests
 ## Architecture
 
 ### One import root: top-level modules + the `mealplanner` package
-There is a **single canonical set** of ORM models / db / crud, imported as the top-level modules `models`, `database`, and `crud` (run from `backend/`). The old `sys.modules` self-replacement shims (`mealplanner/models.py`, `db.py`, `crud.py`) have been **removed** — import `models` / `database` / `crud` directly. `mealplanner/*` code imports the canonical modules by top-level name (e.g. `from models import Recipe`).
+There is **one canonical set** of ORM models / db / crud, imported as the top-level modules `models`, `database` and `crud` (run from `backend/`). `mealplanner/*` imports them the same way (e.g. `from models import Recipe`).
 
 The `mealplanner` package holds only the planner's *real* logic:
 - `mealplanner/planner.py` — `generate_plan`, `generate_side_dish`, `filter_recipes`, and leftover "soft hold" scheduling.
@@ -48,10 +48,10 @@ The `mealplanner` package holds only the planner's *real* logic:
 - `mealplanner/config.py` — `DEFAULT_PLAN_SETTINGS` (leftover repeats, spacing, daypart prefs, etc.).
 - `mealplanner/seed.py`, `mealplanner/utils.py`.
 
-Tests import models/db/crud from the top-level modules and planner logic from `mealplanner.*` (see `tests/conftest.py`, which inserts the backend root onto `sys.path`). `mealplanner/` now lints under `flake8` (it is no longer excluded).
+Tests import models/db/crud from the top-level modules and planner logic from `mealplanner.*` (see `tests/conftest.py`, which inserts the backend root onto `sys.path`).
 
 ### Backend layers (all at `backend/` root)
-- `main.py` — the app object, startup wiring, and **most** FastAPI routes. It is no longer the only route module: ten routers are pre-wired with `include_router` (one block near the top of `main.py`), so work on those domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (user-facing `/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`, every route behind `auth_users.require_admin`), `catalog_import_routes.py` (the admin reviewed-batch import) and `alpha_routes.py` (`/admin/alpha/*`, likewise admin-only — **temporary: closed-alpha scaffolding, removed with the alpha (`ALPHA-GATE`)**), `user_feedback_routes.py` (`POST /feedback`, the one route a signed-in user files feedback through; there is no user read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*`, admin-only triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`. `main.py` still holds recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export.
+- `main.py` — the app object, startup wiring, and most FastAPI routes: recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export. Ten further routers are wired with `include_router` in one block near the top, so work on their domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (`/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`), `catalog_import_routes.py` (admin reviewed-batch import), `alpha_routes.py` (`/admin/alpha/*`, `ALPHA-GATE`), `user_feedback_routes.py` (`POST /feedback` — the only user-facing feedback route; users have no read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*` triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`.
 - **Legacy `/plan` paths.** Three plan routes are double-registered as stacked decorators on a single
   handler, under legacy (`/plan`) and current (`/meal-plans`) paths: `GET` (`get_plan`), `POST`
   (`set_plan`) and `DELETE` (`delete_meal_plans`). **The legacy `/plan` paths are deprecated** — do
@@ -59,29 +59,29 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
   `frontend-v2/src/api/mealPlansApi.js` still calls all three, so migrating that file is the real
   precondition for removal, not a date. Note that `/plan/settings` (GET/PUT, `plan_settings` /
   `update_plan_settings`) is **not** legacy — it has no `/meal-plans` twin and is the current path.
-- `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans. (An earlier process-global in-memory cache `_PLAN_CACHE` / `_PLAN_SETTINGS` has been removed; see `list_planned_titles`'s comment noting it "replaces the former in-memory `_PLAN_CACHE`".)
-- `models.py` — SQLAlchemy models. Plan tables are keyed by owner: `Meal` has composite PK
-  `(user_id, plan_date, meal_number)` with a named `CHECK meal_number IN (1,2)`, `MealPlan` is
-  `(user_id, plan_date)` and `MealSide` `(user_id, plan_date, meal_number, position)`. Constraints
-  are **named explicitly**: an unnamed one has no name in the metadata to match the reflected one
-  against, so autogenerate reads it as absent from the models and proposes dropping it on every
-  migration. `IntList` TypeDecorator stores `list[int]` (e.g. `season_months`) as comma-separated
-  strings. `MealSide` holds ordered side dishes per meal.
-- `catalog.py` — all domain logic of the system recipe catalog ("Discover"): the `is_system` account (resolved by the flag, never by its `mealplanner` handle), listing, adoption counts, batch adopt, publish/retire, admin authoring, export, and `populate_from_pack`, which `main._bootstrap` runs to load `data/catalog_pack.json` into an empty catalog. It must not import `main` or any router (guarded by `tests/test_architecture_guards.py`). `User.is_admin` is **granted by direct SQL only** — no route, service or startup path ever writes it.
+- `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans: nothing is cached in process.
+- `models.py` — SQLAlchemy models. Plan tables are keyed by owner: `Meal` PK
+  `(user_id, plan_date, meal_number)` with a named `CHECK meal_number IN (1,2)`, `MealPlan`
+  `(user_id, plan_date)`, `MealSide` `(user_id, plan_date, meal_number, position)`. **Name every
+  constraint** — autogenerate cannot match an unnamed one against the reflected database, so it
+  proposes dropping it on every migration. `IntList` stores `list[int]` (e.g. `season_months`) as
+  comma-separated strings; `MealSide` holds ordered side dishes per meal.
+- `catalog.py` — all domain logic of the system recipe catalog ("Discover"): the `is_system` account (resolved by the flag, never by its `mealplanner` handle), listing, adoption counts, batch adopt, publish/retire, admin authoring, export, and `populate_from_pack`, which `main._bootstrap` runs to load `data/catalog_pack.json` into an empty catalog. It must not import `main` or any router. `User.is_admin` is **granted by direct SQL only** — no route, service or startup path ever writes it.
 - `alpha.py` — the closed alpha's signup allowlist: normalization, free-text splitting, the
   `assert_email_allowed` gate (which **fails open on an empty table**) and the invite CRUD behind
   `alpha_routes.py`. **Temporary — closed-alpha scaffolding, removed with the alpha
   (`ALPHA-GATE`).** Every artefact carries that marker and all dependency arrows point *into* the
   feature, so removal is `git grep ALPHA-GATE` plus a drop-table revision; it imports only
-  `models` (guarded by `tests/test_architecture_guards.py`).
+  `models`.
 - `user_feedback.py` — all domain logic of in-app user feedback (bug reports and requests, triaged
   by an admin): `submit` (the `FB-<id>` ref code, screenshots stored under `feedback/` via
   `storage.save_image`), filtered listing, status / priority / seen / notes / tags, and the unseen
   count behind the admin badge. Named `user_feedback` everywhere because "feedback" already means
   the meal-plan accept/reject signal. It imports only `models` and `storage`, and only its two
-  routers import it (guarded by `tests/test_architecture_guards.py`).
+  routers import it.
 - `schemas.py` — Pydantic request/response models.
-- `database.py` — engine + `SessionLocal` + `Base`. The database is **PostgreSQL only**; `resolve_database_url()` reads the required `DATABASE_URL` env var (normalizing a bare `postgres://` scheme) and raises `RuntimeError` when it is unset — there is no fallback, so a misconfigured deploy fails loudly instead of silently using the wrong database.
+- `database.py` — engine + `SessionLocal` + `Base`. The database is **PostgreSQL only**; `resolve_database_url()` reads the required `DATABASE_URL` env var (normalizing a bare `postgres://` scheme) and raises `RuntimeError` when it is unset, so a misconfigured deploy fails loudly rather than silently using the wrong database.
+- `tests/test_architecture_guards.py` enforces the import rules above — add a guard there when you add a module that must stay independent.
 
 ### Auth & tenancy
 **Every per-user row is owned, and every query must be scoped.** Ownership is declared uniformly by
@@ -110,17 +110,13 @@ ownership, and the only reader is an admin who must see every row -- so `user_fe
 
 ### Migrations
 The schema is owned by **Alembic**. `alembic upgrade head` runs as the Railway `api` service's
-**pre-deploy command, configured in the Railway dashboard** -- deliberately not in a `railway.json`,
-which was deleted in `e5c67eb` so service settings stay dashboard-editable. It is therefore recorded
-in **no file in this repo**, and running the image anywhere else migrates nothing: do that yourself
-with `alembic upgrade head` from `backend/`. (Railway also builds the api service with the
-**RAILPACK** builder, not `backend/Dockerfile` -- that Dockerfile serves `docker-compose` only, and
-its own comment pointing at a `railway.json` is stale.)
+**pre-deploy command, set in the Railway dashboard** -- so it lives in no file in this repo, and
+Railway builds the service with RAILPACK rather than `backend/Dockerfile`. Running the image
+anywhere else migrates nothing: do it yourself with `alembic upgrade head` from `backend/`. See
+`docs/DEPLOYMENT.md`.
 
-The app does **not** call `Base.metadata.create_all` -- `create_all` only creates *missing* tables
-and never alters existing ones, which silently loses schema changes against a populated database.
-The one remaining call is in `scripts/seed_testing_data.py`, which rebuilds a throwaway schema from
-scratch.
+The app never calls `Base.metadata.create_all`: it only creates *missing* tables and never alters
+existing ones, which silently loses schema changes against a populated database.
 
 **Any model change needs a revision in the same commit:** `alembic revision --autogenerate -m "..."`
 from `backend/`, then *read the generated script* (autogenerate cannot see renames and does not compare
@@ -130,8 +126,7 @@ from the migrations alone and fails if it disagrees with the models, so drift is
 Config is `backend/alembic.ini`; the URL is not in it -- `migrations/env.py` resolves it via
 `database.resolve_database_url()` so migrations and app can never target different databases.
 Generated revision scripts under `migrations/versions/` are excluded from `flake8`; `migrations/env.py`
-is hand-written and is linted. `backend/migrations/README.md` documents the workflow and keeps the
-pre-Alembic changelog as a historical paper trail.
+is hand-written and is linted. `backend/migrations/README.md` documents the workflow.
 
 ### Testing data seed
 `backend/scripts/seed_testing_data.py` performs a **complete DB reset** (drops + recreates every table).
@@ -162,8 +157,7 @@ points at, including a deployment. `docker-compose.yml` sets the flag; no deploy
 - A meal is a leftover exactly when it links back to the meal that produced it, via
   `leftover_source_date` / `leftover_source_meal`, kept all-or-nothing by
   `ck_meal_leftover_source_all_or_nothing`. `Meal.leftover` is a **derived property**, not a stored
-  column — the old `" (leftover)"` title-suffix encoding is gone, so do not reintroduce string
-  parsing of recipe titles.
+  column. **Never encode meal state in the recipe title string.**
 
 ## Conventions
 - **Cite symbols, not line numbers.** Names (`get_plan`, `scope`, `_owner_fk_column`) survive edits

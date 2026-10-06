@@ -78,9 +78,9 @@ export DATABASE_URL=postgresql://user:pass@localhost:5432/mealsdb   # required
 uvicorn main:app --reload
 ```
 
-`DATABASE_URL` is **required**: there is no SQLite fallback and the app raises on
-startup without it. `docker compose up` supplies one, along with a Postgres
-container and a freshly seeded database.
+`DATABASE_URL` is **required** -- the backend raises on startup without it.
+`docker compose up` supplies one, along with a Postgres container and a freshly
+seeded database.
 
 #### Database schema & migrations
 
@@ -104,7 +104,7 @@ deployment that runs as the api service's pre-deploy command.
 ```
 meal-planner/
 │
-├── README.md                  # project specs (already created)
+├── README.md                  # feature spec and API reference
 ├── backend/                   # FastAPI app; modules live at this root (`main:app`)
 │   ├── mealplanner/           # the planner's scoring and scheduling logic
 │   ├── migrations/            # Alembic revisions
@@ -185,9 +185,9 @@ Set the necessary environment variables before starting:
 - `DATABASE_URL` – **required.** SQLAlchemy connection string for the
   PostgreSQL database (e.g. `postgresql://user:pass@host:5432/mealsdb`);
   Railway injects this automatically. A bare `postgres://` scheme is normalized
-  to `postgresql://`. There is no fallback: the backend refuses to start when it
-  is unset, so a misconfigured deployment fails loudly instead of silently
-  serving the wrong database.
+  to `postgresql://`. The backend refuses to start when it is unset, so a
+  misconfigured deployment fails loudly rather than silently serving the wrong
+  database.
 - `API_BASE_URL` – URL used by the frontend to reach the backend
 - `PORT` – server port for the backend
 - `JWT_SECRET` – signing key for the auth tokens (a dev-only default is used

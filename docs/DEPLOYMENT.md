@@ -22,11 +22,11 @@ while the previous container is still serving, and a failed migration fails the
 deploy rather than starting a service whose code expects columns the database
 does not have. The app itself never creates tables.
 
-This setting lives only in the dashboard -- there is no `railway.json`, and the
-service is built by Railway's **RAILPACK** builder rather than
-`backend/Dockerfile`. So nothing in this repository migrates anything: running
-the image anywhere else does **not** migrate, and you must do it yourself with
-`alembic upgrade head` from `backend/`.
+The command lives only in the dashboard, and Railway builds the service with its
+**RAILPACK** builder -- `backend/Dockerfile` is used by `docker-compose`, not by
+the deployment. So nothing in this repository migrates anything: running the
+image elsewhere migrates nothing, and you must run `alembic upgrade head` from
+`backend/` yourself.
 
 On a brand-new database the migrations build the schema and the app's startup
 bootstrap seeds reserved usernames and system tags. Nothing else is needed —
@@ -44,11 +44,10 @@ next deploy. Configure the bucket before anyone uploads anything.
 
 ### Service settings live in the dashboard, not in a file
 
-The api service deliberately has **no `railway.json`**. Railway treats a
-committed config file as the source of truth and greys the corresponding
-controls out in the dashboard, which made the region unchangeable there. These
-settings are therefore configured on the service itself and are edited in the
-dashboard:
+The api service has **no `railway.json`**, deliberately: Railway treats a
+committed config file as the source of truth and greys out the corresponding
+dashboard controls, the region among them. These settings live on the service
+itself and are edited in the dashboard:
 
 | Setting | Value | Why it matters |
 |---|---|---|
@@ -59,8 +58,8 @@ dashboard:
 | Replicas | `1` | Rate limiting is in-process; see below. |
 | Restart policy | `ON_FAILURE`, max 3 | |
 
-The trade-off is that these are no longer version-controlled, so they are
-recorded here instead. Check them after any significant Railway change.
+The trade-off is that these are not version-controlled, which is why they are
+recorded here. Check them after any significant Railway change.
 
 ## Variables — api
 
