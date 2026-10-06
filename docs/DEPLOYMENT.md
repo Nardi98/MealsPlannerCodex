@@ -145,7 +145,8 @@ before inviting testers. An untested backup is not a backup.
   verification and reset tokens.
 - `/docs` and `/redoc` are publicly reachable. They carry `X-Robots-Tag:
   noindex, nofollow` but are not access-controlled.
-- The legacy `/plan` routes remain registered alongside `/meal-plans`; removal is
-  scheduled no earlier than 2026-10-01.
+- Plan reads and writes are served only at `/meal-plans`. A browser running a
+  cached pre-migration bundle will 404 on plan load, save and delete until it is
+  hard-reloaded. (`/plan/settings` is a separate endpoint and is unaffected.)
 - The `refresh_tokens` table has no expired-row cleanup yet. Harmless at alpha
   scale; it needs a sweep before any wider release.

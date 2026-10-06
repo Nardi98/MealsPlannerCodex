@@ -52,13 +52,9 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
 
 ### Backend layers (all at `backend/` root)
 - `main.py` — the app object, startup wiring, and most FastAPI routes: recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export. Ten further routers are wired with `include_router` in one block near the top, so work on their domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (`/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`), `catalog_import_routes.py` (admin reviewed-batch import), `alpha_routes.py` (`/admin/alpha/*`, `ALPHA-GATE`), `user_feedback_routes.py` (`POST /feedback` — the only user-facing feedback route; users have no read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*` triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`.
-- **Legacy `/plan` paths.** Three plan routes are double-registered as stacked decorators on a single
-  handler, under legacy (`/plan`) and current (`/meal-plans`) paths: `GET` (`get_plan`), `POST`
-  (`set_plan`) and `DELETE` (`delete_meal_plans`). **The legacy `/plan` paths are deprecated** — do
-  not add new behaviour to them. They **cannot be removed yet**:
-  `frontend-v2/src/api/mealPlansApi.js` still calls all three, so migrating that file is the real
-  precondition for removal, not a date. Note that `/plan/settings` (GET/PUT, `plan_settings` /
-  `update_plan_settings`) is **not** legacy — it has no `/meal-plans` twin and is the current path.
+- **Plan paths.** Plan reads and writes live at `/meal-plans` (`get_plan`, `set_plan`,
+  `delete_meal_plans`). `/plan/settings` (GET/PUT, `plan_settings` / `update_plan_settings`) is a
+  separate, current endpoint with no `/meal-plans` twin — do not "tidy" it onto one.
 - `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans: nothing is cached in process.
 - `models.py` — SQLAlchemy models. Plan tables are keyed by owner: `Meal` PK
   `(user_id, plan_date, meal_number)` with a named `CHECK meal_number IN (1,2)`, `MealPlan`
