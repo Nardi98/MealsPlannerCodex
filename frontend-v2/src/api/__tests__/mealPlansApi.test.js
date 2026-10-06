@@ -14,15 +14,33 @@ const respondWith = (body) => {
   )
 }
 
-test('fetchRange strips the "(leftover)" suffix into the leftover flag', async () => {
+test('fetchRange takes the leftover flag from the field the server sends', async () => {
   respondWith({
-    '2026-08-24': [{ recipe: 'Stew (leftover)', side_recipes: [], meal_number: 1 }],
+    '2026-08-24': [
+      { recipe: 'Stew', side_recipes: [], meal_number: 1, leftover: true },
+      { recipe: 'Soup', side_recipes: [], meal_number: 2, leftover: false },
+    ],
   })
 
   const plan = await mealPlansApi.fetchRange('2026-08-24', '2026-08-24')
 
-  expect(plan['2026-08-24'][0].recipe).toBe('Stew')
   expect(plan['2026-08-24'][0].leftover).toBe(true)
+  expect(plan['2026-08-24'][1].leftover).toBe(false)
+})
+
+test('fetchRange leaves a title ending in "(leftover)" alone', async () => {
+  // The server sends the raw title and a separate `leftover` field
+  // (crud.meal_item), so a title is never state to be parsed.
+  respondWith({
+    '2026-08-24': [
+      { recipe: 'Stew (leftover)', side_recipes: [], meal_number: 1, leftover: false },
+    ],
+  })
+
+  const plan = await mealPlansApi.fetchRange('2026-08-24', '2026-08-24')
+
+  expect(plan['2026-08-24'][0].recipe).toBe('Stew (leftover)')
+  expect(plan['2026-08-24'][0].leftover).toBe(false)
 })
 
 test('fetchRange passes an empty slot through as null', async () => {

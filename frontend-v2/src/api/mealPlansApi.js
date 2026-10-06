@@ -5,13 +5,7 @@ import { request } from './client';
 // it as a meal throws, and one bad slot would blank the whole plan.
 function parseMeal(meal) {
   if (!meal) return meal;
-  let { recipe } = meal;
-  let leftover = Boolean(meal.leftover);
-  if (typeof recipe === 'string' && recipe.endsWith(' (leftover)')) {
-    leftover = true;
-    recipe = recipe.slice(0, -11);
-  }
-  return { ...meal, recipe, leftover };
+  return { ...meal, leftover: Boolean(meal.leftover) };
 }
 
 export const mealPlansApi = {
