@@ -175,7 +175,7 @@ def test_toggle_meal_acceptance(db_session, user, auth_client):
         "people": 2,
     }
 
-    resp2 = client.get("/plan", params={"plan_date": "2024-01-01"})
+    resp2 = client.get("/meal-plans", params={"plan_date": "2024-01-01"})
     assert resp2.status_code == 200
     assert resp2.json() == {
         "2024-01-01": [

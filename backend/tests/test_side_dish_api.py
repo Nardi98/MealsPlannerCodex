@@ -30,7 +30,7 @@ def test_post_plan_with_side_recipe(db_session, user, auth_client):
     }
     assert resp.json() == expected
 
-    resp2 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    resp2 = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert resp2.status_code == 200
     assert resp2.json() == expected
 
@@ -58,7 +58,7 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
         "people": 2,
     }
 
-    resp2 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    resp2 = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert resp2.status_code == 200
     assert resp2.json() == {
         plan_date.isoformat(): [
@@ -149,7 +149,7 @@ def test_add_multiple_side_dishes(db_session, user, auth_client):
     )
     assert resp2.status_code == 200
 
-    plan_resp = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    plan_resp = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert plan_resp.status_code == 200
     assert plan_resp.json() == {
         plan_date.isoformat(): [
@@ -198,7 +198,7 @@ def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
     }
     assert crud.get_recipe(db_session, side2.id).score == 0
 
-    plan_resp = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    plan_resp = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert plan_resp.status_code == 200
     assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side1", "Side3"]
 
@@ -225,7 +225,7 @@ def test_remove_first_of_multiple_side_dishes(db_session, user, auth_client):
     assert resp.status_code == 200
     assert resp.json()["side_recipes"] == ["Side2", "Side3"]
 
-    plan_resp = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    plan_resp = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert plan_resp.status_code == 200
     assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side2", "Side3"]
 
@@ -274,7 +274,7 @@ def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client
     }
     assert crud.get_recipe(db_session, side2.id).score == 0
 
-    plan_resp = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    plan_resp = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert plan_resp.status_code == 200
     assert plan_resp.json()[plan_date.isoformat()][0]["side_recipes"] == ["Side1"]
 

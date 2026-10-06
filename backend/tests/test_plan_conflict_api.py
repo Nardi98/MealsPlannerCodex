@@ -22,7 +22,7 @@ def test_post_meal_plan_conflict_requires_force(db_session, user, auth_client):
 
     resp2 = client.post("/meal-plans?force=true", json=payload)
     assert resp2.status_code == 200
-    resp3 = client.get("/plan", params={"plan_date": plan_date.isoformat()})
+    resp3 = client.get("/meal-plans", params={"plan_date": plan_date.isoformat()})
     assert resp3.status_code == 200
     assert resp3.json() == {
         plan_date.isoformat(): [

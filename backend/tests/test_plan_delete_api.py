@@ -71,7 +71,7 @@ def test_delete_meal_plans_legacy_route(db_session, user, auth_client):
     client = auth_client
 
     resp = client.delete(
-        "/plan",
+        "/meal-plans",
         params={"start_date": start.isoformat(), "end_date": start.isoformat()},
     )
     assert resp.status_code == 200

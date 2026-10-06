@@ -20,7 +20,7 @@ def test_get_plan_range(db_session, user, auth_client):
     client = auth_client
 
     resp = client.get(
-        "/plan",
+        "/meal-plans",
         params={"start_date": start.isoformat(), "end_date": second.isoformat()},
     )
     assert resp.status_code == 200
