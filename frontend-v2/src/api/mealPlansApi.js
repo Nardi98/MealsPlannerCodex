@@ -17,7 +17,7 @@ function parseMeal(meal) {
 export const mealPlansApi = {
   fetchRange: async (startDate, endDate) => {
     const data = await request(
-      `/plan?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+      `/meal-plans?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
     );
     if (!data) return data;
     return Object.fromEntries(
@@ -47,13 +47,13 @@ export const mealPlansApi = {
     );
   },
   create: (payload, { force = false } = {}) =>
-    request(`/plan${force ? '?force=true' : ''}`, {
+    request(`/meal-plans${force ? '?force=true' : ''}`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
   deleteRange: (startDate, endDate) =>
     request(
-      `/plan?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
+      `/meal-plans?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
       {
         method: 'DELETE',
       },

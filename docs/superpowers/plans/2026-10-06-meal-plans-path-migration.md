@@ -40,7 +40,11 @@ Four traps, each verified against the code at the time of writing:
 
 ### Task 1: Point `mealPlansApi` at `/meal-plans`
 
-Three call sites. `client.js` builds its URL as `` `${API_BASE_URL}${path}` `` and `API_BASE_URL` is `''` under vitest, so `fetch` receives the bare path — which is what we assert.
+Three call sites. `client.js` builds its URL as `` `${API_BASE_URL}${path}` ``, and `frontend-v2/.env` sets
+`VITE_API_BASE_URL=http://localhost:8000`, which vitest loads — so `fetch` receives an **absolute** URL,
+not a bare path. Assert on path+query only, or the tests are coupled to that base. A guard written as
+`url.startsWith('/plan')` would pass vacuously against an absolute URL, which is why the predicate below
+has its own test.
 
 **Files:**
 - Modify: `frontend-v2/src/api/mealPlansApi.js:20`, `:50`, `:56`
@@ -51,28 +55,34 @@ Three call sites. `client.js` builds its URL as `` `${API_BASE_URL}${path}` `` a
 Append to `frontend-v2/src/api/__tests__/mealPlansApi.test.js`:
 
 ```javascript
+// `VITE_API_BASE_URL` is set in .env, so fetch receives an absolute URL. Compare
+// on path+query alone so these tests hold whatever the base is configured to.
+const fetchedPaths = () =>
+  globalThis.fetch.mock.calls.map(([url]) => {
+    const { pathname, search } = new URL(url, 'http://base.invalid')
+    return `${pathname}${search}`
+  })
+
+const isLegacyPlanPath = (p) => p === '/plan' || p.startsWith('/plan?')
+
 test('fetchRange requests the /meal-plans path', async () => {
   respondWith({})
 
   await mealPlansApi.fetchRange('2026-08-24', '2026-08-31')
 
-  expect(globalThis.fetch).toHaveBeenCalledWith(
+  expect(fetchedPaths()).toEqual([
     '/meal-plans?start_date=2026-08-24&end_date=2026-08-31',
-    expect.anything()
-  )
+  ])
 })
 
 test('create posts to /meal-plans, and carries force through', async () => {
   respondWith({})
 
   await mealPlansApi.create({ plan: {} })
-  expect(globalThis.fetch).toHaveBeenCalledWith('/meal-plans', expect.anything())
-
   await mealPlansApi.create({ plan: {} }, { force: true })
-  expect(globalThis.fetch).toHaveBeenCalledWith(
-    '/meal-plans?force=true',
-    expect.anything()
-  )
+
+  expect(fetchedPaths()).toEqual(['/meal-plans', '/meal-plans?force=true'])
+  expect(globalThis.fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' })
 })
 
 test('deleteRange deletes on the /meal-plans path', async () => {
@@ -80,22 +90,32 @@ test('deleteRange deletes on the /meal-plans path', async () => {
 
   await mealPlansApi.deleteRange('2026-08-24', '2026-08-31')
 
-  expect(globalThis.fetch).toHaveBeenCalledWith(
+  expect(fetchedPaths()).toEqual([
     '/meal-plans?start_date=2026-08-24&end_date=2026-08-31',
-    expect.objectContaining({ method: 'DELETE' })
-  )
+  ])
+  expect(globalThis.fetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
 })
 
 test('no mealPlansApi method addresses the legacy /plan path', async () => {
-  // /plan/settings is a different, current endpoint and lives in planSettingsApi.
+  // Guards the migration against regressing. `/plan/settings` is a different,
+  // current endpoint and belongs to planSettingsApi, so it must not match here.
   respondWith({})
 
   await mealPlansApi.fetchRange('2026-08-24', '2026-08-24')
   await mealPlansApi.create({ plan: {} })
   await mealPlansApi.deleteRange('2026-08-24', '2026-08-24')
 
-  const paths = globalThis.fetch.mock.calls.map(([url]) => url)
-  expect(paths.some((p) => p.startsWith('/plan'))).toBe(false)
+  expect(fetchedPaths()).toHaveLength(3)
+  expect(fetchedPaths().filter(isLegacyPlanPath)).toEqual([])
+})
+
+test('the legacy-path guard would catch a regression', async () => {
+  // Proves the guard above can fail: without this, a base-URL change could make
+  // `isLegacyPlanPath` silently match nothing and the guard pass vacuously.
+  expect(isLegacyPlanPath('/plan')).toBe(true)
+  expect(isLegacyPlanPath('/plan?start_date=2026-08-24')).toBe(true)
+  expect(isLegacyPlanPath('/plan/settings')).toBe(false)
+  expect(isLegacyPlanPath('/meal-plans')).toBe(false)
 })
 ```
 
@@ -105,7 +125,7 @@ Run from `frontend-v2/`:
 ```bash
 npm run test -- src/api/__tests__/mealPlansApi.test.js
 ```
-Expected: the four new tests FAIL. The URL assertions report receiving `/plan?start_date=...`, `/plan`, `/plan?force=true`; the last one fails because `paths.some(...)` is `true`.
+Expected: **4 failed, 3 passed (7)**. The four new path assertions fail, reporting `/plan?start_date=...`, `/plan` and `/plan?force=true`. `the legacy-path guard would catch a regression` passes immediately — it tests the predicate, not the code — and so do the two pre-existing tests.
 
 - [ ] **Step 3: Change the three URLs**
 
