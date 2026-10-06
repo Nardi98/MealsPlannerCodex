@@ -73,27 +73,28 @@
 
 ```bash
 cd backend
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
+export DATABASE_URL=postgresql://user:pass@localhost:5432/mealsdb   # required
 uvicorn main:app --reload
 ```
 
+`DATABASE_URL` is **required**: there is no SQLite fallback and the app raises on
+startup without it. `docker compose up` supplies one, along with a Postgres
+container and a freshly seeded database.
+
 #### Database schema & migrations
 
-The schema is created automatically on startup: `main.py` calls
-`Base.metadata.create_all`, so a **fresh** database needs no migration step. During
-development this is the whole story — to change the schema, change the SQLAlchemy
-model and start against a fresh DB.
+The schema is owned by **Alembic** and the app never creates tables. Bring a
+database up to date with `alembic upgrade head` from `backend/`; in the Railway
+deployment that runs as the api service's pre-deploy command.
 
-There is **no active migration system**. Real migrations will be introduced with
-`alembic init` when the project approaches production and needs to evolve a populated
-database in place. A historical changelog of past schema changes is kept in
-[`backend/migrations/README.md`](backend/migrations/README.md).
+**Any model change needs a revision in the same commit** -- see
+[`backend/migrations/README.md`](backend/migrations/README.md) for the workflow and
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for how the deployment migrates.
 
 ### Frontend (`frontend-v2/`)
 
-The repository includes an updated UI located in `frontend-v2/`. Start it with
+`frontend-v2/` is the application's UI. Start it with
 `docker-compose up frontend-v2` and access it at
 [`http://localhost:3000`](http://localhost:3000).
 
@@ -104,15 +105,16 @@ The repository includes an updated UI located in `frontend-v2/`. Start it with
 meal-planner/
 │
 ├── README.md                  # project specs (already created)
-├── backend/                   # FastAPI application
-│   ├── app/                   # business logic and API routers
+├── backend/                   # FastAPI app; modules live at this root (`main:app`)
+│   ├── mealplanner/           # the planner's scoring and scheduling logic
+│   ├── migrations/            # Alembic revisions
 │   ├── requirements.txt       # backend dependencies
 │   └── ...
-├── frontend-v2/             # Updated UI
+├── frontend-v2/               # Vite/React UI
 │   ├── package.json
 │   ├── src/                   # React components
 │   └── ...
-└── migrations/                # schema-change changelog (no active migrations)
+└── docs/                      # deployment and design docs
 ```
 
 ## 📦 Requirements
@@ -307,15 +309,5 @@ The updated meal is returned in the response.
 
 
 
-## Next-gen UI
-
-To spin up the experimental Vite interface:
-
-```bash
-cd frontend-v2
-npm install
-npm run dev
-```
-
-All UI updates must adhere to [MEAL_PLANNER_DESIGN_GUIDE.md](MEAL_PLANNER_DESIGN_GUIDE.md) and the project mock-up. Non-Recipe pages are currently placeholders, and their sidebar buttons are disabled until future tasks.
+All UI updates must adhere to [MEAL_PLANNER_DESIGN_GUIDE.md](MEAL_PLANNER_DESIGN_GUIDE.md) and the project mock-up.
 

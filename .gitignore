@@ -34,3 +34,9 @@ PRODUCT.md
 # summer_recipes_data.py, not a source file -- regenerate it rather than commit
 # it (it also carries a real account's recipe and pantry ids).
 docs/recipes/summer-recipes-import.json
+
+# Uploaded images. `storage.py` writes here only in local dev / CI -- production
+# puts them in the Railway bucket (chosen by `AWS_S3_BUCKET_NAME`). These are
+# runtime user uploads, not source: recipe photos and feedback screenshots from
+# whatever you happened to be testing.
+backend/media/

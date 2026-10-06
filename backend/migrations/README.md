@@ -1,9 +1,13 @@
 # Migrations
 
 This project uses **Alembic**. The deployed schema is defined by the revision
-scripts in `versions/`, and `alembic upgrade head` runs at container start
-(`backend/Dockerfile`) -- so a failed migration fails the deploy rather than
+scripts in `versions/`, and `alembic upgrade head` runs as the Railway api
+service's pre-deploy command, configured in the dashboard and recorded in no file
+here (see `docs/DEPLOYMENT.md`) -- so it runs once per deploy, while the previous
+container still serves, and a failed migration fails the deploy rather than
 producing a service whose code expects columns the database does not have.
+Running the image outside Railway migrates nothing: do it yourself with
+`alembic upgrade head` from `backend/`.
 
 The app does **not** create its own tables. `Base.metadata.create_all` only ever
 creates what is *missing*; it never alters an existing table, which is fine for a

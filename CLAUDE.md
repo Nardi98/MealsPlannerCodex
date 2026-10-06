@@ -23,7 +23,7 @@ make lint / make test              # Makefile shortcuts
 (`docker start mp_test_pg`); in CI it is a `postgres:16` service. The schema is dropped and rebuilt
 per run, so never point it at anything you care about.
 
-Note: the README's `app.main:app` and `python -m venv` snippets are stale — the app module is `main` at the backend root. CI (`.github/workflows/ci.yml`) runs `flake8 .` then `pytest` from `backend/` on Python 3.11.
+Note: the app module is `main` at the backend root, not `app.main`. CI (`.github/workflows/ci.yml`) runs `flake8 .` then `pytest` from `backend/` on Python 3.11.
 
 ### Frontend (run from `frontend-v2/`)
 ```bash
@@ -51,14 +51,14 @@ The `mealplanner` package holds only the planner's *real* logic:
 Tests import models/db/crud from the top-level modules and planner logic from `mealplanner.*` (see `tests/conftest.py`, which inserts the backend root onto `sys.path`). `mealplanner/` now lints under `flake8` (it is no longer excluded).
 
 ### Backend layers (all at `backend/` root)
-- `main.py` — the app object, startup wiring, and **most** FastAPI routes. It is no longer the only route module: ten routers are pre-wired with `include_router` (`main.py:110-119`), so work on those domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (user-facing `/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`, every route behind `auth_users.require_admin`), `catalog_import_routes.py` (the admin reviewed-batch import) and `alpha_routes.py` (`/admin/alpha/*`, likewise admin-only — **temporary: closed-alpha scaffolding, removed with the alpha (`ALPHA-GATE`)**), `user_feedback_routes.py` (`POST /feedback`, the one route a signed-in user files feedback through; there is no user read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*`, admin-only triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`. `main.py` still holds recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export.
+- `main.py` — the app object, startup wiring, and **most** FastAPI routes. It is no longer the only route module: ten routers are pre-wired with `include_router` (one block near the top of `main.py`), so work on those domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (user-facing `/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`, every route behind `auth_users.require_admin`), `catalog_import_routes.py` (the admin reviewed-batch import) and `alpha_routes.py` (`/admin/alpha/*`, likewise admin-only — **temporary: closed-alpha scaffolding, removed with the alpha (`ALPHA-GATE`)**), `user_feedback_routes.py` (`POST /feedback`, the one route a signed-in user files feedback through; there is no user read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*`, admin-only triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`. `main.py` still holds recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export.
 - **Legacy `/plan` paths.** Three plan routes are double-registered as stacked decorators on a single
-  handler, under legacy (`/plan`) and current (`/meal-plans`) paths: `GET` (`main.py:1251`), `POST`
-  (`main.py:1263`) and `DELETE` (`main.py:1299`). **The legacy `/plan` paths are deprecated** — do
+  handler, under legacy (`/plan`) and current (`/meal-plans`) paths: `GET` (`get_plan`), `POST`
+  (`set_plan`) and `DELETE` (`delete_meal_plans`). **The legacy `/plan` paths are deprecated** — do
   not add new behaviour to them. They **cannot be removed yet**:
   `frontend-v2/src/api/mealPlansApi.js` still calls all three, so migrating that file is the real
-  precondition for removal, not a date. Note that `/plan/settings` (GET/PUT, `main.py:1322` /
-  `main.py:1332`) is **not** legacy — it has no `/meal-plans` twin and is the current path.
+  precondition for removal, not a date. Note that `/plan/settings` (GET/PUT, `plan_settings` /
+  `update_plan_settings`) is **not** legacy — it has no `/meal-plans` twin and is the current path.
 - `crud.py` — DB operations backed directly by the `meals` / `meal_plans` tables, which are the **single source of truth** for plans. (An earlier process-global in-memory cache `_PLAN_CACHE` / `_PLAN_SETTINGS` has been removed; see `list_planned_titles`'s comment noting it "replaces the former in-memory `_PLAN_CACHE`".)
 - `models.py` — SQLAlchemy models. Plan tables are keyed by owner: `Meal` has composite PK
   `(user_id, plan_date, meal_number)` with a named `CHECK meal_number IN (1,2)`, `MealPlan` is
@@ -98,8 +98,8 @@ all route through it.
 
 `auth_users.py` owns identity: bcrypt passwords, JWT access + refresh tokens (refresh `jti`s are
 stored in `refresh_tokens` so they can be revoked on logout), Google sign-in, and email
-verification / password-reset tokens. Routes take the caller via the `CurrentUser` dependency
-(`main.py:265`, `Annotated[models.User, Depends(auth_users.get_current_user)]`) and admin-only routes
+verification / password-reset tokens. Routes take the caller via `main.py`'s `CurrentUser` dependency
+(`Annotated[models.User, Depends(auth_users.get_current_user)]`) and admin-only routes
 add `auth_users.require_admin` -- enforced on every route in `catalog_admin_routes.py`,
 `catalog_import_routes.py`, `alpha_routes.py` and `user_feedback_admin_routes.py`. `ops_routes.py` is
 the deliberate *unauthenticated* exception: it serves only `GET /health`, which the platform
@@ -166,6 +166,9 @@ points at, including a deployment. `docker-compose.yml` sets the flag; no deploy
   parsing of recipe titles.
 
 ## Conventions
+- **Cite symbols, not line numbers.** Names (`get_plan`, `scope`, `_owner_fk_column`) survive edits
+  and are greppable; `main.py:1263` is wrong the next time anything above it changes, and a
+  confidently wrong pointer costs more than no pointer.
 - `flake8` excludes `tests/` and `migrations/versions/` (the `mealplanner/` package is linted); max line length 120. New backend code outside the excluded dirs must lint clean.
 - Backend commands assume the working directory is `backend/` (imports are top-level, not package-qualified from the repo root).
 

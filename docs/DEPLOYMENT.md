@@ -16,14 +16,16 @@ cookie has to be marked cross-site.
 
 ## Schema
 
-`alembic upgrade head` runs as the api service's **pre-deploy command**
-(`backend/railway.json`), so it runs once per deploy, while the previous
-container is still serving, and a failed migration fails the deploy rather than
-starting a service whose code expects columns the database does not have. The
-app itself never creates tables.
+`alembic upgrade head` runs as the api service's **pre-deploy command**, set in
+the Railway dashboard (see *Service settings* below), so it runs once per deploy,
+while the previous container is still serving, and a failed migration fails the
+deploy rather than starting a service whose code expects columns the database
+does not have. The app itself never creates tables.
 
-Note that this lives in `railway.json`, not in the Dockerfile: running the image
-outside Railway does **not** migrate. Do it yourself with
+This setting lives only in the dashboard -- there is no `railway.json`, and the
+service is built by Railway's **RAILPACK** builder rather than
+`backend/Dockerfile`. So nothing in this repository migrates anything: running
+the image anywhere else does **not** migrate, and you must do it yourself with
 `alembic upgrade head` from `backend/`.
 
 On a brand-new database the migrations build the schema and the app's startup
@@ -135,7 +137,7 @@ before inviting testers. An untested backup is not a backup.
 
 - **Do not scale the api past one replica.** Rate limiting (`backend/ratelimit.py`)
   uses in-process counters; a second replica halves every limit and makes them
-  unpredictable. `railway.json` pins `numReplicas: 1`.
+  unpredictable. The dashboard's **Replicas** setting pins this to `1`.
 - `/health` is the healthcheck. It is deliberately a pure liveness probe and does
   not touch the database, so a transient database blip cannot get a healthy
   container killed.
