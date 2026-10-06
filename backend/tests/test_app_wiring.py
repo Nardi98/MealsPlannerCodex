@@ -90,3 +90,18 @@ def test_startup_bootstrap_is_idempotent(db_session):
     main._bootstrap(db_session)
     after = len(db_session.execute(select(ReservedUsername)).scalars().all())
     assert before == after
+
+
+def test_the_feedback_routers_are_included():
+    """``POST /feedback`` and ``/admin/feedback/*`` are served by the two
+    ``user_feedback`` routers, both mounted by ``main``."""
+    import user_feedback_admin_routes
+    import user_feedback_routes
+
+    assert main.user_feedback_routes is user_feedback_routes
+    assert main.user_feedback_admin_routes is user_feedback_admin_routes
+    served = {(method, route.path) for route in main.app.routes for method in getattr(route, "methods", ())}
+    assert ("POST", "/feedback") in served
+    admin_paths = {route.path for route in user_feedback_admin_routes.router.routes}
+    assert "/admin/feedback" in admin_paths
+    assert admin_paths <= {path for _, path in served}

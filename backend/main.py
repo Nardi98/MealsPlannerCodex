@@ -41,6 +41,8 @@ import ratelimit
 import schemas
 import share_routes
 import storage
+import user_feedback_admin_routes
+import user_feedback_routes
 import username_routes
 import usernames
 from mealplanner import planner
@@ -113,6 +115,8 @@ app.include_router(catalog_routes.router)
 app.include_router(catalog_admin_routes.router)
 app.include_router(catalog_import_routes.router)
 app.include_router(alpha_routes.router)  # ALPHA-GATE: closed-alpha allowlist admin
+app.include_router(user_feedback_routes.router)
+app.include_router(user_feedback_admin_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
@@ -918,9 +922,6 @@ def create_recipe(
     return crud.create_recipe(db, user_id=current_user.id, **data)
 
 
-_MAX_IMAGE_BYTES = 5 * 1024 * 1024
-
-
 @app.post("/recipes/upload-image", status_code=201)
 async def upload_recipe_image(
     request: Request,
@@ -929,7 +930,7 @@ async def upload_recipe_image(
 ) -> dict:
     """Store an uploaded image and return an absolute URL that serves it back."""
     data = await file.read()
-    if len(data) > _MAX_IMAGE_BYTES:
+    if len(data) > storage.MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Image exceeds the 5 MB limit")
     try:
         key = storage.save_image(data, file.content_type or "")

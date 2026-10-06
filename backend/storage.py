@@ -1,6 +1,6 @@
 """Image storage abstraction.
 
-Persists uploaded recipe images either to a Railway S3-compatible object storage
+Persists uploaded images (recipe photos, feedback screenshots) either to a Railway S3-compatible object storage
 bucket (production) or to a local ``media/`` directory (local dev / CI). The mode
 is chosen by the presence of the ``AWS_S3_BUCKET_NAME`` environment variable, which
 Railway populates from the bucket credentials.
@@ -17,6 +17,11 @@ from uuid import uuid4
 
 # Absolute path so the location is stable regardless of the working directory.
 MEDIA_DIR = Path(__file__).resolve().parent / "media"
+
+# The upload cap for every image route (recipe photos, feedback screenshots):
+# over it a route answers 413. Lives here, public, so routers enforce the same
+# cap without importing ``main``.
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 # Content types we accept, mapped to the extension used for the stored key.
 _EXT_BY_CONTENT_TYPE = {
@@ -36,6 +41,14 @@ _CONTENT_TYPE_BY_EXT = {
 }
 
 
+class UnsupportedImageType(ValueError):
+    """The upload's content type is not one we store as an image.
+
+    A ``ValueError`` so callers that catch the broad class keep working; a
+    distinct class so a route can catch exactly this case and nothing else.
+    """
+
+
 def _bucket_name() -> str | None:
     return os.environ.get("AWS_S3_BUCKET_NAME") or None
 
@@ -52,17 +65,21 @@ def _s3_client():
     )
 
 
-def _key_for(content_type: str) -> str:
+def _key_for(content_type: str, prefix: str) -> str:
     ext = _EXT_BY_CONTENT_TYPE.get(content_type.lower())
     if ext is None:
-        raise ValueError(f"Unsupported image content type: {content_type!r}")
-    return f"recipes/{uuid4().hex}{ext}"
+        raise UnsupportedImageType(f"Unsupported image content type: {content_type!r}")
+    return f"{prefix}/{uuid4().hex}{ext}"
 
 
-def save_image(data: bytes, content_type: str) -> str:
-    """Persist ``data`` and return its object key. Raises ``ValueError`` for
-    non-image content types."""
-    key = _key_for(content_type)
+def save_image(data: bytes, content_type: str, prefix: str = "recipes") -> str:
+    """Persist ``data`` and return its object key. Raises ``UnsupportedImageType``
+    (a ``ValueError``) for non-image content types.
+
+    ``prefix`` namespaces the key by what the image belongs to -- recipe images
+    under ``recipes/``, feedback screenshots under ``feedback/`` -- so the two
+    can be listed, expired or cleaned up independently in the bucket."""
+    key = _key_for(content_type, prefix)
     bucket = _bucket_name()
     if bucket:
         _s3_client().put_object(

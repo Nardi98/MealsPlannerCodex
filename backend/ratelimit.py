@@ -33,6 +33,8 @@ __all__ = [
     "USERNAME_CHECK_RATE_LIMIT",
     "CATALOG_ADOPT_RATE_LIMIT",
     "CATALOG_ADMIN_RATE_LIMIT",
+    "FEEDBACK_RATE_LIMIT",
+    "FEEDBACK_ADMIN_RATE_LIMIT",
 ]
 
 # Generous enough that nobody sharing recipes in earnest will notice, tight
@@ -49,6 +51,13 @@ USERNAME_CHECK_RATE_LIMIT = os.environ.get("USERNAME_CHECK_RATE_LIMIT", "30/minu
 CATALOG_ADOPT_RATE_LIMIT = os.environ.get("CATALOG_ADOPT_RATE_LIMIT", "30/hour")
 # Admin catalog writes (ADM-11). Higher, because curating is many small edits.
 CATALOG_ADMIN_RATE_LIMIT = os.environ.get("CATALOG_ADMIN_RATE_LIMIT", "120/hour")
+# Filing user feedback. Keyed per user for the same reason as sharing. Ten an
+# hour is far above honest use, and it caps what a retry loop can put in the
+# table -- each row can carry an uploaded screenshot.
+FEEDBACK_RATE_LIMIT = os.environ.get("FEEDBACK_RATE_LIMIT", "10/hour")
+# Admin feedback triage. Higher, because triage is many small edits (status,
+# priority, tags, notes) in quick succession.
+FEEDBACK_ADMIN_RATE_LIMIT = os.environ.get("FEEDBACK_ADMIN_RATE_LIMIT", "240/hour")
 
 
 def user_or_ip_key(request: Request) -> str:

@@ -10,6 +10,7 @@ import {
   TagIcon,
   CloudArrowUpIcon,
   EnvelopeIcon, // ALPHA-GATE
+  ChatBubbleLeftEllipsisIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { useViewMode } from '../auth/ViewModeContext'
@@ -35,6 +36,10 @@ const NAV = [
   // ALPHA-GATE: clay (--c-a3) is the one remaining category token that is not
   // the panel's own green -- forest and sage would vanish into it.
   { label: 'Alpha', path: '/discover/alpha', Icon: EnvelopeIcon, color: 'var(--cat-clay)', modes: ADMIN_ONLY, match: (p) => p === '/discover/alpha' },
+  // Last, after the catalog surfaces: it is about the app as a whole, not the
+  // library. Berry is also Recipes' colour, but Recipes is user-only, so the two
+  // are never on screen together -- and every other distinct hue is taken.
+  { label: 'Feedback', path: '/discover/feedback', Icon: ChatBubbleLeftEllipsisIcon, color: 'var(--cat-berry)', modes: ADMIN_ONLY, match: (p) => p === '/discover/feedback' },
   { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', modes: USER_ONLY, match: (p) => p === '/meal-plan' },
   { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', modes: USER_ONLY, match: (p) => p === '/shared-with-me' },
   { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', modes: USER_ONLY, match: (p) => p === '/ingredients' },
@@ -56,7 +61,12 @@ const NAV_FOR = {
 // gets the one surface they have -- the same entry, icon and colour it is in
 // user mode. The other pages remain routable: this hides them, it does not gate
 // them, and nothing here is a permission.
-export default function Sidebar({ onNavigate }) {
+//
+// `badges` maps an entry's path to a count shown beside it (the unread feedback
+// count). It arrives as a prop rather than being read from the badge context,
+// so this panel stays presentational: the shell's provider fetches the count
+// once and hands it to both copies -- desktop and drawer.
+export default function Sidebar({ onNavigate, badges }) {
   const navigate = useNavigate()
   const location = useLocation()
   const items = NAV_FOR[useViewMode().mode]
@@ -77,6 +87,7 @@ export default function Sidebar({ onNavigate }) {
         const { label, path, color, match } = item
         const NavIcon = item.Icon
         const active = match(location.pathname)
+        const count = badges?.[path]
         return (
           <button
             key={label}
@@ -107,9 +118,34 @@ export default function Sidebar({ onNavigate }) {
             >
               {label}
             </span>
+            {count > 0 && <CountPill count={count} />}
           </button>
         )
       })}
     </div>
+  )
+}
+
+// Not the `Badge` primitive: that one is a 16% tint tuned for white surfaces and
+// would all but vanish on the forest panel. Mustard with dark text is the
+// guide's own accent pairing (`--accent-primary` / `--text-on-accent`), so it
+// reads as chrome rather than as one more category colour.
+function CountPill({ count }) {
+  return (
+    <span
+      aria-label={`${count} unread`}
+      className="ml-auto inline-flex items-center justify-center rounded-full"
+      style={{
+        minWidth: 20,
+        padding: '1px 7px',
+        background: 'var(--accent-primary)',
+        color: 'var(--text-on-accent)',
+        fontFamily: 'var(--font-display)',
+        fontWeight: 'var(--weight-semibold)',
+        fontSize: 'var(--text-xs)',
+      }}
+    >
+      {count}
+    </span>
   )
 }

@@ -51,7 +51,7 @@ The `mealplanner` package holds only the planner's *real* logic:
 Tests import models/db/crud from the top-level modules and planner logic from `mealplanner.*` (see `tests/conftest.py`, which inserts the backend root onto `sys.path`). `mealplanner/` now lints under `flake8` (it is no longer excluded).
 
 ### Backend layers (all at `backend/` root)
-- `main.py` — the app object, startup wiring, and **most** FastAPI routes. It is no longer the only route module: eight routers are pre-wired with `include_router` (`main.py:108-115`), so work on those domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (user-facing `/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`, every route behind `auth_users.require_admin`), `catalog_import_routes.py` (the admin reviewed-batch import) and `alpha_routes.py` (`/admin/alpha/*`, likewise admin-only — **temporary: closed-alpha scaffolding, removed with the alpha (`ALPHA-GATE`)**). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`. `main.py` still holds recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export.
+- `main.py` — the app object, startup wiring, and **most** FastAPI routes. It is no longer the only route module: ten routers are pre-wired with `include_router` (`main.py:110-119`), so work on those domains does not serialise on this file: `username_routes.py`, `share_routes.py`, `public_pages.py`, `ops_routes.py`, `catalog_routes.py` (user-facing `/catalog/*`: browse, detail, batch adopt), `catalog_admin_routes.py` (`/admin/catalog/*`, every route behind `auth_users.require_admin`), `catalog_import_routes.py` (the admin reviewed-batch import) and `alpha_routes.py` (`/admin/alpha/*`, likewise admin-only — **temporary: closed-alpha scaffolding, removed with the alpha (`ALPHA-GATE`)**), `user_feedback_routes.py` (`POST /feedback`, the one route a signed-in user files feedback through; there is no user read path) and `user_feedback_admin_routes.py` (`/admin/feedback/*`, admin-only triage). Each router defines its own Pydantic models locally rather than adding them to `schemas.py`. `main.py` still holds recipes/ingredients/tags CRUD, meal-plan generate/set/get/delete, side-dish generation, accept/reject feedback, and data import/export.
 - **Legacy `/plan` paths.** Three plan routes are double-registered as stacked decorators on a single
   handler, under legacy (`/plan`) and current (`/meal-plans`) paths: `GET` (`main.py:1251`), `POST`
   (`main.py:1263`) and `DELETE` (`main.py:1299`). **The legacy `/plan` paths are deprecated** — do
@@ -74,6 +74,12 @@ Tests import models/db/crud from the top-level modules and planner logic from `m
   (`ALPHA-GATE`).** Every artefact carries that marker and all dependency arrows point *into* the
   feature, so removal is `git grep ALPHA-GATE` plus a drop-table revision; it imports only
   `models` (guarded by `tests/test_architecture_guards.py`).
+- `user_feedback.py` — all domain logic of in-app user feedback (bug reports and requests, triaged
+  by an admin): `submit` (the `FB-<id>` ref code, screenshots stored under `feedback/` via
+  `storage.save_image`), filtered listing, status / priority / seen / notes / tags, and the unseen
+  count behind the admin badge. Named `user_feedback` everywhere because "feedback" already means
+  the meal-plan accept/reject signal. It imports only `models` and `storage`, and only its two
+  routers import it (guarded by `tests/test_architecture_guards.py`).
 - `schemas.py` — Pydantic request/response models.
 - `database.py` — engine + `SessionLocal` + `Base`. The database is **PostgreSQL only**; `resolve_database_url()` reads the required `DATABASE_URL` env var (normalizing a bare `postgres://` scheme) and raises `RuntimeError` when it is unset — there is no fallback, so a misconfigured deploy fails loudly instead of silently using the wrong database.
 
@@ -95,8 +101,12 @@ stored in `refresh_tokens` so they can be revoked on logout), Google sign-in, an
 verification / password-reset tokens. Routes take the caller via the `CurrentUser` dependency
 (`main.py:265`, `Annotated[models.User, Depends(auth_users.get_current_user)]`) and admin-only routes
 add `auth_users.require_admin` -- enforced on every route in `catalog_admin_routes.py`,
-`catalog_import_routes.py` and `alpha_routes.py`. `ops_routes.py` is the deliberate exception: it
-serves only `GET /health`, which the platform healthcheck must reach unauthenticated.
+`catalog_import_routes.py`, `alpha_routes.py` and `user_feedback_admin_routes.py`. `ops_routes.py` is
+the deliberate *unauthenticated* exception: it serves only `GET /health`, which the platform
+healthcheck must reach unauthenticated. Feedback is the deliberate *unscoped* exception:
+`FeedbackItem.user_id` is provenance (who filed it, `SET NULL` so the item outlives the account), not
+ownership, and the only reader is an admin who must see every row -- so `user_feedback.py` never calls
+`scope()`, by design.
 
 ### Migrations
 The schema is owned by **Alembic**. `alembic upgrade head` runs as the Railway `api` service's
@@ -131,15 +141,17 @@ points at, including a deployment. `docker-compose.yml` sets the flag; no deploy
 **MANDATORY:** whenever the database schema or domain model changes (new/renamed/removed columns, tables, enums, relationships, or constraints), `seed_testing_data.py` MUST be updated in the same change so the seeded data stays coherent with the updated database. A schema change is not complete until the seed script inserts valid data again.
 
 ### Frontend (`frontend-v2/src/`)
-- `api/` — one module per resource (`recipesApi`, `mealPlansApi`, `ingredientsApi`, etc.); all go through `api/client.js`'s `request()` helper, which unwraps FastAPI's `{detail}` errors and returns `null` on 204.
+- `api/` — one module per resource (`recipesApi`, `mealPlansApi`, `ingredientsApi`, etc.); all go through `api/client.js`'s `request()` helper, which unwraps FastAPI's `{detail}` errors and returns `null` on 204. `requestBlob()` is its byte-returning twin, for admin-only images: the access token lives in memory, so a plain `<img src>` would carry no `Authorization` header.
 - `pages/` — all routed in `App.jsx`. Core: `RecipesPage`, `MealPlanPage`, `IngredientsPage`,
   `ShoppingListPage`, `ImportExportPage`. Catalog: `DiscoverPage` (browsing and adopting from the
   recipe library at `/discover`), `CatalogAdminPage` (curating that library, at the same `/discover`),
   `SystemVocabularyPage`, `CatalogImportPage`, `CatalogImportReviewPage`. Auth: `LoginPage`,
   `ForgotPasswordPage`, `ResetPasswordPage`, `VerifyEmailPage`, `ChooseHandlePage`. Sharing:
   `SharedRecipePage`, `SharedWithMePage`. Plus `AlphaPage` (the closed-alpha invite list at
-  `/discover/alpha` — **temporary, removed with the alpha (`ALPHA-GATE`)**).
-- **User vs admin view.** An admin account wears one hat at a time. `auth/ViewModeContext.jsx` holds the mode (`useViewMode()` → `{ mode, isAdminMode, canAdmin, setMode }`); it is React state only, so every reload and sign-in starts in user mode, and it fails closed — `isAdminMode` re-reads `is_admin` on every render. `components/ViewModePill.jsx` is the header switch, rendered only for an admin, and it navigates (`/discover` into admin, `/recipes` out). In admin mode `Sidebar` lists Discover, Ingredients & Tags (`/discover/vocabulary`) and Import (`/discover/import`, with the review page at `/discover/import/:batchId`); `/discover` renders `CatalogAdminPage`. Those admin-only routes are gated by `AdminOnlyRoute` in `App.jsx`, which redirects to `/discover` outside admin mode; every other route stays reachable by URL. **The mode is presentation, never permission** — the server enforces admin with `require_admin` on every `/admin/catalog/*` route. In user mode an admin's screens are byte-for-byte a normal user's.
+  `/discover/alpha` — **temporary, removed with the alpha (`ALPHA-GATE`)**) and `FeedbackAdminPage`
+  (the admin feedback triage split pane at `/discover/feedback`; users file feedback through
+  `components/FeedbackModal.jsx`, opened from the profile menu).
+- **User vs admin view.** An admin account wears one hat at a time. `auth/ViewModeContext.jsx` holds the mode (`useViewMode()` → `{ mode, isAdminMode, canAdmin, setMode }`); it is React state only, so every reload and sign-in starts in user mode, and it fails closed — `isAdminMode` re-reads `is_admin` on every render. `components/ViewModePill.jsx` is the header switch, rendered only for an admin, and it navigates (`/discover` into admin, `/recipes` out). In admin mode `Sidebar` lists Discover, Ingredients & Tags (`/discover/vocabulary`), Import (`/discover/import`, with the review page at `/discover/import/:batchId`), Alpha and Feedback (with an unread-count pill fed once by `components/feedback/FeedbackBadgeContext.jsx`); `/discover` renders `CatalogAdminPage`. Those admin-only routes are gated by `AdminOnlyRoute` in `App.jsx`, which redirects to `/discover` outside admin mode; every other route stays reachable by URL. **The mode is presentation, never permission** — the server enforces admin with `require_admin` on every `/admin/catalog/*` route. In user mode an admin's screens are byte-for-byte a normal user's.
 - `components/` — shared primitives (`Button`, `Card`, `Badge`, modals, seasonality/month grids), re-exported from `components/index.js`.
 - Styling is Tailwind + CSS variables from the design guide (`--c-pos: #0C3A2D`, `--c-neg: #BD210F`, etc.). All UI work must follow `MEAL_PLANNER_DESIGN_GUIDE.md`.
 

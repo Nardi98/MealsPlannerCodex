@@ -1,0 +1,563 @@
+import React from 'react'
+import { ArrowLeftIcon } from '@heroicons/react/24/outline'
+import { RemovableChip } from '../components/ActiveFilterChips'
+import { Badge } from '../components/Badge'
+import { Button } from '../components/Button'
+import { Card } from '../components/Card'
+import { Input } from '../components/Input'
+import ToggleChip from '../components/ToggleChip'
+import CatalogLoadFailed from '../components/catalog/CatalogLoadFailed'
+import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
+import { mutedTextStyle, sectionHeadingStyle } from '../components/catalog/textStyles'
+import { useFeedbackBadge } from '../components/feedback/FeedbackBadgeContext'
+import {
+  FEEDBACK_PRIORITIES,
+  FEEDBACK_STATUSES,
+  FEEDBACK_TYPES,
+  entryFor,
+} from '../components/feedback/vocabulary'
+import { useAdminAction } from '../hooks/useAdminAction'
+import { useIsMobile } from '../hooks/useIsMobile'
+import { userFeedbackAdminApi } from '../api/userFeedbackAdminApi'
+import { shownDate } from '../utils/formatDate'
+
+const NO_FILTERS = { status: '', type: '', priority: '', tag: '', unreadOnly: false }
+
+/** Who sent it. The item outlives the account, so a missing author is normal. */
+const authorName = (author) =>
+  author ? author.username || author.display_name || author.email : 'Deleted account'
+
+/**
+ * Triage of what testers sent in: a filtered list on the left and the selected
+ * item on the right, where it is read, prioritised, tagged and closed.
+ *
+ * A split pane rather than the list + modal of the other admin screens, because
+ * triage is reading many items in a row: the detail stays put while the list is
+ * walked. Below the `md` breakpoint there is no room for both, so the list
+ * gives way to the detail and a back control returns to it.
+ *
+ * Opening an unread item marks it read and "Mark unread" undoes that; either
+ * way the sidebar badge re-reads its count from the server. Read and status are separate axes -- closing an
+ * item does not read it.
+ */
+export default function FeedbackAdminPage() {
+  const isMobile = useIsMobile()
+  const badge = useFeedbackBadge()
+  const headingId = React.useId()
+
+  const [rows, setRows] = React.useState(null)
+  const [failed, setFailed] = React.useState(false)
+  const [reloadKey, setReloadKey] = React.useState(0)
+  const [filters, setFilters] = React.useState(NO_FILTERS)
+  // The feedback tag vocabulary, for the tag filter and the tag input.
+  const [vocabulary, setVocabulary] = React.useState([])
+  // { kind: 'status' | 'alert', text } -- the kind doubles as the ARIA role.
+  const [notice, setNotice] = React.useState(null)
+  // Most edits report nothing: the control that changed already shows it.
+  const { busy, run } = useAdminAction(setNotice)
+  const [selectedId, setSelectedId] = React.useState(null)
+
+  React.useEffect(() => {
+    // A slower, older response must not overwrite a newer one.
+    let stale = false
+    const { unreadOnly, ...rest } = filters
+    userFeedbackAdminApi
+      .list({ ...rest, seen: unreadOnly ? false : undefined })
+      .then((result) => {
+        if (stale) return
+        setRows(result)
+        setFailed(false)
+      })
+      .catch((err) => {
+        console.error('Failed to load the feedback', err)
+        if (!stale) setFailed(true)
+      })
+    return () => {
+      stale = true
+    }
+  }, [filters, reloadKey])
+
+  // Without the vocabulary the tag filter just offers "All tags", which is no
+  // reason to put an error on a screen that otherwise works.
+  const loadVocabulary = React.useCallback(() => {
+    userFeedbackAdminApi
+      .listTags()
+      .then((tags) => setVocabulary(tags || []))
+      .catch(() => {})
+  }, [])
+  React.useEffect(loadVocabulary, [loadVocabulary])
+
+  const reload = () => setReloadKey((key) => key + 1)
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }))
+
+  const selected = (rows || []).find((row) => row.id === selectedId) || null
+  const unread = (rows || []).filter((row) => !row.seen).length
+
+  /** PATCH one item and put the server's answer in its row. */
+  const patch = (row, change, what, report) =>
+    run(what, async () => {
+      const updated = await userFeedbackAdminApi.update(row.id, change)
+      setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)))
+      if ('seen' in change && change.seen !== row.seen) badge.refresh()
+      // Removing a tag never changes the vocabulary; only a name it lacks does.
+      if ('tags' in change && updated.tags.some((name) => !vocabulary.some((tag) => tag.name === name))) {
+        loadVocabulary()
+      }
+      return report
+    })
+
+  const open = (row) => {
+    setSelectedId(row.id)
+    if (!row.seen) patch(row, { seen: true }, `mark ${row.ref_code} read`)
+  }
+
+  const listPane = failed ? (
+    <CatalogLoadFailed message="Couldn’t load the feedback." onRetry={reload} />
+  ) : (
+    <FeedbackList
+      rows={rows}
+      labelledBy={headingId}
+      selectedId={selectedId}
+      onOpen={open}
+    />
+  )
+
+  const detailPane = selected ? (
+    <FeedbackDetail
+      // Keyed so the drafts and the screenshot belong to one item: moving to
+      // another starts them afresh and releases the old blob URL.
+      key={selected.id}
+      item={selected}
+      vocabulary={vocabulary}
+      busy={busy}
+      onPatch={patch}
+    />
+  ) : null
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="min-w-0">
+        <h1 id={headingId} style={{ margin: 0, fontSize: 'var(--text-2xl)', color: 'var(--text-strong)' }}>
+          Feedback
+        </h1>
+        <p style={{ ...mutedTextStyle, marginTop: 4 }}>
+          {rows === null
+            ? 'What testers have sent in from the app.'
+            : `${rows.length} shown · ${unread} unread`}
+        </p>
+      </div>
+
+      {!(isMobile && selected) && (
+        <FeedbackFilters filters={filters} vocabulary={vocabulary} onChange={setFilter} />
+      )}
+
+      {isMobile ? (
+        selected ? (
+          <div className="flex flex-col gap-3">
+            <div>
+              <Button variant="ghost" Icon={ArrowLeftIcon} onClick={() => setSelectedId(null)}>
+                Back to the list
+              </Button>
+            </div>
+            {detailPane}
+          </div>
+        ) : (
+          listPane
+        )
+      ) : (
+        <div className="flex items-start gap-4">
+          <div className="min-w-0" style={{ flex: '2 1 0' }}>
+            {listPane}
+          </div>
+          <div className="sticky top-5 min-w-0" style={{ flex: '3 1 0' }}>
+            {detailPane || (
+              <Card>
+                <p style={mutedTextStyle}>Select an item to read it here.</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {notice && <CatalogNoticeBar notice={notice} onDismiss={() => setNotice(null)} />}
+    </div>
+  )
+}
+
+/**
+ * The listing's one control bar, built like the catalog admin's: a labelled
+ * group of native selects. Every filter runs server-side, so each is a plain
+ * value handed back up and nothing here filters rows itself.
+ */
+function FeedbackFilters({ filters, vocabulary, onChange }) {
+  const select = (key, label, allLabel, options) => (
+    <EnumSelect
+      aria-label={label}
+      allLabel={allLabel}
+      options={options}
+      value={filters[key]}
+      onChange={(value) => onChange(key, value)}
+    />
+  )
+
+  return (
+    <div
+      role="group"
+      aria-label="Filter the feedback"
+      className="flex flex-wrap items-center gap-2 border-t pt-3"
+      style={{ borderColor: 'var(--border-default)' }}
+    >
+      {select('status', 'Filter by status', 'All statuses', FEEDBACK_STATUSES)}
+      {select('type', 'Filter by type', 'All types', FEEDBACK_TYPES)}
+      {select('priority', 'Filter by priority', 'All priorities', FEEDBACK_PRIORITIES)}
+      {select('tag', 'Filter by tag', 'All tags', vocabulary.map((tag) => ({ value: tag.name, label: tag.name })))}
+      <ToggleChip
+        size="lg"
+        active={filters.unreadOnly}
+        onClick={() => onChange('unreadOnly', !filters.unreadOnly)}
+      >
+        Unread only
+      </ToggleChip>
+    </div>
+  )
+}
+
+/**
+ * The rows. No table primitive exists, so this is the hand-rolled `ul` inside a
+ * flush `Card` that the alpha and catalog admin listings use; each row is one
+ * button, because the whole row is what opens the item.
+ */
+function FeedbackList({ rows, labelledBy, selectedId, onOpen }) {
+  if (rows === null) return <p style={mutedTextStyle}>Loading the feedback…</p>
+
+  if (rows.length === 0) {
+    return (
+      <Card>
+        <p style={mutedTextStyle}>No feedback matches these filters.</p>
+      </Card>
+    )
+  }
+
+  return (
+    <Card style={{ padding: 0, overflow: 'hidden' }}>
+      <ul aria-labelledby={labelledBy} className="m-0 list-none p-0">
+        {rows.map((row, i) => {
+          const active = row.id === selectedId
+          return (
+            <li
+              key={row.id}
+              style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-default)' }}
+            >
+              <button
+                type="button"
+                aria-current={active ? 'true' : undefined}
+                onClick={() => onOpen(row)}
+                className="flex w-full flex-col gap-1.5 px-4 py-3 text-left"
+                style={{
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: active ? 'var(--surface-sunken)' : 'transparent',
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {!row.seen && <UnreadDot />}
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                    {row.ref_code}
+                  </span>
+                  <span
+                    className="min-w-0"
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: row.seen ? 'var(--weight-medium)' : 'var(--weight-bold)',
+                      fontSize: 'var(--text-sm)',
+                      color: 'var(--text-strong)',
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {row.title}
+                  </span>
+                </span>
+                <span className="flex flex-wrap items-center gap-1">
+                  <EnumBadge table={FEEDBACK_TYPES} value={row.type} />
+                  <EnumBadge table={FEEDBACK_STATUSES} value={row.status} />
+                  {row.tags.map((tag) => (
+                    <Badge key={tag} tone="olive">
+                      {tag}
+                    </Badge>
+                  ))}
+                </span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>
+                  <PriorityText priority={row.priority} />
+                  {` · ${authorName(row.author)} · ${shownDate(row.created_at)}`}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+}
+
+// Mustard, the guide's accent: the same signal the sidebar's unread pill uses.
+function UnreadDot() {
+  return (
+    <span
+      role="img"
+      aria-label="Unread"
+      className="inline-block shrink-0 rounded-full"
+      style={{ width: 8, height: 8, background: 'var(--accent-primary)' }}
+    />
+  )
+}
+
+/**
+ * A native select over one of the feedback tables (`[{ value, label }]`). With
+ * `allLabel` it leads with an empty "all" option, which is how a filter says
+ * "no filter". Other props (an id, an aria-label) go to the select itself.
+ */
+function EnumSelect({ options, value, onChange, allLabel, ...rest }) {
+  return (
+    <Input as="select" {...rest} value={value} onChange={(e) => onChange(e.target.value)}>
+      {allLabel !== undefined && <option value="">{allLabel}</option>}
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </Input>
+  )
+}
+
+/** A value from a toned feedback table as its Badge; an unknown one in caramel. */
+function EnumBadge({ table, value }) {
+  const { label, tone } = entryFor(table, value) || { label: value, tone: 'caramel' }
+  return <Badge tone={tone}>{label}</Badge>
+}
+
+// High is the one priority worth catching the eye, so only it takes colour.
+function PriorityText({ priority }) {
+  const words = entryFor(FEEDBACK_PRIORITIES, priority)?.label ?? priority
+  return (
+    <span style={priority === 'high' ? { color: 'var(--c-neg)', fontWeight: 'var(--weight-semibold)' } : undefined}>
+      {`${words} priority`}
+    </span>
+  )
+}
+
+/**
+ * One item, in full, with every triage control. Each control saves on its own
+ * through `onPatch` -- except the notes, which are prose and get an explicit
+ * Save so a half-written sentence is never sent.
+ */
+function FeedbackDetail({ item, vocabulary, busy, onPatch }) {
+  const titleId = React.useId()
+  const [notes, setNotes] = React.useState(item.admin_notes || '')
+  const [tagDraft, setTagDraft] = React.useState('')
+
+  const addTag = (event) => {
+    event.preventDefault()
+    // The server normalizes and dedupes the set; its answer is what the row shows.
+    const name = tagDraft.trim()
+    if (!name) return
+    onPatch(item, { tags: [...item.tags, name] }, 'add the tag').then((ok) => {
+      // Cleared only on success, so a refused name need not be retyped.
+      if (ok) setTagDraft('')
+    })
+  }
+
+  const fieldId = (name) => `${titleId}-${name}`
+  const author = item.author
+
+  return (
+    <Card role="region" aria-labelledby={titleId} className="flex flex-col gap-4">
+      <div className="min-w-0">
+        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-subtle)' }}>{item.ref_code}</div>
+        <h2
+          id={titleId}
+          style={{ margin: 0, fontSize: 'var(--text-lg)', color: 'var(--text-strong)', overflowWrap: 'anywhere' }}
+        >
+          {item.title}
+        </h2>
+        <p style={{ ...mutedTextStyle, marginTop: 4, fontSize: 'var(--text-xs)' }}>
+          {author ? `From ${authorName(author)} (${author.email})` : 'From a deleted account'}
+          {` · sent ${shownDate(item.created_at)} · updated ${shownDate(item.updated_at)}`}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-1">
+          <EnumBadge table={FEEDBACK_TYPES} value={item.type} />
+          <EnumBadge table={FEEDBACK_STATUSES} value={item.status} />
+        </div>
+      </div>
+
+      <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--text-strong)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+        {item.body}
+      </p>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label htmlFor={fieldId('status')} style={sectionHeadingStyle}>
+            Status
+          </label>
+          <EnumSelect
+            id={fieldId('status')}
+            options={FEEDBACK_STATUSES}
+            value={item.status}
+            onChange={(status) => onPatch(item, { status }, 'save the status')}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor={fieldId('priority')} style={sectionHeadingStyle}>
+            Priority
+          </label>
+          <EnumSelect
+            id={fieldId('priority')}
+            options={FEEDBACK_PRIORITIES}
+            value={item.priority}
+            onChange={(priority) => onPatch(item, { priority }, 'save the priority')}
+          />
+        </div>
+        <Button
+          variant="ghost"
+          className="ml-auto"
+          onClick={() =>
+            onPatch(item, { seen: !item.seen }, item.seen ? 'mark it unread' : 'mark it read')
+          }
+        >
+          {item.seen ? 'Mark unread' : 'Mark read'}
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div style={{ ...sectionHeadingStyle, marginBottom: 0 }}>Tags</div>
+        {item.tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {item.tags.map((tag) => (
+              <RemovableChip
+                key={tag}
+                label={tag}
+                ariaLabel={`Remove tag ${tag}`}
+                onRemove={() => onPatch(item, { tags: item.tags.filter((t) => t !== tag) }, 'remove the tag')}
+              />
+            ))}
+          </div>
+        )}
+        <form className="flex flex-wrap items-center gap-2" onSubmit={addTag}>
+          <Input
+            className="min-w-0 flex-1"
+            aria-label="Add a tag"
+            placeholder="Add a tag — a new name creates it"
+            list={fieldId('vocabulary')}
+            value={tagDraft}
+            onChange={(e) => setTagDraft(e.target.value)}
+            autoComplete="off"
+          />
+          <datalist id={fieldId('vocabulary')}>
+            {vocabulary
+              .filter((tag) => !item.tags.includes(tag.name))
+              .map((tag) => (
+                <option key={tag.id} value={tag.name} />
+              ))}
+          </datalist>
+          <Button type="submit" variant="secondary" disabled={busy}>
+            Add tag
+          </Button>
+        </form>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor={fieldId('notes')} style={{ ...sectionHeadingStyle, marginBottom: 0 }}>
+          Admin notes
+        </label>
+        <Input
+          as="textarea"
+          id={fieldId('notes')}
+          rows={4}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Private to admins."
+        />
+        <div className="flex justify-end">
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() =>
+              onPatch(
+                item,
+                { admin_notes: notes.trim() || null },
+                'save the notes',
+                `Saved the notes on ${item.ref_code}.`,
+              )
+            }
+          >
+            Save notes
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div style={{ ...sectionHeadingStyle, marginBottom: 0 }}>Captured with it</div>
+        <dl className="m-0 grid gap-x-3 gap-y-1" style={{ gridTemplateColumns: 'auto minmax(0, 1fr)', fontSize: 'var(--text-xs)' }}>
+          <ContextRow term="Page" value={item.page_path} />
+          <ContextRow term="Screen width" value={item.viewport_width == null ? null : `${item.viewport_width} px`} />
+          <ContextRow term="Browser" value={item.user_agent} />
+        </dl>
+        {item.has_screenshot && <Screenshot item={item} />}
+      </div>
+    </Card>
+  )
+}
+
+function ContextRow({ term, value }) {
+  return (
+    <>
+      <dt style={{ color: 'var(--text-subtle)' }}>{term}</dt>
+      <dd className="m-0" style={{ color: 'var(--text-strong)', overflowWrap: 'anywhere' }}>
+        {value ?? 'Not recorded'}
+      </dd>
+    </>
+  )
+}
+
+/**
+ * The attached screenshot, fetched as bytes with the admin's token -- a plain
+ * image URL would go out without the Authorization header and be refused --
+ * and shown from a blob URL that is released when the item changes or the page
+ * goes away.
+ */
+function Screenshot({ item }) {
+  const [shot, setShot] = React.useState({ src: null, failed: false })
+
+  React.useEffect(() => {
+    let stale = false
+    let url = null
+    userFeedbackAdminApi
+      .screenshot(item.id)
+      .then((blob) => {
+        if (stale) return
+        url = URL.createObjectURL(blob)
+        setShot({ src: url, failed: false })
+      })
+      .catch((err) => {
+        console.error('Failed to load the screenshot', err)
+        if (!stale) setShot({ src: null, failed: true })
+      })
+    return () => {
+      stale = true
+      if (url) URL.revokeObjectURL(url)
+    }
+  }, [item.id])
+
+  if (shot.failed) return <p style={{ ...mutedTextStyle, color: 'var(--c-neg)' }}>Couldn’t load the screenshot.</p>
+  if (!shot.src) return <p style={mutedTextStyle}>Loading the screenshot…</p>
+  return (
+    <img
+      src={shot.src}
+      alt={`Screenshot attached to ${item.ref_code}`}
+      style={{
+        maxWidth: '100%',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-default)',
+      }}
+    />
+  )
+}

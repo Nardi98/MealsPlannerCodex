@@ -13,6 +13,7 @@ import SystemVocabularyPage from './pages/SystemVocabularyPage'
 import CatalogImportPage from './pages/CatalogImportPage'
 import CatalogImportReviewPage from './pages/CatalogImportReviewPage'
 import AlphaPage from './pages/AlphaPage' // ALPHA-GATE
+import FeedbackAdminPage from './pages/FeedbackAdminPage'
 import MealPlanPage from './pages/MealPlanPage'
 import IngredientsPage from './pages/IngredientsPage'
 import ShoppingListPage from './pages/ShoppingListPage'
@@ -28,6 +29,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import { ViewModeProvider, useViewMode } from './auth/ViewModeContext'
 import { nextFromSearch } from './auth/nextDestination'
 import { TutorialProvider, ReplayTutorialButton } from './tutorial/TutorialProvider'
+import { FeedbackBadgeProvider, useFeedbackBadge } from './components/feedback/FeedbackBadgeContext'
 
 // Where a freshly-authenticated user goes when nothing better is known.
 const DEFAULT_LANDING = '/recipes'
@@ -90,6 +92,11 @@ function Shell() {
   const isMobile = useIsMobile()
   const [menuOpen, setMenuOpen] = React.useState(false)
   const closeMenu = React.useCallback(() => setMenuOpen(false), [])
+  // The provider fetches the count once; it is read here and handed to both
+  // copies of the sidebar (column and drawer) as a prop, which keeps `Sidebar`
+  // presentational rather than tied to the badge context.
+  const unreadFeedback = useFeedbackBadge().count
+  const badges = React.useMemo(() => ({ '/discover/feedback': unreadFeedback }), [unreadFeedback])
 
   // The burger is only hidden on desktop, not unmounted, so a `menuOpen` left
   // over from a phone-width session would have it reporting itself as expanded.
@@ -154,7 +161,7 @@ function Shell() {
         </div>
       </header>
 
-      <NavDrawer open={isMobile && menuOpen} onClose={closeMenu} />
+      <NavDrawer open={isMobile && menuOpen} onClose={closeMenu} badges={badges} />
 
       <div
         style={{
@@ -171,7 +178,7 @@ function Shell() {
           className="hidden md:block flex-shrink-0 sticky top-5 overflow-hidden"
           style={{ alignSelf: 'flex-start' }}
         >
-          <Sidebar />
+          <Sidebar badges={badges} />
         </div>
         <div
           className="min-w-0 flex-1"
@@ -202,6 +209,10 @@ function Shell() {
               />
               {/* ALPHA-GATE */}
               <Route path="/discover/alpha" element={<AdminOnlyRoute><AlphaPage /></AdminOnlyRoute>} />
+              <Route
+                path="/discover/feedback"
+                element={<AdminOnlyRoute><FeedbackAdminPage /></AdminOnlyRoute>}
+              />
               <Route path="/meal-plan" element={<MealPlanPage />} />
               <Route path="/ingredients" element={<IngredientsPage />} />
               <Route path="/shopping-list" element={<ShoppingListPage />} />
@@ -271,7 +282,11 @@ function Gate() {
           starts as a plain user. */}
       <ViewModeProvider>
         <TutorialProvider>
-          <Shell />
+          {/* Inside the view mode: it fetches the unread count only in admin
+              mode. Around the shell: the sidebar shows it, the page refreshes it. */}
+          <FeedbackBadgeProvider>
+            <Shell />
+          </FeedbackBadgeProvider>
         </TutorialProvider>
       </ViewModeProvider>
     </ReturnToNext>

@@ -58,6 +58,18 @@ def test_the_limits_are_configurable_with_documented_defaults():
     assert ratelimit.USERNAME_CHECK_RATE_LIMIT
 
 
+def test_the_feedback_limits_have_documented_defaults():
+    """Submission is capped low (each row may carry an image); triage is not.
+
+    The suite sets neither variable, so the module-level values are the defaults.
+    """
+    assert "FEEDBACK_RATE_LIMIT" not in os.environ
+    assert "FEEDBACK_ADMIN_RATE_LIMIT" not in os.environ
+    assert ratelimit.FEEDBACK_RATE_LIMIT == "10/hour"
+    assert ratelimit.FEEDBACK_ADMIN_RATE_LIMIT == "240/hour"
+    assert {"FEEDBACK_RATE_LIMIT", "FEEDBACK_ADMIN_RATE_LIMIT"} <= set(ratelimit.__all__)
+
+
 def test_the_limiter_honours_rate_limit_enabled():
     """The suite sets ``RATE_LIMIT_ENABLED=0``; the new limiter must obey it."""
     assert os.environ["RATE_LIMIT_ENABLED"] == "0"
