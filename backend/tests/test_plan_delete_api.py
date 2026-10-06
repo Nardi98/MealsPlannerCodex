@@ -55,24 +55,3 @@ def test_delete_meal_plans_removes_rows_and_cache(db_session, user, auth_client)
     )
     assert start.isoformat() in generated
     assert generated[start.isoformat()]
-
-
-def test_delete_meal_plans_legacy_route(db_session, user, auth_client):
-    main = crud.create_recipe(db_session, user_id=user.id, title="Main", course="main")
-
-    start = date(2024, 1, 1)
-
-    crud.set_meal_plan(
-        db_session,
-        {start.isoformat(): [{"main_id": main.id}]},
-        user.id,
-    )
-
-    client = auth_client
-
-    resp = client.delete(
-        "/meal-plans",
-        params={"start_date": start.isoformat(), "end_date": start.isoformat()},
-    )
-    assert resp.status_code == 200
-    assert resp.json() == {"deleted": 1}

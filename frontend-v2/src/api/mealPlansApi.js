@@ -1,26 +1,15 @@
 import { request } from './client';
 
-// A day arrives as an array indexed by meal_number, so a slot with no meal is a
-// null hole rather than a missing element. It passes straight through: parsing
-// it as a meal throws, and one bad slot would blank the whole plan.
-function parseMeal(meal) {
-  if (!meal) return meal;
-  return { ...meal, leftover: Boolean(meal.leftover) };
-}
-
 export const mealPlansApi = {
-  fetchRange: async (startDate, endDate) => {
-    const data = await request(
+  // The response passes straight through. A day is an array indexed by
+  // meal_number, so a slot with no meal is a null hole rather than a missing
+  // element, and one mishandled slot would blank the whole plan. Nothing needs
+  // reshaping: `crud.meal_item` sends the title and a separate `leftover`
+  // boolean, so no state is encoded in the title.
+  fetchRange: (startDate, endDate) =>
+    request(
       `/meal-plans?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`,
-    );
-    if (!data) return data;
-    return Object.fromEntries(
-      Object.entries(data).map(([day, meals]) => [
-        day,
-        meals.map((m) => parseMeal(m)),
-      ]),
-    );
-  },
+    ),
   generate: async ({ start, end, ...params }) => {
     const data = await request('/meal-plans/generate', {
       method: 'POST',
