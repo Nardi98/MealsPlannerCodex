@@ -1246,10 +1246,6 @@ def delete_ingredient(
 PlanOut = Dict[str, List[Optional[schemas.MealOut]]]
 
 
-# DEPRECATED: the legacy `/plan` routes below are kept for backward
-# compatibility only. Prefer the `/meal-plans` paths. Removal is scheduled no
-# earlier than 2026-10-01; do not add new behaviour to the `/plan` paths.
-@app.get("/plan", response_model=PlanOut)
 @app.get("/meal-plans", response_model=PlanOut)
 def get_plan(
     db: Db,
@@ -1261,10 +1257,6 @@ def get_plan(
     return crud.get_plan(db, plan_date, start_date, end_date, current_user.id)
 
 
-@app.post(
-    "/plan",
-    response_model=PlanOut,
-)
 @app.post(
     "/meal-plans",
     response_model=PlanOut,
@@ -1297,10 +1289,6 @@ def set_plan(
     return crud.get_plan(db, payload.plan_date, user_id=current_user.id)
 
 
-@app.delete(
-    "/plan",
-    response_model=Dict[str, int],
-)
 @app.delete(
     "/meal-plans",
     response_model=Dict[str, int],
