@@ -23,6 +23,9 @@ DEFAULT_PLAN_SETTINGS: Dict[str, Any] = {
     "SOFT_HOLD_PENALTY": 1.0,
     "EXPLORE_PROTECTION_COST": 1.0,
     "MEAL_NUMBER_TO_DAYPART": {1: "LUNCH", 2: "DINNER"},
+    # Points a held leftover slot adds to its recipe: only a dish more than this
+    # much better takes the slot (Q6).
+    "LEFTOVER_HOLD_MARGIN": 15.0,
 }
 
 __all__ = ["DEFAULT_PLAN_SETTINGS"]

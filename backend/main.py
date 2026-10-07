@@ -33,6 +33,7 @@ import catalog_admin_routes
 import catalog_import_routes
 import catalog_routes
 import crud
+import devlog
 import log_admin_routes
 import mailer
 import models
@@ -1496,12 +1497,14 @@ def generate_plan_endpoint(
         bulk_bonus_weight=payload.bulk_bonus_weight,
         fridge_ingredients=fridge_ingredients,
         return_slots=True,
+        rng=random.Random(),
     )
     result: Dict[str, List[Dict[str, object]]] = {}
     for slot in slots:
         recipe = slot.recipe
         if recipe is None:
             raise HTTPException(status_code=404, detail="Recipe not found")
+        planner.stamp_suggested(recipe, slot.date)
         result.setdefault(slot.date.isoformat(), []).append(
             {
                 "id": recipe.id,
@@ -1510,6 +1513,18 @@ def generate_plan_endpoint(
                 "side_ids": slot.side_ids,
             }
         )
+    devlog.record(
+        db,
+        user_id=current_user.id,
+        channel="planner",
+        event="generate",
+        payload={
+            "params": payload.model_dump(mode="json"),
+            "settings": settings,
+            "slots": [slot.trace for slot in slots],
+        },
+    )
+    db.commit()
     return result
 
 

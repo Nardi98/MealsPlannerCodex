@@ -1,5 +1,8 @@
 import random
+import time
 from datetime import date, timedelta
+
+import pytest
 
 from models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
 from mealplanner.planner import generate_plan, filter_recipes
@@ -92,7 +95,7 @@ def test_fridge_boost_consumed_after_count_reached(db_session):
 
     plan = generate_plan(
         db_session, start, days=2, meals_per_day=1, epsilon=0.0, recency_weight=0.0,
-        min_recipe_gap=0, fridge_ingredients={onion.id: 1},
+ fridge_ingredients={onion.id: 1},
     )
     # Day 1 boosted -> Fridgey; boost consumed -> day 2 falls back to Plain.
     assert plan["2024-01-01"] == ["Fridgey"]
@@ -119,8 +122,9 @@ def test_recency_weight(db_session, user):
         [
             MealPlan(user_id=user.id, plan_date=date(2023, 12, 1)),
             Meal(user_id=user.id, plan_date=date(2023, 12, 1), meal_number=1, recipe_id=fresh.id),
-            MealPlan(user_id=user.id, plan_date=date(2024, 1, 1)),
-            Meal(user_id=user.id, plan_date=date(2024, 1, 1), meal_number=1, recipe_id=recent.id),
+            # Six days back: outside the 5-day minimum gap, inside the recency window.
+            MealPlan(user_id=user.id, plan_date=date(2023, 12, 26)),
+            Meal(user_id=user.id, plan_date=date(2023, 12, 26), meal_number=1, recipe_id=recent.id),
         ]
     )
     db_session.commit()
@@ -132,7 +136,6 @@ def test_recency_weight(db_session, user):
         meals_per_day=1,
         epsilon=0.0,
         recency_weight=0.0,
-        min_recipe_gap=0,
     )
     # Without recency penalty, higher base score wins
     assert plan["2024-01-01"] == ["Recent"]
@@ -143,7 +146,6 @@ def test_recency_weight(db_session, user):
         meals_per_day=1,
         epsilon=0.0,
         recency_weight=2.0,
-        min_recipe_gap=0,
     )
     # Heavier penalty pushes the fresher recipe to the top
     assert plan["2024-01-01"] == ["Fresh"]
@@ -169,7 +171,6 @@ def test_leftover_ignores_recency_penalty(db_session):
         days=2,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
     plan = generate_plan(db_session, start, **kwargs)
@@ -182,21 +183,26 @@ def test_leftover_ignores_recency_penalty(db_session):
 
 
 def test_generate_plan_epsilon_randomness(db_session):
-    """With epsilon > 0 the selection may choose lower scoring recipes."""
+    """With epsilon > 0 the selection may choose lower scoring recipes.
+
+    ``Top`` was suggested for this very day, so its explore weight is 0 and the
+    explore draw can only land on ``Low``.
+    """
+    start = date(2024, 1, 1)
     recipes = [
-        Recipe(title="Top", score=2.0, bulk_prep=True, course="main"),
+        Recipe(title="Top", score=2.0, bulk_prep=True, course="main",
+               date_last_suggested=start),
         Recipe(title="Low", score=1.0, bulk_prep=True, course="main"),
     ]
     db_session.add_all(recipes)
     db_session.commit()
-    start = date(2024, 1, 1)
-    random.seed(0)
     plan = generate_plan(
         db_session,
         start,
         days=1,
         meals_per_day=1,
         epsilon=1.0,
+        rng=random.Random(0),
     )
     assert plan["2024-01-01"] == ["Low"]
 
@@ -216,7 +222,6 @@ def test_exploration_favors_stale_recipes(db_session):
     for _ in range(200):
         plan = generate_plan(
             db_session, start, days=1, meals_per_day=1, epsilon=1.0,
-            min_recipe_gap=0,
         )
         counts[plan["2024-06-01"][0]] += 1
     assert counts["Stale"] > counts["Fresh"] * 3
@@ -242,7 +247,6 @@ def test_exploration_excludes_recipe_within_cooldown(db_session, user):
     for _ in range(50):
         plan = generate_plan(
             db_session, start, days=1, meals_per_day=1, epsilon=1.0,
-            min_recipe_gap=0,
         )
         assert plan["2024-06-01"][0] == "Available"
 
@@ -257,7 +261,6 @@ def test_generate_plan_leftover_expiry(db_session):
         meals_per_day=1,
         epsilon=0.0,
         keep_days=2,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
     )
     plan = generate_plan(db_session, start, **kwargs)
@@ -284,7 +287,6 @@ def test_generate_plan_bulk_leftovers_disabled(db_session):
         epsilon=0.0,
         keep_days=2,
         bulk_leftovers=False,
-        min_recipe_gap=0,
     )
     assert plan == {
         "2024-01-01": ["Bulk"],
@@ -322,7 +324,6 @@ def test_generate_plan_gap_filter(db_session, user):
         days=1,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=5,
     )
     assert schedule["2024-01-02"] == ["R2"]
 
@@ -346,7 +347,6 @@ def test_generate_plan_gap_filter_fallback(db_session, user):
         days=1,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=5,
     )
     assert schedule["2024-01-02"] == ["R1"]
 
@@ -445,3 +445,154 @@ def test_tag_repetition_penalty_only_penalized_tags(db_session):
     )
     # The repeated "pasta" format is penalised, so the vegetarian-only dish wins.
     assert with_penalty["2024-06-02"] == ["Veg2"]
+
+
+# --------------------------------------------------------------------------
+# The rebuilt generation path (engine stages, trace, hold margin, min gap)
+# --------------------------------------------------------------------------
+def test_a_leftover_keeps_its_reserved_slot_against_a_moderately_better_dish(db_session):
+    """L1: the held slot falls only to a dish more than the hold margin better.
+
+    ``Fresh`` is out of season on the 31st, so ``Bulk`` is cooked then. On the
+    1st ``Fresh`` is in season and beats a plain ``Bulk`` by 20 points -- but
+    not the held one, which also carries the +15 hold and no recency penalty.
+    """
+    bulk = Recipe(title="Bulk", score=0.0, bulk_prep=True, course="main")
+    fresh = Recipe(title="Fresh", score=3.0, course="main")
+    feb = Ingredient(name="feb-veg", season_months=[2])
+    fresh.ingredients = [RecipeIngredient(ingredient=feb, recipe=fresh)]
+    db_session.add_all([bulk, fresh])
+    db_session.commit()
+
+    slots = generate_plan(
+        db_session, date(2025, 1, 31), days=2, meals_per_day=1, epsilon=0.0,
+        plan_settings={"LEFTOVER_SPACING_GAP": 1}, return_slots=True,
+    )
+
+    assert [(s.recipe.title, s.leftover) for s in slots] == [("Bulk", False), ("Bulk", True)]
+    assert slots[1].trace["breakdown"]["hold"] == 15.0
+    assert slots[1].trace["hold"] == bulk.id
+
+
+def test_regeneration_varies_in_explore_slots(db_session):
+    db_session.add_all([Recipe(title=f"R{i}", score=float(i % 3), course="main") for i in range(20)])
+    db_session.commit()
+
+    def titles(seed):
+        plan = generate_plan(db_session, date(2025, 3, 3), days=7, meals_per_day=2,
+                             epsilon=0.5, rng=random.Random(seed))
+        return [t for day in sorted(plan) for t in plan[day]]
+
+    assert titles(1) != titles(2)
+    assert titles(3) == titles(3)
+
+
+def test_the_min_gap_holds_across_the_week(db_session):
+    db_session.add_all([Recipe(title=f"R{i}", score=float(i), course="main") for i in range(12)])
+    db_session.commit()
+
+    slots = generate_plan(db_session, date(2025, 3, 3), days=7, meals_per_day=2,
+                          epsilon=0.0, return_slots=True)
+
+    served = {}
+    for s in slots:
+        served.setdefault(s.recipe.title, []).append(s.date)
+    for dates in served.values():
+        assert all((b - a).days >= 5 for a, b in zip(dates, dates[1:]))
+    assert not any(s.trace["relaxed"] for s in slots)
+
+
+def test_a_slot_with_nothing_left_relaxes_the_min_gap(db_session):
+    only = Recipe(title="Only", score=1.0, course="main")
+    db_session.add(only)
+    db_session.commit()
+
+    slots = generate_plan(db_session, date(2025, 3, 3), days=2, meals_per_day=1,
+                          epsilon=0.0, return_slots=True)
+
+    assert [s.recipe.title for s in slots] == ["Only", "Only"]
+    assert slots[0].trace["relaxed"] == []
+    assert slots[1].trace["relaxed"] == ["min_gap"]
+
+
+def test_a_future_meal_no_longer_hides_a_recent_one(db_session, user):
+    """R5: recency counts the latest meal on or before the slot."""
+    start = date(2025, 3, 10)
+    a = Recipe(title="A", score=1.0, course="main")
+    b = Recipe(title="B", score=0.0, course="main")
+    db_session.add_all([a, b])
+    db_session.flush()
+    for day in (start - timedelta(days=6), start + timedelta(days=10)):
+        db_session.add_all([
+            MealPlan(user_id=user.id, plan_date=day),
+            Meal(user_id=user.id, plan_date=day, meal_number=1, recipe_id=a.id),
+        ])
+    db_session.commit()
+
+    plan = generate_plan(db_session, start, days=1, meals_per_day=1, epsilon=0.0,
+                         recency_weight=2.0)
+
+    assert plan[start.isoformat()] == ["B"]
+
+
+def test_meals_inside_the_regenerated_range_do_not_count_as_history(db_session, user):
+    """The range is about to be overwritten, so its old meals are not 'eaten'."""
+    start = date(2025, 3, 10)
+    a = Recipe(title="A", score=1.0, course="main")
+    b = Recipe(title="B", score=0.0, course="main")
+    db_session.add_all([a, b])
+    db_session.flush()
+    db_session.add_all([
+        MealPlan(user_id=user.id, plan_date=start),
+        Meal(user_id=user.id, plan_date=start, meal_number=1, recipe_id=a.id),
+    ])
+    db_session.commit()
+
+    plan = generate_plan(db_session, start, days=1, meals_per_day=1, epsilon=0.0)
+
+    assert plan[start.isoformat()] == ["A"]
+
+
+def test_every_slot_carries_a_trace(db_session):
+    db_session.add_all([Recipe(title=f"R{i}", score=float(i), course="main") for i in range(8)])
+    avoided = Recipe(title="Fried", score=9.0, course="main")
+    avoided.tags = [Tag(name="fried")]
+    db_session.add(avoided)
+    db_session.commit()
+
+    [slot] = generate_plan(db_session, date(2025, 3, 3), days=1, meals_per_day=1,
+                           epsilon=0.0, avoid_tags=["fried"], return_slots=True)
+
+    trace = slot.trace
+    assert trace["date"] == date(2025, 3, 3)
+    assert trace["meal_number"] == 1
+    assert trace["chosen"] == {"id": slot.recipe.id, "title": "R7"}
+    assert (trace["mode"], trace["rank"]) == ("exploit", 0)
+    assert trace["breakdown"]["total"] == pytest.approx(
+        sum(v for k, v in trace["breakdown"].items() if k != "total"), abs=0.01
+    )
+    assert [r["title"] for r in trace["runners_up"]] == ["R6", "R5", "R4", "R3", "R2"]
+    assert all("breakdown" in r for r in trace["runners_up"])
+    assert trace["excluded"] == {"avoid_tag": 1}
+    assert trace["hold"] is None
+
+
+def test_generation_meets_its_time_budget(db_session):
+    """NFR-6 / Q11: 14 slots over 300 recipes in under a second."""
+    ingredients = [Ingredient(name=f"ing{i}", season_months=[(i % 12) + 1]) for i in range(60)]
+    tags = [Tag(name=f"tag{i}", penalize_repetition=i % 2 == 0) for i in range(10)]
+    recipes = []
+    for i in range(300):
+        r = Recipe(title=f"R{i}", score=float(i % 7), bulk_prep=i % 5 == 0, course="main")
+        r.ingredients = [
+            RecipeIngredient(ingredient=ingredients[(i + k) % 60], recipe=r) for k in range(5)
+        ]
+        r.tags = [tags[i % 10], tags[(i + 3) % 10]]
+        recipes.append(r)
+    db_session.add_all(recipes)
+    db_session.commit()
+
+    began = time.perf_counter()
+    generate_plan(db_session, date(2025, 3, 3), days=7, meals_per_day=2, epsilon=0.25,
+                  rng=random.Random(0))
+    assert time.perf_counter() - began < 1.0

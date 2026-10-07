@@ -49,7 +49,6 @@ def test_a_planned_first_course_gets_no_side(db_session):
         days=1,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=0,
         return_slots=True,
     )
 
@@ -93,7 +92,6 @@ def test_generated_slot_gets_one_favorite_side(db_session):
         days=1,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=0,
         return_slots=True,
     )
 
@@ -110,7 +108,6 @@ def test_main_without_favorites_gets_no_side(db_session):
         days=1,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=0,
         return_slots=True,
     )
 
@@ -131,7 +128,6 @@ def test_leftovers_repeat_the_side_cooked_with_the_source(db_session):
         meals_per_day=1,
         epsilon=0.0,
         keep_days=2,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
         return_slots=True,
         rng=random.Random(0),
@@ -160,7 +156,6 @@ def test_a_main_cooked_fresh_again_rerolls_its_side(db_session):
             meals_per_day=1,
             epsilon=0.0,
             keep_days=2,
-            min_recipe_gap=0,
             plan_settings={"LEFTOVER_SPACING_GAP": 1},
             return_slots=True,
             rng=random.Random(seed),

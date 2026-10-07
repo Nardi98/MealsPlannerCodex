@@ -232,9 +232,17 @@ def score(c: Candidate, ctx: SlotContext, stats: Tuple[float, float]) -> Breakdo
     })
 
 
-def score_all(eligible: Sequence[Candidate], ctx: SlotContext) -> List[Tuple[Candidate, Breakdown]]:
-    """Score every eligible candidate against the same pool statistics, in input order."""
-    stats = base_stats(eligible)
+def score_all(
+    eligible: Sequence[Candidate],
+    ctx: SlotContext,
+    stats: Optional[Tuple[float, float]] = None,
+) -> List[Tuple[Candidate, Breakdown]]:
+    """Score every eligible candidate, in input order, against one set of pool statistics.
+
+    Pass the whole course pool's ``stats`` so a dish's base term does not shift
+    when the hard rules remove another; they default to the eligible pool's.
+    """
+    stats = stats or base_stats(eligible)
     return [(c, score(c, ctx, stats)) for c in eligible]
 
 

@@ -1,3 +1,5 @@
+"""Generation explains itself through the slot trace, not through log noise."""
+
 import logging
 from datetime import date
 
@@ -5,33 +7,17 @@ from models import Recipe
 from mealplanner.planner import generate_plan
 
 
-def _make_plan(db_session, caplog, level):
-    good = Recipe(title="Good", score=1.0, course="main")
-    db_session.add(good)
+def test_generation_emits_no_log_records(db_session, caplog):
+    """The trace replaced the per-recipe DEBUG lines; nothing is logged."""
+    db_session.add(Recipe(title="Good", score=1.0, course="main"))
     db_session.commit()
-    with caplog.at_level(level, logger="mealplanner.planner"):
-        generate_plan(
-            db_session,
-            date(2024, 1, 1),
-            days=1,
-            meals_per_day=1,
-            epsilon=0.0,
+    with caplog.at_level(logging.DEBUG, logger="mealplanner"):
+        slots = generate_plan(
+            db_session, date(2024, 1, 1), days=1, meals_per_day=1, epsilon=0.0,
+            return_slots=True,
         )
-    return caplog
-
-
-def test_generation_emits_debug_logs(db_session, caplog):
-    """Generation should log diagnostics as DEBUG records, not print to stdout."""
-    caplog = _make_plan(db_session, caplog, logging.DEBUG)
-    debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
-    assert debug_records, "expected DEBUG log records from generation"
-    assert all(r.name == "mealplanner.planner" for r in debug_records)
-
-
-def test_generation_quiet_at_default_level(db_session, caplog):
-    """No records should surface at WARNING level (default) during generation."""
-    caplog = _make_plan(db_session, caplog, logging.WARNING)
     assert caplog.records == []
+    assert slots[0].trace["chosen"]["title"] == "Good"
 
 
 def test_no_print_in_mealplanner_package():

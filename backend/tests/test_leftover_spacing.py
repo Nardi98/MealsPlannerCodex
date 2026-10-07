@@ -19,7 +19,6 @@ def test_gap1_produces_leftovers(db_session):
         meals_per_day=2,
         keep_days=3,
         epsilon=0.0,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 1},
         return_slots=True,
     )
@@ -49,7 +48,6 @@ def test_gap2_produces_leftovers(db_session):
         meals_per_day=2,
         keep_days=7,
         epsilon=0.0,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 2},
         return_slots=True,
     )
@@ -79,7 +77,6 @@ def test_gap3_produces_leftovers(db_session):
         meals_per_day=2,
         keep_days=7,
         epsilon=0.0,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": 3},
         return_slots=True,
     )
@@ -110,7 +107,6 @@ def test_leftover_is_actually_spaced(db_session):
         meals_per_day=2,
         keep_days=7,
         epsilon=0.0,
-        min_recipe_gap=0,
         plan_settings={"LEFTOVER_SPACING_GAP": gap},
         return_slots=True,
     )
@@ -149,7 +145,6 @@ def test_existing_test_still_passes(db_session):
         days=3,
         meals_per_day=1,
         epsilon=0.0,
-        min_recipe_gap=0,
     )
     plan = generate_plan(db_session, **kwargs)
     assert plan == {

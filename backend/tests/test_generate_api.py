@@ -64,3 +64,70 @@ def test_generate_endpoint_sources_tag_penalty_weight_from_profile(
     )
     assert response.status_code == 200
     assert captured["tag_penalty_weight"] == 2.0
+
+
+# --------------------------------------------------------------------------
+# Suggestion stamps and the planner log
+# --------------------------------------------------------------------------
+def _future(days=1):
+    from datetime import date, timedelta
+
+    return date.today() + timedelta(days=days)
+
+
+def test_generate_stamps_the_latest_suggested_date_on_each_chosen_recipe(
+    db_session, user, auth_client
+):
+    from datetime import timedelta
+
+    recipes = [
+        crud.create_recipe(db_session, user_id=user.id, title=f"Meal {i}", course="main")
+        for i in range(6)
+    ]
+    far = _future(30)
+    recipes[0].date_last_suggested = far
+    db_session.flush()
+    start, end = _future(1), _future(3)
+
+    data = auth_client.post(
+        "/meal-plans/generate",
+        json={"start": start.isoformat(), "end": end.isoformat(), "meals_per_day": 1},
+    ).json()
+
+    latest = {}
+    for day, meals in data.items():
+        for meal in meals:
+            latest[meal["id"]] = max(latest.get(meal["id"], start), start.fromisoformat(day))
+    for r in recipes:
+        db_session.refresh(r)
+        if r.id == recipes[0].id:
+            assert r.date_last_suggested == far  # never moved backwards
+        elif r.id in latest:
+            assert r.date_last_suggested == latest[r.id]
+        else:
+            assert r.date_last_suggested is None
+    assert end - start == timedelta(days=2)
+
+
+def test_generate_writes_one_planner_log_row_per_run(db_session, user, auth_client):
+    from models import DevLogEntry
+
+    for i in range(8):
+        crud.create_recipe(db_session, user_id=user.id, title=f"Meal {i}", course="main")
+    start, end = _future(1), _future(2)
+
+    auth_client.post(
+        "/meal-plans/generate",
+        json={"start": start.isoformat(), "end": end.isoformat(), "meals_per_day": 2,
+              "epsilon": 0.0},
+    )
+
+    [entry] = db_session.query(DevLogEntry).filter_by(user_id=user.id).all()
+    assert (entry.channel, entry.event) == ("planner", "generate")
+    assert entry.payload["params"]["start"] == start.isoformat()
+    assert "LEFTOVER_HOLD_MARGIN" in entry.payload["settings"]
+    slots = entry.payload["slots"]
+    assert len(slots) == 4
+    assert slots[0]["date"] == start.isoformat()
+    assert len(slots[0]["runners_up"]) == 5
+    assert "total" in slots[0]["breakdown"]

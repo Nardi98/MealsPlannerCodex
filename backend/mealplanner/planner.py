@@ -1,16 +1,21 @@
-"""Meal planning logic for the Meals Planner Codex application."""
+"""Meal planning logic for the Meals Planner Codex application.
+
+The DB side of planning: :func:`load_snapshot` does every read once, then each
+slot runs through the pure selection engine (:mod:`mealplanner.engine`) via
+:func:`choose`, which also builds the slot's trace.
+"""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
-import logging
-import random
+from bisect import insort
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Sequence, Set
+from datetime import date, timedelta
+import random
+from typing import Any, Dict, Iterable, List, Sequence, Set
 
-from sqlalchemy import func, true
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy import func, literal, true
+from sqlalchemy.orm import Session, selectinload
 
 from models import (
     MAIN_COURSES,
@@ -23,10 +28,14 @@ from models import (
     takes_favorite_sides,
 )
 from scoping import scope
-from .scoring import score_recipe, exploration_weight
+from . import engine
+from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
-logger = logging.getLogger(__name__)
+#: Runners-up recorded per slot in the trace (Q8).
+TRACE_RUNNERS_UP = 5
+
+COURSE_GROUPS: Dict[str, Sequence[str]] = {"main": MAIN_COURSES, "side": ("side",)}
 
 
 @dataclass
@@ -41,26 +50,194 @@ class Slot:
     candidate_rank: int | None = None
     soft_hold_recipe_id: int | None = None
     side_ids: List[int] = field(default_factory=list)
+    #: Why this dish won: chosen, mode, rank, breakdown, runners-up, exclusions.
+    trace: Dict[str, Any] = field(default_factory=dict)
 
 
-def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
-    if last_planned is None:
-        last_planned = date.today() - timedelta(days=10_000)
+@dataclass
+class Snapshot:
+    """Every DB read a planning run needs, done once (see :func:`load_snapshot`)."""
 
-    # Your ORM exposes Recipe.ingredients -> List[RecipeIngredient]
-    ingredients = [
-        {"season_months": (ri.ingredient.season_months or [])}
-        for ri in getattr(recipe, "ingredients", [])  # <- fixed
-    ]
+    recipes: Dict[int, Recipe]
+    candidates: List[engine.Candidate]
+    #: Recipe id -> sorted dates it was served fresh (leftovers excluded).
+    eaten_dates: Dict[int, List[date]]
+    #: Recipe id -> sorted dates it sits on a plan in any form.
+    kept_dates: Dict[int, List[date]]
+    ingredient_last_used: Dict[int, date]
+    tag_last_used: Dict[str, date]
+    penalized_tags: Set[str]
 
-    return {
-        "score": recipe.score,
-        "bulk_prep": recipe.bulk_prep,
-        "date_last_planned": last_planned,
-        "ingredients": ingredients,
-        "ingredient_ids": [ri.ingredient_id for ri in recipe.ingredients],
-        "tags": [t.name for t in recipe.tags],
+
+def _candidate(recipe: Recipe) -> engine.Candidate:
+    return engine.Candidate(
+        id=recipe.id,
+        title=recipe.title,
+        course=recipe.course,
+        score=recipe.score,
+        bulk_prep=bool(recipe.bulk_prep),
+        ingredient_ids=tuple(ri.ingredient_id for ri in recipe.ingredients),
+        ingredient_season_months=tuple(
+            tuple(ri.ingredient.season_months or ()) for ri in recipe.ingredients
+        ),
+        tags=tuple(t.name for t in recipe.tags),
+        date_last_rejected=recipe.date_last_rejected,
+        date_last_suggested=recipe.date_last_suggested,
+    )
+
+
+def _keep_latest(latest: Dict[Any, date], key: Any, day: date) -> None:
+    if key not in latest or latest[key] < day:
+        latest[key] = day
+
+
+def load_snapshot(
+    session: Session,
+    user_id: int | None,
+    course_group: str,
+    start: date,
+    end: date,
+    skip_slot: tuple[date, int] | None = None,
+) -> Snapshot:
+    """Read the candidates and their history for planning ``[start, end]``.
+
+    Every query goes through :func:`scope`. Meals inside ``[start, end]`` are
+    about to be overwritten, so they are not history -- except when planning a
+    single slot (``skip_slot``), where the rest of the saved plan is the context
+    and only that slot itself is left out. Mains read ``meals`` (fresh servings
+    for eaten dates, every row for kept dates); sides read ``meal_sides``. The
+    ingredient and tag maps hold the latest use before ``start``, or on/before
+    the slot when planning a single one.
+    """
+    recipes = scope(
+        session.query(Recipe)
+        .options(
+            selectinload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+            selectinload(Recipe.tags),
+            # pick_favorite_side reads this per slot; without it each candidate
+            # main lazy-loads its pairing during planning.
+            selectinload(Recipe.favorite_sides),
+        )
+        .filter(Recipe.course.in_(COURSE_GROUPS[course_group])),
+        Recipe.user_id,
+        user_id,
+    ).all()
+    by_id = {r.id: r for r in recipes}
+
+    if course_group == "side":
+        rows = scope(
+            session.query(
+                MealSide.side_recipe_id, MealSide.plan_date, MealSide.meal_number, literal(False)
+            ),
+            MealSide.user_id,
+            user_id,
+        )
+    else:
+        rows = scope(
+            session.query(
+                Meal.recipe_id, Meal.plan_date, Meal.meal_number,
+                Meal.leftover_source_date.isnot(None),
+            ),
+            Meal.user_id,
+            user_id,
+        )
+
+    penalized_tags: Set[str] = {
+        name
+        for (name,) in scope(
+            session.query(Tag.name).filter(Tag.penalize_repetition == true()),
+            Tag.user_id,
+            user_id,
+        )
     }
+
+    eaten: Dict[int, List[date]] = {}
+    kept: Dict[int, List[date]] = {}
+    ingredient_last_used: Dict[int, date] = {}
+    tag_last_used: Dict[str, date] = {}
+    history_cutoff = skip_slot[0] if skip_slot else start - timedelta(days=1)
+    for recipe_id, plan_date, meal_number, is_leftover in rows:
+        if skip_slot is not None:
+            if (plan_date, meal_number) == skip_slot:
+                continue
+        elif start <= plan_date <= end:
+            continue
+        kept.setdefault(recipe_id, []).append(plan_date)
+        if is_leftover:
+            continue
+        eaten.setdefault(recipe_id, []).append(plan_date)
+        recipe = by_id.get(recipe_id)
+        if recipe is None or plan_date > history_cutoff:
+            continue
+        for ri in recipe.ingredients:
+            _keep_latest(ingredient_last_used, ri.ingredient_id, plan_date)
+        for t in recipe.tags:
+            if t.name in penalized_tags:
+                _keep_latest(tag_last_used, t.name, plan_date)
+    for dates in (*eaten.values(), *kept.values()):
+        dates.sort()
+
+    return Snapshot(
+        recipes=by_id,
+        candidates=[_candidate(r) for r in recipes],
+        eaten_dates=eaten,
+        kept_dates=kept,
+        ingredient_last_used=ingredient_last_used,
+        tag_last_used=tag_last_used,
+        penalized_tags=penalized_tags,
+    )
+
+
+def choose(
+    candidates: Sequence[engine.Candidate],
+    ctx: engine.SlotContext,
+    epsilon: float,
+    rng: random.Random,
+) -> tuple[engine.Choice, Dict[str, Any]]:
+    """Run the engine's stages on one slot; return the choice and its trace.
+
+    If the hard rules leave nothing while the minimum gap applies, the slot is
+    re-run without it (a small library could not fill a week otherwise) and the
+    trace records ``relaxed: ["min_gap"]``. Still nothing is a ``ValueError``.
+    """
+    relaxed: List[str] = []
+    eligible, excluded = engine.hard_filter(candidates, ctx)
+    if not eligible and ctx.min_gap:
+        ctx.min_gap = False
+        relaxed.append("min_gap")
+        eligible, excluded = engine.hard_filter(candidates, ctx)
+    if not eligible:
+        raise ValueError("No recipes available")
+
+    scored = engine.score_all(eligible, ctx, engine.base_stats(candidates))
+    choice = engine.select(scored, ctx, epsilon, rng)
+    runners_up = sorted(
+        (pair for pair in scored if pair[0].id != choice.candidate.id),
+        key=lambda pair: (-pair[1].total, pair[0].id),
+    )[:TRACE_RUNNERS_UP]
+    trace = {
+        "date": ctx.date,
+        "meal_number": ctx.meal_number,
+        "chosen": {"id": choice.candidate.id, "title": choice.candidate.title},
+        "mode": choice.mode,
+        "rank": choice.rank,
+        "breakdown": choice.breakdown.as_dict(),
+        "runners_up": [
+            {"id": c.id, "title": c.title, "breakdown": b.as_dict()} for c, b in runners_up
+        ],
+        "excluded": dict(Counter(excluded.values())),
+        "hold": ctx.held_recipe_id,
+        "relaxed": relaxed,
+    }
+    if choice.mode == "explore":
+        trace["explore_weight"] = choice.explore_weights.get(choice.candidate.id)
+    return choice, trace
+
+
+def stamp_suggested(recipe: Recipe, slot_date: date) -> None:
+    """Record that ``recipe`` was proposed for ``slot_date``; never moves backwards."""
+    if recipe.date_last_suggested is None or recipe.date_last_suggested < slot_date:
+        recipe.date_last_suggested = slot_date
 
 
 def pick_favorite_side(
@@ -90,7 +267,6 @@ def generate_plan(
     keep_days: int = 7,
     bulk_leftovers: bool = True,
     epsilon: float = 0.0,
-    tags: Iterable[str] | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
     seasonality_weight: float = 1.0,
@@ -100,93 +276,30 @@ def generate_plan(
     ingredient_repeat_weight: float = 1.0,
     tag_repeat_weight: float = 1.0,
     fridge_ingredients: Dict[int, int] | None = None,
-    min_recipe_gap: int = 5,
     plan_settings: Dict[str, object] | None = None,
     return_slots: bool = False,
     user_id: int | None = None,
     rng: random.Random | None = None,
 ) -> Dict[str, List[str]] | List[Slot]:
-    """Generate a meal plan.
+    """Generate a meal plan slot by slot through the selection engine.
 
-    When ``return_slots`` is ``True`` a list of :class:`Slot` objects is
-    returned instead of a mapping for callers that require detailed metadata.
-    When ``user_id`` is given every candidate query, history map, and penalized
-    tag lookup is scoped to that account so a plan only draws on its own data.
+    When ``return_slots`` is ``True`` a list of :class:`Slot` objects (each with
+    its ``trace``) is returned instead of a ``{date: [titles]}`` mapping. When
+    ``user_id`` is given every read is scoped to that account so a plan only
+    draws on its own data. ``rng`` is the only source of randomness.
     """
 
     settings = {**DEFAULT_PLAN_SETTINGS, **(plan_settings or {})}
-
-    recipes = scope(
-        session.query(Recipe)
-        .options(
-            joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
-            joinedload(Recipe.tags),
-            # pick_favorite_side reads this per slot; without it each candidate
-            # main lazy-loads its pairing during planning.
-            selectinload(Recipe.favorite_sides),
-        )
-        .filter(Recipe.course.in_(MAIN_COURSES)),
-        Recipe.user_id,
-        user_id,
-    ).all()
-
-    last_planned: Dict[int, date] = dict(
-        scope(
-            session.query(Meal.recipe_id, func.max(Meal.plan_date))
-            .filter(Meal.leftover_source_date.is_(None))
-            .group_by(Meal.recipe_id),
-            Meal.user_id,
-            user_id,
-        )
+    rng = rng or random.Random()
+    snap = load_snapshot(session, user_id, "main", start, start + timedelta(days=days - 1))
+    weights = engine.Weights(
+        seasonality=seasonality_weight,
+        recency=recency_weight,
+        tag_penalty=tag_penalty_weight,
+        bulk_bonus=bulk_bonus_weight,
+        ingredient_repeat=ingredient_repeat_weight,
+        tag_repeat=tag_repeat_weight,
     )
-
-    # Last date each recipe was *proposed* (any outcome, incl. leftovers). Drives
-    # the directed-exploration cooldown; updated with every pick within the run.
-    last_proposed: Dict[int, date] = dict(
-        scope(
-            session.query(Meal.recipe_id, func.max(Meal.plan_date))
-            .group_by(Meal.recipe_id),
-            Meal.user_id,
-            user_id,
-        )
-    )
-
-    # History-seeded diversity maps: last real consumption date per ingredient
-    # and per penalized tag, updated as picks are made within the run.
-    ingredient_last_used: Dict[int, date] = dict(
-        scope(
-            session.query(RecipeIngredient.ingredient_id, func.max(Meal.plan_date))
-            .join(Meal, Meal.recipe_id == RecipeIngredient.recipe_id)
-            .filter(Meal.leftover_source_date.is_(None))
-            .group_by(RecipeIngredient.ingredient_id),
-            Meal.user_id,
-            user_id,
-        )
-    )
-
-    penalized_tags: Set[str] = {
-        name
-        for (name,) in scope(
-            session.query(Tag.name).filter(Tag.penalize_repetition == true()),
-            Tag.user_id,
-            user_id,
-        )
-    }
-
-    tag_last_used: Dict[str, date] = {}
-    if penalized_tags:
-        tag_last_used = dict(
-            scope(
-                session.query(Tag.name, func.max(Meal.plan_date))
-                .join(Recipe.tags)
-                .join(Meal, Meal.recipe_id == Recipe.id)
-                .filter(Meal.leftover_source_date.is_(None))
-                .filter(Tag.name.in_(penalized_tags))
-                .group_by(Tag.name),
-                Meal.user_id,
-                user_id,
-            )
-        )
 
     slots: List[Slot] = []
     for day_offset in range(days):
@@ -211,71 +324,28 @@ def generate_plan(
     for idx, slot in enumerate(slots):
         _apply_soft_holds(slots, idx, leftovers, settings)
 
-        available = filter_recipes(
-            recipes,
-            season=slot.date.month,
-            tags=tags,
-            avoid_tags=avoid_tags,
-            reduce_tags=reduce_tags,
+        ctx = engine.SlotContext(
+            date=slot.date,
+            meal_number=slot.meal_number,
+            eaten_dates=snap.eaten_dates,
+            ingredient_last_used=snap.ingredient_last_used,
+            tag_last_used=snap.tag_last_used,
+            penalized_tags=snap.penalized_tags,
+            fridge_remaining=fridge_remaining,
+            held_recipe_id=slot.soft_hold_recipe_id,
+            kept_dates=snap.kept_dates,
+            avoid_tags=set(avoid_tags or ()),
+            reduce_tags=set(reduce_tags or ()),
+            weights=weights,
+            hold_margin=float(settings["LEFTOVER_HOLD_MARGIN"]),
         )
-        if not available:
-            raise ValueError("No recipes available")
-        base_scores = [r.score or 0.0 for r in available]
-        scored: List[tuple[Recipe, float]] = []
-        logger.debug("planning date: %s (meal %s)", slot.date, slot.meal_number)
-        for r in available:
-            logger.debug("recipe: %s", r.title)
-            score = score_recipe(
-                _recipe_to_dict(r, last_planned.get(r.id)),
-                planning_date=slot.date,
-                seasonality_weight=seasonality_weight,
-                recency_weight=0.0
-                if slot.soft_hold_recipe_id == r.id
-                else recency_weight,
-                tag_penalty_weight=tag_penalty_weight,
-                bulk_bonus_weight=bulk_bonus_weight,
-                ingredient_repeat_weight=ingredient_repeat_weight,
-                tag_repeat_weight=tag_repeat_weight,
-                fridge_ingredient_ids=fridge_remaining.keys(),
-                reduce_tags=reduce_tags or [],
-                ingredient_last_used=ingredient_last_used,
-                tag_last_used=tag_last_used,
-                penalized_tags=penalized_tags,
-                base_scores=base_scores,
-            )
-            logger.debug("score: %s", score)
-            if slot.soft_hold_recipe_id and r.id != slot.soft_hold_recipe_id:
-                score -= settings.get("SOFT_HOLD_PENALTY", 0.0)
-            scored.append((r, score))
+        choice, slot.trace = choose(snap.candidates, ctx, epsilon, rng)
+        slot.selection_mode = choice.mode
+        slot.candidate_rank = choice.rank
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        if epsilon and random.random() < epsilon:
-            # Directed exploration: sample toward recipes not proposed recently,
-            # excluding those still within their cooldown (weight 0).
-            weights = [
-                exploration_weight(
-                    slot_date=slot.date,
-                    date_last_suggested=r.date_last_suggested,
-                    kept_dates=[d for d in [last_proposed.get(r.id)] if d],
-                )
-                for r, _ in scored
-            ]
-            if any(weights):
-                choice_idx = random.choices(
-                    range(len(scored)), weights=weights, k=1
-                )[0]
-            else:
-                # Everything is on cooldown -> fall back to uniform exploration.
-                choice_idx = random.randrange(len(scored))
-            slot.selection_mode = "explore"
-        else:
-            choice_idx = 0
-            slot.selection_mode = "exploit"
-        slot.candidate_rank = choice_idx
-
-        chosen = scored[choice_idx][0]
+        chosen = snap.recipes[choice.candidate.id]
         slot.recipe = chosen
-        slot.leftover = slot.soft_hold_recipe_id == getattr(chosen, "id", None)
+        slot.leftover = slot.soft_hold_recipe_id == chosen.id
 
         if slot.leftover:
             # Reheating what was cooked earlier: the side came with it.
@@ -284,13 +354,16 @@ def generate_plan(
             side_id = batch_sides[chosen.id] = pick_favorite_side(chosen, rng)
         slot.side_ids = [] if side_id is None else [side_id]
 
-        # Proposing a recipe (leftover or not) starts its exploration cooldown.
-        last_proposed[chosen.id] = slot.date
+        # The pick is now on the plan: it counts for the explore cooldown and,
+        # when cooked fresh, for recency and the minimum gap of later slots.
+        insort(snap.kept_dates.setdefault(chosen.id, []), slot.date)
+        if not slot.leftover:
+            insort(snap.eaten_dates.setdefault(chosen.id, []), slot.date)
 
         # The chosen recipe's ingredients / penalized tags are eaten on this
         # date regardless of leftover status, so update the diversity maps.
         for ri in chosen.ingredients:
-            ingredient_last_used[ri.ingredient_id] = slot.date
+            snap.ingredient_last_used[ri.ingredient_id] = slot.date
             # Using a fridge ingredient (fresh cook or leftover day) consumes one
             # unit of its requested count; once exhausted it's dropped so it no
             # longer boosts scores.
@@ -299,8 +372,8 @@ def generate_plan(
                 if fridge_remaining[ri.ingredient_id] <= 0:
                     del fridge_remaining[ri.ingredient_id]
         for t in chosen.tags:
-            if t.name in penalized_tags:
-                tag_last_used[t.name] = slot.date
+            if t.name in snap.penalized_tags:
+                snap.tag_last_used[t.name] = slot.date
 
         if slot.leftover:
             for record in leftovers[:]:
@@ -315,23 +388,21 @@ def generate_plan(
                     ):
                         leftovers.remove(record)
                     break
-        else:
-            last_planned[chosen.id] = slot.date
-            if chosen.bulk_prep and bulk_leftovers:
-                repeats = settings.get("LEFTOVER_REPEAT_BY_RECIPE", {}).get(
-                    chosen.id, settings.get("LEFTOVER_REPEAT_DEFAULT", 0)
+        elif chosen.bulk_prep and bulk_leftovers:
+            repeats = settings.get("LEFTOVER_REPEAT_BY_RECIPE", {}).get(
+                chosen.id, settings.get("LEFTOVER_REPEAT_DEFAULT", 0)
+            )
+            if repeats:
+                leftovers.append(
+                    {
+                        "recipe_id": chosen.id,
+                        "source_date": slot.date,
+                        "repeats_remaining": int(repeats),
+                        "window_end": slot.date + timedelta(days=keep_days - 1),
+                        "next_date": slot.date
+                        + timedelta(days=settings.get("LEFTOVER_SPACING_GAP", 1)),
+                    }
                 )
-                if repeats:
-                    leftovers.append(
-                        {
-                            "recipe_id": chosen.id,
-                            "source_date": slot.date,
-                            "repeats_remaining": int(repeats),
-                            "window_end": slot.date + timedelta(days=keep_days - 1),
-                            "next_date": slot.date
-                            + timedelta(days=settings.get("LEFTOVER_SPACING_GAP", 1)),
-                        }
-                    )
 
     if return_slots:
         return slots
@@ -384,6 +455,22 @@ def _apply_soft_holds(
             counts[s.date] += 1
             repeats -= 1
             next_date = s.date + timedelta(days=spacing)
+
+
+def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
+    if last_planned is None:
+        last_planned = date.today() - timedelta(days=10_000)
+    return {
+        "score": recipe.score,
+        "bulk_prep": recipe.bulk_prep,
+        "date_last_planned": last_planned,
+        "ingredients": [
+            {"season_months": (ri.ingredient.season_months or [])}
+            for ri in getattr(recipe, "ingredients", [])
+        ],
+        "ingredient_ids": [ri.ingredient_id for ri in recipe.ingredients],
+        "tags": [t.name for t in recipe.tags],
+    }
 
 
 def generate_side_dish(
@@ -517,6 +604,10 @@ def filter_recipes(
 
 __all__ = [
     "Slot",
+    "Snapshot",
+    "load_snapshot",
+    "choose",
+    "stamp_suggested",
     "generate_plan",
     "generate_side_dish",
     "filter_recipes",
