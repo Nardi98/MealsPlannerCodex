@@ -1,5 +1,10 @@
 
+from datetime import date, timedelta
+
 import crud
+
+# Generation only accepts ranges from today on (F3), so these run tomorrow.
+DAY = (date.today() + timedelta(days=1)).isoformat()
 
 
 def test_generate_endpoint_handles_duplicate_titles(db_session, user, auth_client):
@@ -8,10 +13,10 @@ def test_generate_endpoint_handles_duplicate_titles(db_session, user, auth_clien
 
     response = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
     assert response.status_code == 200
     data = response.json()
-    assert "2024-01-01" in data
-    assert isinstance(data["2024-01-01"][0]["id"], int)
-    assert isinstance(data["2024-01-01"][0]["title"], str)
+    assert DAY in data
+    assert isinstance(data[DAY][0]["id"], int)
+    assert isinstance(data[DAY][0]["title"], str)

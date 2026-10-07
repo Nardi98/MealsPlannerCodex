@@ -1,8 +1,10 @@
 """Leftover state must come from the Meal.leftover column, never a title suffix."""
-
-
+from datetime import date, timedelta
 
 import crud
+
+# Generation only accepts ranges from today on (F3), so these run tomorrow.
+DAY = (date.today() + timedelta(days=1)).isoformat()
 
 
 def test_recipe_named_leftover_is_not_treated_as_leftover(db_session, user, auth_client):
@@ -13,11 +15,11 @@ def test_recipe_named_leftover_is_not_treated_as_leftover(db_session, user, auth
     )
     response = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
 
     assert response.status_code == 200
-    item = response.json()["2024-01-01"][0]
+    item = response.json()[DAY][0]
     assert item["title"] == "Soup (leftover)"
     assert item["leftover"] is False
 
@@ -30,7 +32,8 @@ def test_scheduled_leftover_slot_has_clean_title_and_flag(db_session, user, auth
     )
     response = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-03", "meals_per_day": 1},
+        json={"start": DAY, "end": (date.fromisoformat(DAY) + timedelta(days=2)).isoformat(),
+              "meals_per_day": 1},
     )
 
     assert response.status_code == 200

@@ -1536,6 +1536,12 @@ def generate_plan_endpoint(
     db: Db,
     current_user: CurrentUser,
 ) -> Dict[str, List[Dict[str, object]]]:
+    # F3: saving a generated range overwrites it, so a range reaching into the
+    # past would rewrite days already lived.
+    if payload.start < date.today():
+        raise HTTPException(
+            status_code=422, detail="Plans can only be generated from today onwards"
+        )
     days = (payload.end - payload.start).days + 1
     settings = crud.get_plan_settings(db, current_user.id)
     # The tag-penalty weight is a per-user profile setting, not a per-plan knob,

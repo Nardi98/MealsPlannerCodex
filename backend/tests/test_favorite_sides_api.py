@@ -1,4 +1,6 @@
 """The /recipes surface for curating a main's favorite sides."""
+from datetime import date, timedelta
+
 import crud
 
 
@@ -100,6 +102,10 @@ def test_deleting_a_favorite_side_leaves_the_main(api_client):
     assert fetched.json()["favorite_side_ids"] == []
 
 
+# Generation only accepts ranges from today on (F3), so these run tomorrow.
+DAY = (date.today() + timedelta(days=1)).isoformat()
+
+
 def test_generate_returns_the_favorite_side_for_the_main(db_session, user, auth_client):
     side = crud.create_recipe(
         db_session, user_id=user.id, title="Potatoes",
@@ -114,11 +120,11 @@ def test_generate_returns_the_favorite_side_for_the_main(db_session, user, auth_
 
     res = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
 
     assert res.status_code == 200
-    assert res.json()["2024-01-01"][0]["side_ids"] == [side.id]
+    assert res.json()[DAY][0]["side_ids"] == [side.id]
 
 
 def test_generate_returns_no_sides_for_a_main_without_favorites(
@@ -131,10 +137,10 @@ def test_generate_returns_no_sides_for_a_main_without_favorites(
 
     res = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
 
-    assert res.json()["2024-01-01"][0]["side_ids"] == []
+    assert res.json()[DAY][0]["side_ids"] == []
 
 
 def test_a_generated_side_persists_onto_the_meal(db_session, user, auth_client):
@@ -152,16 +158,16 @@ def test_a_generated_side_persists_onto_the_meal(db_session, user, auth_client):
 
     generated = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     ).json()
-    meal = generated["2024-01-01"][0]
+    meal = generated[DAY][0]
 
     saved = auth_client.post(
         "/meal-plans",
         json={
-            "plan_date": "2024-01-01",
+            "plan_date": DAY,
             "plan": {
-                "2024-01-01": [
+                DAY: [
                     {
                         "main_id": meal["id"],
                         "side_ids": meal["side_ids"],
@@ -173,5 +179,5 @@ def test_a_generated_side_persists_onto_the_meal(db_session, user, auth_client):
     )
 
     assert saved.status_code in (200, 201)
-    fetched = auth_client.get("/meal-plans?plan_date=2024-01-01").json()
-    assert fetched["2024-01-01"][0]["side_recipes"] == ["Potatoes"]
+    fetched = auth_client.get(f"/meal-plans?plan_date={DAY}").json()
+    assert fetched[DAY][0]["side_recipes"] == ["Potatoes"]

@@ -1,6 +1,10 @@
 
 import crud
 import main
+from datetime import date, timedelta
+
+# Generation only accepts ranges from today on (F3), so these run tomorrow.
+DAY = (date.today() + timedelta(days=1)).isoformat()
 
 
 def test_generate_endpoint_returns_plan(db_session, user, auth_client):
@@ -9,14 +13,14 @@ def test_generate_endpoint_returns_plan(db_session, user, auth_client):
 
     response = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
     assert response.status_code == 200
     data = response.json()
-    assert "2024-01-01" in data
-    assert isinstance(data["2024-01-01"][0]["id"], int)
-    assert data["2024-01-01"][0]["title"].startswith("Meal")
-    assert data["2024-01-01"][0]["leftover"] is False
+    assert DAY in data
+    assert isinstance(data[DAY][0]["id"], int)
+    assert data[DAY][0]["title"].startswith("Meal")
+    assert data[DAY][0]["leftover"] is False
 
 
 def test_generate_endpoint_forwards_fridge_ingredients(auth_client, monkeypatch):
@@ -31,8 +35,8 @@ def test_generate_endpoint_forwards_fridge_ingredients(auth_client, monkeypatch)
     response = auth_client.post(
         "/meal-plans/generate",
         json={
-            "start": "2024-01-01",
-            "end": "2024-01-01",
+            "start": DAY,
+            "end": DAY,
             "meals_per_day": 1,
             "fridge": [
                 {"ingredient_id": 5, "count": 2},
@@ -60,7 +64,7 @@ def test_generate_endpoint_sources_tag_penalty_weight_from_profile(
 
     response = auth_client.post(
         "/meal-plans/generate",
-        json={"start": "2024-01-01", "end": "2024-01-01", "meals_per_day": 1},
+        json={"start": DAY, "end": DAY, "meals_per_day": 1},
     )
     assert response.status_code == 200
     assert captured["tag_penalty_weight"] == 2.0
@@ -131,3 +135,34 @@ def test_generate_writes_one_planner_log_row_per_run(db_session, user, auth_clie
     assert slots[0]["date"] == start.isoformat()
     assert len(slots[0]["runners_up"]) == 5
     assert "total" in slots[0]["breakdown"]
+
+
+# --------------------------------------------------------------------------
+# F3 / FR-19: generation never reaches into the past
+# --------------------------------------------------------------------------
+def test_generate_rejects_a_range_starting_before_today(db_session, user, auth_client):
+    from datetime import date, timedelta
+
+    crud.create_recipe(db_session, user_id=user.id, title="Meal", course="main")
+    yesterday = date.today() - timedelta(days=1)
+
+    resp = auth_client.post(
+        "/meal-plans/generate",
+        json={"start": yesterday.isoformat(), "end": _future(2).isoformat(), "meals_per_day": 1},
+    )
+
+    assert resp.status_code == 422
+    assert "today" in resp.json()["detail"]
+
+
+def test_generate_accepts_a_range_starting_today(db_session, user, auth_client):
+    from datetime import date
+
+    crud.create_recipe(db_session, user_id=user.id, title="Meal", course="main")
+    today = date.today().isoformat()
+
+    resp = auth_client.post(
+        "/meal-plans/generate", json={"start": today, "end": today, "meals_per_day": 1}
+    )
+
+    assert resp.status_code == 200
