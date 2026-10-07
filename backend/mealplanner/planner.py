@@ -255,9 +255,8 @@ def generate_plan(
             weights = [
                 exploration_weight(
                     slot_date=slot.date,
-                    date_last_rejected=r.date_last_rejected,
-                    last_proposed=last_proposed.get(r.id),
-                    score=r.score,
+                    date_last_suggested=r.date_last_suggested,
+                    kept_dates=[d for d in [last_proposed.get(r.id)] if d],
                 )
                 for r, _ in scored
             ]

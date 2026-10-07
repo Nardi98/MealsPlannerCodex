@@ -202,12 +202,12 @@ def test_generate_plan_epsilon_randomness(db_session):
 
 
 def test_exploration_favors_stale_recipes(db_session):
-    """With epsilon=1, a long-unrejected recipe is explored far more often."""
+    """With epsilon=1, a long-unsuggested recipe is explored far more often."""
     start = date(2024, 6, 1)
     stale = Recipe(title="Stale", score=1.0, course="main")
-    stale.date_last_rejected = start - timedelta(days=60)
+    stale.date_last_suggested = start - timedelta(days=60)
     fresh = Recipe(title="Fresh", score=1.0, course="main")
-    fresh.date_last_rejected = start - timedelta(days=2)
+    fresh.date_last_suggested = start - timedelta(days=2)
     db_session.add_all([stale, fresh])
     db_session.commit()
 
@@ -226,7 +226,7 @@ def test_exploration_excludes_recipe_within_cooldown(db_session, user):
     """A recipe proposed within the cooldown is never chosen on the explore branch."""
     start = date(2024, 6, 1)
     recent = Recipe(title="Recent", score=1.0, course="main")
-    recent.date_last_rejected = start - timedelta(days=90)  # very stale...
+    recent.date_last_suggested = start - timedelta(days=90)  # very stale...
     available = Recipe(title="Available", score=1.0, course="main")
     db_session.add_all([recent, available])
     db_session.commit()

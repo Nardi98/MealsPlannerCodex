@@ -64,12 +64,11 @@ TAG_REPEAT_MAX_PENALTY = 5.0
 TAG_REPEAT_HALF_LIFE_DAYS = 1.5
 TAG_REPEAT_WINDOW_DAYS = 4.0
 
-# Directed exploration ("uncertainty bonus"): weights the ε-greedy explore pick
-# toward recipes not proposed recently. Values are relative, so the growth slope
-# cancels under normalisation; only the ratios below carry meaning.
-EXPLORE_COOLDOWN_DAYS = 7.0            # zero weight for this long after a proposal
-EXPLORE_NEW_RECIPE_STALENESS_DAYS = 365.0  # anchor for never-rejected recipes
-EXPLORE_DAMP_SCALE = 20.0             # negative score halves weight every this many
+# Directed exploration ("chance to shine"): weights the ε-greedy explore draw
+# toward recipes not suggested for a long time. Values are relative, so only the
+# ratios carry meaning.
+EXPLORE_COOLDOWN_DAYS = 7.0                # zero weight if kept on a plan this close to the slot
+EXPLORE_NEW_RECIPE_STALENESS_DAYS = 365.0  # weight of a never-suggested recipe
 
 
 def _decayed_penalty(
@@ -276,36 +275,55 @@ def tag_repetition_penalty(
 def exploration_weight(
     *,
     slot_date: date,
-    date_last_rejected: Optional[date],
-    last_proposed: Optional[date],
-    score: Optional[float],
+    date_last_suggested: Optional[date],
+    kept_dates: Iterable[date],
     cooldown_days: float = EXPLORE_COOLDOWN_DAYS,
     new_recipe_staleness_days: float = EXPLORE_NEW_RECIPE_STALENESS_DAYS,
-    damp_scale: float = EXPLORE_DAMP_SCALE,
 ) -> float:
-    """Return a non-negative sampling weight for the ε-greedy explore branch.
+    """Return a non-negative sampling weight for the ε-greedy explore draw.
 
-    The weight grows linearly with *staleness* (days since the recipe was last
-    rejected -- acceptance never resets this anchor) so a recipe untouched for
-    two months is twice as likely to be explored as one untouched for one. A
-    recipe proposed within ``cooldown_days`` is excluded (weight ``0``) so a
-    stale dish cannot carpet a plan. Badly negative scores damp the weight so
-    genuine losers fade while seasonal near-misses do not; ``score`` is halved
-    for every ``damp_scale`` points below zero. Never-rejected recipes use
-    ``new_recipe_staleness_days`` as their anchor, giving a strong first
-    audition.
+    The weight is the number of days since the recipe was last *suggested*
+    (rejected suggestions included), so a dish untouched for two months is twice
+    as likely to be drawn as one untouched for one; a never-suggested recipe
+    weighs ``new_recipe_staleness_days``. A recipe kept on a plan within
+    ``cooldown_days`` of the slot, on either side, weighs ``0`` so a stale dish
+    cannot carpet a plan. The score plays no part: rejections lower a recipe's
+    preference, but they can never bury it out of the draw.
     """
 
-    if last_proposed is not None and (slot_date - last_proposed).days < cooldown_days:
+    if any(abs((slot_date - kept).days) < cooldown_days for kept in kept_dates):
         return 0.0
+    if date_last_suggested is None:
+        return new_recipe_staleness_days
+    return float(max((slot_date - date_last_suggested).days, 0))
 
-    if date_last_rejected is None:
-        days_stale = new_recipe_staleness_days
+
+def base_stats(base_scores: Iterable[float]) -> tuple[float, float]:
+    """``(mean, std)`` of the candidate pool's raw scores, for :func:`squashed_base`.
+
+    A pool of fewer than two scores has no spread, so its ``std`` is ``1``.
+    """
+
+    data = list(base_scores)
+    mean = sum(data) / len(data) if data else 0.0
+    if len(data) > 1:
+        std = (sum((s - mean) ** 2 for s in data) / len(data)) ** 0.5
     else:
-        days_stale = max((slot_date - date_last_rejected).days, 0)
+        std = 1.0
+    return mean, std
 
-    damp = 2 ** (min(score or 0.0, 0.0) / damp_scale)
-    return days_stale * damp
+
+def squashed_base(
+    raw: Optional[float],
+    stats: tuple[float, float],
+    B: float = BASE_SQUASH_SCALE,
+    k: float = BASE_SQUASH_SHARPNESS,
+) -> float:
+    """The z-scored raw score, squashed by ``tanh`` into ``[-B, B]``."""
+
+    mean, std = stats
+    norm = (float(raw or 0.0) - mean) / std if std else 0.0
+    return B * math.tanh(k * norm)
 
 
 def score_recipe(
@@ -365,12 +383,7 @@ def score_recipe(
     raw_base = float(recipe.get("score") or 0.0)
     data = list(base_scores or [])
     if squash_mode == "zscore":
-        mean = sum(data) / len(data) if data else 0.0
-        if data and len(data) > 1:
-            variance = sum((s - mean) ** 2 for s in data) / len(data)
-            std = variance ** 0.5
-        else:
-            std = 1.0
+        mean, std = base_stats(data)
         norm = (raw_base - mean) / std if std else 0.0
     elif squash_mode == "percentile":
         if data:
@@ -411,6 +424,8 @@ __all__ = [
     "ingredient_repetition_penalty",
     "tag_repetition_penalty",
     "exploration_weight",
+    "base_stats",
+    "squashed_base",
     "score_recipe",
     "SEASONALITY_BONUS_SCALE",
     "BULK_PREP_BONUS",
@@ -426,5 +441,4 @@ __all__ = [
     "TAG_REPEAT_WINDOW_DAYS",
     "EXPLORE_COOLDOWN_DAYS",
     "EXPLORE_NEW_RECIPE_STALENESS_DAYS",
-    "EXPLORE_DAMP_SCALE",
 ]

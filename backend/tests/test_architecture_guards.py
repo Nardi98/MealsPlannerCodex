@@ -167,6 +167,26 @@ def test_devlog_imports_nothing_of_ours_but_models_and_scoping():
     assert (imported & ours) - {"models", "scoping"} == set()
 
 
+# --------------------------------------------------------------------------
+# NFR-5: the selection engine is pure. No FastAPI, no ``main``, no router -- and
+# no database either, so every stage is testable with plain values.
+# --------------------------------------------------------------------------
+def test_the_engine_imports_no_web_layer_and_no_database():
+    imported = {
+        name.split(".")[0]
+        for name in _imported_modules(BACKEND_ROOT / "mealplanner" / "engine.py")
+    }
+    assert imported, "the AST walk found no imports at all"
+
+    forbidden = {
+        name
+        for name in imported
+        if name in {"fastapi", "starlette", "main", "sqlalchemy", "models", "crud", "database"}
+        or name.endswith("_routes")
+    }
+    assert forbidden == set()
+
+
 def _user_scoped_functions(path):
     """``{name: index of user_id among positional params, or None if keyword-only}``."""
     scoped = {}

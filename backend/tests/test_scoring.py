@@ -25,7 +25,6 @@ from mealplanner.scoring import (
     FRIDGE_BONUS_SCALE,
     EXPLORE_COOLDOWN_DAYS,
     EXPLORE_NEW_RECIPE_STALENESS_DAYS,
-    EXPLORE_DAMP_SCALE,
 )
 
 
@@ -42,76 +41,50 @@ def squashed_base(norm):
     return BASE_SQUASH_SCALE * math.tanh(BASE_SQUASH_SHARPNESS * norm)
 
 
-def test_exploration_weight_grows_linearly_with_staleness():
-    """Twice as stale means twice the weight (relative pick-probability)."""
+def test_exploration_weight_grows_linearly_with_days_since_suggested():
+    """Twice as long since the last suggestion means twice the weight."""
     one_month = exploration_weight(
-        slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=30),
-        last_proposed=None,
-        score=0.0,
+        slot_date=SLOT, date_last_suggested=SLOT - timedelta(days=30), kept_dates=[]
     )
     two_months = exploration_weight(
-        slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=60),
-        last_proposed=None,
-        score=0.0,
+        slot_date=SLOT, date_last_suggested=SLOT - timedelta(days=60), kept_dates=[]
     )
+    assert one_month == pytest.approx(30)
     assert two_months == pytest.approx(2 * one_month)
 
 
-def test_exploration_weight_zero_within_cooldown():
-    """A recipe proposed within the cooldown is out of the explore pool."""
+def test_exploration_weight_never_suggested_is_a_year_stale():
+    new = exploration_weight(slot_date=SLOT, date_last_suggested=None, kept_dates=[])
+    assert new == pytest.approx(EXPLORE_NEW_RECIPE_STALENESS_DAYS) == pytest.approx(365)
+
+
+@pytest.mark.parametrize("offset", [-6, 0, 6])
+def test_exploration_weight_zero_when_kept_within_the_cooldown(offset):
+    """Kept on a plan within 7 days of the slot, either side, means no explore draw."""
     w = exploration_weight(
         slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=90),
-        last_proposed=SLOT - timedelta(days=int(EXPLORE_COOLDOWN_DAYS) - 1),
-        score=0.0,
+        date_last_suggested=None,
+        kept_dates=[SLOT + timedelta(days=offset)],
     )
+    assert EXPLORE_COOLDOWN_DAYS == 7
     assert w == 0.0
 
 
-def test_exploration_weight_null_anchor_is_maximally_stale():
-    """Never-rejected recipes audition strongly (treated as far-past anchor)."""
-    new = exploration_weight(
-        slot_date=SLOT, date_last_rejected=None, last_proposed=None, score=0.0
-    )
-    month_old = exploration_weight(
+@pytest.mark.parametrize("offset", [-7, 7])
+def test_exploration_weight_back_once_the_cooldown_has_passed(offset):
+    w = exploration_weight(
         slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=30),
-        last_proposed=None,
-        score=0.0,
+        date_last_suggested=None,
+        kept_dates=[SLOT + timedelta(days=offset)],
     )
-    assert new == pytest.approx(EXPLORE_NEW_RECIPE_STALENESS_DAYS)
-    assert new > month_old
+    assert w == pytest.approx(365)
 
 
-def test_exploration_weight_negative_score_damps_monotonically():
-    """More negative scores shrink the weight; losers fade, near-misses don't."""
-    kwargs = dict(
-        slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=60),
-        last_proposed=None,
+def test_exploration_weight_suggested_after_the_slot_weighs_nothing():
+    w = exploration_weight(
+        slot_date=SLOT, date_last_suggested=SLOT + timedelta(days=2), kept_dates=[]
     )
-    mild = exploration_weight(score=-10.0, **kwargs)
-    harsh = exploration_weight(score=-80.0, **kwargs)
-    neutral = exploration_weight(score=0.0, **kwargs)
-    assert 0 < harsh < mild < neutral
-
-
-def test_exploration_weight_nonnegative_score_not_damped():
-    """Positive scores get no damping (factor 1)."""
-    kwargs = dict(
-        slot_date=SLOT,
-        date_last_rejected=SLOT - timedelta(days=60),
-        last_proposed=None,
-    )
-    assert exploration_weight(score=0.0, **kwargs) == pytest.approx(
-        exploration_weight(score=50.0, **kwargs)
-    )
-    # Sanity: damp scale is the halving constant for negative scores.
-    assert exploration_weight(score=-EXPLORE_DAMP_SCALE, **kwargs) == pytest.approx(
-        0.5 * exploration_weight(score=0.0, **kwargs)
-    )
+    assert w == 0.0
 
 
 def test_recency_penalty_decays_monotonically():
