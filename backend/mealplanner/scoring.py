@@ -4,7 +4,7 @@ This module contains small helper functions used to calculate a score for a
 recipe.  The intent is not to be a perfect representation of real world
 preferences, but to provide deterministic behaviour that can be unit tested.
 
-The :func:`score_recipe` function combines several simple signals:
+The selection engine (:mod:`mealplanner.engine`) sums these signals:
 
 ``base score``
     A starting score stored on the recipe.  The raw value is normalised against
@@ -326,95 +326,6 @@ def squashed_base(
     return B * math.tanh(k * norm)
 
 
-def score_recipe(
-    recipe: RecipeDict,
-    planning_date: date,
-    *,
-    seasonality_weight: float = 1.0,
-    recency_weight: float = 1.0,
-    tag_penalty_weight: float = 1.0,
-    bulk_bonus_weight: float = 1.0,
-    ingredient_repeat_weight: float = 1.0,
-    tag_repeat_weight: float = 1.0,
-    fridge_ingredient_ids: Iterable[int] | None = None,
-    reduce_tags: Iterable[str] | None = None,
-    ingredient_last_used: Dict[int, date] | None = None,
-    tag_last_used: Dict[str, date] | None = None,
-    penalized_tags: Iterable[str] | None = None,
-    base_scores: Iterable[float] | None = None,
-    squash_mode: str = "zscore",
-    B: float = BASE_SQUASH_SCALE,
-    k: float = BASE_SQUASH_SHARPNESS,
-) -> float:
-    """Compute the overall score for ``recipe``.
-
-    Individual components are scaled by weights allowing callers to influence
-    their impact on the final score.  The raw ``recipe['score']`` is normalised
-    according to ``squash_mode`` using ``base_scores`` and then squashed via a
-    ``tanh`` function into ``[-B, B]`` before being combined with the other
-    signals.
-
-    Parameters
-    ----------
-    recipe:
-        Mapping describing the recipe.
-    planning_date:
-        Date used for seasonality and recency calculations.
-    seasonality_weight, recency_weight, tag_penalty_weight, bulk_bonus_weight:
-        Multipliers applied to their respective components.
-    reduce_tags:
-        Tags that should incur a penalty if present.
-    base_scores:
-        Iterable of historical base scores for the user.  Used to compute
-        normalisation statistics.
-    squash_mode:
-        Normalisation strategy: ``"zscore"`` or ``"percentile"``.
-    B:
-        Maximum absolute contribution from the base score after squashing.
-    k:
-        Sharpness of the ``tanh`` squashing function.
-    """
-
-    planning_date = planning_date
-
-    # Normalise the raw base score using per-user statistics then squash into a
-    # bounded contribution so that extreme values cannot dominate the final
-    # score.
-    raw_base = float(recipe.get("score") or 0.0)
-    data = list(base_scores or [])
-    if squash_mode == "zscore":
-        mean, std = base_stats(data)
-        norm = (raw_base - mean) / std if std else 0.0
-    elif squash_mode == "percentile":
-        if data:
-            data.sort()
-            from bisect import bisect_left
-
-            idx = bisect_left(data, raw_base)
-            percentile = idx / len(data)
-            norm = 2 * percentile - 1
-        else:
-            norm = 0.0
-    else:
-        raise ValueError(f"Unknown squash_mode: {squash_mode}")
-
-    base = B * math.tanh(k * norm)
-
-    total = base
-    total += seasonality_weight * seasonality_bonus(recipe, planning_date)
-    total += recency_weight * recency_penalty(recipe, planning_date)
-    total += bulk_bonus_weight * bulk_bonus(recipe)
-    total += fridge_bonus(recipe, fridge_ingredient_ids or [])
-    total += tag_penalty_weight * tag_penalty(recipe, reduce_tags or [])
-    total += ingredient_repeat_weight * ingredient_repetition_penalty(
-        recipe, planning_date, ingredient_last_used or {}
-    )
-    total += tag_repeat_weight * tag_repetition_penalty(
-        recipe, planning_date, tag_last_used or {}, penalized_tags or []
-    )
-    return total
-
-
 __all__ = [
     "seasonality_bonus",
     "recency_penalty",
@@ -426,7 +337,6 @@ __all__ = [
     "exploration_weight",
     "base_stats",
     "squashed_base",
-    "score_recipe",
     "SEASONALITY_BONUS_SCALE",
     "BULK_PREP_BONUS",
     "FRIDGE_BONUS_SCALE",

@@ -1,8 +1,7 @@
 import { mealPlansApi } from '../api/mealPlansApi'
 import { feedbackApi } from '../api/feedbackApi'
-import { recipesApi } from '../api/recipesApi'
 import { sideDishesApi } from '../api/sideDishesApi'
-import { mealNumberOf } from './useMealPlan'
+import { idOfTitle, mealNumberOf } from './useMealPlan'
 
 /**
  * Per-meal side-dish actions (add / reject / remove / swap). Each handler takes
@@ -105,14 +104,15 @@ export function useSideDishes({ plan, setPlan, setError }) {
       return
     }
     try {
-      const recipes = await recipesApi.fetchAll()
-      const newId = recipes.find((r) => r.title === newTitle)?.id
+      const newId = await idOfTitle(newTitle)
       if (!newId) {
         setError('Replacement recipe not found.')
         return
       }
-      await feedbackApi.rejectRecipe(oldId, date)
-      await feedbackApi.acceptRecipe(newId, date)
+      await Promise.all([
+        feedbackApi.rejectRecipe(oldId, date),
+        feedbackApi.acceptRecipe(newId, date),
+      ])
       await mealPlansApi.replaceSide(date, mealNumberOf(meal, mealIndex), sideIndex, newId, meal.leftover)
       updateSides(date, mealIndex, (sides) =>
         sides.map((s, idx) => (idx === sideIndex ? { id: newId, title: newTitle } : s))

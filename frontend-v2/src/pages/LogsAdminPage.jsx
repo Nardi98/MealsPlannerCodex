@@ -5,6 +5,7 @@ import { Input } from '../components/Input'
 import CatalogNoticeBar from '../components/catalog/CatalogNoticeBar'
 import { mutedTextStyle } from '../components/catalog/textStyles'
 import { logsAdminApi } from '../api/logsAdminApi'
+import { useAdminAction } from '../hooks/useAdminAction'
 import { downloadJson } from '../utils/download'
 
 // The areas that write to the developer log. `''` downloads every channel.
@@ -28,44 +29,28 @@ export default function LogsAdminPage() {
   const [searched, setSearched] = React.useState('')
   const [selected, setSelected] = React.useState(null)
   const [channel, setChannel] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
   // { kind: 'status' | 'alert', text } -- the kind doubles as the ARIA role.
   const [notice, setNotice] = React.useState(null)
+  const { busy, run } = useAdminAction(setNotice)
 
-  const search = async (event) => {
+  const search = (event) => {
     event.preventDefault()
     const text = query.trim()
-    if (!text) return
-    setBusy(true)
-    try {
-      const users = await logsAdminApi.searchUsers(text)
-      setResults(users)
+    if (!text) return undefined
+    return run('search the accounts', async () => {
+      setResults(await logsAdminApi.searchUsers(text))
       setSearched(text)
       setSelected(null)
-      setNotice(null)
-    } catch (err) {
-      console.error('Failed to search accounts', err)
-      setNotice({ kind: 'alert', text: 'Couldn’t search the accounts. Try again.' })
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
-  const download = async () => {
-    if (!selected) return
-    setBusy(true)
-    try {
+  const download = () =>
+    run('download the log', async () => {
       const log = await logsAdminApi.exportLog(selected.id, channel || undefined)
       const name = selected.username || `user-${selected.id}`
       downloadJson(log, `devlog-${name}${channel ? `-${channel}` : ''}.json`)
-      setNotice({ kind: 'status', text: `Downloaded ${log.entries.length} entries for ${selected.email}.` })
-    } catch (err) {
-      console.error('Failed to download the log', err)
-      setNotice({ kind: 'alert', text: 'Couldn’t download the log. Try again.' })
-    } finally {
-      setBusy(false)
-    }
-  }
+      return `Downloaded ${log.entries.length} entries for ${selected.email}.`
+    })
 
   return (
     <div className="flex flex-col gap-4">

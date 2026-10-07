@@ -2,8 +2,8 @@ from datetime import date, timedelta
 import math
 import pytest
 
+from mealplanner import scoring
 from mealplanner.scoring import (
-    score_recipe,
     tag_penalty,
     seasonality_bonus,
     recency_penalty,
@@ -129,99 +129,6 @@ def test_seasonality_bonus_missing_data_is_neutral():
     assert seasonality_bonus(recipe, today) == pytest.approx(0.0)
 
 
-def test_all_in_season_old_recipe():
-    today = date(2024, 6, 1)
-    recipe = {
-        "score": 1.0,
-        "ingredients": [
-            {"season_months": [6]},
-            {"season_months": [5, 6]},
-        ],
-        "date_last_planned": date(2024, 4, 1),
-        "bulk_prep": False,
-    }
-    expected = squashed_base(1.0) + seasonality_bonus(recipe, today)
-    assert score_recipe(recipe, today) == pytest.approx(expected)
-
-
-def test_recent_offseason_bulk_recipe():
-    today = date(2024, 6, 1)
-    recipe = {
-        "score": 0.5,
-        "ingredients": [
-            {"season_months": [1]},
-            {"season_months": []},
-        ],
-        "date_last_planned": date(2024, 5, 30),
-        "bulk_prep": True,
-    }
-    expected = (
-        squashed_base(0.5)
-        + seasonality_bonus(recipe, today)
-        + recency_penalty(recipe, today)
-        + bulk_bonus(recipe)
-    )
-    assert score_recipe(recipe, today) == pytest.approx(expected)
-
-
-def test_missing_data_defaults():
-    today = date(2024, 1, 1)
-    recipe = {
-        "score": None,
-        "date_last_planned": date(2023, 1, 1),
-        "ingredients": [],
-    }
-    assert score_recipe(recipe, today) == pytest.approx(0.0)
-
-
-def test_extreme_base_score():
-    today = date(2024, 1, 1)
-    recipe = {
-        "score": 1_000_000,
-        "date_last_planned": date(2023, 12, 31),
-        "ingredients": [],
-    }
-    expected = squashed_base(1_000_000) + recency_penalty(recipe, today)
-    assert score_recipe(recipe, today) == pytest.approx(expected)
-
-
-def test_weight_parameters():
-    today = date(2024, 6, 1)
-    recipe = {
-        "score": 1.0,
-        "ingredients": [{"season_months": [6]}],
-        "date_last_planned": date(2024, 5, 30),
-        "bulk_prep": True,
-        "tags": ["spicy"],
-    }
-    # Only bounded base score when weights are zero
-    assert score_recipe(
-        recipe,
-        today,
-        seasonality_weight=0,
-        recency_weight=0,
-        tag_penalty_weight=0,
-        bulk_bonus_weight=0,
-        reduce_tags={"spicy"},
-    ) == pytest.approx(squashed_base(1.0))
-    # Doubling all weights doubles magnitude of other components
-    assert score_recipe(
-        recipe,
-        today,
-        seasonality_weight=2,
-        recency_weight=2,
-        tag_penalty_weight=2,
-        bulk_bonus_weight=2,
-        reduce_tags={"spicy"},
-    ) == pytest.approx(
-        squashed_base(1.0)
-        + 2 * seasonality_bonus(recipe, today)
-        + 2 * recency_penalty(recipe, today)
-        + 2 * bulk_bonus(recipe)
-        + 2 * tag_penalty(recipe, {"spicy"})
-    )
-
-
 def test_tag_penalty():
     recipe = {"tags": ["spicy", "vegan"]}
     assert tag_penalty(recipe, {"spicy"}) == pytest.approx(-3.0)
@@ -345,34 +252,6 @@ def test_fridge_bonus_empty_set_is_zero():
     assert fridge_bonus(recipe, set()) == pytest.approx(0.0)
 
 
-def test_score_recipe_fridge_boost_raises_score():
-    today = date(2024, 6, 1)
-    recipe = {
-        "score": 1.0,
-        "ingredients": [{"season_months": [6]}],
-        "ingredient_ids": [1, 2],
-        "date_last_planned": date(2024, 4, 1),
-        "bulk_prep": False,
-    }
-    without = score_recipe(recipe, today)
-    with_fridge = score_recipe(recipe, today, fridge_ingredient_ids={2})
-    assert with_fridge == pytest.approx(without + FRIDGE_BONUS_SCALE)
-
-
-def test_score_recipe_backward_compatible_without_maps():
-    today = date(2024, 6, 1)
-    recipe = {
-        "score": 1.0,
-        "ingredients": [{"season_months": [6]}, {"season_months": [5, 6]}],
-        "ingredient_ids": [1, 2],
-        "tags": ["pasta"],
-        "date_last_planned": date(2024, 4, 1),
-        "bulk_prep": False,
-    }
-    baseline = squashed_base(1.0) + seasonality_bonus(recipe, today)
-    assert score_recipe(recipe, today) == pytest.approx(baseline)
-
-
 # ---------------------------------------------------------------------------
 # Base score squash
 # ---------------------------------------------------------------------------
@@ -408,9 +287,12 @@ def test_rejected_recipe_loses_to_neutral_one_despite_being_in_season():
         "bulk_prep": False,
     }
 
-    assert score_recipe(rejected, today, base_scores=pool) < score_recipe(
-        neutral, today, base_scores=pool
-    )
+    stats = scoring.base_stats(pool)
+
+    def total(recipe):
+        return scoring.squashed_base(recipe["score"], stats) + seasonality_bonus(recipe, today)
+
+    assert total(rejected) < total(neutral)
 
 
 def test_feedback_still_moves_the_score_past_the_old_saturation_point():
@@ -432,6 +314,6 @@ def test_feedback_still_moves_the_score_past_the_old_saturation_point():
             "date_last_planned": long_ago,
             "bulk_prep": False,
         }
-        return score_recipe(recipe, today, base_scores=pool)
+        return scoring.squashed_base(recipe["score"], scoring.base_stats(pool))
 
     assert at(-2.0) - at(-4.0) > 1.0

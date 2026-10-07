@@ -300,7 +300,7 @@ _LINES_AND_TAGS = (
 _ENTRY_LINES_AND_TAGS = (contains_eager(models.Recipe.catalog_entry), *_LINES_AND_TAGS)
 
 
-def _escape_like(text: str) -> str:
+def escape_like(text: str) -> str:
     """``text`` with LIKE's metacharacters made literal, for ``escape="\\\\"`` (ERR-11)."""
     return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
@@ -317,7 +317,7 @@ STATUSES = get_args(Status)
 
 def _title_match(query: str):
     """A case-insensitive *literal* substring criterion on the title (ERR-11)."""
-    return models.Recipe.title.ilike(f"%{_escape_like(query)}%", escape="\\")
+    return models.Recipe.title.ilike(f"%{escape_like(query)}%", escape="\\")
 
 
 def _catalog_rows(

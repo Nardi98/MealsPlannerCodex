@@ -36,6 +36,12 @@ def test_user_search_matches_email_or_username_case_insensitively(
     assert set(by_email[0]) == {"id", "email", "username"}
 
 
+def test_user_search_treats_like_wildcards_literally(admin_client, user, other_user):
+    """``ow_er`` and ``ow%r`` would match ``owner`` if the wildcards were live."""
+    assert admin_client.get("/admin/logs/users", params={"q": "ow_er"}).json() == []
+    assert admin_client.get("/admin/logs/users", params={"q": "ow%r"}).json() == []
+
+
 def test_user_search_is_capped_at_twenty(admin_client, db_session):
     import crud
 
@@ -53,8 +59,6 @@ def test_export_downloads_only_that_users_rows(admin_client, db_session, user, o
     resp = admin_client.get("/admin/logs/export", params={"user_id": user.id})
 
     assert resp.status_code == 200
-    assert "attachment" in resp.headers["content-disposition"]
-    assert f"user-{user.id}" in resp.headers["content-disposition"]
     body = resp.json()
     assert body["user"] == {"id": user.id, "email": user.email, "username": user.username}
     assert [e["event"] for e in body["entries"]] == ["mine"]

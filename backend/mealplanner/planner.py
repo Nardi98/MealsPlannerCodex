@@ -32,6 +32,9 @@ from .config import DEFAULT_PLAN_SETTINGS
 
 #: Runners-up recorded per slot in the trace (Q8).
 TRACE_RUNNERS_UP = 5
+#: How far around the planned range history is read. Every rule looks closer
+#: than this: recency 15 days, explore cooldown 7, minimum gap 5, repetition 4.
+HISTORY_DAYS = 30
 
 COURSE_GROUPS: Dict[str, Sequence[str]] = {"main": MAIN_COURSES, "side": ("side",)}
 
@@ -44,8 +47,6 @@ class Slot:
     meal_number: int
     recipe: Recipe | None = None
     leftover: bool = False
-    selection_mode: str | None = None
-    candidate_rank: int | None = None
     soft_hold_recipe_id: int | None = None
     side_ids: List[int] = field(default_factory=list)
     #: Why this dish won: chosen, mode, rank, breakdown, runners-up, exclusions.
@@ -107,15 +108,17 @@ def load_snapshot(
     ingredient and tag maps hold the latest use before ``start``, or on/before
     the slot when planning a single one.
     """
+    options = [
+        selectinload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+        selectinload(Recipe.tags),
+    ]
+    if course_group == "main":
+        # pick_favorite_side reads this per slot; without it each candidate
+        # main lazy-loads its pairing during planning.
+        options.append(selectinload(Recipe.favorite_sides))
     recipes = scope(
         session.query(Recipe)
-        .options(
-            selectinload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
-            selectinload(Recipe.tags),
-            # pick_favorite_side reads this per slot; without it each candidate
-            # main lazy-loads its pairing during planning.
-            selectinload(Recipe.favorite_sides),
-        )
+        .options(*options)
         .filter(Recipe.course.in_(COURSE_GROUPS[course_group])),
         Recipe.user_id,
         user_id,
@@ -123,22 +126,17 @@ def load_snapshot(
     by_id = {r.id: r for r in recipes}
 
     if course_group == "side":
-        rows = scope(
-            session.query(
-                MealSide.side_recipe_id, MealSide.plan_date, MealSide.meal_number, literal(False)
-            ),
-            MealSide.user_id,
-            user_id,
-        )
+        table = MealSide
+        columns = (MealSide.side_recipe_id, MealSide.plan_date, MealSide.meal_number, literal(False))
     else:
-        rows = scope(
-            session.query(
-                Meal.recipe_id, Meal.plan_date, Meal.meal_number,
-                Meal.leftover_source_date.isnot(None),
-            ),
-            Meal.user_id,
-            user_id,
-        )
+        table = Meal
+        columns = (Meal.recipe_id, Meal.plan_date, Meal.meal_number, Meal.leftover_source_date.isnot(None))
+    window = timedelta(days=HISTORY_DAYS)
+    rows = scope(
+        session.query(*columns).filter(table.plan_date.between(start - window, end + window)),
+        table.user_id,
+        user_id,
+    )
 
     penalized_tags: Set[str] = {
         name
@@ -186,17 +184,37 @@ def load_snapshot(
     )
 
 
+def _context(
+    snap: Snapshot, settings: Dict[str, Any], slot_date: date, meal_number: int, **fields: Any
+) -> engine.SlotContext:
+    """A slot's engine context over ``snap``'s history; ``fields`` add the rest."""
+    return engine.SlotContext(
+        date=slot_date,
+        meal_number=meal_number,
+        eaten_dates=snap.eaten_dates,
+        ingredient_last_used=snap.ingredient_last_used,
+        tag_last_used=snap.tag_last_used,
+        penalized_tags=snap.penalized_tags,
+        kept_dates=snap.kept_dates,
+        hold_margin=float(settings["LEFTOVER_HOLD_MARGIN"]),
+        **fields,
+    )
+
+
 def choose(
     candidates: Sequence[engine.Candidate],
     ctx: engine.SlotContext,
     epsilon: float,
     rng: random.Random,
+    stats: tuple[float, float] | None = None,
 ) -> tuple[engine.Choice, Dict[str, Any]]:
     """Run the engine's stages on one slot; return the choice and its trace.
 
-    If the hard rules leave nothing while the minimum gap applies, the slot is
-    re-run without it (a small library could not fill a week otherwise) and the
-    trace records ``relaxed: ["min_gap"]``. Still nothing is a ``ValueError``.
+    ``stats`` are the whole pool's :func:`engine.base_stats`, computed once per
+    run by a caller planning many slots. If the hard rules leave nothing while
+    the minimum gap applies, the slot is re-run without it (a small library
+    could not fill a week otherwise) and the trace records
+    ``relaxed: ["min_gap"]``. Still nothing is a ``ValueError``.
     """
     relaxed: List[str] = []
     eligible, excluded = engine.hard_filter(candidates, ctx)
@@ -207,12 +225,9 @@ def choose(
     if not eligible:
         raise ValueError("No recipes available")
 
-    scored = engine.score_all(eligible, ctx, engine.base_stats(candidates))
+    scored = engine.score_all(eligible, ctx, stats or engine.base_stats(candidates))
     choice = engine.select(scored, ctx, epsilon, rng)
-    runners_up = sorted(
-        (pair for pair in scored if pair[0].id != choice.candidate.id),
-        key=lambda pair: (-pair[1].total, pair[0].id),
-    )[:TRACE_RUNNERS_UP]
+    runners_up = [pair for pair in choice.ranked if pair[0] is not choice.candidate][:TRACE_RUNNERS_UP]
     trace = {
         "date": ctx.date,
         "meal_number": ctx.meal_number,
@@ -318,28 +333,21 @@ def generate_plan(
     fridge_remaining: Dict[int, int] = {
         int(k): int(v) for k, v in (fridge_ingredients or {}).items() if int(v) > 0
     }
+    avoid, reduce = set(avoid_tags or ()), set(reduce_tags or ())
+    stats = engine.base_stats(snap.candidates)
 
     for idx, slot in enumerate(slots):
         _apply_soft_holds(slots, idx, leftovers, settings)
 
-        ctx = engine.SlotContext(
-            date=slot.date,
-            meal_number=slot.meal_number,
-            eaten_dates=snap.eaten_dates,
-            ingredient_last_used=snap.ingredient_last_used,
-            tag_last_used=snap.tag_last_used,
-            penalized_tags=snap.penalized_tags,
+        ctx = _context(
+            snap, settings, slot.date, slot.meal_number,
             fridge_remaining=fridge_remaining,
             held_recipe_id=slot.soft_hold_recipe_id,
-            kept_dates=snap.kept_dates,
-            avoid_tags=set(avoid_tags or ()),
-            reduce_tags=set(reduce_tags or ()),
+            avoid_tags=avoid,
+            reduce_tags=reduce,
             weights=weights,
-            hold_margin=float(settings["LEFTOVER_HOLD_MARGIN"]),
         )
-        choice, slot.trace = choose(snap.candidates, ctx, epsilon, rng)
-        slot.selection_mode = choice.mode
-        slot.candidate_rank = choice.rank
+        choice, slot.trace = choose(snap.candidates, ctx, epsilon, rng, stats)
 
         chosen = snap.recipes[choice.candidate.id]
         slot.recipe = chosen
@@ -492,19 +500,12 @@ def suggest_for_slot(
                 user_id,
             )
         )
-    ctx = engine.SlotContext(
-        date=plan_date,
-        meal_number=meal_number,
-        eaten_dates=snap.eaten_dates,
-        ingredient_last_used=snap.ingredient_last_used,
-        tag_last_used=snap.tag_last_used,
-        penalized_tags=snap.penalized_tags,
-        kept_dates=snap.kept_dates,
+    ctx = _context(
+        snap, settings, plan_date, meal_number,
         exclude_ids=exclude,
         avoid_tags=set(avoid_tags or ()),
         reduce_tags=set(reduce_tags or ()),
         weights=weights or engine.Weights(),
-        hold_margin=float(settings["LEFTOVER_HOLD_MARGIN"]),
         min_gap=course_group == "main",
     )
     choice, trace = choose(snap.candidates, ctx, epsilon, rng or random.Random())

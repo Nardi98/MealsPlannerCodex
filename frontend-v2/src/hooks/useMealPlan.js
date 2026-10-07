@@ -20,7 +20,7 @@ export const fmt = (d) => d.toISOString().split('T')[0]
 export const mealNumberOf = (meal, mealIndex) => meal?.meal_number ?? mealIndex + 1
 
 // Resolve a recipe title the user picked by hand to its id.
-const idOfTitle = async (title) => {
+export const idOfTitle = async (title) => {
   const recipes = await recipesApi.fetchAll()
   return recipes.find((r) => r.title === title)?.id
 }
@@ -242,8 +242,10 @@ export function useMealPlan({ setError }) {
         setError('Replacement recipe not found.')
         return
       }
-      await feedbackApi.rejectRecipe(meal.recipe_id, date)
-      await feedbackApi.acceptRecipe(newId, date)
+      await Promise.all([
+        feedbackApi.rejectRecipe(meal.recipe_id, date),
+        feedbackApi.acceptRecipe(newId, date),
+      ])
       const updatedDay = plan[date].map((m, i) =>
         i === mealIndex
           ? { ...m, recipe: newTitle, recipe_id: newId, accepted: false, leftover: false }

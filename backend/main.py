@@ -1483,6 +1483,7 @@ def _suggest_for_slot(
     event: str,
     epsilon: float,
     weights: Weights,
+    settings: Dict[str, Any],
 ) -> Dict[str, object]:
     """Run the engine on one slot, stamp the suggestion and log its trace."""
 
@@ -1499,7 +1500,7 @@ def _suggest_for_slot(
             avoid_tags=payload.avoid_tags,
             reduce_tags=payload.reduce_tags,
             weights=weights,
-            plan_settings=crud.get_plan_settings(db, user_id),
+            plan_settings=settings,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -1526,7 +1527,7 @@ def replace_main(
     settings = crud.get_plan_settings(db, current_user.id)
     weights = Weights(tag_penalty=settings.get("tag_penalty_weight", 1.0))
     return _suggest_for_slot(
-        db, current_user.id, payload, "main", "replace_main", 0.0, weights
+        db, current_user.id, payload, "main", "replace_main", 0.0, weights, settings
     )
 
 
@@ -1614,7 +1615,8 @@ def generate_side_dish_endpoint(
         bulk_bonus=payload.bulk_bonus_weight,
     )
     return _suggest_for_slot(
-        db, current_user.id, payload, "side", "suggest_side", payload.epsilon, weights
+        db, current_user.id, payload, "side", "suggest_side", payload.epsilon, weights,
+        crud.get_plan_settings(db, current_user.id),
     )
 
 

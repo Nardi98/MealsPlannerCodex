@@ -121,6 +121,8 @@ class Choice:
     mode: str  # "exploit" or "explore"
     #: Candidate id -> explore weight; empty unless the explore draw fired.
     explore_weights: Dict[int, float] = field(default_factory=dict)
+    #: Every scored candidate, best first: the ranking ``rank`` indexes.
+    ranked: List[Tuple[Candidate, Breakdown]] = field(default_factory=list)
 
 
 def _is_seasonal_data(months: Sequence[int]) -> bool:
@@ -276,4 +278,7 @@ def select(
     else:
         mode, rank = "exploit", 0
     c, breakdown = ranked[rank]
-    return Choice(candidate=c, breakdown=breakdown, rank=rank, mode=mode, explore_weights=weights)
+    return Choice(
+        candidate=c, breakdown=breakdown, rank=rank, mode=mode,
+        explore_weights=weights, ranked=ranked,
+    )
