@@ -48,6 +48,7 @@ import user_feedback_routes
 import username_routes
 import usernames
 from mealplanner import planner
+from mealplanner.engine import Weights
 from mealplanner.seed import seed_system_ingredients, seed_system_tags
 from database import SessionLocal, get_db
 from scoping import scope
@@ -1426,18 +1427,31 @@ def delete_side_dish(
     return schemas.MealOut(**crud.meal_item(meal))
 
 
+def _log_feedback(
+    db: Session, user_id: int, kind: str, payload: schemas.FeedbackIn, recipe: models.Recipe
+) -> None:
+    event = {"kind": kind, "recipe_id": recipe.id, "plan_date": payload.plan_date}
+    if kind == "accept":
+        event["leftover"] = payload.leftover
+    event["score"] = recipe.score
+    devlog.record(db, user_id=user_id, channel="planner", event="feedback", payload=event)
+
+
 @app.post("/feedback/accept")
 def feedback_accept(
     payload: schemas.FeedbackIn,
     db: Db,
     current_user: CurrentUser,
 ) -> Dict[str, str]:
-    """Record user acceptance of a recipe."""
+    """Record that the user kept a recipe. A leftover accept bumps nothing (Q7)."""
 
-    if crud.accept_recipe(
-        db, payload.title, payload.consumed_date, current_user.id
-    ) is None:
+    recipe = crud.accept_recipe(
+        db, payload.recipe_id, current_user.id, leftover=payload.leftover
+    )
+    if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    _log_feedback(db, current_user.id, "accept", payload, recipe)
+    db.commit()
     return {"status": "ok"}
 
 
@@ -1446,23 +1460,74 @@ def feedback_reject(
     payload: schemas.FeedbackIn,
     db: Db,
     current_user: CurrentUser,
-) -> Dict[str, Optional[str]]:
-    """Record user rejection of a recipe and suggest a replacement."""
+) -> Dict[str, str]:
+    """Record a rejection: a mild score drop and a 4-day ban from the slot date.
 
-    if crud.reject_recipe(db, payload.title, current_user.id) is None:
+    It suggests nothing: the client asks ``/meal-plans/replace`` for a main, or
+    ``/side-dishes/generate`` for a side (S3).
+    """
+
+    recipe = crud.reject_recipe(db, payload.recipe_id, payload.plan_date, current_user.id)
+    if recipe is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
-    existing = set(crud.list_planned_titles(db, current_user.id))
-    existing.add(payload.title)
-    available = list(
-        set(
-            crud.list_recipe_titles(
-                db, courses=["main", "first-course"], user_id=current_user.id
-            )
+    _log_feedback(db, current_user.id, "reject", payload, recipe)
+    db.commit()
+    return {"status": "ok"}
+
+
+def _suggest_for_slot(
+    db: Session,
+    user_id: int,
+    payload: schemas.MealReplaceIn | schemas.SideDishGenerate,
+    course_group: str,
+    event: str,
+    epsilon: float,
+    weights: Weights,
+) -> Dict[str, object]:
+    """Run the engine on one slot, stamp the suggestion and log its trace."""
+
+    try:
+        recipe, trace = planner.suggest_for_slot(
+            db,
+            user_id,
+            payload.plan_date,
+            payload.meal_number,
+            course_group,
+            exclude_ids=payload.exclude_ids,
+            epsilon=epsilon,
+            rng=random.Random(),
+            avoid_tags=payload.avoid_tags,
+            reduce_tags=payload.reduce_tags,
+            weights=weights,
+            plan_settings=crud.get_plan_settings(db, user_id),
         )
-        - existing
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    planner.stamp_suggested(recipe, payload.plan_date)
+    devlog.record(
+        db,
+        user_id=user_id,
+        channel="planner",
+        event=event,
+        payload={"exclude_ids": payload.exclude_ids, "slot": trace},
     )
-    replacement = random.choice(available) if available else None
-    return {"replacement": replacement}
+    db.commit()
+    return {"id": recipe.id, "title": recipe.title}
+
+
+@app.post("/meal-plans/replace")
+def replace_main(
+    payload: schemas.MealReplaceIn,
+    db: Db,
+    current_user: CurrentUser,
+) -> Dict[str, object]:
+    """The best main for one slot, given the rest of the saved plan (FR-11)."""
+
+    settings = crud.get_plan_settings(db, current_user.id)
+    weights = Weights(tag_penalty=settings.get("tag_penalty_weight", 1.0))
+    return _suggest_for_slot(
+        db, current_user.id, payload, "main", "replace_main", 0.0, weights
+    )
 
 
 @app.post("/meal-plans/generate")
@@ -1534,24 +1599,17 @@ def generate_side_dish_endpoint(
     db: Db,
     current_user: CurrentUser,
 ) -> Dict[str, object]:
-    try:
-        recipe = planner.generate_side_dish(
-            db,
-            user_id=current_user.id,
-            avoid_tags=payload.avoid_tags,
-            reduce_tags=payload.reduce_tags,
-            avoid_titles=payload.avoid_titles,
-            epsilon=payload.epsilon,
-            keep_days=payload.keep_days,
-            bulk_leftovers=payload.bulk_leftovers,
-            seasonality_weight=payload.seasonality_weight,
-            recency_weight=payload.recency_weight,
-            tag_penalty_weight=payload.tag_penalty_weight,
-            bulk_bonus_weight=payload.bulk_bonus_weight,
-        )
-    except ValueError as exc:  # pragma: no cover - error path
-        raise HTTPException(status_code=400, detail=str(exc))
-    return {"id": recipe.id, "title": recipe.title}
+    """One side for a meal, scored against that meal's date (S1)."""
+
+    weights = Weights(
+        seasonality=payload.seasonality_weight,
+        recency=payload.recency_weight,
+        tag_penalty=payload.tag_penalty_weight,
+        bulk_bonus=payload.bulk_bonus_weight,
+    )
+    return _suggest_for_slot(
+        db, current_user.id, payload, "side", "suggest_side", payload.epsilon, weights
+    )
 
 
 @app.get("/data/export")

@@ -14,12 +14,11 @@ from datetime import date, timedelta
 import random
 from typing import Any, Dict, Iterable, List, Sequence, Set
 
-from sqlalchemy import func, literal, true
+from sqlalchemy import literal, true
 from sqlalchemy.orm import Session, selectinload
 
 from models import (
     MAIN_COURSES,
-    Ingredient,
     Recipe,
     RecipeIngredient,
     Meal,
@@ -29,7 +28,6 @@ from models import (
 )
 from scoping import scope
 from . import engine
-from .scoring import score_recipe
 from .config import DEFAULT_PLAN_SETTINGS
 
 #: Runners-up recorded per slot in the trace (Q8).
@@ -457,149 +455,60 @@ def _apply_soft_holds(
             next_date = s.date + timedelta(days=spacing)
 
 
-def _recipe_to_dict(recipe: Recipe, last_planned: date | None) -> Dict[str, object]:
-    if last_planned is None:
-        last_planned = date.today() - timedelta(days=10_000)
-    return {
-        "score": recipe.score,
-        "bulk_prep": recipe.bulk_prep,
-        "date_last_planned": last_planned,
-        "ingredients": [
-            {"season_months": (ri.ingredient.season_months or [])}
-            for ri in getattr(recipe, "ingredients", [])
-        ],
-        "ingredient_ids": [ri.ingredient_id for ri in recipe.ingredients],
-        "tags": [t.name for t in recipe.tags],
-    }
-
-
-def generate_side_dish(
+def suggest_for_slot(
     session: Session,
-    tags: Iterable[str] | None = None,
-    avoid_tags: Iterable[str] | None = None,
-    reduce_tags: Iterable[str] | None = None,
-    avoid_titles: Iterable[str] | None = None,
+    user_id: int | None,
+    plan_date: date,
+    meal_number: int,
+    course_group: str,
+    exclude_ids: Iterable[int] = (),
     epsilon: float = 0.0,
-    keep_days: int = 7,
-    bulk_leftovers: bool = True,
-    seasonality_weight: float = 1.0,
-    recency_weight: float = 1.0,
-    tag_penalty_weight: float = 1.0,
-    bulk_bonus_weight: float = 1.0,
-    user_id: int | None = None,
-) -> Recipe:
-    """Select a single side dish using the planner's scoring logic.
-
-    Scoped to ``user_id`` when given, so only the caller's own side recipes and
-    side-dish history are considered.
-    """
-
-    recipes = scope(
-        session.query(Recipe).filter(Recipe.course == "side"),
-        Recipe.user_id,
-        user_id,
-    ).all()
-    if avoid_titles:
-        avoid_set = set(avoid_titles)
-        recipes = [r for r in recipes if r.title not in avoid_set]
-    today = date.today()
-    available = filter_recipes(
-        recipes,
-        season=today.month,
-        tags=tags,
-        avoid_tags=avoid_tags,
-        reduce_tags=reduce_tags,
-    )
-    if not available:
-        raise ValueError("No side dishes available")
-
-    last_planned: Dict[int, date] = dict(
-        scope(
-            session.query(MealSide.side_recipe_id, func.max(MealSide.plan_date))
-            .group_by(MealSide.side_recipe_id),
-            MealSide.user_id,
-            user_id,
-        )
-    )
-
-    base_scores = [r.score or 0.0 for r in available]
-    scored: List[tuple[Recipe, float]] = []
-    for r in available:
-        score = score_recipe(
-            _recipe_to_dict(r, last_planned.get(r.id)),
-            planning_date=today,
-            seasonality_weight=seasonality_weight,
-            recency_weight=recency_weight,
-            tag_penalty_weight=tag_penalty_weight,
-            bulk_bonus_weight=bulk_bonus_weight,
-            reduce_tags=reduce_tags or [],
-            base_scores=base_scores,
-        )
-        scored.append((r, score))
-
-    scored.sort(key=lambda x: x[1], reverse=True)
-    if epsilon and random.random() < epsilon:
-        idx = random.randrange(len(scored))
-    else:
-        idx = 0
-    return scored[idx][0]
-
-
-def _ingredient_in_season(ingredient: Ingredient, month: int) -> bool:
-    """Return ``True`` if ``ingredient`` is available in ``month``.
-
-    ``Ingredient.season_months`` stores a list of month numbers. If the field is
-    empty the ingredient is assumed to be available year round.
-    """
-
-    months = ingredient.season_months or []
-    return not months or month in months
-
-
-def filter_recipes(
-    recipes: Sequence[Recipe],
-    season: int | None = None,
-    tags: Iterable[str] | None = None,
+    rng: random.Random | None = None,
     avoid_tags: Iterable[str] | None = None,
     reduce_tags: Iterable[str] | None = None,
-) -> List[Recipe]:
-    """Filter ``recipes`` according to ``season`` and ``tags``.
+    weights: engine.Weights | None = None,
+    plan_settings: Dict[str, object] | None = None,
+) -> tuple[Recipe, Dict[str, Any]]:
+    """Propose one recipe of ``course_group`` for a single slot of the saved plan.
 
-    Args:
-        recipes: Collection of :class:`~models.Recipe` objects.
-        season: Optional month number (``1-12``). Only recipes with at least one
-            ingredient available in that month are kept.
-        tags: Optional iterable of tag names. A recipe must contain at least one
-            of these tags to be included.
-        avoid_tags: Optional iterable of tag names. Recipes containing any of
-            these tags are excluded.
-        reduce_tags: Optional iterable of tag names. Recipes containing these
-            tags are returned after others so they are less likely to be
-            selected.
+    The same engine as :func:`generate_plan`, with the rest of the saved plan as
+    context: its meals feed recency, the minimum gap (mains only) and the
+    repetition maps, while the slot itself is left out. A side never repeats one
+    already on the same plate. Returns the recipe and the slot trace; raises
+    ``ValueError`` when nothing is eligible.
     """
-
-    tag_set: Set[str] | None = set(tags) if tags else None
-    avoid_set: Set[str] = set(avoid_tags or [])
-    reduce_set: Set[str] = set(reduce_tags or [])
-    primary: List[Recipe] = []
-    reduced: List[Recipe] = []
-    for recipe in recipes:
-        recipe_tags = {t.name for t in recipe.tags}
-        if avoid_set and recipe_tags.intersection(avoid_set):
-            continue
-        if tag_set and not recipe_tags.intersection(tag_set):
-            continue
-        recipe_ingredients = getattr(recipe, "ingredients", [])
-        if season is not None and recipe_ingredients and not any(
-            _ingredient_in_season(ri.ingredient, season)
-            for ri in recipe_ingredients
-        ):
-            continue
-        if reduce_set and recipe_tags.intersection(reduce_set):
-            reduced.append(recipe)
-        else:
-            primary.append(recipe)
-    return primary + reduced
+    settings = {**DEFAULT_PLAN_SETTINGS, **(plan_settings or {})}
+    slot = (plan_date, meal_number)
+    snap = load_snapshot(session, user_id, course_group, plan_date, plan_date, skip_slot=slot)
+    exclude = set(exclude_ids)
+    if course_group == "side":
+        exclude.update(
+            side_id
+            for (side_id,) in scope(
+                session.query(MealSide.side_recipe_id).filter(
+                    MealSide.plan_date == plan_date, MealSide.meal_number == meal_number
+                ),
+                MealSide.user_id,
+                user_id,
+            )
+        )
+    ctx = engine.SlotContext(
+        date=plan_date,
+        meal_number=meal_number,
+        eaten_dates=snap.eaten_dates,
+        ingredient_last_used=snap.ingredient_last_used,
+        tag_last_used=snap.tag_last_used,
+        penalized_tags=snap.penalized_tags,
+        kept_dates=snap.kept_dates,
+        exclude_ids=exclude,
+        avoid_tags=set(avoid_tags or ()),
+        reduce_tags=set(reduce_tags or ()),
+        weights=weights or engine.Weights(),
+        hold_margin=float(settings["LEFTOVER_HOLD_MARGIN"]),
+        min_gap=course_group == "main",
+    )
+    choice, trace = choose(snap.candidates, ctx, epsilon, rng or random.Random())
+    return snap.recipes[choice.candidate.id], trace
 
 
 __all__ = [
@@ -609,6 +518,5 @@ __all__ = [
     "choose",
     "stamp_suggested",
     "generate_plan",
-    "generate_side_dish",
-    "filter_recipes",
+    "suggest_for_slot",
 ]

@@ -20,7 +20,9 @@ def test_post_plan_with_side_recipe(db_session, user, auth_client):
         plan_date.isoformat(): [
             {
                 "recipe": "Main",
+                "recipe_id": main.id,
                 "side_recipes": ["Side"],
+                "side_recipe_ids": [side.id],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,
@@ -51,7 +53,9 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
     assert resp.status_code == 200
     assert resp.json() == {
         "recipe": "Main",
+        "recipe_id": main.id,
         "side_recipes": ["Side"],
+        "side_recipe_ids": [side.id],
         "accepted": False,
         "leftover": False,
         "meal_number": 1,
@@ -64,7 +68,9 @@ def test_add_side_dish_endpoint(db_session, user, auth_client):
         plan_date.isoformat(): [
             {
                 "recipe": "Main",
+                "recipe_id": main.id,
                 "side_recipes": ["Side"],
+                "side_recipe_ids": [side.id],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,
@@ -109,7 +115,7 @@ def test_reject_then_replace_side_dish_costs_exactly_one_point(db_session, user,
 
     reject = client.post(
         "/feedback/reject",
-        json={"title": "Side1", "consumed_date": plan_date.isoformat()},
+        json={"recipe_id": side1.id, "plan_date": plan_date.isoformat()},
     )
     assert reject.status_code == 200
 
@@ -126,7 +132,7 @@ def test_reject_then_replace_side_dish_costs_exactly_one_point(db_session, user,
 
     rejected = crud.get_recipe(db_session, side1.id)
     assert rejected.score == -1
-    assert rejected.date_last_rejected == date.today()
+    assert rejected.date_last_rejected == plan_date
 
 
 def test_add_multiple_side_dishes(db_session, user, auth_client):
@@ -155,7 +161,9 @@ def test_add_multiple_side_dishes(db_session, user, auth_client):
         plan_date.isoformat(): [
             {
                 "recipe": "Main",
+                "recipe_id": main.id,
                 "side_recipes": ["Side1", "Side2"],
+                "side_recipe_ids": [side1.id, side2.id],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,
@@ -190,7 +198,9 @@ def test_swap_specific_side_dish_endpoint(db_session, user, auth_client):
     assert resp.status_code == 200
     assert resp.json() == {
         "recipe": "Main",
+        "recipe_id": main.id,
         "side_recipes": ["Side1", "Side3"],
+        "side_recipe_ids": [side1.id, side3.id],
         "accepted": False,
         "leftover": False,
         "meal_number": 1,
@@ -266,7 +276,9 @@ def test_remove_side_dish_endpoint_no_score_change(db_session, user, auth_client
     assert resp.status_code == 200
     assert resp.json() == {
         "recipe": "Main",
+        "recipe_id": main.id,
         "side_recipes": ["Side1"],
+        "side_recipe_ids": [side1.id],
         "accepted": False,
         "leftover": False,
         "meal_number": 1,

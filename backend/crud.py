@@ -6,7 +6,7 @@ from datetime import date, datetime
 import difflib
 import json
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from types import SimpleNamespace
 
@@ -77,8 +77,6 @@ __all__ = [
     "remove_meal_side",
     "accept_recipe",
     "reject_recipe",
-    "list_recipe_titles",
-    "list_planned_titles",
     "import_data",
     "export_data",
     "clear_data",
@@ -1147,11 +1145,12 @@ def meal_item(meal: Meal) -> Dict[str, Any]:
     cannot drift apart on the wire format.
     """
 
+    sides = [ms.side_recipe for ms in meal.sides if ms.side_recipe]
     return {
         "recipe": meal.recipe.title,
-        "side_recipes": [
-            ms.side_recipe.title for ms in meal.sides if ms.side_recipe
-        ],
+        "recipe_id": meal.recipe_id,
+        "side_recipes": [side.title for side in sides],
+        "side_recipe_ids": [side.id for side in sides],
         "accepted": meal.accepted,
         "leftover": meal.leftover,
         "meal_number": meal.meal_number,
@@ -1542,87 +1541,46 @@ def remove_meal_side(
 
 
 def accept_recipe(
-    session: Session, title: str, consumed_date: date, user_id: int | None = None
+    session: Session,
+    recipe_id: int,
+    user_id: int | None = None,
+    leftover: bool = False,
 ) -> Optional[Recipe]:
-    """Increment ``title``'s score.
+    """Record that the user kept ``recipe_id``: its score goes up by one.
 
-    Scoped to ``user_id`` when given so feedback only touches owned recipes.
+    Accepting a *leftover* meal bumps nothing -- one cooking batch counts as one
+    accept, and the fresh serving already earned it (Q7). Scoped to
+    ``user_id`` when given; ``None`` for a recipe that is missing or not
+    owned. Flushes only: the caller owns the transaction.
     """
 
-    # ``scalar_one_or_none`` raises ``MultipleResultsFound`` if more than one
-    # recipe shares the same title. While titles should ideally be unique,
-    # user data might contain duplicates.  Fetch the first matching recipe
-    # instead to gracefully handle such cases.
-    stmt = _scope(
-        select(Recipe).where(Recipe.title == title), Recipe.user_id, user_id
-    )
-    recipe = session.scalars(stmt).first()
+    recipe = get_recipe(session, recipe_id, user_id)
     if recipe is None:
         return None
-    recipe.score = (recipe.score or 0) + 1
-    session.commit()
-    session.refresh(recipe)
+    if not leftover:
+        recipe.score = (recipe.score or 0) + 1
+    session.flush()
     return recipe
 
 
 def reject_recipe(
-    session: Session, title: str, user_id: int | None = None
+    session: Session, recipe_id: int, plan_date: date, user_id: int | None = None
 ) -> Optional[Recipe]:
-    """Decrement ``title``'s score (scoped to ``user_id`` when given)."""
+    """Record that the user turned ``recipe_id`` down for the slot on ``plan_date``.
 
-    stmt = _scope(
-        select(Recipe).where(Recipe.title == title), Recipe.user_id, user_id
-    )
-    recipe = session.scalars(stmt).first()
+    The score drops by one (a mild preference signal, R2) and
+    ``date_last_rejected`` becomes the slot date, which starts the 4-day ban.
+    Scoped to ``user_id`` when given. Flushes only: the caller owns the
+    transaction.
+    """
+
+    recipe = get_recipe(session, recipe_id, user_id)
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) - 1
-    recipe.date_last_rejected = date.today()
-    session.commit()
-    session.refresh(recipe)
+    recipe.date_last_rejected = plan_date
+    session.flush()
     return recipe
-
-
-def list_recipe_titles(
-    session: Session,
-    courses: Sequence[str] | None = None,
-    user_id: int | None = None,
-) -> List[str]:
-    """Return recipe titles from the database.
-
-    Parameters
-    ----------
-    session:
-        SQLAlchemy session used for the query.
-    courses:
-        Optional sequence of course names. If provided, only recipes whose
-        ``course`` attribute is one of these values will be returned.
-    user_id:
-        When given, only titles owned by that user are returned.
-    """
-
-    stmt = select(Recipe.title)
-    if courses:
-        stmt = stmt.where(Recipe.course.in_(courses))
-    stmt = _scope(stmt, Recipe.user_id, user_id)
-    return session.scalars(stmt).all()
-
-
-def list_planned_titles(session: Session, user_id: int | None = None) -> set[str]:
-    """Return the distinct set of main-recipe titles across persisted plans.
-
-    This replaces the former in-memory ``_PLAN_CACHE`` lookup used when
-    suggesting rejection replacements: the DB is the single source of truth.
-    Scoped to ``user_id`` when given.
-    """
-
-    stmt = (
-        select(Recipe.title)
-        .join(Meal, Meal.recipe_id == Recipe.id)
-        .distinct()
-    )
-    stmt = _scope(stmt, Recipe.user_id, user_id)
-    return set(session.scalars(stmt).all())
 
 
 def clear_data(session: Session, user_id: int | None) -> None:

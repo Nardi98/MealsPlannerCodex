@@ -28,7 +28,9 @@ def test_post_meal_plan_conflict_requires_force(db_session, user, auth_client):
         plan_date.isoformat(): [
             {
                 "recipe": "B",
+                "recipe_id": r2.id,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,

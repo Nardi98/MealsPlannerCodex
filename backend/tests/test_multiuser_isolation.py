@@ -189,14 +189,15 @@ def test_feedback_is_scoped_to_owner(db_session):
     a, b = _two_users(db_session)
     try:
         ca = _client(db_session, a)
-        ca.post("/recipes", json=_recipe_payload("A Only"))
+        recipe_id = ca.post("/recipes", json=_recipe_payload("A Only")).json()["id"]
 
         # B cannot record feedback on a recipe it does not own.
         cb = _client(db_session, b)
-        resp = cb.post(
-            "/feedback/accept",
-            json={"title": "A Only", "consumed_date": date(2024, 1, 1).isoformat()},
-        )
-        assert resp.status_code == 404
+        for kind in ("accept", "reject"):
+            resp = cb.post(
+                f"/feedback/{kind}",
+                json={"recipe_id": recipe_id, "plan_date": date(2024, 1, 1).isoformat()},
+            )
+            assert resp.status_code == 404
     finally:
         app.dependency_overrides.clear()

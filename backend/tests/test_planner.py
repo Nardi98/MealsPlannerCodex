@@ -5,24 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from models import Recipe, Ingredient, RecipeIngredient, Tag, MealPlan, Meal
-from mealplanner.planner import generate_plan, filter_recipes
-
-
-def test_filter_recipes_excludes_out_of_season(db_session):
-    """A recipe whose only ingredient is out of season is filtered out."""
-    winter = Recipe(title="Winter", course="main")
-    winter_ing = Ingredient(name="winter-veg", season_months=[12, 1, 2])
-    winter.ingredients = [RecipeIngredient(ingredient=winter_ing, recipe=winter)]
-
-    summer = Recipe(title="Summer", course="main")
-    summer_ing = Ingredient(name="summer-veg", season_months=[6, 7, 8])
-    summer.ingredients = [RecipeIngredient(ingredient=summer_ing, recipe=summer)]
-
-    db_session.add_all([winter, summer])
-    db_session.commit()
-
-    kept = filter_recipes([winter, summer], season=7)
-    assert [r.title for r in kept] == ["Summer"]
+from mealplanner.planner import generate_plan
 
 
 def make_recipe(name, bulk=False, tags=None, season=None):

@@ -28,7 +28,9 @@ def test_get_plan_range(db_session, user, auth_client):
         start.isoformat(): [
             {
                 "recipe": "A",
+                "recipe_id": r1.id,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,
@@ -38,7 +40,9 @@ def test_get_plan_range(db_session, user, auth_client):
         second.isoformat(): [
             {
                 "recipe": "B",
+                "recipe_id": r2.id,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,

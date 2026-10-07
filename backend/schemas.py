@@ -388,32 +388,46 @@ class MealPlanGenerate(BaseModel):
 
 
 class SideDishGenerate(BaseModel):
-    """Parameters for generating a side dish recommendation."""
+    """Ask for one side for a meal, scored against that meal's date (S1)."""
 
-    epsilon: float = 0.0
-    avoid_titles: List[str] = []
+    plan_date: date
+    meal_number: int = Field(ge=1, le=2)
+    exclude_ids: List[int] = []
+    # "Add side" explores by default so repeated requests do not all agree.
+    epsilon: float = 0.25
     avoid_tags: List[str] = []
     reduce_tags: List[str] = []
     seasonality_weight: float = 1.0
     recency_weight: float = 1.0
     tag_penalty_weight: float = 1.0
     bulk_bonus_weight: float = 1.0
-    bulk_leftovers: bool = True
-    keep_days: int = 7
+
+
+class MealReplaceIn(BaseModel):
+    """Ask for the best main for one slot, given the rest of the saved plan."""
+
+    plan_date: date
+    meal_number: int = Field(ge=1, le=2)
+    exclude_ids: List[int] = []
+    avoid_tags: List[str] = []
+    reduce_tags: List[str] = []
 
 
 class FeedbackIn(BaseModel):
-    """Payload for feedback endpoints."""
+    """Payload for feedback endpoints: the recipe by id, and the slot it was on."""
 
-    title: str
-    consumed_date: date
+    recipe_id: int
+    plan_date: date
+    leftover: bool = False
 
 
 class MealOut(BaseModel):
     """Represents a meal within a plan."""
 
     recipe: str
+    recipe_id: int
     side_recipes: List[str] = Field(default_factory=list)
+    side_recipe_ids: List[int] = Field(default_factory=list)
     accepted: bool
     leftover: bool = False
     meal_number: int

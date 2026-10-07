@@ -48,13 +48,15 @@ def test_generate_and_persist_plan(db_session, user):
         day: [
             {
                 "recipe": title,
+                "recipe_id": rid,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": idx,
                 "people": 2,
             }
-            for idx, title in enumerate(meals, start=1)
+            for idx, (title, rid) in enumerate(zip(meals, id_plan[day]), start=1)
         ]
         for day, meals in plan_titles.items()
     }
@@ -97,13 +99,15 @@ def test_duplicate_titles_do_not_break_plan(db_session, user):
         day: [
             {
                 "recipe": title,
+                "recipe_id": rid,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": idx,
                 "people": 2,
             }
-            for idx, title in enumerate(meals, start=1)
+            for idx, (title, rid) in enumerate(zip(meals, id_plan[day]), start=1)
         ]
         for day, meals in plan_titles.items()
     }
@@ -127,7 +131,9 @@ def test_mark_meal_accepted(db_session, user):
         plan_date.isoformat(): [
             {
                 "recipe": r.title,
+                "recipe_id": r.id,
                 "side_recipes": [],
+                "side_recipe_ids": [],
                 "accepted": True,
                 "leftover": False,
                 "meal_number": 1,
@@ -153,7 +159,9 @@ def test_meal_with_side_recipe(db_session, user):
         plan_date.isoformat(): [
             {
                 "recipe": main.title,
+                "recipe_id": main.id,
                 "side_recipes": [side.title],
+                "side_recipe_ids": [side.id],
                 "accepted": False,
                 "leftover": False,
                 "meal_number": 1,

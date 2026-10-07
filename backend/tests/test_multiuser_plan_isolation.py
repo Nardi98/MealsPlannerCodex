@@ -106,15 +106,13 @@ def test_planner_only_draws_on_the_callers_recipes(db_session):
     assert schedule == {PLAN_DAY.isoformat(): ["A Only"]}
 
 
-def test_planned_titles_and_recipe_titles_are_scoped(db_session):
-    a, b = _two_users(db_session)
-    ra = _recipe(db_session, a, "A Main")
-    _recipe(db_session, b, "B Main")
-    crud.set_meal_plan(db_session, {PLAN_DAY.isoformat(): [ra.id]}, a.id)
+def _titles(session, user_id):
+    """The titles of the recipes ``user_id`` owns."""
+    from sqlalchemy import select
 
-    assert crud.list_planned_titles(db_session, a.id) == {"A Main"}
-    assert crud.list_planned_titles(db_session, b.id) == set()
-    assert set(crud.list_recipe_titles(db_session, user_id=b.id)) == {"B Main"}
+    from models import Recipe
+
+    return session.scalars(select(Recipe.title).where(Recipe.user_id == user_id)).all()
 
 
 def test_plan_settings_are_per_user(db_session):
@@ -164,10 +162,10 @@ def test_clear_data_only_wipes_the_callers_rows(db_session):
 
     crud.clear_data(db_session, a.id)
 
-    assert crud.list_recipe_titles(db_session, user_id=a.id) == []
+    assert _titles(db_session, a.id) == []
     assert crud.get_plan(db_session, PLAN_DAY, user_id=a.id) == {}
     # B is untouched.
-    assert set(crud.list_recipe_titles(db_session, user_id=b.id)) == {"B Main"}
+    assert set(_titles(db_session, b.id)) == {"B Main"}
 
 
 def test_import_stamps_ownership_on_the_caller(db_session):
@@ -191,8 +189,8 @@ def test_import_stamps_ownership_on_the_caller(db_session):
         io.StringIO(json.dumps(payload)), db_session, mode="merge", user_id=a.id
     )
 
-    assert set(crud.list_recipe_titles(db_session, user_id=a.id)) == {"Imported"}
-    assert crud.list_recipe_titles(db_session, user_id=b.id) == []
+    assert set(_titles(db_session, a.id)) == {"Imported"}
+    assert _titles(db_session, b.id) == []
 
 
 def test_registration_seeds_system_tags_for_the_new_user(db_session):
@@ -210,7 +208,7 @@ def test_registration_seeds_system_tags_for_the_new_user(db_session):
         assert tags.is_system is True
         assert tags.penalize_repetition is True
         # ...and the account is otherwise empty.
-        assert crud.list_recipe_titles(db_session, user_id=new_id) == []
+        assert _titles(db_session, new_id) == []
     finally:
         app.dependency_overrides.clear()
 
