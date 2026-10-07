@@ -10,18 +10,12 @@ DEFAULT_PLAN_SETTINGS: Dict[str, Any] = {
     "keep_days": 7,
     # Scoring weight persisted per user (edited from the profile, not per plan).
     "tag_penalty_weight": 1.0,
-    # New leftover and scheduling parameters
+    # Leftover scheduling
     "LEFTOVER_REPEAT_DEFAULT": 1,
     "LEFTOVER_REPEAT_BY_RECIPE": {},
     "LEFTOVER_SPACING_GAP": 2,
     "MAX_LEFTOVERS_PER_DAY": 2,
-    "MAX_LEFTOVERS_PER_WEEK": 7,
-    "LEFTOVER_ACCEPT_WEIGHT": 1.0,
     "LEFTOVER_DAYPART_PREF": {},
-    "LEFTOVER_DAYPART_WEIGHT": 1.0,
-    "PROTECT_EXPLORE_SLOTS": False,
-    "SOFT_HOLD_PENALTY": 1.0,
-    "EXPLORE_PROTECTION_COST": 1.0,
     "MEAL_NUMBER_TO_DAYPART": {1: "LUNCH", 2: "DINNER"},
     # Points a held leftover slot adds to its recipe: only a dish more than this
     # much better takes the slot (Q6).

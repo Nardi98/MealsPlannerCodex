@@ -1225,7 +1225,13 @@ def get_plan_settings(
     if session is not None and user_id is not None:
         user = session.get(User, user_id)
         if user is not None:
-            settings.update(user.plan_settings or {})
+            # Only keys that still exist: an override stored before a setting
+            # was retired must not resurface.
+            settings.update(
+                (key, value)
+                for key, value in (user.plan_settings or {}).items()
+                if key in DEFAULT_PLAN_SETTINGS
+            )
     return settings
 
 
