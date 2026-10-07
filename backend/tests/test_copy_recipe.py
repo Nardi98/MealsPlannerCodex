@@ -181,12 +181,12 @@ def test_the_copy_starts_private_with_no_page_and_no_copies(
 def test_planner_history_does_not_cross_accounts(db_session, source, copier):
     """CP-7."""
     source.score = 9.5
-    source.date_last_consumed = date(2026, 1, 1)
+    source.date_last_suggested = date(2026, 1, 1)
     source.date_last_rejected = date(2026, 2, 1)
     db_session.flush()
     made = copy_module.copy_recipe(db_session, source, copier)
     assert made.score is None
-    assert made.date_last_consumed is None
+    assert made.date_last_suggested is None
     assert made.date_last_rejected is None
 
 

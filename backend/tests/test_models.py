@@ -42,7 +42,7 @@ def test_recipe_insert_defaults(db_session):
     assert r.id is not None
     assert r.procedure is None
     assert r.score is None
-    assert r.date_last_consumed is None
+    assert r.date_last_suggested is None
     assert r.bulk_prep is False
     assert r.course == "main"
     # Quantities are stored as authored, for this many people.
@@ -215,19 +215,19 @@ def test_optional_field_and_defaults_on_update(db_session):
     db_session.refresh(r)
 
     assert r.bulk_prep is False
-    assert r.date_last_consumed is None
+    assert r.date_last_suggested is None
     assert r.course == "main"
 
     r.title = "Tomato Soup"
-    r.date_last_consumed = date(2023, 10, 1)
+    r.date_last_suggested = date(2023, 10, 1)
     db_session.commit()
     db_session.refresh(r)
 
-    assert r.date_last_consumed == date(2023, 10, 1)
+    assert r.date_last_suggested == date(2023, 10, 1)
     assert r.bulk_prep is False
 
-    r.date_last_consumed = None
+    r.date_last_suggested = None
     db_session.commit()
     db_session.refresh(r)
 
-    assert r.date_last_consumed is None
+    assert r.date_last_suggested is None

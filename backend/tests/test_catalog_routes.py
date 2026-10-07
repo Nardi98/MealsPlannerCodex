@@ -27,7 +27,7 @@ INGREDIENT_KEYS = {"name", "quantity", "unit"}
 
 #: API-2/4/8 and PRV-3: none of these may appear anywhere in a catalog body.
 FORBIDDEN_KEYS = {
-    "procedure", "score", "date_last_consumed", "date_last_rejected",
+    "procedure", "score", "date_last_suggested", "date_last_rejected",
     "copy_count", "visibility", "user_id", "email", "username",
     "source_user_id", "source_author_username", "owner",
 }

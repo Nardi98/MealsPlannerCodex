@@ -46,7 +46,7 @@ def rich_recipe(db_session, user):
     )
     import datetime as _dt
 
-    recipe.date_last_consumed = _dt.date(2026, 1, 2)
+    recipe.date_last_suggested = _dt.date(2026, 1, 2)
     recipe.date_last_rejected = _dt.date(2026, 1, 3)
     ing = crud.create_ingredient(
         db_session,
@@ -114,7 +114,7 @@ def test_404_also_sets_no_cookie_and_stays_noindex(page_client):
 # ---------------------------------------------------------------------------
 FORBIDDEN_SUBSTRINGS = (
     "bulk_prep",
-    "date_last_consumed",
+    "date_last_suggested",
     "date_last_rejected",
     "score",
     "user_id",

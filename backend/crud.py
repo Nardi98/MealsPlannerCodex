@@ -1544,7 +1544,7 @@ def remove_meal_side(
 def accept_recipe(
     session: Session, title: str, consumed_date: date, user_id: int | None = None
 ) -> Optional[Recipe]:
-    """Increment ``title``'s score and update ``date_last_consumed``.
+    """Increment ``title``'s score.
 
     Scoped to ``user_id`` when given so feedback only touches owned recipes.
     """
@@ -1560,7 +1560,6 @@ def accept_recipe(
     if recipe is None:
         return None
     recipe.score = (recipe.score or 0) + 1
-    recipe.date_last_consumed = consumed_date
     session.commit()
     session.refresh(recipe)
     return recipe
@@ -1689,7 +1688,6 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
     database to assign.
     """
 
-    consumed = rec_info.get("date_last_consumed")
     return Recipe(
         id=rec_id,
         title=rec_info["title"],
@@ -1699,7 +1697,6 @@ def _recipe_from_payload(rec_info: Dict[str, Any], rec_id: Optional[int] = None)
         image_url=rec_info.get("image_url"),
         servings=_payload_servings(rec_info),
         score=rec_info.get("score"),
-        date_last_consumed=date.fromisoformat(consumed) if consumed else None,
     )
 
 
@@ -1961,11 +1958,6 @@ def export_data(session: Optional[Session], user_id: int | None) -> str:
                     "image_url": recipe.image_url,
                     "servings": recipe.servings,
                     "score": recipe.score,
-                    "date_last_consumed": (
-                        recipe.date_last_consumed.isoformat()
-                        if recipe.date_last_consumed
-                        else None
-                    ),
                     "ingredients": [
                         {
                             "id": ri.ingredient.id,

@@ -131,7 +131,7 @@ def duplicate(
         source_recipe_title=source.title,
         copied_at=datetime.utcnow(),
     )
-    # CP-7: score, date_last_consumed, and date_last_rejected are absent above
+    # CP-7: score, date_last_suggested, and date_last_rejected are absent above
     # and must stay absent. No planner history crosses accounts.
 
     for link in source.ingredients:

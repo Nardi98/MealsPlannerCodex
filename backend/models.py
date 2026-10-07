@@ -369,7 +369,11 @@ class Recipe(Base):
     procedure = Column(Text)
     bulk_prep = Column(Boolean, default=False)
     score = Column(Float)
-    date_last_consumed = Column(Date)
+    # Planner memory. ``date_last_suggested`` is the latest slot date the planner
+    # proposed this recipe for (kept or not): it drives the explore draw.
+    # ``date_last_rejected`` is the slot date of the latest rejection: it anchors
+    # the rejection ban.
+    date_last_suggested = Column(Date)
     date_last_rejected = Column(Date)
     course = Column(String, nullable=False, default="main")
     image_url = Column(String, nullable=True)
@@ -1065,3 +1069,26 @@ class FeedbackTag(Base):
     @validates("name")
     def _normalize_name(self, _key, value):
         return normalize_feedback_tag_name(value)
+
+
+class DevLogEntry(Base):
+    """One developer-log event, owned by the user whose action produced it.
+
+    A generic trace for debugging, never read by the app itself: ``channel``
+    names the area (``planner`` first), ``event`` what happened, and ``payload``
+    carries the detail. Written and pruned by ``devlog.py`` only.
+    """
+
+    __tablename__ = "dev_log_entries"
+
+    id = Column(Integer, primary_key=True)
+    user_id = _owner_fk_column(index=False)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    channel = Column(String(32), nullable=False)
+    event = Column(String(64), nullable=False)
+    payload = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        # Leads with ``user_id``, so it also serves the ownership filter.
+        Index("ix_dev_log_entries_user_channel_created", "user_id", "channel", "created_at"),
+    )

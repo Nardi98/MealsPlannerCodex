@@ -133,7 +133,7 @@ def test_a_seeded_copy_carries_no_planner_history(db_session):
     for recipe in db_session.execute(select(Recipe)).scalars():
         if recipe.source_recipe_id is not None:
             assert recipe.score is None
-            assert recipe.date_last_consumed is None
+            assert recipe.date_last_suggested is None
             assert recipe.date_last_rejected is None
 
 

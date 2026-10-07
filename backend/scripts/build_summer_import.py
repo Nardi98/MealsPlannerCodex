@@ -70,7 +70,6 @@ def build_payload():
             # Unscored and never eaten: the planner should meet these the way
             # it meets any new recipe, not with a history invented here.
             "score": None,
-            "date_last_consumed": None,
             "ingredients": [_ingredient_line(*line) for line in recipe["ingredients"]],
             "tags": [tag_ids[t] for t in recipe["tags"]],
             "favorite_side_ids": [],

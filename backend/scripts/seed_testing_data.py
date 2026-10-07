@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import NamedTuple
 from uuid import uuid4
 
@@ -49,6 +49,7 @@ from models import (  # noqa: E402
     CatalogEntry,
     CatalogImportBatch,
     CatalogImportItem,
+    DevLogEntry,
     FeedbackItem,
     FeedbackTag,
     Ingredient,
@@ -1029,6 +1030,48 @@ def link_user_feedback(session, users_by_username: dict[str, User]) -> None:
         item.ref_code = f"FB-{item.id}"
 
 
+def link_planner_memory(session, recipes_by_title: dict[str, Recipe], user: User) -> None:
+    """Give a few demo mains planner memory and the account a planner log.
+
+    Some mains were suggested recently and one was rejected two days ago, so its
+    4-day ban is live today; the log shows a ``generate`` run and the rejection
+    that followed it, in the shape ``devlog.record`` writes. Flushes, never
+    commits: ``populate`` owns the commit.
+    """
+    today = date.today()
+    mains = [r for r in recipes_by_title.values() if r.course == "main"][:4]
+    for offset, recipe in enumerate(mains):
+        recipe.date_last_suggested = today - timedelta(days=offset + 1)
+    rejected = mains[0]
+    rejected.date_last_rejected = today - timedelta(days=2)
+
+    slot = {
+        "date": (today - timedelta(days=2)).isoformat(),
+        "meal_number": 1,
+        "chosen": {"id": rejected.id, "title": rejected.title},
+        "mode": "exploit",
+        "rank": 0,
+        "breakdown": {"base": 4.0, "seasonality": 5.0, "total": 9.0},
+        "runners_up": [
+            {"id": r.id, "title": r.title, "breakdown": {"total": 9.0 - i - 1}}
+            for i, r in enumerate(mains[1:])
+        ],
+        "excluded": {},
+        "hold": None,
+    }
+    session.add_all([
+        DevLogEntry(
+            user_id=user.id, channel="planner", event="generate",
+            payload={"params": {"start": slot["date"], "days": 1}, "slots": [slot]},
+        ),
+        DevLogEntry(
+            user_id=user.id, channel="planner", event="feedback",
+            payload={"kind": "reject", "recipe_id": rejected.id, "plan_date": slot["date"]},
+        ),
+    ])
+    session.flush()
+
+
 # Dropping every table is irreversible, and ``DATABASE_URL`` points at whatever
 # database the process was handed -- on Railway, the deployed one. Requiring an
 # explicit opt-in means the destruction can only happen where someone put the
@@ -1125,6 +1168,7 @@ def populate(session) -> None:
 
     link_favorite_sides(recipes_by_title)
     session.flush()
+    link_planner_memory(session, recipes_by_title, demo_user)
     link_shares(session, recipes_by_title, users_by_username, demo_user)
     link_copies(
         session, recipes_by_title, users_by_username, ingredients, demo_user

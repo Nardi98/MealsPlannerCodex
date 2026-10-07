@@ -206,12 +206,12 @@ def test_the_copy_carries_no_planner_history(
     """CP-7."""
     source = make_recipe("Ragu")
     source.score = 9.0
-    source.date_last_consumed = datetime.utcnow().date()
+    source.date_last_suggested = datetime.utcnow().date()
     db_session.flush()
     share, _ = _share_to(db_session, source, user, recipient_email=recipient.email)
     body = client.post(f"/shared-with-me/{share.id}/copy").json()
     made = db_session.get(models.Recipe, body["id"])
-    assert made.date_last_consumed is None
+    assert made.date_last_suggested is None
     assert made.date_last_rejected is None
     assert made.score != 9.0
 

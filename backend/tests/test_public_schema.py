@@ -69,7 +69,7 @@ def _seed(db_session, user, *, image_url=None, procedure="Mix well."):
         image_url=image_url,
         bulk_prep=True,
         score=0.87,
-        date_last_consumed=datetime.date(2026, 1, 1),
+        date_last_suggested=datetime.date(2026, 1, 1),
         date_last_rejected=datetime.date(2026, 2, 2),
     )
     ing = crud.get_or_create_ingredient(
@@ -132,7 +132,7 @@ def test_from_recipe_dump_never_contains_private_columns(db_session, user):
     for forbidden in (
         "score",
         "bulk_prep",
-        "date_last_consumed",
+        "date_last_suggested",
         "date_last_rejected",
         "user_id",
         "email",

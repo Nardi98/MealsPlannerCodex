@@ -293,7 +293,7 @@ def test_page_contains_no_script_element_of_its_own():
 PRV3_FORBIDDEN = (
     "score",
     "bulk_prep",
-    "date_last_consumed",
+    "date_last_suggested",
     "date_last_rejected",
     "plan_settings",
     "default_people",

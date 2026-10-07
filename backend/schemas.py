@@ -306,7 +306,6 @@ class RecipeOut(BaseModel):
     image_url: Optional[str] = None
     servings: int = 1
     score: Optional[float] = None
-    date_last_consumed: Optional[date] = None
     ingredients: List[IngredientOut] = []
     tags: List[TagOut] = []
     # Read off ``Recipe.favorite_side_ids``, which flattens the relationship.

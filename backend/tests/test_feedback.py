@@ -30,7 +30,6 @@ def test_accept_recipe_updates_score_and_date(db_session):
     crud.accept_recipe(db_session, "Test", consumed)
     db_session.refresh(r)
     assert r.score == 1
-    assert r.date_last_consumed == consumed
 
 
 def test_reject_recipe_updates_score(db_session):
@@ -43,7 +42,6 @@ def test_reject_recipe_updates_score(db_session):
     crud.reject_recipe(db_session, "Test2")
     db_session.refresh(r)
     assert r.score == -1
-    assert r.date_last_consumed is None
 
 
 def test_reject_recipe_stamps_date_last_rejected(db_session):
@@ -88,10 +86,7 @@ def test_accept_recipe_handles_duplicates(db_session):
     db_session.refresh(r1)
     db_session.refresh(r2)
 
-    scores = {r1.score, r2.score}
-    dates = {r1.date_last_consumed, r2.date_last_consumed}
-    assert scores == {0, 1}
-    assert dates == {None, consumed}
+    assert {r1.score, r2.score} == {0, 1}
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +116,6 @@ def test_feedback_endpoints_return_unique_replacement(db_session, user, auth_cli
     assert resp.status_code == 200
     db_session.refresh(a)
     assert a.score == 1
-    assert a.date_last_consumed == consumed
 
     resp = client.post(
         "/feedback/reject", json={"title": "A", "consumed_date": consumed.isoformat()}

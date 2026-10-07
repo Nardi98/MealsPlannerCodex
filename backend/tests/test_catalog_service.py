@@ -543,7 +543,7 @@ def test_adopt_creates_a_private_copy_with_the_full_snapshot(
     source = make_catalog_recipe("Stew", course="first-course", bulk_prep=True, servings=4,
                                  procedure="Simmer for two hours.")
     source.score = 9.5
-    source.date_last_consumed = date(2026, 1, 1)
+    source.date_last_suggested = date(2026, 1, 1)
     source.date_last_rejected = date(2026, 2, 1)
     db_session.flush()
 
@@ -568,7 +568,7 @@ def test_adopt_creates_a_private_copy_with_the_full_snapshot(
     )
     # ADO-10: no planner history crosses accounts.
     assert made.score is None
-    assert made.date_last_consumed is None
+    assert made.date_last_suggested is None
     assert made.date_last_rejected is None
 
 

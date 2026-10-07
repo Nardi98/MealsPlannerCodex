@@ -130,6 +130,7 @@ def test_export_includes_related_objects(db_session, user):
     assert meal_info["recipe_id"] == data["recipes"][0]["id"]
     assert meal_info["accepted"] is True
     assert meal_info["leftover"] is False
+    assert "date_last_consumed" not in data["recipes"][0]
 
 
 _FULL_RECIPE_PAYLOAD = {
@@ -141,6 +142,7 @@ _FULL_RECIPE_PAYLOAD = {
     "bulk_prep": True,
     "course": "first-course",
     "score": 3.5,
+    # Exports written before the column was dropped still carry it; it is ignored.
     "date_last_consumed": "2024-02-03",
     "ingredients": [],
     "tags": [],
@@ -153,7 +155,7 @@ def _assert_full_recipe(recipe):
     assert recipe.bulk_prep is True
     assert recipe.course == "first-course"
     assert recipe.score == 3.5
-    assert recipe.date_last_consumed == date(2024, 2, 3)
+    assert not hasattr(recipe, "date_last_consumed")
     assert recipe.servings == 4
 
 
