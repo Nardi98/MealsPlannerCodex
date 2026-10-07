@@ -156,6 +156,17 @@ def test_user_feedback_imports_nothing_of_ours_but_models_and_storage():
     assert (imported & ours) - {"models", "storage"} == set()
 
 
+# --------------------------------------------------------------------------
+# Developer log: ``devlog`` is a leaf any area may call, so it must not reach
+# back into any of them -- only ``models`` and ``scoping``.
+# --------------------------------------------------------------------------
+def test_devlog_imports_nothing_of_ours_but_models_and_scoping():
+    ours = {path.stem for path in _production_modules()} | {"mealplanner", "scripts", "tests"}
+    imported = {name.split(".")[0] for name in _imported_modules(BACKEND_ROOT / "devlog.py")}
+
+    assert (imported & ours) - {"models", "scoping"} == set()
+
+
 def _user_scoped_functions(path):
     """``{name: index of user_id among positional params, or None if keyword-only}``."""
     scoped = {}

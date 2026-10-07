@@ -33,6 +33,7 @@ import catalog_admin_routes
 import catalog_import_routes
 import catalog_routes
 import crud
+import log_admin_routes
 import mailer
 import models
 import ops_routes
@@ -117,6 +118,7 @@ app.include_router(catalog_import_routes.router)
 app.include_router(alpha_routes.router)  # ALPHA-GATE: closed-alpha allowlist admin
 app.include_router(user_feedback_routes.router)
 app.include_router(user_feedback_admin_routes.router)
+app.include_router(log_admin_routes.router)
 
 # D-4 / RA-5: the public share page's stylesheet, served without JavaScript and
 # without authentication. ``static`` is on the UN-4 reserved list so no username
