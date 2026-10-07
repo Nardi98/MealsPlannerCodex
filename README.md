@@ -16,23 +16,33 @@
     -   Ingredients also store their **season_months** (list of months
         1--12).
 2.  **Meal plan generator**
-    -   Input: start date, end date, meals per day, bulk leftovers toggle, keep days field.
-    -   For each slot, propose a recipe using a **scoring function**:
-        -   Base preference score (per-recipe, updated on
-            accept/reject).
-        -   Seasonality (all ingredients in season → bonus, else
-            penalty).
-        -   Recency penalty (recently eaten recipes are down-weighted).
-        -   Tag penalties (avoid = exclude, reduce = down-weight).
-        -   Bulk-prep bonus when leftovers are useful.
-    -   **Exploration vs exploitation** via ε-greedy (user controls ε).
-    -   Leftovers automatically placed within a "keep days" window.
+    -   Input: start date (today or later), end date, meals per day, bulk
+        leftovers toggle, keep days field.
+    -   Every proposal -- a week, a replacement for a rejected main, "Add
+        side" -- runs through one **selection engine**
+        (`backend/mealplanner/engine.py`) in fixed stages:
+        1.  **Hard rules** remove a candidate: avoid-tags, fully out of
+            season, rejected within the last 4 days (the ban), or a main
+            served within 5 days either side (the minimum gap, which a
+            fridge ingredient or a strictly seasonal dish may break).
+        2.  **Scoring** sums named terms: base preference, seasonality,
+            recency (from the latest meal on or before the slot), bulk-prep
+            bonus, fridge bonus, reduce-tags, ingredient and tag repetition,
+            and the leftover `hold`.
+        3.  **Selection** takes the top score, or with probability ε draws a
+            dish weighted by the days since it was last suggested (a dish
+            kept on a plan within 7 days is never drawn).
+    -   Leftovers are reserved within a "keep days" window: a held slot
+        gives its dish +15, so only a dish more than 15 points better
+        takes it.
     -   User can accept, reject, or swap each slot.
 3.  **Learning**
-    -   Recipes have `score` and `date_last_consumed` stored directly in
-        the DB.
-    -   Accept → `score += +1`, update `date_last_consumed`.
-    -   Reject → `score += -1`.
+    -   Recipes store `score`, `date_last_suggested` and
+        `date_last_rejected` directly in the DB.
+    -   Accept → `score += +1` (a leftover accept adds nothing: the batch
+        counted once).
+    -   Reject → `score += -1` and a 4-day ban from the rejected slot's
+        date.
     -   Sliders allow adjusting weights (seasonality, recency, tags,
         bulk-prep).
 4.  **Seasonality**
@@ -239,7 +249,8 @@ constraint restricts `meal_number` to `1` or `2`.
 ### Generating a plan
 
 `POST /meal-plans/generate` creates a temporary plan without saving it. The
-payload controls the date range to generate and how many meals per day:
+payload controls the date range to generate and how many meals per day. A
+range starting before today is refused with `422`:
 
 ```json
 {
@@ -292,6 +303,25 @@ model mapping dates to recipe IDs:
 If any of the supplied `plan_date` values already exist, the API returns
 `409` with a `conflicts` array. Resubmit the request with
 `?force=true` to overwrite existing plans.
+
+### Replacing one main
+
+`POST /meal-plans/replace` proposes the best main for one slot of the saved
+plan, never one of `exclude_ids`:
+
+```json
+{"plan_date": "2024-01-01", "meal_number": 1, "exclude_ids": [4]}
+```
+
+It answers `{"id": 7, "title": "Risotto"}`, or `400` when nothing is
+eligible. `POST /side-dishes/generate` does the same for a side, given the
+meal's `plan_date` and `meal_number`.
+
+### Feedback
+
+`POST /feedback/accept` and `POST /feedback/reject` take
+`{"recipe_id": 4, "plan_date": "2024-01-01"}`; an accept may add
+`"leftover": true`. A reject suggests nothing: ask `/meal-plans/replace`.
 
 ### Toggling meal acceptance
 
