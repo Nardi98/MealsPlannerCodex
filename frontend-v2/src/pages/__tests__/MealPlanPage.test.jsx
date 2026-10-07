@@ -12,6 +12,7 @@ import { mealPlansApi } from '../../api/mealPlansApi'
 import { tagsApi } from '../../api/tagsApi'
 import { feedbackApi } from '../../api/feedbackApi'
 import { recipesApi } from '../../api/recipesApi'
+import { addDays, format } from 'date-fns'
 
 vi.mock('../../api/mealPlansApi', () => ({
   mealPlansApi: {
@@ -23,6 +24,7 @@ vi.mock('../../api/mealPlansApi', () => ({
     addSide: vi.fn(),
     replaceSide: vi.fn(),
     removeSide: vi.fn(),
+    replace: vi.fn(),
   },
 }))
 
@@ -89,7 +91,9 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
   const startIso = start.toISOString().slice(0, 10)
 
   mealPlansApi.create.mockResolvedValue()
-  feedbackApi.rejectRecipe.mockResolvedValue('Replacement')
+  feedbackApi.rejectRecipe.mockResolvedValue()
+  mealPlansApi.replace.mockResolvedValue({ id: 2, title: 'Replacement' })
+  // The meal modal lists the recipes for its swap picker.
   recipesApi.fetchAll.mockResolvedValue([
     { id: 1, title: 'Bulk' },
     { id: 2, title: 'Replacement' },
@@ -97,11 +101,11 @@ test('rejecting a leftover meal clears leftover flag for replacement', async () 
   // Mount fetch returns the leftover; the post-reject refetch returns the replacement.
   mealPlansApi.fetchRange
     .mockResolvedValueOnce({
-      [startIso]: [{ recipe: 'Bulk', side_recipes: [], accepted: false, leftover: true }],
+      [startIso]: [{ recipe: 'Bulk', recipe_id: 1, side_recipes: [], accepted: false, leftover: true }],
     })
     .mockResolvedValueOnce({
       [startIso]: [
-        { recipe: 'Replacement', side_recipes: [], accepted: false, leftover: false },
+        { recipe: 'Replacement', recipe_id: 2, side_recipes: [], accepted: false, leftover: false },
       ],
     })
 
@@ -140,9 +144,9 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
   const start = new Date(today)
   start.setDate(today.getDate() + diff)
   const startIso = start.toISOString().slice(0, 10)
-  const end = new Date(start)
-  end.setDate(start.getDate() + 6)
-  const endIso = end.toISOString().slice(0, 10)
+  // The form's default range runs from today (never earlier, F3) to Sunday.
+  const rangeStart = format(today, 'yyyy-MM-dd')
+  const endIso = format(addDays(start, 6), 'yyyy-MM-dd')
 
   mealPlansApi.fetchRange.mockReset()
   mealPlansApi.generate.mockReset()
@@ -182,7 +186,7 @@ test('regeneration waits for overwrite confirmation before proceeding', async ()
   await user.click(screen.getByRole('button', { name: /overwrite/i }))
 
   await waitFor(() => {
-    expect(mealPlansApi.deleteRange).toHaveBeenCalledWith(startIso, endIso)
+    expect(mealPlansApi.deleteRange).toHaveBeenCalledWith(rangeStart, endIso)
   })
   await waitFor(() => {
     expect(mealPlansApi.generate).toHaveBeenCalledTimes(1)

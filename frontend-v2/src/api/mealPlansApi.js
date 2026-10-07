@@ -50,6 +50,16 @@ export const mealPlansApi = {
         accepted,
       }),
     }),
+  // The best main for one slot of the saved plan, never one of `excludeIds`.
+  replace: (planDate, mealNumber, excludeIds = []) =>
+    request('/meal-plans/replace', {
+      method: 'POST',
+      body: JSON.stringify({
+        plan_date: planDate,
+        meal_number: mealNumber,
+        exclude_ids: excludeIds,
+      }),
+    }),
   swap: (a, b) =>
     request('/meal-plans/swap', {
       method: 'POST',

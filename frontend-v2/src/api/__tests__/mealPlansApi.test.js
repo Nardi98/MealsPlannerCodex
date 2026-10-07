@@ -94,3 +94,15 @@ test('deleteRange deletes on the /meal-plans path', async () => {
   ])
   expect(globalThis.fetch.mock.calls[0][1]).toMatchObject({ method: 'DELETE' })
 })
+
+test('replace asks for the best main for one slot, minus the excluded ids', async () => {
+  respondWith({ id: 8, title: 'Risotto' })
+
+  const replacement = await mealPlansApi.replace('2026-03-10', 1, [4, 5])
+
+  const [url, opts] = globalThis.fetch.mock.calls[0]
+  expect(url).toContain('/meal-plans/replace')
+  expect(opts.method).toBe('POST')
+  expect(JSON.parse(opts.body)).toEqual({ plan_date: '2026-03-10', meal_number: 1, exclude_ids: [4, 5] })
+  expect(replacement).toEqual({ id: 8, title: 'Risotto' })
+})

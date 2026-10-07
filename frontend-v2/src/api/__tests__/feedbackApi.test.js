@@ -8,41 +8,36 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-test('acceptRecipe posts title and consumed_date', async () => {
+const respondWith = (body) => {
   globalThis.fetch = vi.fn(() =>
-    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+    Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) })
   )
+}
 
-  await feedbackApi.acceptRecipe('Test', '2024-01-01')
+const sentBody = () => JSON.parse(globalThis.fetch.mock.calls[0][1].body)
 
-  const [url, opts] = globalThis.fetch.mock.calls[0]
-  expect(url).toContain('/feedback/accept')
-  expect(opts).toEqual({
-    method: 'POST',
-    credentials: 'include',
-    body: JSON.stringify({ title: 'Test', consumed_date: '2024-01-01' }),
-    headers: { 'Content-Type': 'application/json' },
-  })
+test('acceptRecipe posts the recipe id and the slot date', async () => {
+  respondWith({ status: 'ok' })
+
+  await feedbackApi.acceptRecipe(4, '2024-01-01')
+
+  expect(globalThis.fetch.mock.calls[0][0]).toContain('/feedback/accept')
+  expect(sentBody()).toEqual({ recipe_id: 4, plan_date: '2024-01-01', leftover: false })
 })
 
-test('rejectRecipe posts title and consumed_date', async () => {
-  globalThis.fetch = vi.fn(() =>
-    Promise.resolve({
-      ok: true,
-      status: 200,
-      json: () => Promise.resolve({ replacement: 'Alt' }),
-    })
-  )
+test('acceptRecipe flags a leftover so the score is not bumped twice', async () => {
+  respondWith({ status: 'ok' })
 
-  const result = await feedbackApi.rejectRecipe('Bad', '2024-01-02')
+  await feedbackApi.acceptRecipe(4, '2024-01-01', { leftover: true })
 
-  const [url, opts] = globalThis.fetch.mock.calls[0]
-  expect(url).toContain('/feedback/reject')
-  expect(opts).toEqual({
-    method: 'POST',
-    credentials: 'include',
-    body: JSON.stringify({ title: 'Bad', consumed_date: '2024-01-02' }),
-    headers: { 'Content-Type': 'application/json' },
-  })
-  expect(result).toBe('Alt')
+  expect(sentBody()).toEqual({ recipe_id: 4, plan_date: '2024-01-01', leftover: true })
+})
+
+test('rejectRecipe posts the recipe id and the slot date', async () => {
+  respondWith({ status: 'ok' })
+
+  await feedbackApi.rejectRecipe(7, '2024-01-02')
+
+  expect(globalThis.fetch.mock.calls[0][0]).toContain('/feedback/reject')
+  expect(sentBody()).toEqual({ recipe_id: 7, plan_date: '2024-01-02' })
 })

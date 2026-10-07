@@ -105,3 +105,16 @@ test('a half-finished range does not carry over to the next open', () => {
   fireEvent.click(within(screen.getByRole('grid')).getByRole('button', { name: /January 12(?!\d)/ }))
   expect(onChange).toHaveBeenLastCalledWith({ start: '2024-01-12', end: '2024-01-12' })
 })
+
+test('days before minDate cannot be picked', () => {
+  const onChange = vi.fn()
+  render(
+    <DateRangePicker start="2024-01-10" end="2024-01-12" minDate={new Date(2024, 0, 10)} onChange={onChange} />
+  )
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+  const grid = screen.getByRole('grid')
+
+  const before = within(grid).getByRole('button', { name: /January 9(?!\d)/ })
+  expect(before).toBeDisabled()
+  expect(within(grid).getByRole('button', { name: /January 10(?!\d)/ })).not.toBeDisabled()
+})

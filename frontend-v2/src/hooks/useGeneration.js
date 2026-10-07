@@ -1,6 +1,10 @@
 import React from 'react'
+import { addDays, format, max } from 'date-fns'
 import { mealPlansApi } from '../api/mealPlansApi'
-import { startOfWeek, fmt } from './useMealPlan'
+import { startOfWeek } from './useMealPlan'
+
+// The local calendar day, `YYYY-MM-DD`. Plans start today at the earliest (F3).
+const todayIso = () => format(new Date(), 'yyyy-MM-dd')
 
 // Leftover preset -> the backend leftover/bulk knobs it stands for. Fresh means
 // "cook every meal" (no leftovers); Lots leans hard on batch-cooked reuse.
@@ -39,13 +43,13 @@ export const buildGenerateParams = (form) => {
   }
 }
 
+// The rest of this week: from today (never an earlier day of the week, which
+// generation would refuse) through Sunday.
 const defaultForm = () => {
-  const start = startOfWeek(new Date())
-  const end = startOfWeek(new Date())
-  end.setDate(end.getDate() + 6)
+  const monday = startOfWeek(new Date())
   return {
-    start: fmt(start),
-    end: fmt(end),
+    start: format(max([monday, new Date()]), 'yyyy-MM-dd'),
+    end: format(addDays(monday, 6), 'yyyy-MM-dd'),
     meals_per_day: 2,
     epsilon: 0.25,
     leftovers: 'some',
@@ -151,6 +155,10 @@ export function useGeneration({ setPlan }) {
       const days = (new Date(form.end) - new Date(form.start)) / 86400000 + 1
       if (days < 1) {
         setError('End date cannot be before start date')
+        return
+      }
+      if (form.start < todayIso()) {
+        setError('Start date cannot be before today')
         return
       }
       const params = buildGenerateParams(form)

@@ -22,7 +22,8 @@ const parse = (s) => (s ? parseISO(s) : undefined)
  * app gives controls that are too big to anchor.
  *
  * `start`/`end` are `YYYY-MM-DD` strings and `onChange({ start, end })` returns
- * the same shape, matching the existing form/page state.
+ * the same shape, matching the existing form/page state. Days before `minDate`
+ * (a `Date`), when given, cannot be picked.
  */
 export default function DateRangePicker({
   start,
@@ -31,6 +32,7 @@ export default function DateRangePicker({
   label,
   placeholder = 'Select dates',
   align = 'left',
+  minDate,
 }) {
   const [open, setOpen] = React.useState(false)
   const [anchor, setAnchor] = React.useState(null)
@@ -89,6 +91,7 @@ export default function DateRangePicker({
       weekStartsOn={1}
       defaultMonth={from || new Date()}
       selected={{ from, to }}
+      disabled={minDate ? { before: minDate } : undefined}
       onSelect={(_range, triggerDate) => handleDayPick(triggerDate)}
     />
   )

@@ -2,19 +2,28 @@ import { mealPlansApi } from '../api/mealPlansApi'
 import { feedbackApi } from '../api/feedbackApi'
 import { recipesApi } from '../api/recipesApi'
 import { sideDishesApi } from '../api/sideDishesApi'
+import { mealNumberOf } from './useMealPlan'
 
 /**
  * Per-meal side-dish actions (add / reject / remove / swap). Each handler takes
  * an explicit `cell` ({ date, mealIndex }) so the page can drive them from the
- * active cell. Mutates the shared plan via the provided `setPlan`.
+ * active cell. Mutates the shared plan via the provided `setPlan`, keeping a
+ * meal's `side_recipes` titles and `side_recipe_ids` in step.
  */
 export function useSideDishes({ plan, setPlan, setError }) {
   const updateSides = (date, mealIndex, mapper) =>
     setPlan((p) => ({
       ...p,
-      [date]: p[date].map((m, i) =>
-        i === mealIndex ? { ...m, side_recipes: mapper(m.side_recipes || []) } : m
-      ),
+      [date]: p[date].map((m, i) => {
+        if (i !== mealIndex) return m
+        const titles = m.side_recipes || []
+        const sides = mapper(titles.map((title, idx) => ({ title, id: m.side_recipe_ids?.[idx] })))
+        return {
+          ...m,
+          side_recipes: sides.map((s) => s.title),
+          side_recipe_ids: sides.map((s) => s.id),
+        }
+      }),
     }))
 
   const handleAddSide = async (cell) => {
@@ -22,17 +31,19 @@ export function useSideDishes({ plan, setPlan, setError }) {
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
+    const mealNumber = mealNumberOf(meal, mealIndex)
     try {
-      const existing = meal.side_recipes || []
-      const avoid = [meal.recipe, ...existing]
-      const generated = await sideDishesApi.generate({ avoid_titles: avoid })
+      // Scored against this meal's date; the server leaves out the sides
+      // already on the plate.
+      const generated = await sideDishesApi.generate(date, mealNumber, {
+        excludeIds: meal.side_recipe_ids || [],
+      })
       if (!generated) {
         setError('No unique side dish available.')
         return
       }
-      const { id, title } = generated
-      await mealPlansApi.addSide(date, mealIndex + 1, id, meal.leftover)
-      updateSides(date, mealIndex, (sides) => [...sides, title])
+      await mealPlansApi.addSide(date, mealNumber, generated.id, meal.leftover)
+      updateSides(date, mealIndex, (sides) => [...sides, generated])
     } catch (err) {
       console.error('Failed to add side dish', err)
       setError('No unique side dish available.')
@@ -43,29 +54,23 @@ export function useSideDishes({ plan, setPlan, setError }) {
     if (!cell) return
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
-    const current = meal?.side_recipes?.[sideIndex]
-    if (!meal || !current) return
+    const currentId = meal?.side_recipe_ids?.[sideIndex]
+    if (!meal || !currentId) return
+    const mealNumber = mealNumberOf(meal, mealIndex)
     try {
-      await feedbackApi.rejectRecipe(current, date)
-      // Avoid every title on the plate, the rejected one included: the planner
-      // picks sides by a deterministic argmax and the rejected recipe keeps no
-      // plan_date, so nothing else stops it being handed back as its own
-      // replacement.
-      const avoid = [meal.recipe, ...meal.side_recipes]
-      const replacement = await sideDishesApi.generate({ avoid_titles: avoid })
+      // The rejection bans the side from this date on; it is still on the
+      // plate, so the server would skip it anyway, but saying so is explicit.
+      await feedbackApi.rejectRecipe(currentId, date)
+      const replacement = await sideDishesApi.generate(date, mealNumber, {
+        excludeIds: [currentId],
+      })
       if (!replacement) {
         setError('No replacement recipe available.')
         return
       }
-      await mealPlansApi.replaceSide(
-        date,
-        mealIndex + 1,
-        sideIndex,
-        replacement.id,
-        meal.leftover,
-      )
+      await mealPlansApi.replaceSide(date, mealNumber, sideIndex, replacement.id, meal.leftover)
       updateSides(date, mealIndex, (sides) =>
-        sides.map((s, idx) => (idx === sideIndex ? replacement.title : s))
+        sides.map((s, idx) => (idx === sideIndex ? replacement : s))
       )
     } catch (err) {
       console.error('Failed to reject side dish', err)
@@ -79,7 +84,7 @@ export function useSideDishes({ plan, setPlan, setError }) {
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      await mealPlansApi.removeSide(date, mealIndex + 1, sideIndex, meal.leftover)
+      await mealPlansApi.removeSide(date, mealNumberOf(meal, mealIndex), sideIndex, meal.leftover)
       updateSides(date, mealIndex, (sides) =>
         sides.filter((_, idx) => idx !== sideIndex)
       )
@@ -92,26 +97,25 @@ export function useSideDishes({ plan, setPlan, setError }) {
     if (!cell) return
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
-    const oldTitle = meal?.side_recipes?.[sideIndex]
-    if (!meal || !oldTitle) return
+    const oldId = meal?.side_recipe_ids?.[sideIndex]
+    if (!meal || !oldId) return
     const existing = meal.side_recipes.filter((_, idx) => idx !== sideIndex)
     if (newTitle === meal.recipe || existing.includes(newTitle)) {
       setError('Side dish already present.')
       return
     }
     try {
-      await feedbackApi.rejectRecipe(oldTitle, date)
-      await feedbackApi.acceptRecipe(newTitle, date)
       const recipes = await recipesApi.fetchAll()
-      const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
-      const newId = titleToId[newTitle]
+      const newId = recipes.find((r) => r.title === newTitle)?.id
       if (!newId) {
         setError('Replacement recipe not found.')
         return
       }
-      await mealPlansApi.replaceSide(date, mealIndex + 1, sideIndex, newId, meal.leftover)
+      await feedbackApi.rejectRecipe(oldId, date)
+      await feedbackApi.acceptRecipe(newId, date)
+      await mealPlansApi.replaceSide(date, mealNumberOf(meal, mealIndex), sideIndex, newId, meal.leftover)
       updateSides(date, mealIndex, (sides) =>
-        sides.map((s, idx) => (idx === sideIndex ? newTitle : s))
+        sides.map((s, idx) => (idx === sideIndex ? { id: newId, title: newTitle } : s))
       )
     } catch (err) {
       console.error('Failed to swap side dish', err)

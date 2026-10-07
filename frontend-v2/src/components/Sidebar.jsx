@@ -11,6 +11,7 @@ import {
   CloudArrowUpIcon,
   EnvelopeIcon, // ALPHA-GATE
   ChatBubbleLeftEllipsisIcon,
+  CommandLineIcon,
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { useViewMode } from '../auth/ViewModeContext'
@@ -40,6 +41,9 @@ const NAV = [
   // library. Berry is also Recipes' colour, but Recipes is user-only, so the two
   // are never on screen together -- and every other distinct hue is taken.
   { label: 'Feedback', path: '/discover/feedback', Icon: ChatBubbleLeftEllipsisIcon, color: 'var(--cat-berry)', modes: ADMIN_ONLY, match: (p) => p === '/discover/feedback' },
+  // The developer log, also about the app as a whole. Olive is Ingredients'
+  // colour, which is user-only, so the two never share a sidebar.
+  { label: 'Logs', path: '/discover/logs', Icon: CommandLineIcon, color: 'var(--cat-olive)', modes: ADMIN_ONLY, match: (p) => p === '/discover/logs' },
   { label: 'Meal Plan', path: '/meal-plan', Icon: CalendarDaysIcon, color: 'var(--c-a2)', modes: USER_ONLY, match: (p) => p === '/meal-plan' },
   { label: 'Shared with me', path: '/shared-with-me', Icon: InboxArrowDownIcon, color: 'var(--cat-sky)', modes: USER_ONLY, match: (p) => p === '/shared-with-me' },
   { label: 'Ingredients', path: '/ingredients', Icon: BeakerIcon, color: 'var(--cat-olive)', modes: USER_ONLY, match: (p) => p === '/ingredients' },

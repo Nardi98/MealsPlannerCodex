@@ -17,13 +17,18 @@ export const fmt = (d) => d.toISOString().split('T')[0]
 // each day as a positional array indexed by meal_number, so the array index
 // normally matches, but a meal carries its own meal_number — prefer it so a
 // mis-ordered or gapped day never targets the wrong slot on the server.
-const mealNumberOf = (meal, mealIndex) => meal?.meal_number ?? mealIndex + 1
+export const mealNumberOf = (meal, mealIndex) => meal?.meal_number ?? mealIndex + 1
+
+// Resolve a recipe title the user picked by hand to its id.
+const idOfTitle = async (title) => {
+  const recipes = await recipesApi.fetchAll()
+  return recipes.find((r) => r.title === title)?.id
+}
 
 // Persist one or more days' meals in a single request, forcing an overwrite if
 // any day already exists. `anchorDate` names the plan_date the response echoes.
+// Meals carry their recipe ids, so nothing is matched by title.
 const persistDays = async (anchorDate, daysMap) => {
-  const recipes = await recipesApi.fetchAll()
-  const titleToId = Object.fromEntries(recipes.map((r) => [r.title, r.id]))
   // The slot travels with the meal: dropping the empty slots of a gapped day
   // would otherwise renumber every meal after the gap on the server, which
   // numbers a day's meals by their position in this list.
@@ -31,8 +36,8 @@ const persistDays = async (anchorDate, daysMap) => {
     dayMeals.flatMap((m, i) =>
       m
         ? [{
-            main_id: titleToId[m.recipe],
-            side_ids: (m.side_recipes || []).map((s) => titleToId[s]).filter(Boolean),
+            main_id: m.recipe_id,
+            side_ids: m.side_recipe_ids || [],
             leftover: m.leftover,
             meal_number: mealNumberOf(m, i),
           }]
@@ -133,13 +138,16 @@ export function useMealPlan({ setError }) {
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
-    const { recipe: mainTitle, side_recipes: sides = [] } = meal
+    // A leftover's batch was already counted when it was cooked: the server
+    // marks it kept without bumping the score again.
+    const options = { leftover: Boolean(meal.leftover) }
     try {
       await mealPlansApi.accept(date, mealNumberOf(meal, mealIndex), true)
-      await Promise.all([
-        feedbackApi.acceptRecipe(mainTitle, date),
-        ...sides.map((s) => feedbackApi.acceptRecipe(s, date)),
-      ])
+      await Promise.all(
+        [meal.recipe_id, ...(meal.side_recipe_ids || [])].map((id) =>
+          feedbackApi.acceptRecipe(id, date, options)
+        )
+      )
       setPlan((p) => ({
         ...p,
         [date]: p[date].map((m, i) =>
@@ -151,63 +159,57 @@ export function useMealPlan({ setError }) {
     }
   }
 
-  // Extract a fresh replacement distinct from the rejected recipe, its sides,
-  // and any already-chosen replacements in the same batch.
-  const extractReplacement = async (meal, date, used) => {
-    let replacement
-    let attempts = 0
-    do {
-      replacement = await feedbackApi.rejectRecipe(meal.recipe, date)
-      attempts += 1
-    } while (
-      replacement &&
-      (used.has(replacement) || meal.side_recipes?.includes(replacement)) &&
-      attempts < 5
-    )
-    if (!replacement || used.has(replacement) || meal.side_recipes?.includes(replacement)) {
-      return null
-    }
-    used.add(replacement)
-    return replacement
-  }
-
   const handleReject = async (cell) => {
     if (!cell) return
     const { date, mealIndex } = cell
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      // A bulk source drags its leftovers with it: re-extract those slots too so
-      // they don't get cascade-removed and left empty. Leftovers share the
-      // source's recipe title and carry the leftover flag.
+      // A bulk source drags its leftovers with it: replace those slots too so
+      // they don't get cascade-removed and left empty. Each slot is replaced on
+      // its own (L2).
       const batch = [{ date, mealIndex, meal }]
       if (!meal.leftover) {
         Object.entries(plan).forEach(([d, meals]) => {
           meals.forEach((m, i) => {
-            if (m?.leftover && m.recipe === meal.recipe && !(d === date && i === mealIndex)) {
+            if (m?.leftover && m.recipe_id === meal.recipe_id && !(d === date && i === mealIndex)) {
               batch.push({ date: d, mealIndex: i, meal: m })
             }
           })
         })
       }
 
-      const used = new Set([meal.recipe])
+      // The rejection bans the dish from this slot's date on; the server picks
+      // each replacement for its own slot, never one already used in the batch.
+      await feedbackApi.rejectRecipe(meal.recipe_id, date)
+      const used = [meal.recipe_id]
       const replacements = []
       for (const slot of batch) {
-        const replacement = await extractReplacement(slot.meal, slot.date, used)
+        let replacement
+        try {
+          replacement = await mealPlansApi.replace(
+            slot.date,
+            mealNumberOf(slot.meal, slot.mealIndex),
+            [...used],
+          )
+        } catch (apiErr) {
+          console.error('No replacement available', apiErr)
+        }
         if (!replacement) {
           setError('No replacement recipe available.')
           return
         }
+        used.push(replacement.id)
         replacements.push(replacement)
       }
 
       // Apply replacements locally and collect the affected days for persistence.
       const nextPlan = { ...plan }
       batch.forEach((slot, idx) => {
+        const { id, title } = replacements[idx]
         nextPlan[slot.date] = nextPlan[slot.date].map((m, i) =>
           i === slot.mealIndex
-            ? { ...m, recipe: replacements[idx], accepted: false, leftover: false }
+            ? { ...m, recipe: title, recipe_id: id, accepted: false, leftover: false }
             : m
         )
       })
@@ -235,11 +237,16 @@ export function useMealPlan({ setError }) {
     const meal = plan[date]?.[mealIndex]
     if (!meal) return
     try {
-      await feedbackApi.rejectRecipe(meal.recipe, date)
-      await feedbackApi.acceptRecipe(newTitle, date)
+      const newId = await idOfTitle(newTitle)
+      if (!newId) {
+        setError('Replacement recipe not found.')
+        return
+      }
+      await feedbackApi.rejectRecipe(meal.recipe_id, date)
+      await feedbackApi.acceptRecipe(newId, date)
       const updatedDay = plan[date].map((m, i) =>
         i === mealIndex
-          ? { ...m, recipe: newTitle, accepted: false, leftover: false }
+          ? { ...m, recipe: newTitle, recipe_id: newId, accepted: false, leftover: false }
           : m
       )
       setPlan((p) => ({ ...p, [date]: updatedDay }))

@@ -57,6 +57,7 @@ test('admin mode lists the catalog surfaces and nothing else', () => {
     'Import',
     'Alpha', // ALPHA-GATE
     'Feedback',
+    'Logs',
   ])
 })
 

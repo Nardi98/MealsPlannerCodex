@@ -133,3 +133,12 @@ test('the fridge selector is explained too', async () => {
   await hoverFor(wrapper, HOVER_DELAY_MS)
   expect(screen.getByRole('tooltip')).toHaveTextContent(SETTING_HELP.fridge.body.slice(0, 30))
 })
+
+test('the plan dates cannot start before today', () => {
+  vi.useRealTimers()
+  renderForm()
+  fireEvent.click(screen.getByRole('button', { name: /jan/i }))
+
+  // The form's range sits in January 2024, long before today.
+  expect(screen.getByRole('button', { name: /January 15(?!\d)/ })).toBeDisabled()
+})

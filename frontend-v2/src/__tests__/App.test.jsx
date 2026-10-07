@@ -49,6 +49,7 @@ vi.mock('../pages/CatalogImportPage', () => ({
 }))
 vi.mock('../pages/CatalogImportReviewPage', () => ({ default: () => <div>catalog-import-review-page</div> }))
 vi.mock('../pages/AlphaPage', () => ({ default: () => <div>alpha-page</div> }))  // ALPHA-GATE
+vi.mock('../pages/LogsAdminPage', () => ({ default: () => <div>logs-admin-page</div> }))
 // The stand-in reports into the badge exactly as the real page does, so the
 // test exercises the shell's wiring rather than an imitation of it.
 vi.mock('../pages/FeedbackAdminPage', async () => {
@@ -485,6 +486,7 @@ const ADMIN_ROUTES = [
   ['/discover/import/7', 'catalog-import-review-page'],
   ['/discover/alpha', 'alpha-page'],  // ALPHA-GATE
   ['/discover/feedback', 'feedback-admin-page'],
+  ['/discover/logs', 'logs-admin-page'],
 ]
 
 // Admin mode is entered through the pill, which navigates to `/discover` as it
@@ -674,4 +676,20 @@ test('re-entering admin mode asks for the count again', async () => {
   await switchTo('Admin')
 
   expect(userFeedbackAdminApi.unseenCount).toHaveBeenCalledTimes(2)
+})
+
+
+// ---------------------------------------------------------------------------
+// Developer logs: an admin-only page, the last entry of the admin sidebar
+// ---------------------------------------------------------------------------
+
+test('the logs page is reachable in admin mode', async () => {
+  signedIn(ADMIN)
+  render(<App />)
+  await switchTo('Admin')
+
+  await userEvent.click(screen.getByRole('button', { name: /^logs$/i }))
+
+  expect(screen.getByText('logs-admin-page')).toBeInTheDocument()
+  expect(window.location.pathname).toBe('/discover/logs')
 })

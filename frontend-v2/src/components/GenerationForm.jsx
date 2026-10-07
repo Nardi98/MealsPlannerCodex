@@ -1,4 +1,5 @@
 import React from 'react'
+import { startOfDay } from 'date-fns'
 import {
   SparklesIcon,
   GlobeAltIcon,
@@ -96,6 +97,8 @@ export default function GenerationForm({
   onSubmit,
 }) {
   const [activeTab, setActiveTab] = React.useState('settings')
+  // Plans are generated from today on (F3): earlier days cannot be picked.
+  const today = React.useMemo(() => startOfDay(new Date()), [])
   return (
     <Card data-tour="mealplan-form">
       <form onSubmit={onSubmit} className="space-y-8">
@@ -136,6 +139,7 @@ export default function GenerationForm({
               label="Plan dates"
               start={form.start}
               end={form.end}
+              minDate={today}
               onChange={onRangeChange}
             />
           </Setting>
